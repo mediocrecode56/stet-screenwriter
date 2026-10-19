@@ -4,7 +4,7 @@
 application. Monochrome, typographic, deliberately beta in look; strict about
 formatting and about never losing your work.
 
-Version 0.2.0 β.
+Version 0.2.1 β.
 
 ## Run it
 
@@ -27,13 +27,16 @@ scripts), fetch the binary once:
 node node_modules/electron/install.js
 ```
 
-### Build a standalone app
+### Get a Windows .exe (no Electron knowledge needed)
 
 ```bash
-npm run package
+npm run exe
 ```
 
-produces `dist/STET-win32-x64/STET.exe` (portable folder, no installer).
+builds every released version that isn't built yet into
+`dist/STET-vX.Y.Z-win32-x64/STET.exe` — double-click it, nothing to install.
+Each version is built from its own git tag, so old versions stay runnable.
+`npm run exe -- v0.2.0` rebuilds one version; `npm run exe -- --all` rebuilds all.
 
 ### Tests and measurements
 

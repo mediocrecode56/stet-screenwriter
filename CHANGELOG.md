@@ -2,6 +2,12 @@
 
 All notable changes to STET. Each version is one git commit, tagged `vX.Y.Z`.
 Versions stay below 1.0 while the app is in beta.
+Every version also gets a Windows build: `dist/STET-vX.Y.Z-win32-x64/STET.exe` (`npm run exe`).
+
+## 0.2.1 — 2026-10-19 — an .exe for every version
+
+### Added
+- `npm run exe` builds a portable `STET.exe` for every tagged version into `dist/STET-vX.Y.Z-win32-x64/`, each from its own tag in a temporary git worktree (the working tree is untouched). Replaces `npm run package`.
 
 ## 0.2.0 — 2026-10-19 — verified, measured, packaged
 
