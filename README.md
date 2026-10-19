@@ -4,7 +4,7 @@
 application. Monochrome, typographic, deliberately beta in look; strict about
 formatting and about never losing your work.
 
-Version 0.3.0 β.
+Version 0.3.1 β.
 
 ## Run it
 
@@ -43,7 +43,7 @@ Each version is built from its own git tag, so old versions stay runnable.
 | command | what it does |
 |---|---|
 | `npm test` | 61 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, statistics, theme schedule, word-count fuzz |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change). `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change), caret/selection/click alignment with rendered glyphs at several display scales and zooms. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 

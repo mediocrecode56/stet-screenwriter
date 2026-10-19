@@ -55,6 +55,11 @@ export class View {
     content.append(this.findLayer, this.selLayer, this.caretEl);
     this.titleEl = null;
 
+    // Moving between monitors changes the display scale; web fonts may settle late.
+    const watchScale = () => matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener('change', () => { this.remeasure(); watchScale(); }, { once: true });
+    watchScale();
+    if (document.fonts) document.fonts.ready.then(() => this.remeasure());
+
     scroller.addEventListener('scroll', () => this.schedule(), { passive: true });
     new ResizeObserver(() => { this.layoutDirty = true; this.schedule(); }).observe(scroller);
     this.layoutDirty = true;
@@ -63,15 +68,35 @@ export class View {
 
   // ---- geometry ----------------------------------------------------------------
 
+  /**
+   * Character advance as Chromium actually renders it on a page — measured in
+   * the DOM with the page's own CSS, never assumed or taken from a canvas.
+   * Whatever affects glyph placement (font fallback, inherited spacing, display
+   * scale, zoom) is therefore what the caret, selection, highlights and
+   * hit-testing use. Re-measured on zoom, display-scale and font changes.
+   */
   measure() {
-    const c = document.createElement('canvas').getContext('2d');
-    c.font = `${PX_ROW * this.z}px "Courier New", Courier, monospace`;
-    this.cw = c.measureText('M'.repeat(100)).width / 100;
+    if (!this.probe) {
+      this.probe = el('div', 'page metric-probe');
+      this.probe.setAttribute('aria-hidden', 'true');
+      this.probeLine = el('div', 'l');
+      this.probeLine.textContent = 'M'.repeat(200);
+      this.probe.appendChild(this.probeLine);
+      this.content.appendChild(this.probe);
+    }
+    this.probe.style.fontSize = PX_ROW * this.z + 'px';
+    this.cw = this.probeLine.getBoundingClientRect().width / 200 || PX_COL * this.z;
     this.col = PX_COL * this.z;
     this.row = PX_ROW * this.z;
     this.PW = PAGE.cols * this.col;
     this.PH = PAGE.rows * this.row;
     this.gap = GAP * this.z;
+  }
+
+  remeasure() {
+    const old = this.cw;
+    this.measure();
+    if (Math.abs(old - this.cw) > 1e-4) this.invalidate();
   }
 
   get offset() { return this.showTitle ? 1 : 0; }
@@ -331,16 +356,23 @@ export class View {
     const r = this.caretRect();
     if (!r || this.editor.hasSelection() || !this.focused) { c.style.display = 'none'; return; }
     c.style.display = '';
-    const key = `${r.x},${r.y},${r.h}`;
+    const key = `${r.x},${r.y},${r.h},${devicePixelRatio}`;
     if (c._k !== key) {
       c._k = key;
-      c.style.left = r.x - 1 + 'px';
+      // The caret sits in the gap *after* the glyph boundary, never over the
+      // preceding glyph, and is snapped to whole device pixels so it stays crisp.
+      const dpr = devicePixelRatio || 1;
+      const origin = this.content.getBoundingClientRect().left;
+      const devLeft = Math.ceil((origin + r.x) * dpr - 0.01);
+      const devWidth = Math.max(1, Math.round(1.5 * dpr * Math.min(1.5, this.z)));
+      c.style.left = devLeft / dpr - origin + 'px';
+      c.style.width = devWidth / dpr + 'px';
       c.style.top = r.y + 'px';
       c.style.height = r.h + 'px';
-      // Restart the blink so the caret is solid while typing.
-      c.classList.remove('blink');
-      void c.offsetWidth;
-      c.classList.add('blink');
+      // Restart the blink (solid while typing) by alternating two identical
+      // animations — no forced reflow needed.
+      c.classList.toggle('blink-a');
+      c.classList.toggle('blink-b', !c.classList.contains('blink-a'));
     }
   }
 

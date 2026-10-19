@@ -4,6 +4,22 @@ All notable changes to STET. Each version is one git commit, tagged `vX.Y.Z`.
 Versions stay below 1.0 while the app is in beta.
 Every version also gets a Windows build: `dist/STET-vX.Y.Z-win32-x64/STET.exe` (`npm run exe`).
 
+## 0.3.1 — 2026-10-19 — the caret no longer covers your text
+
+### Fixed
+- **The blinking caret drifted into the text.** Script pages inherited the interface's `letter-spacing: .02em` (0.22 px), so Chromium drew every glyph 0.22 px wider than the caret, selection and click maths assumed. The error grew along the line: 1.8 px after 8 characters, 12.8 px after 58. It was the same at every zoom level and display scale.
+- The caret is now drawn just after the glyph boundary instead of centred on it, so it never covers the previous character. It's snapped to whole device pixels so it stays crisp at 125 %, 150 % and 200 % display scaling.
+
+### Changed — robust text metrics
+- Glyph width is no longer assumed or taken from a canvas. It's measured in the DOM, on a hidden probe page that uses the page's own CSS, so anything that affects glyph placement (fonts, spacing, display scale, zoom) is what the caret, selection, highlights and click hit-testing use.
+- It's re-measured on zoom, when the window moves to a monitor with a different scale, and when fonts finish loading.
+- Script text is isolated from interface typography: no letter-spacing, word-spacing, kerning or ligatures on pages, title-page fields, the input field, suggestions or print-preview sheets.
+- The caret's blink restarts without forcing a layout on every keystroke.
+
+### Added
+- `test/e2e/caret.e2e.js`: at display scales 1 and 1.5 and zooms 80 / 100 / 125 %, checks that the caret starts at the painted glyph edge (never over it), that selection edges match the glyphs, and that clicking any character puts the caret there. It fails on v0.3.0 and passes now.
+- `bench/caret-drift.js`: measures caret vs glyph across 4 display scales × 3 zooms × 3 line lengths. Worst case went from 12.8 px to 0.02 px.
+
 ## 0.3.0 — 2026-10-19 — readability, theme schedule, responsiveness, icon
 
 ### Changed
