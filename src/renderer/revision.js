@@ -45,11 +45,13 @@ export class Revision {
 
   async start() {
     if (this.run && !this.run.finished) return;
-    const status = await api.invoke('claude:key-status');
+    let status = await api.invoke('claude:key-status');
     if (status.source === 'none') {
-      const ok = await keyDialog('The English revision uses Claude through your Anthropic API key.');
+      const ok = await keyDialog('The English revision needs Claude. Claude Code was not found on this computer.');
       if (!ok) return;
+      status = await api.invoke('claude:key-status');
     }
+    const viaCli = status.source === 'claude-code';
     const blocks = this.editor.blocks.slice(); // snapshot: blocks are immutable values
     const chunks = buildChunks(blocks);
     if (!chunks.length) { dlg.alertBox('NOTHING TO REVIEW', 'There is no action or dialogue to review yet.'); return; }
@@ -61,7 +63,7 @@ export class Revision {
         title: 'ENGLISH REVISION', sub: MODEL,
         body: dlg.h('div', { class: 'body', style: 'max-width:560px' },
           dlg.h('p', {}, `Send this screenplay's action, dialogue and parentheticals (about ${words.toLocaleString()} words) to Claude for an English review?`),
-          dlg.h('p', { class: 'hint' }, `${est.requests} request${est.requests === 1 ? '' : 's'}, roughly ${est.inputTokens.toLocaleString()} input tokens plus Claude's reasoning and answers, billed to your Anthropic account. Scene headings and character names are sent as context; the title page and your notes are not sent. Nothing in the script changes until you accept a suggestion.`),
+          dlg.h('p', { class: 'hint' }, `${est.requests} request${est.requests === 1 ? '' : 's'}, roughly ${est.inputTokens.toLocaleString()} input tokens plus Claude's reasoning and answers, ${viaCli ? 'through Claude Code on your Claude sign-in (counts toward your plan usage)' : 'billed to your Anthropic API account'}. Scene headings and character names are sent as context; the title page and your notes are not sent. Nothing in the script changes until you accept a suggestion.`),
           dlg.h('label', { class: 'chk' }, remember, "don't ask again")),
         buttons: [{ label: 'Cancel', value: null }, { label: 'Review', value: true, primary: true }],
       });
@@ -318,7 +320,7 @@ export class Revision {
       body += '</div>';
     }
     if (!body && r && r.finished && !r.fatal) body = '<div class="empty">No problems found. Your English reads naturally.</div>';
-    const foot = `<div class="rv-foot">${open.length > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="dict">DICTIONARY</button><button class="tb" data-act="key">API KEY</button></div>`;
+    const foot = `<div class="rv-foot">${open.length > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="dict">DICTIONARY</button><button class="tb" data-act="key">CONNECTION</button></div>`;
     this.host.innerHTML = `<div class="panel-head">ENGLISH REVISION <span>${open.length ? '· ' + open.length : ''}</span></div>${head}<div class="list rv-list">${body}</div>${foot}`;
   }
 
@@ -344,19 +346,22 @@ export async function keyDialog(lead = '') {
   const st = await api.invoke('claude:key-status');
   const input = dlg.h('input', { type: 'password', placeholder: 'sk-ant-…', spellcheck: false, autocomplete: 'off' });
   const msg = dlg.h('div', { class: 'hint' });
-  const where = st.source === 'saved' ? `A key is saved (${st.hint}), encrypted by the operating system.`
-    : st.source === 'env' ? 'Using the ANTHROPIC_API_KEY environment variable.' : 'No key yet.';
+  const where = st.source === 'saved' ? `Using a saved API key (${st.hint}), encrypted by the operating system. Remove it to use your Claude sign-in instead.`
+    : st.source === 'env' ? 'Using the ANTHROPIC_API_KEY environment variable.'
+    : st.source === 'claude-code' ? `Ready — no key needed. Reviews run through ${st.cli} on your existing Claude sign-in. Add an API key only if you'd rather bill an Anthropic API account.`
+    : 'Claude Code was not found. Install the Claude desktop app or Claude Code and sign in — STET then uses that sign-in automatically. Or paste an Anthropic API key (console.anthropic.com).';
   let closeFn;
   const v = await dlg.open({
-    title: 'CLAUDE API KEY', sub: 'stored encrypted · never in your scripts',
+    title: 'CLAUDE CONNECTION', sub: st.source === 'claude-code' ? 'claude code · your claude sign-in' : 'api key stored encrypted · never in your scripts',
     body: dlg.h('div', { class: 'body', style: 'max-width:540px' },
       lead ? dlg.h('p', {}, lead) : null,
-      dlg.h('p', { class: 'hint' }, where + ' Create a key at console.anthropic.com. It stays in this app\'s main process and is only sent to the Anthropic API when you start a review.'),
-      dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key'), input), msg),
+      dlg.h('p', { class: st.source === 'none' ? '' : 'hint' }, where),
+      dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key (optional)'), input),
+      dlg.h('p', { class: 'hint' }, 'A key stays in this app\'s main process and is only sent to the Anthropic API when you start a review.'), msg),
     buttons: [
       ...(st.source === 'saved' ? [{ label: 'Remove key', value: 'clear' }] : []),
       { label: 'Cancel', value: null },
-      { label: 'Save & test', value: 'save', primary: true },
+      { label: st.source === 'claude-code' ? 'OK' : 'Save & test', value: 'save', primary: true },
     ],
     init: (_d, close) => { closeFn = close; },
   });

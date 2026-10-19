@@ -1,7 +1,7 @@
-// Live check of the English revision against the real Claude API.
-// Needs a key: ANTHROPIC_API_KEY in the environment, or a key saved in the app
-// (Tools → Claude API Key…) together with STET_USE_APP_PROFILE=1 to reuse your
-// normal settings folder. `node bench/revision-live.js` — costs a few cents.
+// Live check of the English revision against the real Claude.
+// With no API key it runs through Claude Code on your Claude sign-in (no setup);
+// with ANTHROPIC_API_KEY set, or STET_USE_APP_PROFILE=1 and a key saved in the app,
+// it uses the API instead. `node bench/revision-live.js`
 import path from 'node:path';
 import os from 'node:os';
 import { App, sleep } from '../test/e2e/cdp.js';

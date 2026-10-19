@@ -636,7 +636,7 @@ cmd.register([
   { id: 'revise-next', cat: 'Tools', label: 'Next Suggestion', keys: 'F7', global: true, run: () => revision.step(1) },
   { id: 'revise-prev', cat: 'Tools', label: 'Previous Suggestion', keys: 'Shift+F7', global: true, run: () => revision.step(-1) },
   { id: 'revise-dict', cat: 'Tools', label: 'Dictionary & Ignored…', run: () => dictionaryDialog(revision) },
-  { id: 'claude-key', cat: 'Tools', label: 'Claude API Key…', run: () => keyDialog() },
+  { id: 'claude-key', cat: 'Tools', label: 'Claude Connection…', run: () => keyDialog() },
   { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, api, report: false }) },
 
   { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog(cmd.all()) },

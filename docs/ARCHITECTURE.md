@@ -118,7 +118,12 @@ against the live document. Blocks are immutable, so identity tells whether an
 element changed, and undo/redo of an accepted suggestion is recognised because
 undo restores the exact block objects. `src/main/claude.js` calls the API with
 the Anthropic SDK in the main process (key via safeStorage, streaming, adaptive
-thinking, `fallbacks: "default"`, AbortController cancellation).
+thinking, `fallbacks: "default"`, AbortController cancellation). With no key it
+runs the Claude Code CLI instead (`claude -p --output-format json --json-schema …
+--tools "" --setting-sources "" --strict-mcp-config --no-session-persistence`),
+found on PATH, in `~/.local/bin`, or inside the Claude desktop app's folder;
+the prompt goes over stdin, cancelling kills the process, and its result is
+validated exactly like an API response.
 `src/renderer/revision.js` is the panel. Accepting goes through
 `Editor.replaceRanges`, so it is ordinary, undoable editing.
 

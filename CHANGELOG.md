@@ -4,6 +4,18 @@ All notable changes to STET. Each version is one git commit, tagged `vX.Y.Z`.
 Versions stay below 1.0 while the app is in beta.
 Every version also gets a Windows build: `dist/STET-vX.Y.Z-win32-x64/STET.exe` (`npm run exe`).
 
+## 0.5.0 — 2026-10-19 — English revision without an API key
+
+### Added
+- The English revision now works with **no API key**: it runs through Claude Code on your existing Claude sign-in (the copy bundled with the Claude desktop app is found automatically, as is a `claude` install on PATH or in `~/.local/bin`). Usage counts toward your Claude plan.
+- Claude Code runs locked down: print mode, no tools, no MCP servers, no settings files, no skills, no saved session, in an empty temporary folder that is deleted afterwards. The script is passed on stdin, never on the command line. Same model (`claude-opus-5-5`, high effort), same instructions and the same findings schema; its answers are validated exactly like API answers.
+- Clear errors when Claude Code is signed out, hits a usage limit, or returns something unreadable; Cancel stops the running Claude Code processes.
+- Tests: 3 end-to-end tests against a fake Claude Code CLI (flags, stdin, temp folder, sign-out, cancellation, bad output). Verified live: a real review of the sample scene through Claude Code took 22 s.
+
+### Changed
+- *Tools → Claude API Key…* is now *Claude Connection…* and shows which connection is used. An API key is optional and, when set, takes precedence.
+- The review confirmation says whether usage goes to your Claude plan or your API account.
+
 ## 0.4.0 — 2026-10-19 — English revision with Claude
 
 ### Added
