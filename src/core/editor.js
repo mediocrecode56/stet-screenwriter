@@ -1,0 +1,587 @@
+// Editing engine: owns the block array, selection and undo history.
+// Pure logic, no DOM — every operation is unit-testable in Node.
+//
+// All mutations go through _splice(), which records an invertible step
+// {from, removed, added} in the open transaction and widens the dirty range
+// used by incremental pagination. Undo/redo replays those steps.
+
+import {
+  makeBlock, withText, withType, newId, UPPER_TYPES, cueName,
+  marksAfterInsert, marksAfterDelete, sliceMarks, concatMarks, setHighlight, removeCommentMarks,
+} from './model.js';
+import { blockWords, countWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
+import { mergeDirty } from './layout.js';
+
+export const NEXT_ON_ENTER = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'action', transition: 'scene', shot: 'action' };
+export const TAB_NEXT = { action: 'character', character: 'transition', transition: 'scene', scene: 'action', dialogue: 'paren', paren: 'dialogue', shot: 'action' };
+export const TAB_PREV = { action: 'scene', character: 'action', transition: 'character', scene: 'transition', dialogue: 'character', paren: 'dialogue', shot: 'scene' };
+
+const SCENE_PREFIX = /^(int|ext|est|i\/e|int\.?\s?\/\s?ext|ext\.?\s?\/\s?int)\.(\s|$)/i;
+const MERGE_WINDOW_MS = 1500;
+
+export const pos = (b, o) => ({ b, o });
+export const cmp = (p, q) => (p.b - q.b) || (p.o - q.o);
+
+export class Editor {
+  constructor(blocks) {
+    this.blocks = blocks.length ? blocks : [makeBlock('action')];
+    this.sel = { a: pos(0, 0), f: pos(0, 0) };
+    this.undoStack = [];
+    this.redoStack = [];
+    this.rev = 0;          // increments on every committed change
+    this.dirty = null;     // pending dirty range for pagination
+    this.txn = null;
+    this.words = 0;
+    for (const b of this.blocks) this.words += blockWords(b);
+    this.namesRev = -1;
+    this._names = null;
+    this.pastedWords = 0;  // words inserted by paste, for writing statistics
+    this.onChange = null;  // (editor) => void
+    this.autoCapitalize = true;
+    this.now = () => Date.now();
+  }
+
+  // ---- transaction core ------------------------------------------------------
+
+  _splice(from, count, added) {
+    const removed = this.blocks.slice(from, from + count);
+    if (count === 1 && added.length === 1) this.blocks[from] = added[0];
+    else this.blocks.splice(from, count, ...added);
+    for (const b of removed) this.words -= blockWords(b);
+    for (const b of added) this.words += blockWords(b);
+    this.dirty = mergeDirty(this.dirty, from, count, added.length);
+    if (this.txn) this.txn.steps.push({ from, removed, added });
+    return removed;
+  }
+
+  _replace(bi, block) { this._splice(bi, 1, [block]); }
+
+  /** Run fn as one undoable transaction. */
+  edit(kind, fn, opts = {}) {
+    if (this.txn) { fn(); return; } // nested: join the outer transaction
+    const txn = { kind, steps: [], selBefore: this.sel, selAfter: null, time: this.now(), closed: !!opts.close };
+    this.txn = txn;
+    try { fn(); } finally { this.txn = null; }
+    if (!txn.steps.length) { this._emit(); return; }
+    txn.selAfter = this.sel;
+    this.redoStack.length = 0;
+    const last = this.undoStack[this.undoStack.length - 1];
+    if (kind === 'type' && last && last.kind === 'type' && !last.closed && this._mergeable(last, txn)) {
+      last.steps[0].added = txn.steps[0].added;
+      last.selAfter = txn.selAfter;
+      last.time = txn.time;
+      last.closed = txn.closed;
+    } else {
+      this.undoStack.push(txn);
+      if (this.undoStack.length > 2000) this.undoStack.splice(0, this.undoStack.length - 2000);
+    }
+    this.rev++;
+    this._emit();
+  }
+
+  _mergeable(a, b) {
+    return a.steps.length === 1 && b.steps.length === 1 &&
+      a.steps[0].from === b.steps[0].from &&
+      a.steps[0].added.length === 1 && b.steps[0].removed.length === 1 && b.steps[0].added.length === 1 &&
+      b.time - a.time < MERGE_WINDOW_MS;
+  }
+
+  /** Close the current typing group (called on cursor movement). */
+  breakUndoGroup() {
+    const last = this.undoStack[this.undoStack.length - 1];
+    if (last) last.closed = true;
+  }
+
+  undo() {
+    const t = this.undoStack.pop();
+    if (!t) return false;
+    for (let i = t.steps.length - 1; i >= 0; i--) {
+      const s = t.steps[i];
+      this._applyRaw(s.from, s.added.length, s.removed);
+    }
+    this.redoStack.push(t);
+    this.sel = t.selBefore;
+    this.rev++;
+    this._emit();
+    return true;
+  }
+
+  redo() {
+    const t = this.redoStack.pop();
+    if (!t) return false;
+    for (const s of t.steps) this._applyRaw(s.from, s.removed.length, s.added);
+    t.closed = true;
+    this.undoStack.push(t);
+    this.sel = t.selAfter;
+    this.rev++;
+    this._emit();
+    return true;
+  }
+
+  _applyRaw(from, count, added) {
+    const removed = this.blocks.splice(from, count, ...added);
+    for (const b of removed) this.words -= blockWords(b);
+    for (const b of added) this.words += blockWords(b);
+    this.dirty = mergeDirty(this.dirty, from, count, added.length);
+  }
+
+  /** Replace the whole document (open/restore). Clears history. */
+  reset(blocks) {
+    const n = this.blocks.length;
+    this.blocks = blocks.length ? blocks : [makeBlock('action')];
+    this.words = 0;
+    for (const b of this.blocks) this.words += blockWords(b);
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
+    this.sel = { a: pos(0, 0), f: pos(0, 0) };
+    this.dirty = { from: 0, to: this.blocks.length, delta: this.blocks.length - n, full: true };
+    this.rev++;
+    this._emit();
+  }
+
+  takeDirty() { const d = this.dirty; this.dirty = null; return d; }
+
+  _emit() { if (this.onChange) this.onChange(this); }
+
+  // ---- selection -------------------------------------------------------------
+
+  get caret() { return this.sel.f; }
+  get block() { return this.blocks[this.sel.f.b]; }
+  hasSelection() { return cmp(this.sel.a, this.sel.f) !== 0; }
+
+  ordered() {
+    const { a, f } = this.sel;
+    return cmp(a, f) <= 0 ? [a, f] : [f, a];
+  }
+
+  clampPos(p) {
+    const b = Math.max(0, Math.min(this.blocks.length - 1, p.b));
+    return pos(b, Math.max(0, Math.min(this.blocks[b].text.length, p.o)));
+  }
+
+  setSel(a, f = a) {
+    this.sel = { a: this.clampPos(a), f: this.clampPos(f) };
+    this.breakUndoGroup();
+    this._emit();
+  }
+
+  selectAll() {
+    const last = this.blocks.length - 1;
+    this.setSel(pos(0, 0), pos(last, this.blocks[last].text.length));
+  }
+
+  selectedText() {
+    if (!this.hasSelection()) return '';
+    return this.fragment().map((b) => b.text).join('\n');
+  }
+
+  /** Selected content as an array of {type, text, marks}. */
+  fragment() {
+    const [s, e] = this.ordered();
+    const out = [];
+    for (let i = s.b; i <= e.b; i++) {
+      const b = this.blocks[i];
+      const a = i === s.b ? s.o : 0;
+      const z = i === e.b ? e.o : b.text.length;
+      out.push({ type: b.type, text: b.text.slice(a, z), marks: sliceMarks(b.marks, a, z) });
+    }
+    return out;
+  }
+
+  // ---- primitive edits (must run inside a transaction) ----------------------
+
+  _deleteRange(s, e) {
+    if (cmp(s, e) === 0) return s;
+    if (s.b === e.b) {
+      const b = this.blocks[s.b];
+      this._replace(s.b, withText(b, b.text.slice(0, s.o) + b.text.slice(e.o), marksAfterDelete(b.marks, s.o, e.o)));
+      return s;
+    }
+    const first = this.blocks[s.b], last = this.blocks[e.b];
+    const head = first.text.slice(0, s.o);
+    let tail = last.text.slice(e.o);
+    let tailMarks = sliceMarks(last.marks, e.o, last.text.length);
+    if (UPPER_TYPES.has(first.type) && tail !== tail.toUpperCase()) {
+      const up = tail.toUpperCase();
+      if (up.length !== tail.length) tailMarks = [];
+      tail = up;
+    }
+    const nb = withText(first, head + tail, concatMarks(sliceMarks(first.marks, 0, s.o), head.length, tailMarks));
+    this._splice(s.b, e.b - s.b + 1, [nb]);
+    return s;
+  }
+
+  _deleteSelection() {
+    const [s, e] = this.ordered();
+    const p = this._deleteRange(s, e);
+    this.sel = { a: p, f: p };
+    return p;
+  }
+
+  _insertAt(p, str) {
+    const b = this.blocks[p.b];
+    if (UPPER_TYPES.has(b.type)) str = str.toUpperCase();
+    this._replace(p.b, withText(b, b.text.slice(0, p.o) + str + b.text.slice(p.o), marksAfterInsert(b.marks, p.o, str.length)));
+    const np = pos(p.b, p.o + str.length);
+    this.sel = { a: np, f: np };
+    return np;
+  }
+
+  // ---- public editing commands ------------------------------------------------
+
+  /** Insert typed text (no newlines). Applies element-aware smart behaviour. */
+  insertText(str) {
+    if (!str) return;
+    str = str.replace(/\r\n?|\n/g, ' ');
+    const b0 = this.block;
+    const caret = this.caret;
+    // Typing ")" over an existing closing paren just steps over it.
+    if (str === ')' && !this.hasSelection() && b0.text[caret.o] === ')') { this.setSel(pos(caret.b, caret.o + 1)); return; }
+    const boundary = !isWordChar(str[str.length - 1]);
+    this.edit('type', () => {
+      if (this.hasSelection()) this._deleteSelection();
+      let p = this.caret;
+      let b = this.blocks[p.b];
+      // "(" at the start of an empty dialogue/character line starts a parenthetical.
+      if (str === '(' && b.text === '' && (b.type === 'dialogue' || b.type === 'action')) {
+        const prev = this.blocks[p.b - 1];
+        if (b.type === 'dialogue' || (prev && prev.type === 'character')) {
+          this._replace(p.b, { ...b, type: 'paren', text: '()', marks: [] });
+          this.sel = { a: pos(p.b, 1), f: pos(p.b, 1) };
+          return;
+        }
+      }
+      p = this._insertAt(p, str);
+      b = this.blocks[p.b];
+      if (b.type === 'action' && boundary && p.o <= 12 && SCENE_PREFIX.test(b.text)) {
+        this._replace(p.b, withType(b, 'scene'));
+      }
+    }, { close: boundary });
+    if (boundary && this.autoCapitalize) this._capitalizeFirstAppearance();
+  }
+
+  /** Paste: plain text or a structured fragment. One undo step. */
+  paste(fragment) {
+    if (!fragment || !fragment.length) return;
+    let words = 0;
+    for (const f of fragment) words += countWords(f.text);
+    this.edit('paste', () => {
+      if (this.hasSelection()) this._deleteSelection();
+      const p = this.caret;
+      const cur = this.blocks[p.b];
+      if (fragment.length === 1) {
+        let t = fragment[0].text.replace(/\r\n?/g, '\n');
+        if (UPPER_TYPES.has(cur.type)) t = t.toUpperCase();
+        const ms = fragment[0].marks && t.length === fragment[0].text.length ? fragment[0].marks : [];
+        const head = cur.text.slice(0, p.o), tail = cur.text.slice(p.o);
+        const marks = concatMarks(concatMarks(sliceMarks(cur.marks, 0, p.o), head.length, ms), head.length + t.length, sliceMarks(cur.marks, p.o, cur.text.length));
+        this._replace(p.b, withText(cur, head + t + tail, marks));
+        const np = pos(p.b, p.o + t.length);
+        this.sel = { a: np, f: np };
+        return;
+      }
+      const head = cur.text.slice(0, p.o), tail = cur.text.slice(p.o);
+      const headMarks = sliceMarks(cur.marks, 0, p.o), tailMarks = sliceMarks(cur.marks, p.o, cur.text.length);
+      const out = [];
+      fragment.forEach((f, i) => {
+        let type = f.type;
+        let text = f.text;
+        let marks = f.marks || [];
+        if (i === 0) {
+          if (head.length) type = cur.type;
+          if (UPPER_TYPES.has(type)) text = text.toUpperCase();
+          out.push({ id: cur.id, type, text: head + text, marks: concatMarks(headMarks, head.length, text.length === f.text.length ? marks : []) });
+        } else {
+          if (UPPER_TYPES.has(type)) { const up = text.toUpperCase(); if (up.length !== text.length) marks = []; text = up; }
+          out.push(makeBlock(type, text, marks));
+        }
+      });
+      const lastBlock = out[out.length - 1];
+      const caretO = lastBlock.text.length;
+      const tailText = UPPER_TYPES.has(lastBlock.type) ? tail.toUpperCase() : tail;
+      out[out.length - 1] = withText(lastBlock, lastBlock.text + tailText, concatMarks(lastBlock.marks, lastBlock.text.length, tailText.length === tail.length ? tailMarks : []));
+      this._splice(p.b, 1, out);
+      const np = pos(p.b + out.length - 1, caretO);
+      this.sel = { a: np, f: np };
+    });
+    this.pastedWords += words;
+  }
+
+  backspace(byWord = false) {
+    if (this.hasSelection()) return this.edit('delete', () => this._deleteSelection());
+    const p = this.caret;
+    if (p.o > 0) {
+      const b = this.block;
+      let from = byWord ? wordLeft(b.text, p.o) : p.o - 1;
+      // Delete surrogate pairs as a unit.
+      if (!byWord && from > 0 && /[\uDC00-\uDFFF]/.test(b.text[from]) && /[\uD800-\uDBFF]/.test(b.text[from - 1])) from--;
+      // Backspacing into an empty "()" removes the parenthetical shell.
+      if (!byWord && b.type === 'paren' && b.text === '()' && p.o === 1) {
+        return this.edit('delete', () => { this._replace(p.b, { ...b, type: 'dialogue', text: '', marks: [] }); this.sel = { a: pos(p.b, 0), f: pos(p.b, 0) }; });
+      }
+      return this.edit(byWord ? 'delete' : 'type', () => {
+        this._deleteRange(pos(p.b, from), p);
+        this.sel = { a: pos(p.b, from), f: pos(p.b, from) };
+      });
+    }
+    if (p.b === 0) return;
+    // At block start: merge into the previous block.
+    const prev = this.blocks[p.b - 1];
+    this.edit('delete', () => {
+      const cur = this.blocks[p.b];
+      if (prev.text === '' && cur.text !== '') {
+        this._splice(p.b - 1, 1, []);
+        this.sel = { a: pos(p.b - 1, 0), f: pos(p.b - 1, 0) };
+      } else {
+        const np = pos(p.b - 1, prev.text.length);
+        this._deleteRange(np, p);
+        this.sel = { a: np, f: np };
+      }
+    });
+  }
+
+  deleteForward(byWord = false) {
+    if (this.hasSelection()) return this.edit('delete', () => this._deleteSelection());
+    const p = this.caret;
+    const b = this.block;
+    if (p.o < b.text.length) {
+      let to = byWord ? wordRight(b.text, p.o) : p.o + 1;
+      if (!byWord && /[\uD800-\uDBFF]/.test(b.text[p.o])) to = Math.min(b.text.length, to + 1);
+      return this.edit('delete', () => { this._deleteRange(p, pos(p.b, to)); this.sel = { a: p, f: p }; });
+    }
+    if (p.b >= this.blocks.length - 1) return;
+    this.edit('delete', () => { this._deleteRange(p, pos(p.b + 1, 0)); this.sel = { a: p, f: p }; });
+  }
+
+  /** Enter: start the next element (or convert an empty one). */
+  enter() {
+    this.edit('enter', () => {
+      if (this.hasSelection()) this._deleteSelection();
+      const p = this.caret;
+      const b = this.blocks[p.b];
+      if (b.text === '' || (b.type === 'paren' && b.text === '()')) {
+        // Empty element: Enter steps back to Action, and from Action to Scene Heading.
+        const t = b.type === 'action' ? 'scene' : 'action';
+        this._replace(p.b, { ...b, type: t, text: '', marks: [] });
+        this.sel = { a: pos(p.b, 0), f: pos(p.b, 0) };
+        return;
+      }
+      const atEnd = p.o === b.text.length || (b.type === 'paren' && p.o === b.text.length - 1 && b.text.endsWith(')'));
+      if (atEnd) {
+        const nb = makeBlock(NEXT_ON_ENTER[b.type], '');
+        this._splice(p.b + 1, 0, [nb]);
+        this.sel = { a: pos(p.b + 1, 0), f: pos(p.b + 1, 0) };
+        return;
+      }
+      const left = withText(b, b.text.slice(0, p.o).replace(/ +$/, ''), sliceMarks(b.marks, 0, p.o));
+      const rightText = b.text.slice(p.o);
+      const trimmed = rightText.replace(/^ +/, '');
+      const cut = rightText.length - trimmed.length;
+      const right = makeBlock(b.type, trimmed, sliceMarks(b.marks, p.o + cut, b.text.length));
+      this._splice(p.b, 1, [left, right]);
+      this.sel = { a: pos(p.b + 1, 0), f: pos(p.b + 1, 0) };
+    }, { close: true });
+  }
+
+  /** Shift+Enter: line break inside the current element. */
+  softBreak() {
+    this.edit('type', () => {
+      if (this.hasSelection()) this._deleteSelection();
+      this._insertAt(this.caret, '\n');
+    }, { close: true });
+  }
+
+  /** Tab / Shift+Tab: cycle the element type. */
+  tab(reverse = false) {
+    const b = this.block;
+    this.setType((reverse ? TAB_PREV : TAB_NEXT)[b.type]);
+  }
+
+  /** Change the element type of every block touched by the selection. */
+  setType(type) {
+    const [s, e] = this.ordered();
+    this.edit('type-change', () => {
+      for (let i = s.b; i <= e.b; i++) {
+        const b = this.blocks[i];
+        if (b.type === type) continue;
+        let nb = withType(b, type);
+        if (type === 'paren' && !/^\(.*\)$/s.test(nb.text)) {
+          nb = { ...nb, text: '(' + nb.text + ')', marks: marksAfterInsert(nb.marks, 0, 1) };
+          if (i === this.sel.f.b) {
+            const o = Math.min(nb.text.length - 1, this.sel.f.o + 1);
+            this.sel = { a: pos(i, s.b === e.b ? o : this.sel.a.o), f: pos(i, o) };
+          }
+        } else if (b.type === 'paren' && type !== 'paren' && /^\(.*\)$/s.test(nb.text)) {
+          const inner = nb.text.slice(1, -1);
+          nb = { ...nb, text: inner, marks: marksAfterDelete(marksAfterDelete(nb.marks, nb.text.length - 1, nb.text.length), 0, 1) };
+        }
+        this._replace(i, nb);
+      }
+      this.sel = { a: this.clampPos(this.sel.a), f: this.clampPos(this.sel.f) };
+    }, { close: true });
+  }
+
+  /** Replace [from, caret) of the current block with `text` (autocomplete). */
+  complete(from, text) {
+    const p = this.caret;
+    this.edit('complete', () => {
+      this._deleteRange(pos(p.b, from), p);
+      this._insertAt(pos(p.b, from), text);
+    }, { close: true });
+  }
+
+  // ---- marks -------------------------------------------------------------------
+
+  /** Apply (or with null, clear) a highlight across the selection. */
+  highlight(color) {
+    if (!this.hasSelection()) return false;
+    const [s, e] = this.ordered();
+    this.edit('mark', () => {
+      for (let i = s.b; i <= e.b; i++) {
+        const b = this.blocks[i];
+        const a = i === s.b ? s.o : 0, z = i === e.b ? e.o : b.text.length;
+        if (z <= a) continue;
+        this._replace(i, withText(b, b.text, setHighlight(b.marks, a, z, color)));
+      }
+    }, { close: true });
+    return true;
+  }
+
+  /** Attach comment `id` to the selection (or the whole current block). */
+  attachComment(id) {
+    let [s, e] = this.ordered();
+    if (cmp(s, e) === 0) { s = pos(s.b, 0); e = pos(s.b, this.blocks[s.b].text.length); }
+    if (s.b === e.b && s.o === e.o) return false; // empty block: nothing to anchor to
+    this.edit('mark', () => {
+      for (let i = s.b; i <= e.b; i++) {
+        const b = this.blocks[i];
+        const a = i === s.b ? s.o : 0, z = i === e.b ? e.o : b.text.length;
+        if (z <= a) continue;
+        this._replace(i, withText(b, b.text, b.marks.concat([{ s: a, e: z, k: 'cm', v: id }])));
+      }
+    }, { close: true });
+    return true;
+  }
+
+  detachComment(id) {
+    this.edit('mark', () => {
+      for (let i = 0; i < this.blocks.length; i++) {
+        const b = this.blocks[i];
+        const m = removeCommentMarks(b.marks, id);
+        if (m !== b.marks) this._replace(i, withText(b, b.text, m));
+      }
+    }, { close: true });
+  }
+
+  /** Positions of every comment anchor in document order: [{id, b, s, e}]. */
+  commentAnchors() {
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < this.blocks.length; i++) {
+      for (const m of this.blocks[i].marks) {
+        if (m.k === 'cm' && !seen.has(m.v)) { seen.add(m.v); out.push({ id: m.v, b: i, s: m.s, e: m.e }); }
+      }
+    }
+    return out;
+  }
+
+  // ---- find / replace ------------------------------------------------------------
+
+  findAll(query, { caseSensitive = false, wholeWord = false } = {}) {
+    if (!query) return [];
+    let src = escapeRegExp(query);
+    if (wholeWord) src = '(?<![\\p{L}\\p{N}_])' + src + '(?![\\p{L}\\p{N}_])';
+    const re = new RegExp(src, (caseSensitive ? 'g' : 'gi') + 'u');
+    const out = [];
+    for (let i = 0; i < this.blocks.length; i++) {
+      const t = this.blocks[i].text;
+      if (!t) continue;
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(t)) !== null) {
+        if (m[0].length === 0) { re.lastIndex++; continue; }
+        out.push({ b: i, s: m.index, e: m.index + m[0].length });
+      }
+    }
+    return out;
+  }
+
+  /** Replace the given matches (from findAll) in one undoable step. */
+  replaceMatches(matches, replacement) {
+    if (!matches.length) return 0;
+    this.edit('replace', () => {
+      // Back to front so earlier offsets stay valid.
+      for (let k = matches.length - 1; k >= 0; k--) {
+        const m = matches[k];
+        const b = this.blocks[m.b];
+        const r = UPPER_TYPES.has(b.type) ? replacement.toUpperCase() : replacement;
+        const marks = marksAfterInsert(marksAfterDelete(b.marks, m.s, m.e), m.s, r.length);
+        this._replace(m.b, withText(b, b.text.slice(0, m.s) + r + b.text.slice(m.e), marks));
+      }
+      const first = matches[0];
+      this.sel = { a: pos(first.b, first.s), f: pos(first.b, first.s) };
+    }, { close: true });
+    return matches.length;
+  }
+
+  // ---- recognition -------------------------------------------------------------
+
+  /** Character names used in cues, most frequent first. Cached per revision. */
+  characterNames() {
+    if (this.namesRev === this.rev && this._names) return this._names;
+    const freq = new Map();
+    for (const b of this.blocks) {
+      if (b.type !== 'character' || !b.text) continue;
+      const n = cueName(b.text);
+      if (n) freq.set(n, (freq.get(n) || 0) + 1);
+    }
+    this._names = [...freq.entries()].sort((x, y) => y[1] - x[1]).map((x) => x[0]);
+    this.namesRev = this.rev;
+    return this._names;
+  }
+
+  /**
+   * After a word boundary in Action, uppercase a known character's name on its
+   * first appearance in action text. Only Capitalized words are touched (so
+   * "will" never becomes "WILL"), and it is its own undo step.
+   */
+  _capitalizeFirstAppearance() {
+    const p = this.caret;
+    const b = this.blocks[p.b];
+    if (b.type !== 'action') return;
+    const before = b.text.slice(0, p.o - 1);
+    const names = this.characterNames();
+    if (!names.length) return;
+    for (const name of names) {
+      if (name.length < 2 || before.length < name.length) continue;
+      const start = before.length - name.length;
+      const typed = before.slice(start);
+      if (typed.toUpperCase() !== name || typed === name) continue;
+      if (typed[0] !== typed[0].toUpperCase()) continue;
+      if (start > 0 && isWordChar(before[start - 1])) continue;
+      const re = new RegExp('(?<![\\p{L}\\p{N}])' + escapeRegExp(name) + '(?![\\p{L}\\p{N}])', 'iu');
+      if (re.test(b.text.slice(0, start))) return;
+      for (let i = 0; i < p.b; i++) {
+        const o = this.blocks[i];
+        if (o.type === 'action' && re.test(o.text)) return;
+      }
+      this.edit('autocap', () => {
+        const cur = this.blocks[p.b];
+        this._replace(p.b, withText(cur, cur.text.slice(0, start) + name + cur.text.slice(start + name.length)));
+      }, { close: true });
+      return;
+    }
+  }
+
+  /** Scene headings in order: [{b, text}]. */
+  scenes() {
+    const out = [];
+    for (let i = 0; i < this.blocks.length; i++) {
+      const b = this.blocks[i];
+      if (b.type === 'scene') out.push({ b: i, text: b.text });
+    }
+    return out;
+  }
+}
+
+export function newBlockId() { return newId(); }

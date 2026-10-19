@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self'">
+<title>STET</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div id="brand">STET<span id="ver"></span></div>
+  <nav id="menubar"></nav>
+  <div id="docname" title="Document"><span id="docdot"></span><span id="doctitle">untitled</span></div>
+  <div id="drag"></div>
+</header>
+<div id="elbar">
+  <div id="eltypes"></div>
+  <div class="sep"></div>
+  <div id="hlbar"></div>
+  <div class="sep"></div>
+  <button id="btn-comment" class="tb" title="Comment on selection (Ctrl+Alt+M)">+NOTE</button>
+  <div class="grow"></div>
+  <button id="btn-scenes" class="tb" title="Scene navigator (Ctrl+\)">SCENES</button>
+  <button id="btn-notes" class="tb" title="Comments (Ctrl+Shift+\)">NOTES</button>
+  <button id="btn-theme" class="tb" title="Toggle light/dark (Ctrl+Shift+L)">◐</button>
+</div>
+<div id="findbar" hidden>
+  <input id="find-q" placeholder="find" spellcheck="false">
+  <input id="find-r" placeholder="replace with" spellcheck="false">
+  <label class="chk"><input type="checkbox" id="find-case">Aa</label>
+  <label class="chk"><input type="checkbox" id="find-word">whole</label>
+  <span id="find-count"></span>
+  <button class="tb" id="find-prev" title="Previous (Shift+Enter)">↑</button>
+  <button class="tb" id="find-next" title="Next (Enter)">↓</button>
+  <button class="tb" id="find-one">REPLACE</button>
+  <button class="tb" id="find-all">ALL</button>
+  <button class="tb" id="find-close" title="Close (Esc)">×</button>
+</div>
+<main id="main">
+  <aside id="left" hidden>
+    <div class="panel-head">SCENES <span id="scene-count"></span></div>
+    <div id="scenes" class="list"></div>
+  </aside>
+  <div id="scroller" tabindex="-1">
+    <div id="content"></div>
+  </div>
+  <aside id="right" hidden>
+    <div class="panel-head">NOTES <span id="note-count"></span></div>
+    <div id="notes" class="list"></div>
+  </aside>
+</main>
+<footer id="status">
+  <span id="st-el" class="st"></span>
+  <span id="st-page" class="st"></span>
+  <span id="st-scene" class="st"></span>
+  <span id="st-words" class="st"></span>
+  <span id="st-goal" class="st" title="Today's writing goal — click for statistics"></span>
+  <span class="grow"></span>
+  <span id="st-save" class="st"></span>
+  <span class="st zoom">
+    <button class="tb" id="zoom-out" title="Zoom out (Ctrl+-)">−</button>
+    <button class="tb" id="zoom-val" title="Reset zoom (Ctrl+0)">100%</button>
+    <button class="tb" id="zoom-in" title="Zoom in (Ctrl+=)">+</button>
+  </span>
+</footer>
+<textarea id="input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="Screenplay editor"></textarea>
+<div id="ac" hidden></div>
+<div id="overlay" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

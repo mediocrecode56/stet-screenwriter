@@ -1,0 +1,20 @@
+{
+  "name": "stet",
+  "productName": "STET",
+  "version": "0.1.0",
+  "description": "A fast, minimal, dependable screenwriting application.",
+  "type": "module",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/",
+    "bench": "node bench/core-bench.js",
+    "perf": "electron . --perf-probe",
+    "package": "electron-packager . STET --platform=win32 --arch=x64 --out=dist --overwrite --prune=true --ignore=^/dist --ignore=^/bench --ignore=^/test"
+  },
+  "devDependencies": {
+    "electron": "44.5.1"
+  }
+}

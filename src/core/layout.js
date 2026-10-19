@@ -1,0 +1,206 @@
+// Layout cache and incremental pagination.
+//
+// Layout of a block (its wrapped line starts) depends only on the block value,
+// so it is cached by object identity in a WeakMap: unchanged blocks are never
+// re-wrapped. Pagination is a linear pass over cached line counts; after an
+// edit it restarts a few blocks before the change and stops as soon as a page
+// boundary lines up with the previous result ("resync"), reusing the rest.
+
+import { ELEMENT, PAGE, spaceBefore, wrap } from './format.js';
+import { cueName } from './model.js';
+
+const cache = new WeakMap();
+
+/** Wrapped line starts for a block (cached). */
+export function linesOf(block) {
+  let l = cache.get(block);
+  if (l === undefined) {
+    l = wrap(block.text, ELEMENT[block.type].width);
+    cache.set(block, l);
+  }
+  return l;
+}
+
+const BODY = PAGE.bodyRows;
+const LOOKBACK = 4; // keep-with-next chains reach at most 3 blocks ahead
+
+function chainNext(type, nextType) {
+  switch (type) {
+    case 'scene': case 'shot': return nextType !== 'scene' && nextType !== 'shot';
+    case 'character': return nextType === 'paren' || nextType === 'dialogue';
+    case 'paren': return nextType === 'dialogue';
+    default: return false;
+  }
+}
+
+/** Rows that must fit on the current page before block bi may start there. */
+function minNeed(blocks, bi, settings) {
+  const b = blocks[bi];
+  const n = linesOf(b).length;
+  switch (b.type) {
+    case 'action': return n < 4 ? n : 2;
+    case 'dialogue': return n < 4 ? n : 3; // 2 lines + (MORE)
+    case 'transition': return n;
+    default: {
+      const next = blocks[bi + 1];
+      if (next && chainNext(b.type, next.type)) return n + spaceBefore(next.type, settings) + minNeed(blocks, bi + 1, settings);
+      return n;
+    }
+  }
+}
+
+function inSpeech(blocks, bi) {
+  const t = blocks[bi].type;
+  if (t !== 'paren' && t !== 'dialogue') return false;
+  const p = blocks[bi - 1];
+  return !!p && (p.type === 'character' || p.type === 'paren' || p.type === 'dialogue');
+}
+
+/** "NAME (CONT'D)" cue text for a speech that continues at block bi, or null. */
+export function contCue(blocks, bi, line) {
+  const t = blocks[bi].type;
+  if (t !== 'paren' && t !== 'dialogue') return null;
+  if (line === 0 && !inSpeech(blocks, bi)) return null;
+  for (let i = bi - 1; i >= 0; i--) {
+    const b = blocks[i];
+    if (b.type === 'character') {
+      const ext = b.text.replace(/\(CONT'?D\)/gi, '').trim();
+      return (ext || cueName(b.text)) + " (CONT'D)";
+    }
+    if (b.type !== 'paren' && b.type !== 'dialogue') return null;
+  }
+  return null;
+}
+
+function makePage(blocks, bi, line) {
+  const text = bi < blocks.length ? contCue(blocks, bi, line) : null;
+  return { startBi: bi, startLine: line, items: [], more: -1, cont: text, contRow: text ? 0 : -1 };
+}
+
+/**
+ * Paginate `blocks`. With `prev` (previous pages) and `dirty` ({from, to, delta}
+ * in new-index space: blocks [from, to) changed, total length changed by delta)
+ * only the affected region is recomputed.
+ */
+export function paginate(blocks, settings, prev = null, dirty = null) {
+  const N = blocks.length;
+  let pages = [];
+  let startBi = 0, startLine = 0;
+  let resyncFrom = Infinity, delta = 0, oldIdx = 0;
+
+  if (prev && dirty && prev.length && !dirty.full) {
+    // Keep every page that starts safely before the change.
+    const limit = dirty.from - LOOKBACK;
+    let p = 0;
+    for (let i = 0; i < prev.length; i++) {
+      if (prev[i].startBi <= limit) p = i; else break;
+    }
+    if (limit < 0) p = 0;
+    pages = prev.slice(0, p);
+    startBi = prev[p].startBi;
+    startLine = prev[p].startLine;
+    resyncFrom = dirty.to;
+    delta = dirty.delta;
+    oldIdx = p + 1;
+  }
+
+  if (N === 0) return [makePage(blocks, 0, 0)];
+
+  let page = makePage(blocks, startBi, startLine);
+  pages.push(page);
+  let y = page.cont ? 1 : 0;
+  let bi = startBi, line = startLine;
+
+  const newPage = (nbi, nline) => {
+    // A speech continuing onto the next page gets (MORE) on this one.
+    if (nbi < N && page.items.length && contCue(blocks, nbi, nline)) page.more = y;
+    // Resync with the previous pagination once we're past the edit.
+    if (nbi >= resyncFrom) {
+      const want = nbi - delta;
+      while (oldIdx < prev.length && (prev[oldIdx].startBi < want || (prev[oldIdx].startBi === want && prev[oldIdx].startLine < nline))) oldIdx++;
+      const old = prev[oldIdx];
+      if (old && old.startBi === want && old.startLine === nline) {
+        for (let k = oldIdx; k < prev.length; k++) pages.push(shiftPage(blocks, prev[k], delta));
+        return true;
+      }
+    }
+    page = makePage(blocks, nbi, nline);
+    pages.push(page);
+    y = page.cont ? 1 : 0;
+    return false;
+  };
+
+  while (bi < N) {
+    const b = blocks[bi];
+    const L = linesOf(b);
+    const n = L.length - line;
+    const sb = y === 0 || line > 0 || (page.cont && y === 1) ? 0 : spaceBefore(b.type, settings);
+
+    if (line === 0 && y > 0) {
+      const need = sb + minNeed(blocks, bi, settings);
+      if (y + need > BODY && !(page.cont && y === 1)) {
+        if (newPage(bi, 0)) return pages;
+        continue;
+      }
+    }
+    if (y + sb + n <= BODY) {
+      page.items.push({ bi, l0: line, l1: line + n, y: y + sb });
+      y += sb + n;
+      bi++; line = 0;
+      continue;
+    }
+    const isDlg = b.type === 'dialogue';
+    let avail = BODY - y - sb - (isDlg ? 1 : 0);
+    const fresh = page.items.length === 0;
+    if (!fresh) avail = Math.min(avail, n - 2); // leave at least two lines for the next page
+    if (avail >= 2 || (fresh && avail >= 1)) {
+      page.items.push({ bi, l0: line, l1: line + avail, y: y + sb });
+      y += sb + avail;
+      if (newPage(bi, line + avail)) return pages;
+      line += avail;
+      continue;
+    }
+    if (newPage(bi, line)) return pages;
+  }
+  return pages;
+}
+
+function shiftPage(blocks, p, delta) {
+  const cont = p.startBi + delta < blocks.length ? contCue(blocks, p.startBi + delta, p.startLine) : null;
+  if (delta === 0 && cont === p.cont) return p;
+  return {
+    startBi: p.startBi + delta,
+    startLine: p.startLine,
+    items: delta === 0 ? p.items : p.items.map((it) => ({ bi: it.bi + delta, l0: it.l0, l1: it.l1, y: it.y })),
+    more: p.more,
+    cont,
+    contRow: cont ? 0 : -1,
+  };
+}
+
+/** Merge a splice (s, removed r, added a) into an accumulated dirty range. */
+export function mergeDirty(d, s, r, a) {
+  if (!d) return { from: s, to: s + a, delta: a - r };
+  if (d.full) return d;
+  const t = d.to <= s ? d.to : d.to >= s + r ? d.to - r + a : s + a;
+  return { from: Math.min(d.from, s), to: Math.max(t, s + a), delta: d.delta + a - r };
+}
+
+/** Index of the page containing (bi, line). Binary search over page starts. */
+export function pageOf(pages, bi, line = 0) {
+  let lo = 0, hi = pages.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    const p = pages[mid];
+    if (p.startBi < bi || (p.startBi === bi && p.startLine <= line)) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+
+/** Row on its page of visual line `line` of block bi, or -1. */
+export function rowOf(page, bi, line) {
+  for (const it of page.items) {
+    if (it.bi === bi && line >= it.l0 && line < it.l1) return it.y + line - it.l0;
+  }
+  return -1;
+}
