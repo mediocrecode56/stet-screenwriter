@@ -145,6 +145,7 @@ export class Input {
         if (mod) return;
         ed.tab(ext); this.after(false); e.preventDefault(); return;
       case 'Escape':
+        if (this.onEscape && this.onEscape()) { e.preventDefault(); return; }
         if (ed.hasSelection()) { ed.setSel(ed.caret); this.after(); }
         return;
       default:

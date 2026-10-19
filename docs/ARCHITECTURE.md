@@ -108,6 +108,20 @@ page.
 | corrupt / unknown file | container checksum + schema validation; refused files are never written to |
 | format evolution | schema version + migrations; pre-migration original is backed up |
 
+## English revision
+
+`src/core/revision.js` (pure, unit-tested) builds review sections, the system
+prompt and the structured-output schema; validates every returned finding
+against the snapshot it was made from (element exists, original text is really
+there, minimal word-aligned span, no overlaps); and later revalidates findings
+against the live document. Blocks are immutable, so identity tells whether an
+element changed, and undo/redo of an accepted suggestion is recognised because
+undo restores the exact block objects. `src/main/claude.js` calls the API with
+the Anthropic SDK in the main process (key via safeStorage, streaming, adaptive
+thinking, `fallbacks: "default"`, AbortController cancellation).
+`src/renderer/revision.js` is the panel. Accepting goes through
+`Editor.replaceRanges`, so it is ordinary, undoable editing.
+
 ## Native code
 
 See [NATIVE.md](NATIVE.md): measured, not needed.

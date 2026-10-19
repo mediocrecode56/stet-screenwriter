@@ -50,9 +50,11 @@ export class View {
 
     this.selLayer = el('div', 'layer');
     this.findLayer = el('div', 'layer');
+    this.revLayer = el('div', 'layer');
+    this.revision = null; // { marks: [{b, s, e, cat, cur}] } from the English revision panel
     this.caretEl = el('div', '');
     this.caretEl.id = 'caret';
-    content.append(this.findLayer, this.selLayer, this.caretEl);
+    content.append(this.revLayer, this.findLayer, this.selLayer, this.caretEl);
     this.titleEl = null;
 
     // Moving between monitors changes the display scale; web fonts may settle late.
@@ -288,6 +290,8 @@ export class View {
     const blocks = ed.blocks;
     let selHTML = '';
     let findHTML = '';
+    let revHTML = '';
+    const rm = this.revision && this.revision.marks;
     const [s, e] = ed.ordered();
     const hasSel = cmp(s, e) !== 0;
     const fm = this.find && this.find.matches;
@@ -300,7 +304,10 @@ export class View {
         let fk = -1;
         if (fm && fm.length) fk = firstMatch(fm, it.bi);
         const hasFind = fk !== -1 && fm[fk].b === it.bi;
-        if (!inSel && !hasFind) continue;
+        let rk = -1;
+        if (rm && rm.length) rk = firstMatch(rm, it.bi);
+        const hasRev = rk !== -1 && rm[rk].b === it.bi;
+        if (!inSel && !hasFind && !hasRev) continue;
         const b = blocks[it.bi];
         const starts = linesOf(b);
         for (let l = it.l0; l < it.l1; l++) {
@@ -326,11 +333,20 @@ export class View {
               findHTML += `<div class="findr${cur}" style="left:${left + this.xAt(x0, a - ls)}px;top:${y}px;width:${(z - a) * this.cw}px;height:${this.row}px"></div>`;
             }
           }
+          if (hasRev) {
+            for (let k = rk; k < rm.length && rm[k].b === it.bi; k++) {
+              const m = rm[k];
+              const a = Math.max(m.s, ls), z = Math.min(m.e, le === b.text.length ? le : le + 1);
+              if (z <= a) continue;
+              revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}" style="left:${left + this.xAt(x0, a - ls)}px;top:${y}px;width:${(z - a) * this.cw}px;height:${this.row}px"></div>`;
+            }
+          }
         }
       }
     }
     if (this.selLayer._h !== selHTML) { this.selLayer.innerHTML = selHTML; this.selLayer._h = selHTML; }
     if (this.findLayer._h !== findHTML) { this.findLayer.innerHTML = findHTML; this.findLayer._h = findHTML; }
+    if (this.revLayer._h !== revHTML) { this.revLayer.innerHTML = revHTML; this.revLayer._h = revHTML; }
     this.paintCaret(left);
   }
 

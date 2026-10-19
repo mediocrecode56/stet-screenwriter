@@ -4,6 +4,22 @@ All notable changes to STET. Each version is one git commit, tagged `vX.Y.Z`.
 Versions stay below 1.0 while the app is in beta.
 Every version also gets a Windows build: `dist/STET-vX.Y.Z-win32-x64/STET.exe` (`npm run exe`).
 
+## 0.4.0 — 2026-10-19 — English revision with Claude
+
+### Added
+- **English Revision** (Tools menu, REVISE in the toolbar, Ctrl+Shift+R): Claude (`claude-opus-5-5`) reviews action, dialogue and parentheticals and reports Grammar Errors, Non-Native Constructions and Awkward Phrasing. Each finding has the original, a minimal replacement, an explanation and a confidence level.
+- The instructions protect the writer's voice: dialogue isn't formalised; slang, dialect and fragments are left alone; screenplay conventions aren't flagged; possibly deliberate choices are flagged cautiously or not at all; clean text gets no findings.
+- Review panel grouped by category; flagged passages underlined in the script (one style per category); F7 / Shift+F7 navigate.
+- Accept, Reject, Dismiss, **Ignore** (remembered in the screenplay's .stet file) and **+Dict** (a dictionary shared by every screenplay, editable under *Dictionary & Ignored…*). Accept all — per category or overall — asks for confirmation and is one undo step.
+- Every finding is validated against the text it was made for. Edits during or after a review mark affected findings *outdated*; moved text is followed only when unambiguous; overlapping suggestions are never both applied; undo/redo of an accepted suggestion re-opens or re-accepts it.
+- Long scripts are reviewed in scene-aligned sections with preceding text as context, three at a time. Rate limits are retried with backoff; failed sections can be retried; the review can be cancelled. Refusals, truncated answers and unreadable output are reported per section.
+- The API key is stored encrypted (Windows DPAPI via Electron safeStorage) and used only in the main process, never in screenplay files. The script is sent only when you press Review, after a confirmation showing request count and approximate tokens; the title page and notes are never sent; Claude is never called automatically.
+- Tests: 10 unit tests for the revision core and 6 end-to-end tests against a local mock of the Messages API.
+
+### Changed
+- No INT./EXT. prompt while typing a scene heading (location and time-of-day suggestions after the prefix remain).
+- Ctrl+F toggles Find & Replace; Escape closes it from the find bar or the script.
+
 ## 0.3.1 — 2026-10-19 — the caret no longer covers your text
 
 ### Fixed

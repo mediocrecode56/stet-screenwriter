@@ -12,10 +12,10 @@ const APP_ARGS = process.env.STET_E2E_EXE ? [] : [ROOT];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class App {
-  static async launch({ userData, port = 9300 + Math.floor(Math.random() * 500), args = [], hidden = true }) {
+  static async launch({ userData, port = 9300 + Math.floor(Math.random() * 500), args = [], hidden = true, env = {} }) {
     // Hidden windows produce no compositor frames, so screenshots need a visible one.
     const child = spawn(ELECTRON, [...APP_ARGS, '--e2e', ...(hidden ? ['--hidden'] : []), `--remote-debugging-port=${port}`, ...args], {
-      env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0' },
+      env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     child.stdout.on('data', () => {});

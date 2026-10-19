@@ -524,12 +524,21 @@ export class Editor {
 
   /** Replace the given matches (from findAll) in one undoable step. */
   replaceMatches(matches, replacement) {
+    return this.replaceRanges(matches, matches.map(() => replacement));
+  }
+
+  /**
+   * Replace ranges [{b, s, e}] (document order, non-overlapping) with the
+   * corresponding strings, as one undoable step. Marks are kept and shifted.
+   */
+  replaceRanges(matches, replacements) {
     if (!matches.length) return 0;
     this.edit('replace', () => {
       // Back to front so earlier offsets stay valid.
       for (let k = matches.length - 1; k >= 0; k--) {
         const m = matches[k];
         const b = this.blocks[m.b];
+        const replacement = replacements[k];
         const r = UPPER_TYPES.has(b.type) ? replacement.toUpperCase() : replacement;
         const marks = marksAfterInsert(marksAfterDelete(b.marks, m.s, m.e), m.s, r.length);
         this._replace(m.b, withText(b, b.text.slice(0, m.s) + r + b.text.slice(m.e), marks));

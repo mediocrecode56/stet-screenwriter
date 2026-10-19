@@ -20,6 +20,7 @@
   <div class="sep"></div>
   <button id="btn-comment" class="tb" title="Comment on selection (Ctrl+Alt+M)">+NOTE</button>
   <div class="grow"></div>
+  <button id="btn-rev" class="tb" title="English revision with Claude (F7 next suggestion)">REVISE</button>
   <button id="btn-scenes" class="tb" title="Scene navigator (Ctrl+\)">SCENES</button>
   <button id="btn-notes" class="tb" title="Comments (Ctrl+Shift+\)">NOTES</button>
 </div>
@@ -43,6 +44,7 @@
   <div id="scroller" tabindex="-1">
     <div id="content"></div>
   </div>
+  <aside id="rev" hidden></aside>
   <aside id="right" hidden>
     <div class="panel-head">NOTES <span id="note-count"></span></div>
     <div id="notes" class="list"></div>

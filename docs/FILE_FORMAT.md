@@ -83,6 +83,18 @@ into `x`, `start < end`:
 - `["cm", id]` — comment anchor; `id` keys into `comments`. One comment may
   anchor across several consecutive blocks.
 
+### Revision (optional, since 0.4.0)
+
+```jsonc
+"revision": { "ignored": [ { "text": "looking to him since five minutes", "category": "non_native" } ] }
+```
+
+Passages the writer chose to **Ignore** in the English revision. Future reviews
+of this script hide matching findings, and Claude is told not to flag them.
+Written only when non-empty, so files without ignores are byte-identical to
+0.3.x output. Older builds ignore the field (and would drop it on save). The
+global dictionary is not stored in screenplays — it lives in the app settings.
+
 ### Comments
 
 Only comments referenced by at least one anchor are written. Comment text is

@@ -187,7 +187,9 @@ test('first appearance of a character name is capitalized once', () => {
 
 test('autocomplete suggests prefixes, locations, times, names and extensions', () => {
   const blocks = [makeBlock('scene', 'INT. COFFEE SHOP - DAY'), makeBlock('scene', 'I')];
-  assert.deepEqual(suggest(blocks, 1, 1).items.slice(0, 3), ['INT. ', 'INT./EXT. ', 'I/E. ']);
+  assert.equal(suggest(blocks, 1, 1), null, 'no INT./EXT. prompt while typing the prefix');
+  blocks[1] = makeBlock('scene', '1. ITNRO');
+  assert.equal(suggest(blocks, 1, 8), null, 'free-form headings get no prompt');
   blocks[1] = makeBlock('scene', 'EXT. CO');
   assert.deepEqual(suggest(blocks, 1, 7).items, ['COFFEE SHOP']);
   blocks[1] = makeBlock('scene', 'EXT. COFFEE SHOP - N');

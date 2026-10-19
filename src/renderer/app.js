@@ -16,6 +16,7 @@ import * as cmd from './ui/commands.js';
 import * as dlg from './ui/dialog.js';
 import * as dialogs from './ui/dialogs.js';
 import { runPerfProbe } from './perf.js';
+import { Revision, keyDialog, dictionaryDialog } from './revision.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 
 const api = window.stet;
@@ -39,6 +40,7 @@ const input = new Input({
   onCommandKey: (e) => cmd.handleKey(e),
   onCommentClick: (id) => openNote(id, true),
 });
+input.onEscape = () => { if (!find.open) return false; find.close(); return true; };
 input.onZoom = () => { renderZoom(); persistZoom(); };
 ac.onAccepted = () => input.after(false);
 
@@ -55,6 +57,13 @@ const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), { editor
 const notes = new NotesPanel($('right'), $('notes'), $('note-count'), { editor, view, session, jump, onChange: () => session.touch() });
 const find = new FindBar({ editor, view, jump, focusEditor: () => input.focus() });
 
+const revision = new Revision({
+  host: $('rev'), editor, view, session, jump,
+  getSettings: () => settings,
+  setSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
+  onShow: (on) => { $('btn-rev').classList.toggle('on', on); view.layoutDirty = true; view.schedule(); },
+});
+
 view.onTitleInput = () => session.touch();
 view.showTitle = settings.showTitlePage !== false;
 
@@ -70,6 +79,7 @@ editor.onChange = () => {
     scenes.refresh();
     notes.refresh();
     if (find.open) find.schedule();
+    revision.documentChanged();
   }
   // Caret inside commented text makes that note current.
   const b = editor.block;
@@ -96,6 +106,7 @@ function onDocLoaded(s) {
   lastRev = editor.rev;
   editor.pastedWords = 0;
   scenes.lastKey = ''; notes.lastKey = '';
+  revision.reset();
   scenes.refresh(); notes.refresh(true);
   renderTitle();
   if (find.open) find.search(true);
@@ -262,6 +273,7 @@ const tbClick = (id, c) => $(id).addEventListener('mousedown', (e) => { e.preven
 tbClick('btn-comment', 'note-add');
 tbClick('btn-scenes', 'panel-scenes');
 tbClick('btn-notes', 'panel-notes');
+tbClick('btn-rev', 'revise-panel');
 tbClick('th-light', 'theme-light');
 tbClick('th-dark', 'theme-dark');
 tbClick('th-auto', 'theme-auto');
@@ -576,7 +588,7 @@ cmd.register([
   { id: 'copy', cat: 'Edit', label: 'Copy', display: 'Ctrl+C', run: () => { input.focus(); document.execCommand('copy'); } },
   { id: 'paste', cat: 'Edit', label: 'Paste', display: 'Ctrl+V', run: () => { input.focus(); document.execCommand('paste'); } },
   { id: 'select-all', cat: 'Edit', label: 'Select All', display: 'Ctrl+A', run: () => { editor.selectAll(); input.after(); input.focus(); } },
-  { id: 'find', cat: 'Edit', label: 'Find…', keys: 'Ctrl+F', global: true, run: () => find.show(false) },
+  { id: 'find', cat: 'Edit', label: () => (find.open ? 'Close Find' : 'Find…'), keys: 'Ctrl+F', global: true, run: () => (find.open ? find.close() : find.show(false)) },
   { id: 'replace', cat: 'Edit', label: 'Find & Replace…', keys: 'Ctrl+H', global: true, run: () => find.show(true) },
   { id: 'find-next', cat: 'Edit', label: 'Find Next', keys: 'F3', global: true, run: () => { if (!find.open) find.show(); else find.next(1); } },
   { id: 'find-prev', cat: 'Edit', label: 'Find Previous', keys: 'Shift+F3', global: true, run: () => { if (!find.open) find.show(); else find.next(-1); } },
@@ -619,6 +631,12 @@ cmd.register([
     tracker.update(session.doc.meta.id, editor.words, editor.pastedWords); editor.pastedWords = 0;
     await dialogs.statsDialog(tracker.summary(settings.goals), editor.words, async (goals) => { settings = await api.invoke('settings:set', { goals }); renderGoal(); });
   } },
+  { id: 'revise-panel', cat: 'Tools', label: () => (revision.visible ? 'Hide English Revision' : 'English Revision'), keys: 'Ctrl+Shift+R', global: true, run: () => revision.show() },
+  { id: 'revise-run', cat: 'Tools', label: 'Review English with Claude…', run: () => { revision.show(true); revision.start(); } },
+  { id: 'revise-next', cat: 'Tools', label: 'Next Suggestion', keys: 'F7', global: true, run: () => revision.step(1) },
+  { id: 'revise-prev', cat: 'Tools', label: 'Previous Suggestion', keys: 'Shift+F7', global: true, run: () => revision.step(-1) },
+  { id: 'revise-dict', cat: 'Tools', label: 'Dictionary & Ignored…', run: () => dictionaryDialog(revision) },
+  { id: 'claude-key', cat: 'Tools', label: 'Claude API Key…', run: () => keyDialog() },
   { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, api, report: false }) },
 
   { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog(cmd.all()) },
@@ -632,7 +650,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
   { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', '-', 'goto-page', 'scene-next', 'scene-prev'] },
-  { label: 'Tools', items: ['stats', '-', 'perf'] },
+  { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', 'about'] },
 ]);
 
@@ -678,7 +696,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, tracker, cmd, openPath, save, exportPdf, checkRecovery, api, settings: () => settings };
+if (info.e2e) window.__stet = { editor, view, session, input, tracker, cmd, revision, openPath, save, exportPdf, checkRecovery, api, settings: () => settings };
 
 // ---- startup -----------------------------------------------------------------------------------------
 

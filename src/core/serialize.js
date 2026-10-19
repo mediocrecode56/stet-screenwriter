@@ -41,6 +41,10 @@ export function toPayload(doc, appVersion) {
     titlePage: tp,
     blocks: doc.blocks.map((b) => (b.marks.length ? { t: b.type, x: b.text, m: b.marks.map((m) => [m.s, m.e, m.k, m.v]) } : { t: b.type, x: b.text })),
     comments,
+    // Optional (v0.4+): English-revision passages the writer chose to ignore in this script.
+    ...(doc.revision && doc.revision.ignored && doc.revision.ignored.length
+      ? { revision: { ignored: doc.revision.ignored.map((x) => ({ text: x.text, category: x.category })) } }
+      : {}),
   };
 }
 
@@ -136,6 +140,13 @@ export function deserialize(json) {
   const doc = {
     meta: { id: str(meta.id) || uuid(), created: str(meta.created) || now, modified: str(meta.modified) || now },
     settings, titlePage, blocks, comments,
+    revision: { ignored: [] },
   };
+  const rv = p.revision;
+  if (rv && Array.isArray(rv.ignored)) {
+    for (const x of rv.ignored) {
+      if (x && typeof x.text === 'string' && x.text && typeof x.category === 'string') doc.revision.ignored.push({ text: x.text, category: x.category });
+    }
+  }
   return { doc, warnings, migratedFrom };
 }

@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { JsonStore } from './store.js';
 import { effectiveTheme, DEFAULT_SCHEDULE } from '../core/schedule.js';
+import { ClaudeService } from './claude.js';
 import {
   SaveQueue, Recovery, readDocument, isValidDocument, atomicWrite, cleanTemps,
   backupDirFor, createBackup, listBackups, pruneBackups, docBase,
@@ -35,7 +36,7 @@ if (!PERF && !SHOT && !E2E && !app.requestSingleInstanceLock()) app.quit();
 let win = null;
 let allowClose = false;
 let closeAsked = 0;
-let settings, stats, recovery;
+let settings, stats, recovery, claude;
 const queue = new SaveQueue();
 
 const defaultDir = () => path.join(app.getPath('documents'), 'STET');
@@ -246,6 +247,13 @@ function registerIpc() {
   });
   handle('shell:reveal', (file) => shell.showItemInFolder(file));
 
+  handle('claude:key-status', () => claude.keyStatus());
+  handle('claude:key-set', (key) => claude.setKey(key));
+  handle('claude:key-clear', () => claude.clearKey());
+  handle('claude:key-test', () => claude.testKey());
+  handle('review:start', (req) => { claude.start(req); return true; });
+  handle('review:cancel', (id) => claude.cancel(id));
+
   handle('stats:get', () => stats.get());
   handle('stats:set', (data) => { stats.replace(data); return true; });
 
@@ -333,10 +341,11 @@ app.whenReady().then(async () => {
   const ud = app.getPath('userData');
   settings = new JsonStore(path.join(ud, 'settings.json'), {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
-    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, showTitlePage: true, panels: { scenes: false, notes: false },
+    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], reviewConsent: false, showTitlePage: true, panels: { scenes: false, notes: false },
   });
   stats = new JsonStore(path.join(ud, 'stats.json'), { days: {} });
   recovery = new Recovery(path.join(ud, 'recovery'));
+  claude = new ClaudeService(ud, (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
   await fs.mkdir(recovery.dir, { recursive: true });
 
   protocol.handle('stet', (req) => {

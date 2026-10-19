@@ -73,6 +73,7 @@ export function newDocument(title = '') {
     titlePage: emptyTitlePage(title),
     blocks: [makeBlock('scene', '')],
     comments: {},
+    revision: { ignored: [] },
   };
 }
 

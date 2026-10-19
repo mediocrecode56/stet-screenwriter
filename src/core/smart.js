@@ -4,7 +4,6 @@
 
 import { cueName } from './model.js';
 
-export const SCENE_PREFIXES = ['INT. ', 'EXT. ', 'INT./EXT. ', 'EXT./INT. ', 'I/E. ', 'EST. '];
 export const TIMES = ['DAY', 'NIGHT', 'MORNING', 'AFTERNOON', 'EVENING', 'DAWN', 'DUSK', 'CONTINUOUS', 'LATER', 'MOMENTS LATER', 'SAME TIME'];
 export const EXTENSIONS = ['V.O.', 'O.S.', 'O.C.', "CONT'D", 'PRE-LAP', 'FILTERED', 'INTO PHONE'];
 export const TRANSITIONS = ['CUT TO:', 'DISSOLVE TO:', 'SMASH CUT TO:', 'MATCH CUT TO:', 'JUMP CUT TO:', 'FADE OUT.', 'FADE TO BLACK.', 'FADE IN:', 'INTERCUT WITH:', 'BACK TO:'];
@@ -51,10 +50,8 @@ export function suggest(blocks, bi, o, names) {
   const text = b.text;
   if (b.type === 'scene') {
     const m = PREFIX_RE.exec(text);
-    if (!m) {
-      const items = filter(SCENE_PREFIXES, text);
-      return items.length ? { from: 0, items } : null;
-    }
+    // No prompt while typing the INT./EXT. prefix: headings are typed freely.
+    if (!m) return null;
     const restStart = m[0].length;
     const dash = text.lastIndexOf(' - ');
     if (dash >= restStart - 1 && dash !== -1) {

@@ -40,6 +40,11 @@ for (const tag of targets) {
     const electronVersion = (pkg.devDependencies?.electron || '').replace(/^[^\d]*/, '');
     // Each version keeps the icon it shipped with (versions before 0.3.0 had none).
     const ico = path.join(src, 'build', 'icon.ico');
+    // Runtime dependencies (v0.4+: the Anthropic SDK) are installed into the worktree.
+    if (pkg.dependencies && Object.keys(pkg.dependencies).length) {
+      console.log(`${tag}: installing runtime dependencies…`);
+      execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: src, stdio: 'ignore', shell: process.platform === 'win32' });
+    }
     console.log(`${tag}: packaging with Electron ${electronVersion}…`);
     const [made] = await packager({
       dir: src,
@@ -52,7 +57,7 @@ for (const tag of targets) {
       appVersion: pkg.version,
       ...(fs.existsSync(ico) ? { icon: ico } : {}),
       win32metadata: { CompanyName: 'STET', ProductName: 'STET', FileDescription: 'STET screenwriting' },
-      prune: false, // the app has no runtime dependencies
+      prune: false, // node_modules holds production dependencies only (npm ci --omit=dev)
       overwrite: true,
       asar: true,
       ignore: [/^\/(dist|bench|test|docs|scripts|\.perf|\.build)(\/|$)/, /^\/\.git/, /^\/build\/icon-\d+\.png$/],
