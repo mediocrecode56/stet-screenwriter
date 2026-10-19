@@ -79,6 +79,42 @@ Set from the architecture and confirmed by the measurements above:
 | open a 450-page script to first paint < 100 ms | met (≈ 10 ms after the file is read) |
 | no memory growth beyond undo history in long sessions | 5 000 edits ≈ +3.5 MB including 2 000-step undo history cap |
 
+## Toolbar latency (v0.3.0)
+
+Measured with `node bench/toolbar-latency.js`: real mouse events (CDP) on a
+visible window holding the 456-page script; time from mousedown to the
+handler finishing ("JS") and to the next frame.
+
+| control | JS before → after | next frame p50 before → after |
+|---|---|---|
+| element type (CHARACTER / ACTION) | 1.6 / 1.0 → 1.7 / 0.9 ms | 3.7 / 3.0 → 3.4 / 1.9 ms |
+| highlight | 0.9 → 1.1 ms | 4.3 → 2.8 ms |
+| SCENES open / close | 0.3 → 0.2 ms | 4.6 / 11.2 → 5.3 / 11.4 ms |
+| theme LIGHT / DARK | 0.2 → 0.1 ms | 2.1 / 3.7 → 2.4 / 4.3 ms |
+| zoom + / − | 4.8 / 1.7 → 5.2 / 1.7 ms | 6.0 / 7.2 → 6.3 / 2.8 ms |
+| File menu | 2.3 → 1.4 ms | 6.5 → 2.4 ms |
+
+Every control already reached the screen within one frame, so the felt delay
+was not computation. It came from the visual path:
+
+- **no pressed state** — nothing changed under the pointer until the
+  command's own result appeared. Controls now get a `pressed` class on
+  `pointerdown`, painted in the same frame, independent of the command.
+- **fade-from-transparent animations** — panels faded in from opacity 0 over
+  80 ms and menus over 60 ms, so their content was half-visible for several
+  frames. They are now fully opaque on the first frame with a short 50–60 ms
+  positional nudge (motion kept, delay removed); dialogs keep the backdrop
+  fade but the dialog itself is solid immediately.
+- **redundant work** — theme switches no longer tear down and repaint every
+  page (colours are CSS variables), panel toggles no longer force a full
+  repaint, and autosave no longer rewrites settings.json on every save.
+
+## Word counting (v0.3.0)
+
+Replaced the Unicode-regex scan with a table-driven state machine (see
+[NATIVE.md](NATIVE.md)): 3.95 → 1.59 ms per full count on English, 14.6 →
+1.5 ms on Cyrillic-heavy text; opening a 456-page script 14.5 → 13.0 ms.
+
 ## What was optimised, and why
 
 1. **Character-grid layout** instead of DOM measurement — removed text

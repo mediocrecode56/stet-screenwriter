@@ -8,7 +8,7 @@
 </head>
 <body>
 <header id="top">
-  <div id="brand">STET<span id="ver"></span></div>
+  <div id="brand"><img id="mark" src="mark.svg" width="14" height="14" alt="">STET<span id="ver"></span></div>
   <nav id="menubar"></nav>
   <div id="docname" title="Document"><span id="docdot"></span><span id="doctitle">untitled</span></div>
   <div id="drag"></div>
@@ -22,7 +22,6 @@
   <div class="grow"></div>
   <button id="btn-scenes" class="tb" title="Scene navigator (Ctrl+\)">SCENES</button>
   <button id="btn-notes" class="tb" title="Comments (Ctrl+Shift+\)">NOTES</button>
-  <button id="btn-theme" class="tb" title="Toggle light/dark (Ctrl+Shift+L)">◐</button>
 </div>
 <div id="findbar" hidden>
   <input id="find-q" placeholder="find" spellcheck="false">
@@ -57,6 +56,11 @@
   <span id="st-goal" class="st" title="Today's writing goal — click for statistics"></span>
   <span class="grow"></span>
   <span id="st-save" class="st"></span>
+  <span class="st seg" id="theme-seg" role="group" aria-label="Theme">
+    <button class="tb" id="th-light" title="Light mode (Ctrl+Shift+L toggles)">LIGHT</button>
+    <button class="tb" id="th-dark" title="Dark mode (Ctrl+Shift+L toggles)">DARK</button>
+    <button class="tb" id="th-auto" title="Switch automatically on a schedule — right-click to set times">AUTO</button>
+  </span>
   <span class="st zoom">
     <button class="tb" id="zoom-out" title="Zoom out (Ctrl+-)">−</button>
     <button class="tb" id="zoom-val" title="Reset zoom (Ctrl+0)">100%</button>

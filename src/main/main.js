@@ -8,6 +8,7 @@ import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { JsonStore } from './store.js';
+import { effectiveTheme, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import {
   SaveQueue, Recovery, readDocument, isValidDocument, atomicWrite, cleanTemps,
   backupDirFor, createBackup, listBackups, pruneBackups, docBase,
@@ -40,13 +41,12 @@ const queue = new SaveQueue();
 const defaultDir = () => path.join(app.getPath('documents'), 'STET');
 
 const THEME_BAR = {
-  dark: { color: '#0d0d0d', symbolColor: '#e6e6e3', bg: '#070707' },
-  light: { color: '#f4f4f2', symbolColor: '#000000', bg: '#e9e9e6' },
+  dark: { color: '#161616', symbolColor: '#f0f0ed', bg: '#0f0f0f' },
+  light: { color: '#e9e9e6', symbolColor: '#000000', bg: '#d9d9d5' },
 };
 
 function resolvedTheme() {
-  const t = settings.get().theme;
-  return t === 'system' ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light') : t;
+  return effectiveTheme(settings.get(), new Date(), nativeTheme.shouldUseDarkColors);
 }
 
 function fileArg(args) {
@@ -60,6 +60,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: b.width || 1280, height: b.height || 860, x: b.x, y: b.y,
     minWidth: 720, minHeight: 480,
+    icon: path.join(ROOT, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     show: false,
     backgroundColor: THEME_BAR[theme].bg,
     titleBarStyle: 'hidden',
@@ -112,6 +113,8 @@ function saveBounds() {
 
 function addRecent(file) {
   const s = settings.get();
+  // Autosave calls this every few seconds: only touch settings.json when the list changes.
+  if (s.recent && s.recent[0] && s.recent[0].path === file) return;
   const recent = (s.recent || []).filter((r) => r.path !== file);
   recent.unshift({ path: file, name: docBase(file), opened: Date.now() });
   settings.set({ recent: recent.slice(0, 12) });
@@ -246,13 +249,12 @@ function registerIpc() {
   handle('stats:get', () => stats.get());
   handle('stats:set', (data) => { stats.replace(data); return true; });
 
-  handle('theme:set', (theme) => {
-    settings.set({ theme });
-    nativeTheme.themeSource = theme;
-    const t = THEME_BAR[resolvedTheme()];
+  // The renderer decides the theme (manual choice or schedule); main just matches the window chrome.
+  handle('theme:apply', (resolved) => {
+    const t = THEME_BAR[resolved === 'light' ? 'light' : 'dark'];
     if (win && process.platform !== 'darwin') { try { win.setTitleBarOverlay({ color: t.color, symbolColor: t.symbolColor, height: 30 }); } catch { /* unsupported */ } }
     if (win) win.setBackgroundColor(t.bg);
-    return resolvedTheme();
+    return true;
   });
 
   handle('export:pdf', async ({ json, options, name, file }) => {
@@ -325,16 +327,17 @@ app.on('open-file', (e, file) => { // macOS
 });
 let pendingOpen = fileArg(argv);
 
+if (process.platform === 'win32') app.setAppUserModelId('app.stet.screenwriting');
+
 app.whenReady().then(async () => {
   const ud = app.getPath('userData');
   settings = new JsonStore(path.join(ud, 'settings.json'), {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
-    goals: { daily: 1000, weekly: 5000 }, showTitlePage: true, panels: { scenes: false, notes: false },
+    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, showTitlePage: true, panels: { scenes: false, notes: false },
   });
   stats = new JsonStore(path.join(ud, 'stats.json'), { days: {} });
   recovery = new Recovery(path.join(ud, 'recovery'));
   await fs.mkdir(recovery.dir, { recursive: true });
-  nativeTheme.themeSource = settings.get().theme;
 
   protocol.handle('stet', (req) => {
     const { pathname } = new URL(req.url);

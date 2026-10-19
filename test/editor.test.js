@@ -197,3 +197,20 @@ test('autocomplete suggests prefixes, locations, times, names and extensions', (
   c[0] = makeBlock('character', 'MARA (V');
   assert.deepEqual(suggest(c, 0, 7, []).items, ['V.O.)']);
 });
+
+test('countWords matches the regex definition on random and real-world text', async () => {
+  const { WORD_RE } = await import('../src/core/text.js');
+  const ref = (s) => (s.match(WORD_RE) || []).length;
+  const alphabet = ['a', 'Z', '7', ' ', '-', "'", '’', '—', '.', 'é', 'ñ', 'ж', '日', '😀', '𝐀', '\n', '\uD800', '\uDC00', '_', '(', '٣'];
+  let seed = 42;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; };
+  for (let k = 0; k < 4000; k++) {
+    let s = '';
+    const n = Math.floor(rnd() * 30);
+    for (let i = 0; i < n; i++) s += alphabet[Math.floor(rnd() * alphabet.length)];
+    assert.equal(countWords(s), ref(s), JSON.stringify(s));
+  }
+  for (const s of ["don't stop", 'well-known  -- dash', 'a--b', 'a- b', "rock 'n' roll", 'café’s niño', 'Привет, мир', '日本語 テキスト', 'x-', '-x', "''a''"]) {
+    assert.equal(countWords(s), ref(s), s);
+  }
+});

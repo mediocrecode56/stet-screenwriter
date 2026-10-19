@@ -16,6 +16,7 @@ import * as cmd from './ui/commands.js';
 import * as dlg from './ui/dialog.js';
 import * as dialogs from './ui/dialogs.js';
 import { runPerfProbe } from './perf.js';
+import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 
 const api = window.stet;
 const $ = (id) => document.getElementById(id);
@@ -184,12 +185,61 @@ function renderZoom() { $('zoom-val').textContent = Math.round(view.z * 100) + '
 let zoomTimer = 0;
 function persistZoom() { clearTimeout(zoomTimer); zoomTimer = setTimeout(() => api.invoke('settings:set', { zoom: view.z }), 500); }
 
-function applyTheme(theme) {
-  const resolved = theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
-  document.documentElement.dataset.theme = resolved;
-  api.invoke('theme:set', theme);
-  settings.theme = theme;
+// ---- theme: manual choice or AM/PM schedule ----------------------------------------
+// The schedule only ever decides while it is enabled; picking LIGHT or DARK
+// switches it off, so the clock never overrides a manual choice.
+
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+function schedule() { return { ...DEFAULT_SCHEDULE, ...(settings.schedule || {}) }; }
+
+/** Show whatever theme the settings call for right now (cheap; safe to poll). */
+function refreshTheme() {
+  const t = effectiveTheme({ ...settings, schedule: schedule() }, new Date(), systemDark.matches);
+  if (document.documentElement.dataset.theme !== t) {
+    document.documentElement.dataset.theme = t;
+    api.invoke('theme:apply', t);
+  }
+  renderThemeSeg(t);
 }
+
+function setManualTheme(theme) {
+  settings.theme = theme;
+  settings.schedule = { ...schedule(), enabled: false };
+  refreshTheme();
+  api.invoke('settings:set', { theme, schedule: settings.schedule });
+}
+
+function setAutoTheme(on) {
+  settings.schedule = { ...schedule(), enabled: on };
+  refreshTheme();
+  api.invoke('settings:set', { schedule: settings.schedule });
+}
+
+function renderThemeSeg(t) {
+  const auto = schedule().enabled;
+  $('th-light').classList.toggle('on', !auto && t === 'light');
+  $('th-dark').classList.toggle('on', !auto && t === 'dark');
+  $('th-light').classList.toggle('cur', auto && t === 'light');
+  $('th-dark').classList.toggle('cur', auto && t === 'dark');
+  $('th-auto').classList.toggle('on', auto);
+  const s = schedule();
+  $('th-auto').title = `${auto ? 'Automatic: ' : 'Switch automatically — '}dark from ${timeLabel(s.darkAt)}, light from ${timeLabel(s.lightAt)}. Right-click to change the times.`;
+}
+
+async function editSchedule() {
+  const v = await dialogs.scheduleDialog(schedule());
+  if (!v) return;
+  settings.schedule = v;
+  refreshTheme();
+  api.invoke('settings:set', { schedule: v });
+}
+
+// Re-check on a short poll and whenever the window regains attention, so
+// sleep/wake, clock changes and time-zone changes take effect promptly.
+setInterval(refreshTheme, 15000);
+window.addEventListener('focus', refreshTheme);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshTheme(); });
+systemDark.addEventListener('change', refreshTheme);
 
 // element & highlight bars
 for (const [i, t] of TYPES.entries()) {
@@ -212,13 +262,26 @@ const tbClick = (id, c) => $(id).addEventListener('mousedown', (e) => { e.preven
 tbClick('btn-comment', 'note-add');
 tbClick('btn-scenes', 'panel-scenes');
 tbClick('btn-notes', 'panel-notes');
-tbClick('btn-theme', 'theme-toggle');
+tbClick('th-light', 'theme-light');
+tbClick('th-dark', 'theme-dark');
+tbClick('th-auto', 'theme-auto');
+$('th-auto').addEventListener('contextmenu', (e) => { e.preventDefault(); editSchedule(); });
 tbClick('zoom-in', 'zoom-in');
 tbClick('zoom-out', 'zoom-out');
 tbClick('zoom-val', 'zoom-reset');
 $('st-goal').addEventListener('click', () => cmd.run('stats'));
 $('st-save').addEventListener('click', () => { if (session.status === 'conflict' || session.status === 'error') cmd.run('save'); });
 $('doctitle').addEventListener('dblclick', () => cmd.run('rename'));
+
+// Immediate pressed state for every control, independent of what the command does.
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest && e.target.closest('.tb, .mb, .btn');
+  if (!b || e.button !== 0) return;
+  b.classList.add('pressed');
+  const up = () => { b.classList.remove('pressed'); removeEventListener('pointerup', up, true); removeEventListener('pointercancel', up, true); };
+  addEventListener('pointerup', up, true);
+  addEventListener('pointercancel', up, true);
+}, true);
 
 // ---- document operations ----------------------------------------------------------------
 
@@ -429,8 +492,9 @@ function showPanel(which, on) {
   host.hidden = !want;
   $(which === 'scenes' ? 'btn-scenes' : 'btn-notes').classList.toggle('on', want);
   api.invoke('settings:set', { panels: { [which]: want } });
+  // The view's ResizeObserver re-centres and repaints only what moved; no full teardown.
   view.layoutDirty = true;
-  view.invalidate();
+  view.schedule();
   if (want) (which === 'scenes' ? scenes : notes).refresh(true);
 }
 
@@ -496,7 +560,7 @@ cmd.register([
     const v = await dialogs.preferencesDialog(settings, session.doc);
     if (!v) return;
     settings = await api.invoke('settings:set', v.app);
-    applyTheme(v.app.theme);
+    refreshTheme();
     session.autosave = settings.autosave; session.autosaveDelay = settings.autosaveDelayMs;
     const spacingChanged = v.doc.sceneSpacing !== session.doc.settings.sceneSpacing;
     Object.assign(session.doc.settings, v.doc);
@@ -527,7 +591,11 @@ cmd.register([
   { id: 'note-prev', cat: 'Format', label: 'Previous Note', keys: 'Shift+F8', global: true, run: () => stepNote(-1) },
 
   { id: 'palette', cat: 'View', label: 'Command Palette…', keys: ['Ctrl+K', 'Ctrl+Shift+P'], global: true, run: () => cmd.palette() },
-  { id: 'theme-toggle', cat: 'View', label: () => (document.documentElement.dataset.theme === 'dark' ? 'Light Mode' : 'Dark Mode'), keys: 'Ctrl+Shift+L', global: true, run: () => { applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); view.invalidate(); } },
+  { id: 'theme-toggle', cat: 'View', label: () => (document.documentElement.dataset.theme === 'dark' ? 'Light Mode' : 'Dark Mode'), keys: 'Ctrl+Shift+L', global: true, run: () => setManualTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark') },
+  { id: 'theme-light', cat: 'View', label: 'Light Mode (manual)', run: () => setManualTheme('light') },
+  { id: 'theme-dark', cat: 'View', label: 'Dark Mode (manual)', run: () => setManualTheme('dark') },
+  { id: 'theme-auto', cat: 'View', label: () => (schedule().enabled ? 'Turn Off Automatic Theme' : 'Automatic Theme (Schedule)'), run: () => setAutoTheme(!schedule().enabled) },
+  { id: 'theme-schedule', cat: 'View', label: 'Theme Schedule…', run: editSchedule },
   { id: 'zoom-in', cat: 'View', label: 'Zoom In', keys: ['Ctrl+=', 'Ctrl+Shift+='], global: true, run: () => { view.setZoom(view.z + 0.1); renderZoom(); persistZoom(); } },
   { id: 'zoom-out', cat: 'View', label: 'Zoom Out', keys: 'Ctrl+-', global: true, run: () => { view.setZoom(view.z - 0.1); renderZoom(); persistZoom(); } },
   { id: 'zoom-reset', cat: 'View', label: 'Actual Size (100%)', keys: 'Ctrl+0', global: true, run: () => { view.setZoom(1); renderZoom(); persistZoom(); } },
@@ -563,7 +631,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
-  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', '-', 'goto-page', 'scene-next', 'scene-prev'] },
+  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: ['stats', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', 'about'] },
 ]);
@@ -614,7 +682,7 @@ if (info.e2e) window.__stet = { editor, view, session, input, tracker, cmd, open
 
 // ---- startup -----------------------------------------------------------------------------------------
 
-applyTheme(settings.theme);
+refreshTheme();
 session.autosave = settings.autosave;
 session.autosaveDelay = settings.autosaveDelayMs;
 if (settings.zoom && settings.zoom !== 1) view.setZoom(settings.zoom);

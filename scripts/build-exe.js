@@ -38,6 +38,8 @@ for (const tag of targets) {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8'));
     const electronVersion = (pkg.devDependencies?.electron || '').replace(/^[^\d]*/, '');
+    // Each version keeps the icon it shipped with (versions before 0.3.0 had none).
+    const ico = path.join(src, 'build', 'icon.ico');
     console.log(`${tag}: packaging with Electron ${electronVersion}…`);
     const [made] = await packager({
       dir: src,
@@ -48,11 +50,12 @@ for (const tag of targets) {
       arch: 'x64',
       electronVersion,
       appVersion: pkg.version,
+      ...(fs.existsSync(ico) ? { icon: ico } : {}),
       win32metadata: { CompanyName: 'STET', ProductName: 'STET', FileDescription: 'STET screenwriting' },
       prune: false, // the app has no runtime dependencies
       overwrite: true,
       asar: true,
-      ignore: [/^\/(dist|bench|test|docs|scripts|\.perf|\.build)(\/|$)/, /^\/\.git/],
+      ignore: [/^\/(dist|bench|test|docs|scripts|\.perf|\.build)(\/|$)/, /^\/\.git/, /^\/build\/icon-\d+\.png$/],
       quiet: true,
     });
     fs.rmSync(out, { recursive: true, force: true });

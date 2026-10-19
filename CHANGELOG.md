@@ -4,6 +4,24 @@ All notable changes to STET. Each version is one git commit, tagged `vX.Y.Z`.
 Versions stay below 1.0 while the app is in beta.
 Every version also gets a Windows build: `dist/STET-vX.Y.Z-win32-x64/STET.exe` (`npm run exe`).
 
+## 0.3.0 — 2026-10-19 — readability, theme schedule, responsiveness, icon
+
+### Changed
+- Dark mode is brighter: lighter page (#1e1e1e) and desk, brighter text at every level. Muted labels rose from about 2.9:1 to 5.2:1 contrast, and the four grey levels stay distinct.
+- Light mode is slightly deeper: darker desk and bars, darker secondary text (muted labels about 2.6:1 → 4.3:1), stronger page edge.
+- Highlight colours retuned for the new dark page (≥ 7.7:1 text contrast in dark, ≥ 14.9:1 in light).
+- The theme toggle moved to the status bar: LIGHT · DARK · AUTO, active state inverted, always visible. Lower-priority status items hide first on narrow windows.
+
+### Added
+- Automatic theme schedule: dark-mode and light-mode start times picked with AM/PM controls (right-click AUTO, View → Theme Schedule…, or Preferences). Applies at launch and as soon as it's enabled, handles schedules that cross midnight, and re-checks every 15 s and on focus/wake, so clock and time-zone changes take effect. Picking LIGHT or DARK by hand turns the schedule off, so it never overrides a manual choice. Settings persist across restarts.
+- Custom icon: a line of text, the typing caret, and the proofreader's stet dots ("let it stand"). Used for the window, the taskbar, the top-bar mark and the .exe, with pixel-grid versions for 16–32 px.
+- Toolbar latency benchmark (`bench/toolbar-latency.js`) and the C/WebAssembly word-count experiment (`bench/native-experiment/`).
+- Tests: 6 scheduler unit tests, a 4 000-case word-count fuzz test, and 5 end-to-end tests (toggle, pressed state, AUTO vs manual, time-zone change, persistence across restart).
+
+### Faster
+- Toolbar controls paint a pressed state at pointerdown. Panels and menus are fully visible on their first frame (a short motion nudge instead of a fade from transparent). Theme and panel toggles no longer repaint every page. Autosave no longer rewrites settings.json on every save.
+- Word counting uses a table-driven state machine instead of a Unicode regex: 2.5× faster on English, 9.6× on Cyrillic. Opening a 456-page script went from 14.5 ms to 13.0 ms. A C kernel compiled to WebAssembly was built and benchmarked; it was not faster than the same algorithm in JavaScript, so it isn't shipped (docs/NATIVE.md).
+
 ## 0.2.1 — 2026-10-19 — an .exe for every version
 
 ### Added

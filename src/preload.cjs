@@ -8,7 +8,7 @@ const INVOKE = new Set([
   'recovery:write', 'recovery:clear', 'recovery:list', 'recovery:read',
   'backup:create', 'backup:list', 'backup:prune', 'backup:read', 'backup:dir', 'backup:reveal',
   'stats:get', 'stats:set',
-  'export:pdf', 'print:html', 'theme:set', 'perf:report', 'shell:reveal', 'app:pending-open',
+  'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'shell:reveal', 'app:pending-open',
 ]);
 const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start']);
 

@@ -3,6 +3,7 @@
 import { h, open, esc } from './dialog.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
 import { paginate } from '../../core/layout.js';
+import { parseTime, formatTime, toAmPm, fromAmPm, label as timeLabel } from '../../core/schedule.js';
 
 const api = window.stet;
 const fmtTime = (t) => new Date(t).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -62,7 +63,47 @@ export async function setupDialog({ title = 'NEW SCREENPLAY', name = 'Untitled S
   return cfg;
 }
 
+/** Hour / minute / AM-PM picker for "HH:MM". Returns { node, value() }. */
+function timePicker(hhmm) {
+  const t = toAmPm(parseTime(hhmm) ?? 0);
+  const hour = h('select', {}, ...Array.from({ length: 12 }, (_, i) => i + 1).map((n) => h('option', { value: n, selected: n === t.hour }, String(n))));
+  const minute = h('select', {}, ...Array.from({ length: 12 }, (_, i) => i * 5).concat(t.minute % 5 ? [t.minute] : []).sort((a, b) => a - b)
+    .map((n) => h('option', { value: n, selected: n === t.minute }, String(n).padStart(2, '0'))));
+  const ampm = h('select', {}, ...['AM', 'PM'].map((x) => h('option', { value: x, selected: x === t.ampm }, x)));
+  for (const x of [hour, minute, ampm]) x.style.width = 'auto';
+  return { node: h('span', { class: 'inline tp' }, hour, h('span', {}, ':'), minute, ampm), value: () => formatTime(fromAmPm(+hour.value, +minute.value, ampm.value)), els: [hour, minute, ampm] };
+}
+
+/** Schedule section shared by Preferences and the quick schedule dialog. */
+function scheduleFields(sched) {
+  const on = h('input', { type: 'checkbox', checked: !!sched.enabled });
+  const dark = timePicker(sched.darkAt), light = timePicker(sched.lightAt);
+  const hint = h('div', { class: 'hint' });
+  const upd = () => {
+    const d = dark.value(), l = light.value();
+    hint.textContent = d === l ? 'Both times are the same: the schedule would stay light. Pick different times.'
+      : `Dark from ${timeLabel(d)} until ${timeLabel(l)}${parseTime(d) > parseTime(l) ? ' the next morning' : ''}; light the rest of the day. Uses this computer's clock and time zone. Picking LIGHT or DARK by hand turns the schedule off.`;
+  };
+  for (const x of [...dark.els, ...light.els]) x.addEventListener('change', upd);
+  upd();
+  return {
+    nodes: [
+      field('Automatic theme', h('label', { class: 'chk' }, on, 'switch on a schedule')),
+      field('Dark mode from', dark.node),
+      field('Light mode from', light.node, hint),
+    ],
+    value: () => ({ enabled: on.checked, darkAt: dark.value(), lightAt: light.value() }),
+  };
+}
+
+export async function scheduleDialog(sched) {
+  const f = scheduleFields({ ...sched, enabled: true });
+  const v = await open({ title: 'THEME SCHEDULE', sub: 'local time', body: h('div', { class: 'body' }, ...f.nodes), buttons: [{ label: 'Cancel', value: null }, { label: 'Apply', value: true, primary: true }] });
+  return v ? f.value() : null;
+}
+
 export async function preferencesDialog(settings, doc) {
+  const sched = scheduleFields({ enabled: false, darkAt: '19:00', lightAt: '07:00', ...(settings.schedule || {}) });
   const theme = h('select', {}, ...['dark', 'light', 'system'].map((t) => h('option', { value: t, selected: settings.theme === t }, t)));
   const dirIn = h('input', { type: 'text', value: settings.defaultDir || '', spellcheck: false });
   const browse = h('button', { class: 'btn', onclick: async () => { const d = await api.invoke('dialog:folder', dirIn.value); if (d) dirIn.value = d; } }, 'Browse');
@@ -78,6 +119,7 @@ export async function preferencesDialog(settings, doc) {
   const body = h('div', { class: 'body' },
     h('div', { class: 'hint', style: 'margin-bottom:6px' }, 'APPLICATION'),
     field('Theme', theme),
+    ...sched.nodes,
     field('Default save folder', h('div', { class: 'inline' }, dirIn, browse)),
     field('Autosave', h('div', { class: 'inline' }, h('label', { class: 'chk' }, auto, 'on'), h('span', {}, 'after'), delay, h('span', {}, 'ms idle'))),
     field('Daily goal', h('div', { class: 'inline' }, daily, h('span', {}, 'words'))),
@@ -92,6 +134,7 @@ export async function preferencesDialog(settings, doc) {
   return {
     app: {
       theme: theme.value,
+      schedule: sched.value(),
       defaultDir: dirIn.value.trim() || null,
       autosave: auto.checked,
       autosaveDelayMs: Math.max(300, Math.min(60000, +delay.value || 1200)),

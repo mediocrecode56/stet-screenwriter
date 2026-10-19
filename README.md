@@ -4,7 +4,7 @@
 application. Monochrome, typographic, deliberately beta in look; strict about
 formatting and about never losing your work.
 
-Version 0.2.1 β.
+Version 0.3.0 β.
 
 ## Run it
 
@@ -42,8 +42,8 @@ Each version is built from its own git tag, so old versions stay runnable.
 
 | command | what it does |
 |---|---|
-| `npm test` | 54 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, statistics |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm test` | 61 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, statistics, theme schedule, word-count fuzz |
+| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change). `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
@@ -65,6 +65,7 @@ Results and test conditions: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 | Ctrl+F · Ctrl+H · F3 | find · replace · next |
 | Alt+↑/↓ · Ctrl+G · PgUp/PgDn | previous/next scene · go to page · page |
 | Ctrl+wheel · Ctrl+= / − / 0 | zoom |
+| LIGHT · DARK · AUTO (bottom right) · Ctrl+Shift+L | theme; AUTO follows a schedule — right-click it to set the dark and light start times (AM/PM). Picking LIGHT or DARK turns the schedule off |
 | Ctrl+K | command palette — every command, searchable |
 | Ctrl+P · Ctrl+Shift+E | print preview · export PDF |
 | F9 | writing goals & statistics |
@@ -87,7 +88,7 @@ Results and test conditions: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 - [Architecture](docs/ARCHITECTURE.md) — modules, editing pipeline, pagination rules, integrity design
 - [File format](docs/FILE_FORMAT.md) — `.stet` container and schema, versioning, migrations
 - [Performance](docs/PERFORMANCE.md) — measured results and conditions
-- [Native code](docs/NATIVE.md) — why there is no C helper (measured, not needed)
+- [Native code](docs/NATIVE.md) — the C/WebAssembly word-count experiment and why it isn't shipped (measured)
 - [Changelog](CHANGELOG.md) — one git commit and tag per version; also in the app under *Help → Changelog*
 
 ## Known limitations
