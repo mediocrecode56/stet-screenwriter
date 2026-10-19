@@ -23,11 +23,13 @@ const flagValue = (name) => { const f = flag(name); return f && f.includes('=') 
 const PERF = !!flag('--perf-probe');
 const SHOT = flagValue('--screenshot');
 const SAMPLE = !!flag('--sample');
+const E2E = !!flag('--e2e');
+const RUN = flagValue('--run'); // dev: run a command after startup (used for screenshots)
 if (process.env.STET_USER_DATA) app.setPath('userData', path.resolve(process.env.STET_USER_DATA));
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'stet', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
-if (!PERF && !SHOT && !app.requestSingleInstanceLock()) app.quit();
+if (!PERF && !SHOT && !E2E && !app.requestSingleInstanceLock()) app.quit();
 
 let win = null;
 let allowClose = false;
@@ -73,7 +75,7 @@ function createWindow() {
   });
   if (b.maximized) win.maximize();
   win.loadURL('stet://app/renderer/index.html');
-  win.once('ready-to-show', () => { if (!SHOT) win.show(); });
+  win.once('ready-to-show', () => { if (!SHOT && !flag('--hidden')) win.show(); });
   win.on('close', (e) => {
     saveBounds();
     if (allowClose) return;
@@ -126,7 +128,7 @@ function handle(channel, fn) {
 
 function registerIpc() {
   handle('app:info', () => ({
-    version: pkg.version, platform: process.platform, perf: PERF, shot: !!SHOT, sample: SAMPLE,
+    version: pkg.version, platform: process.platform, perf: PERF, shot: !!SHOT, sample: SAMPLE, e2e: E2E, run: RUN,
     defaultDir: defaultDir(), userData: app.getPath('userData'), electron: process.versions.electron,
   }));
   handle('app:changelog', () => fs.readFile(path.join(ROOT, 'CHANGELOG.md'), 'utf8').catch(() => ''));
@@ -290,7 +292,7 @@ function registerIpc() {
   });
 
   handle('perf:report', async (data) => {
-    const dir = path.join(ROOT, '.perf');
+    const dir = app.isPackaged ? path.join(app.getPath('userData'), 'perf') : path.join(ROOT, '.perf');
     await fs.mkdir(dir, { recursive: true });
     const out = path.join(dir, 'renderer-results.json');
     await fs.writeFile(out, JSON.stringify({ ...data, electron: process.versions.electron, chrome: process.versions.chrome, platform: `${os.type()} ${os.release()}`, cpu: os.cpus()[0]?.model, cores: os.cpus().length, memGB: Math.round(os.totalmem() / 2 ** 30) }, null, 2));

@@ -229,6 +229,8 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .field input:focus, .field select:focus { border-color: var(--rule-strong); }
 .field .inline { display: flex; gap: 6px; align-items: center; }
 .field .inline input { flex: 1; }
+.field .inline input[type=number] { flex: none; }
+input[type=checkbox] { accent-color: var(--ink); margin: 0 4px 0 0; }
 .hint { color: var(--ink-3); font-size: 10px; }
 .err-text { border-left: 2px solid var(--ink); padding: 4px 8px; margin: 6px 0; }
 .palette { width: 560px; }

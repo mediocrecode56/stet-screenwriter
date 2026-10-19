@@ -14,6 +14,7 @@ import { mergeDirty } from './layout.js';
 
 export const NEXT_ON_ENTER = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'action', transition: 'scene', shot: 'action' };
 export const TAB_NEXT = { action: 'character', character: 'transition', transition: 'scene', scene: 'action', dialogue: 'paren', paren: 'dialogue', shot: 'action' };
+export const TAB_AFTER = { action: 'character', character: 'paren', paren: 'dialogue', dialogue: 'paren', scene: 'action', transition: 'scene', shot: 'action' };
 export const TAB_PREV = { action: 'scene', character: 'action', transition: 'character', scene: 'transition', dialogue: 'character', paren: 'dialogue', shot: 'scene' };
 
 const SCENE_PREFIX = /^(int|ext|est|i\/e|int\.?\s?\/\s?ext|ext\.?\s?\/\s?int)\.(\s|$)/i;
@@ -391,10 +392,25 @@ export class Editor {
     }, { close: true });
   }
 
-  /** Tab / Shift+Tab: cycle the element type. */
+  /**
+   * Tab / Shift+Tab. In an empty element (or mid-text) it cycles the element
+   * type; at the end of a written element, Tab starts the element that
+   * usually follows it (dialogue -> parenthetical, cue -> parenthetical,
+   * parenthetical -> dialogue, action -> character).
+   */
   tab(reverse = false) {
     const b = this.block;
-    this.setType((reverse ? TAB_PREV : TAB_NEXT)[b.type]);
+    const p = this.caret;
+    const atEnd = !this.hasSelection() && b.text !== '' && b.text !== '()' &&
+      (p.o === b.text.length || (b.type === 'paren' && p.o === b.text.length - 1 && b.text.endsWith(')')));
+    if (reverse || !atEnd) { this.setType((reverse ? TAB_PREV : TAB_NEXT)[b.type]); return; }
+    const type = TAB_AFTER[b.type];
+    this.edit('enter', () => {
+      const nb = type === 'paren' ? makeBlock('paren', '()') : makeBlock(type, '');
+      this._splice(p.b + 1, 0, [nb]);
+      const o = type === 'paren' ? 1 : 0;
+      this.sel = { a: pos(p.b + 1, o), f: pos(p.b + 1, o) };
+    }, { close: true });
   }
 
   /** Change the element type of every block touched by the selection. */

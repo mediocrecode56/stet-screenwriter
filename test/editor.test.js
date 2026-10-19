@@ -44,6 +44,21 @@ test('Enter/Tab element flow: character -> dialogue -> paren', () => {
   assert.deepEqual(types(ed), ['character', 'paren', 'dialogue']);
 });
 
+test('Tab at the end of written dialogue starts a parenthetical below', () => {
+  const ed = new Editor([makeBlock('character', 'MARA'), makeBlock('dialogue', 'You came.')]);
+  ed.setSel(pos(1, 9));
+  ed.tab();
+  assert.deepEqual(types(ed), ['character', 'dialogue', 'paren']);
+  assert.deepEqual(ed.caret, pos(2, 1));
+  typeStr(ed, 'beat');
+  ed.enter();
+  assert.deepEqual(texts(ed), ['MARA', 'You came.', '(beat)', '']);
+  assert.equal(ed.block.type, 'dialogue');
+  ed.setSel(pos(1, 3));
+  ed.tab(); // mid-text: converts
+  assert.equal(ed.blocks[1].type, 'paren');
+});
+
 test('Enter on an empty element converts instead of adding', () => {
   const ed = new Editor([makeBlock('dialogue')]);
   ed.enter();

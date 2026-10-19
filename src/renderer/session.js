@@ -31,6 +31,7 @@ export class Session {
     this.lastBackupRev = -1;
     this.lastBackupAt = Date.now();
     this.recoveryRev = -1;
+    this.ownsRecovery = false; // only clear recovery copies this session wrote or restored
     this.backupTimer = setInterval(() => this.maybeBackup(), 20000);
     this.lastSerializeMs = 0;
   }
@@ -52,6 +53,7 @@ export class Session {
     this.lastBackupRev = dirty ? -1 : this.rev;
     this.lastBackupAt = Date.now();
     this.recoveryRev = -1;
+    this.ownsRecovery = dirty;
     this.status = dirty ? 'dirty' : 'saved';
     this.error = null;
     this.onLoaded(this);
@@ -106,7 +108,14 @@ export class Session {
     if (rev === this.recoveryRev) return;
     const json = this.serialize();
     const r = await api.invoke('recovery:write', { id: this.doc.meta.id, info: { path: this.path, name: this.name, rev }, json });
-    if (r.ok) this.recoveryRev = rev;
+    if (r.ok) { this.recoveryRev = rev; this.ownsRecovery = true; }
+  }
+
+  /** Remove this document's recovery copy, if this session is responsible for it. */
+  clearRecovery() {
+    if (!this.ownsRecovery || !this.doc) return Promise.resolve();
+    this.ownsRecovery = false;
+    return api.invoke('recovery:clear', this.doc.meta.id);
   }
 
   async writeFile({ force = false } = {}) {
@@ -125,7 +134,7 @@ export class Session {
       this.error = null;
       this.retryMs = 2000;
       this.status = this.dirty ? 'dirty' : 'saved';
-      if (!this.dirty) api.invoke('recovery:clear', this.doc.meta.id);
+      if (!this.dirty) this.clearRecovery();
       else this.changed();
     } else if (r.conflict) {
       this.status = 'conflict';

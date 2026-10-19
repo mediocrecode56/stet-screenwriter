@@ -29,7 +29,8 @@ export async function setupDialog({ title = 'NEW SCREENPLAY', name = 'Untitled S
   const where = h('div', { class: 'hint' });
   const upd = () => {
     const n = nameIn.value.trim() || 'Untitled';
-    where.textContent = custom.checked && bkDir.value ? `Backups → ${bkDir.value}\\${n} Backups\\` : `Backups → ${dirIn.value}\\${n} Backups\\  (next to the script)`;
+    const sep = api.platform === 'win32' ? '\\' : '/';
+    where.textContent = custom.checked && bkDir.value ? `Backups → ${bkDir.value}${sep}${n} Backups${sep}` : `Backups → ${dirIn.value}${sep}${n} Backups${sep}  (next to the script)`;
     bkDir.disabled = bkBrowse.disabled = !custom.checked;
   };
   for (const x of [nameIn, dirIn, bkDir]) x.addEventListener('input', upd);
@@ -203,7 +204,7 @@ export async function previewDialog(doc, initial) {
   const range = h('input', { type: 'text', value: opts.range, placeholder: `all (1–${total})`, spellcheck: false });
   const msg = h('div', { class: 'hint' });
   const sheets = h('div', { class: 'sheets' });
-  const scale = 0.32;
+  const scale = 0.42;
   let ok = true;
   const render = () => {
     try {

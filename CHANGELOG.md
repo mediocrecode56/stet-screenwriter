@@ -3,6 +3,25 @@
 All notable changes to STET. Each version is one git commit, tagged `vX.Y.Z`.
 Versions stay below 1.0 while the app is in beta.
 
+## 0.2.0 — 2026-10-19 — verified, measured, packaged
+
+### Fixed
+- Tab at the end of written dialogue (or a cue) now starts a parenthetical on a new line instead of converting the dialogue itself; Tab mid-text or on an empty element still cycles the type.
+- Opening a script that has unsaved changes left by a crash now offers to restore them first (the on-disk file is backed up before restoring). Previously, postponing recovery and then opening the script could let the first autosave discard those changes.
+- A session only deletes recovery copies it wrote or restored itself.
+- Find results refresh on a short debounce instead of re-searching synchronously on every keystroke.
+- With side panels open, a page wider than the viewport is centred on the text column instead of clipped.
+- Dialog number fields no longer stretch; checkboxes are monochrome.
+- Print preview thumbnails are larger and readable.
+
+### Added
+- End-to-end test suite (`npm run e2e`) driving the real app over the DevTools protocol: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export and recovery after a forced kill. Runs against a packaged build with `STET_E2E_EXE`.
+- Unit/integration tests for the file container, serialization round-trips, atomic writes, save ordering, external-change detection, backups and retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, plain-text interchange and statistics (54 total).
+- Engine benchmarks (`npm run bench`) and an in-app performance probe (`npm run perf`, *Tools → Run Performance Probe*).
+- `npm run package` builds a portable `dist/STET-win32-x64/STET.exe`.
+- Documentation: architecture, file format, performance (with measured results), native-code decision.
+- Dev flags: `--sample`, `--screenshot=<png>`, `--run=<command>`, `--hidden`, `--e2e`.
+
 ## 0.1.0 — 2026-10-19 — first working build
 
 ### Engine

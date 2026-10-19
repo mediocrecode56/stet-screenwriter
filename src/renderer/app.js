@@ -68,7 +68,7 @@ editor.onChange = () => {
     scheduleStats();
     scenes.refresh();
     notes.refresh();
-    if (find.open) find.search();
+    if (find.open) find.schedule();
   }
   // Caret inside commented text makes that note current.
   const b = editor.block;
@@ -259,7 +259,7 @@ async function saveUntitled() {
   session.doc.settings.backup = cfg.backup;
   const r = await session.saveTo(file);
   if (!r.ok) { await dlg.alertBox('SAVE FAILED', 'The screenplay could not be saved.', r.error); return false; }
-  await api.invoke('recovery:clear', session.doc.meta.id);
+  await session.clearRecovery();
   return true;
 }
 
@@ -305,6 +305,24 @@ async function openPath(file) {
   if (r.migratedFrom) {
     // Keep the pre-migration original before anything rewrites it.
     await api.invoke('backup:create', { path: file, id: r.doc.meta.id, dir: r.doc.settings.backup.dir, json: r.raw });
+  }
+  // Unsaved changes to this very script from a session that crashed?
+  const pending = (await api.invoke('recovery:list')).find((x) => x.id === r.doc.meta.id);
+  if (pending) {
+    const v = await dlg.choose('UNSAVED CHANGES FOUND', `"${pending.name}" has changes from ${new Date(pending.time).toLocaleString()} that never reached the file. Restore them? (The file on disk is backed up first.)`, [
+      { label: 'Discard them', value: 'discard' }, { label: 'Restore', value: 'restore', primary: true },
+    ]);
+    if (v === 'restore') {
+      const rec = await Session.readFile(pending.file, 'recovery:read');
+      if (rec.ok) {
+        await api.invoke('backup:create', { path: file, id: r.doc.meta.id, dir: r.doc.settings.backup.dir, json: r.raw });
+        session.load(rec.doc, file, { dirty: true });
+        api.invoke('settings:set', { lastOpen: file });
+        return;
+      }
+    } else if (v === 'discard') {
+      await api.invoke('recovery:clear', pending.id);
+    }
   }
   session.load(r.doc, file);
   api.invoke('settings:set', { lastOpen: file });
@@ -575,7 +593,7 @@ api.on('app:before-close', async () => {
   tracker.update(session.doc.meta.id, editor.words, editor.pastedWords);
   await api.invoke('stats:set', tracker.data);
   if (await releaseCurrent()) {
-    if (!session.dirty) await api.invoke('recovery:clear', session.doc.meta.id);
+    if (!session.dirty) await session.clearRecovery();
     api.invoke('app:close-ready');
   } else {
     api.invoke('app:close-cancel');
@@ -590,6 +608,9 @@ window.addEventListener('drop', (e) => {
   const f = e.dataTransfer.files[0];
   if (f && /\.stet$/i.test(f.name)) openPath(api.pathForFile(f));
 });
+
+// Test hook for the end-to-end driver (only with --e2e).
+if (info.e2e) window.__stet = { editor, view, session, input, tracker, cmd, openPath, save, exportPdf, checkRecovery, api, settings: () => settings };
 
 // ---- startup -----------------------------------------------------------------------------------------
 
@@ -617,3 +638,5 @@ if (info.sample) {
   }
 }
 tracker.compact();
+if (info.run) setTimeout(() => cmd.run(info.run), 300);
+

@@ -106,6 +106,12 @@ export class View {
       this.content.style.height = h + 'px';
       this.content.style.width = w + 'px';
       this.layoutDirty = false;
+      // Narrower than a page (side panels, high zoom): centre the text column once per width change.
+      const cw = this.scroller.clientWidth;
+      if (cw !== this._lastWidth) {
+        this._lastWidth = cw;
+        if (w > cw) this.scroller.scrollLeft = (w - cw) / 2;
+      }
     }
     const top = this.scroller.scrollTop, bottom = top + this.scroller.clientHeight;
     const span = this.PH + this.gap;
