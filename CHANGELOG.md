@@ -4,6 +4,12 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.6.1 — 19 October 2026
+
+### Fixed
+
+- **The line above the toolbar no longer runs over REVISE.** The thin line that separates the menu bar from the toolbar now ends a small margin (12 px) before the REVISE button instead of running across the top of REVISE, SCENES and NOTES. It looks the same in light and dark mode.
+
 ## 0.6.0 — 19 October 2026
 
 English Revision suggestions now stay put until you decide, word counting is reliable again, and a small pixel dinosaur keeps you company while you write.

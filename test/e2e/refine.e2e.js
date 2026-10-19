@@ -242,5 +242,10 @@ test('toolbar: the active REVISE button stops short of the separator lines', asy
   assert.ok(g.gapTop >= 2, `gap above (${g.gapTop})`);
   assert.ok(g.gapBottom >= 2, `gap below (${g.gapBottom})`);
   assert.equal(new Set(g.others).size, 1, 'same spacing for every toolbar button');
+  // The rule above the toolbar ends a margin before REVISE.
+  const line = await app.eval(`(() => { const r = document.getElementById('elright'), cs = getComputedStyle(r, '::before'); const rev = document.getElementById('btn-rev').getBoundingClientRect(); const top = document.getElementById('top').getBoundingClientRect(); return { maskStart: r.getBoundingClientRect().left + parseFloat(cs.left), maskTop: r.getBoundingClientRect().top + parseFloat(cs.top), lineY: top.bottom - 1, revLeft: rev.left, bg: cs.backgroundColor, bar: getComputedStyle(document.getElementById('elbar')).backgroundColor }; })()`);
+  assert.equal(line.maskTop, line.lineY, 'covers the rule exactly');
+  assert.equal(line.bg, line.bar);
+  assert.ok(line.revLeft - line.maskStart >= 10, `line stops ${line.revLeft - line.maskStart}px before REVISE`);
   await app.eval('__stet.revision.show(false)');
 });

@@ -4,7 +4,7 @@
 application. Monochrome, typographic, deliberately beta in look; strict about
 formatting and about never losing your work.
 
-Version 0.6.0 β.
+Version 0.6.1 β.
 
 ## Run it
 
