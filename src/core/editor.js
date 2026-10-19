@@ -23,6 +23,9 @@ const MERGE_WINDOW_MS = 1500;
 export const pos = (b, o) => ({ b, o });
 export const cmp = (p, q) => (p.b - q.b) || (p.o - q.o);
 
+// Transactions whose word changes are not the writer's own writing.
+const NOT_WRITING = new Set(['paste', 'replace']);
+
 export class Editor {
   constructor(blocks) {
     this.blocks = blocks.length ? blocks : [makeBlock('action')];
@@ -36,7 +39,12 @@ export class Editor {
     for (const b of this.blocks) this.words += blockWords(b);
     this.namesRev = -1;
     this._names = null;
-    this.pastedWords = 0;  // words inserted by paste, for writing statistics
+    // Net word change from edits that aren't the writer's own writing (paste,
+    // replace, accepted suggestions — and undo/redo of those), measured from the
+    // document itself. Writing statistics subtract it; the app drains it after
+    // every change.
+    this.wordShift = 0;
+    this.loads = 0;
     this.onChange = null;  // (editor) => void
     this.autoCapitalize = true;
     this.now = () => Date.now();
@@ -61,9 +69,11 @@ export class Editor {
   edit(kind, fn, opts = {}) {
     if (this.txn) { fn(); return; } // nested: join the outer transaction
     const txn = { kind, steps: [], selBefore: this.sel, selAfter: null, time: this.now(), closed: !!opts.close };
+    const w0 = this.words;
     this.txn = txn;
     try { fn(); } finally { this.txn = null; }
     if (!txn.steps.length) { this._emit(); return; }
+    if (NOT_WRITING.has(kind)) this.wordShift += this.words - w0;
     txn.selAfter = this.sel;
     this.redoStack.length = 0;
     const last = this.undoStack[this.undoStack.length - 1];
@@ -96,10 +106,12 @@ export class Editor {
   undo() {
     const t = this.undoStack.pop();
     if (!t) return false;
+    const w0 = this.words;
     for (let i = t.steps.length - 1; i >= 0; i--) {
       const s = t.steps[i];
       this._applyRaw(s.from, s.added.length, s.removed);
     }
+    if (NOT_WRITING.has(t.kind)) this.wordShift += this.words - w0;
     this.redoStack.push(t);
     this.sel = t.selBefore;
     this.rev++;
@@ -110,7 +122,9 @@ export class Editor {
   redo() {
     const t = this.redoStack.pop();
     if (!t) return false;
+    const w0 = this.words;
     for (const s of t.steps) this._applyRaw(s.from, s.removed.length, s.added);
+    if (NOT_WRITING.has(t.kind)) this.wordShift += this.words - w0;
     t.closed = true;
     this.undoStack.push(t);
     this.sel = t.selAfter;
@@ -132,6 +146,8 @@ export class Editor {
     this.blocks = blocks.length ? blocks : [makeBlock('action')];
     this.words = 0;
     for (const b of this.blocks) this.words += blockWords(b);
+    this.wordShift = 0;
+    this.loads = (this.loads || 0) + 1; // lets listeners tell a document load from an edit
     this.undoStack.length = 0;
     this.redoStack.length = 0;
     this.sel = { a: pos(0, 0), f: pos(0, 0) };
@@ -264,8 +280,6 @@ export class Editor {
   /** Paste: plain text or a structured fragment. One undo step. */
   paste(fragment) {
     if (!fragment || !fragment.length) return;
-    let words = 0;
-    for (const f of fragment) words += countWords(f.text);
     this.edit('paste', () => {
       if (this.hasSelection()) this._deleteSelection();
       const p = this.caret;
@@ -305,7 +319,6 @@ export class Editor {
       const np = pos(p.b + out.length - 1, caretO);
       this.sel = { a: np, f: np };
     });
-    this.pastedWords += words;
   }
 
   backspace(byWord = false) {

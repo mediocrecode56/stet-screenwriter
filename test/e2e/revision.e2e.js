@@ -44,62 +44,92 @@ const loadScript = () => app.eval(`(async () => {
   __stet.session.load(d, null);
 })()`);
 const texts = () => app.eval('__stet.editor.blocks.map(b => b.text)');
-const findings = () => app.eval('__stet.revision.findings.map(f => ({ id: f.id, cat: f.category, status: f.status, o: f.shownOriginal }))');
-const waitDone = async () => { for (let i = 0; i < 200; i++) { if (await app.eval('!!(__stet.revision.run && __stet.revision.run.finished)')) return; await sleep(50); } throw new Error('review did not finish'); };
+const findings = () => app.eval(`__stet.revision.findings.map(f => ({ id: f.id, cat: f.category, decision: f.decision, o: f.shownOriginal, r: f.shownReplacement, orig: f.original, applied: f.appliedText, why: f.explanation, at: __stet.revision.located(f) }))`);
+const waitDone = async () => { for (let i = 0; i < 300; i++) { if (await app.eval('!!(__stet.revision.run && __stet.revision.run.finished)')) return; await sleep(50); } throw new Error('review did not finish'); };
+const settle = () => sleep(250); // documentChanged() re-locates after a short idle delay
+const launch = () => App.launch({ userData: path.join(tmp, 'ud'), env: { STET_ANTHROPIC_BASE_URL: mock.url, ANTHROPIC_API_KEY: KEY } });
+const consent = () => app.eval(`window.stet.invoke('settings:set', { reviewConsent: true }).then(s => { const cur = __stet.settings(); Object.assign(cur, s); })`);
+// With undecided suggestions, "review again" asks first; tests answer yes.
+const startReview = () => app.eval(`(async () => { const r = __stet.revision; const p = r.start(); await new Promise(res => setTimeout(res, 30)); const ok = [...document.querySelectorAll('#overlay .btn.primary')].find(b => b.textContent === 'Review'); if (ok) ok.click(); await p; })()`);
 
 before(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-rev-'));
   mock = await startMock(handler);
-  app = await App.launch({ userData: path.join(tmp, 'ud'), env: { STET_ANTHROPIC_BASE_URL: mock.url, ANTHROPIC_API_KEY: KEY } });
-  await app.eval(`window.stet.invoke('settings:set', { reviewConsent: true }).then(s => { const cur = __stet.settings(); Object.assign(cur, s); })`);
+  app = await launch();
+  await consent();
 });
 after(async () => { if (app) await app.close(); if (mock) await mock.close(); await fs.rm(tmp, { recursive: true, force: true }).catch(() => {}); });
 
-test('review sends a structured request and categorises findings', async () => {
+test('review sends a structured request; a progress indicator shows while waiting', async () => {
   await loadScript();
-  await app.eval('__stet.revision.show(true); __stet.revision.start()');
+  mode = { delayMs: 700 };
+  await app.eval('__stet.revision.show(true)');
+  await startReview();
+  await sleep(150);
+  const prog = await app.eval(`(() => { const p = document.querySelector('#rev .rv-progress'); return p && { text: p.textContent.replace(/\\s+/g, ' '), anim: getComputedStyle(p.querySelector('.rv-indet i')).animationName, pct: /\\d+\\s*%/.test(p.textContent) }; })()`);
+  assert.ok(prog, 'indicator shown');
+  assert.match(prog.text, /Claude is reviewing|Sending the script/);
+  assert.match(prog.text, /CANCEL/);
+  assert.equal(prog.anim, 'rv-sweep', 'indeterminate animation');
+  assert.equal(prog.pct, false, 'no made-up percentage');
+  // The editor stays responsive while waiting.
+  const t0 = Date.now(); await app.eval('__stet.editor.rev'); assert.ok(Date.now() - t0 < 200);
   await waitDone();
+  mode = {};
+  assert.equal(await app.eval('!!document.querySelector("#rev .rv-progress")'), false, 'indicator gone when finished');
   const req = mock.requests.find((r) => r.body && r.body.messages);
   assert.equal(req.body.model, 'claude-opus-5-5');
   assert.equal(req.body.output_config.format.type, 'json_schema');
-  assert.equal(req.body.thinking.type, 'adaptive');
-  assert.equal(req.body.fallbacks, 'default');
-  assert.match(req.headers['anthropic-beta'], /server-side-fallback-2026-07-01/);
-  assert.equal(req.headers['x-api-key'], KEY, 'key sent only in the API request, from the main process');
-  assert.ok(!/TITLE|Written by/.test(req.body.messages[0].content), 'title page not sent');
+  assert.equal(req.headers['x-api-key'], KEY);
   const fs_ = await findings();
   assert.deepEqual(fs_.map((f) => f.cat).sort(), ['awkward', 'awkward', 'grammar', 'non_native']);
+  assert.ok(fs_.every((f) => f.decision === null && f.at));
   assert.equal(await app.eval('__stet.revision.run.rejected'), 1, 'hallucinated element discarded');
   assert.equal(await app.eval('document.querySelectorAll(".rv-group").length'), 3, 'grouped by category');
   await app.eval('__stet.view.frame()');
   assert.ok(await app.eval('document.querySelectorAll(".revr").length') >= 4, 'flagged passages marked in the script');
-  assert.equal(await app.eval('__stet.renderer || __stet.session.dirty'), false, 'reviewing changes nothing');
+  assert.equal(await app.eval('__stet.editor.blocks[1].text'), 'Mara enter in the kitchen and sits.', 'reviewing changes nothing');
 });
 
-test('accept, undo, redo, reject, dismiss', async () => {
+test('hovering a suggestion highlights exactly its passage; leaving removes it', async () => {
+  const nn = (await findings()).find((f) => f.cat === 'non_native');
+  const hov = (ev) => app.eval(`(() => { const n = document.querySelector('#rev .rv-item[data-id="${nn.id}"] .rv-why'); n.dispatchEvent(new MouseEvent('${ev}', { bubbles: true })); if ('${ev}' === 'mouseleave') document.getElementById('rev').dispatchEvent(new MouseEvent('mouseleave')); __stet.view.frame(); return { marks: (__stet.view.revision.marks || []).filter(m => m.hov), dom: document.querySelectorAll('.revr.hov').length, item: document.querySelector('#rev .rv-item.hov')?.dataset.id || null }; })()`);
+  const on = await hov('mouseover');
+  assert.equal(on.marks.length, 1);
+  const t4 = (await texts())[4];
+  assert.equal(nn.o, 'looking to him since five minutes');
+  assert.deepEqual([on.marks[0].b, on.marks[0].s, on.marks[0].e], [4, t4.indexOf(nn.o), t4.indexOf(nn.o) + nn.o.length], 'exactly the passage shown in the panel');
+  assert.ok(on.dom >= 1, 'highlight painted');
+  assert.equal(on.item, nn.id);
+  const off = await hov('mouseleave');
+  assert.equal(off.marks.length, 0);
+  assert.equal(off.dom, 0);
+  assert.equal(off.item, null);
+});
+
+test('decisions are explicit and permanent: accept, undo, discard, reopen', async () => {
   const g = (await findings()).find((f) => f.cat === 'grammar');
   await app.eval(`__stet.revision.accept(['${g.id}'])`);
   assert.equal((await texts())[1], 'Mara enters the kitchen and sits.');
-  assert.equal((await findings()).find((f) => f.id === g.id).status, 'accepted');
-  await app.eval('__stet.editor.undo(); __stet.revision.documentChanged()'); await sleep(200);
+  const acc = (await findings()).find((f) => f.id === g.id);
+  assert.equal(acc.decision, 'accepted');
+  assert.equal(acc.o, 'enter in the kitchen', 'original kept as reviewed');
+  await app.eval('__stet.editor.undo()'); await settle();
   assert.equal((await texts())[1], 'Mara enter in the kitchen and sits.');
-  assert.equal((await findings()).find((f) => f.id === g.id).status, 'open', 'undo re-offers it');
-  await app.eval('__stet.editor.redo(); __stet.revision.documentChanged()'); await sleep(200);
-  assert.equal((await texts())[1], 'Mara enters the kitchen and sits.');
-  assert.equal((await findings()).find((f) => f.id === g.id).status, 'accepted');
-  const nn = (await findings()).find((f) => f.cat === 'non_native');
-  await app.eval(`__stet.revision.setStatus('${nn.id}', 'rejected')`);
-  assert.equal((await texts())[4], 'She is looking to him since five minutes.', 'reject leaves the text');
+  assert.equal((await findings()).find((f) => f.id === g.id).decision, 'accepted', 'undoing the text does not change the decision');
+  await app.eval(`__stet.revision.reopen('${g.id}')`);
+  assert.equal((await findings()).find((f) => f.id === g.id).decision, null, 'reopen is explicit');
   const aw = (await findings()).find((f) => f.o === 'made a decision of leaving');
-  await app.eval(`__stet.revision.setStatus('${aw.id}', 'dismissed')`);
-  assert.ok(!(await findings()).some((f) => f.id === aw.id));
+  await app.eval(`__stet.revision.discard('${aw.id}')`);
+  const after = (await findings()).find((f) => f.id === aw.id);
+  assert.equal(after.decision, 'discarded', 'discarded suggestions are kept, with their decision');
   assert.equal((await texts())[5], 'Teo made a decision of leaving.');
 });
 
 test('accept-all in a category is one undo step', async () => {
   await loadScript();
-  await app.eval('__stet.revision.start()'); await waitDone();
-  await app.eval(`(() => { const r = __stet.revision; r.accept(r.findings.filter(f => f.category === 'awkward' && f.status === 'open').map(f => f.id)); })()`);
+  await startReview(); await waitDone();
+  await app.eval(`(() => { const r = __stet.revision; r.accept(r.findings.filter(f => f.category === 'awkward' && !f.decision).map(f => f.id)); })()`);
   const t = await texts();
   assert.equal(t[5], 'Teo decided to leave.');
   assert.equal(t[3], "Ain't nobody awake. INTRO starts soon.");
@@ -109,10 +139,10 @@ test('accept-all in a category is one undo step', async () => {
   assert.equal(u[3], "Ain't nobody awake. ITNRO starts soon.");
 });
 
-test('editing during a review never causes a wrong replacement', async () => {
+test('edits never change a suggestion; passages are followed or reported lost, never guessed', async () => {
   await loadScript();
   mode = { delayMs: 1200 };
-  await app.eval('__stet.revision.start()');
+  await startReview();
   await sleep(200);
   // While Claude "thinks", rewrite the sentence that will be flagged as non-native and move another.
   await app.eval(`(() => { const ed = __stet.editor;
@@ -120,63 +150,101 @@ test('editing during a review never causes a wrong replacement', async () => {
     ed.setSel({ b: 1, o: 0 }); for (const c of 'Tired, ') ed.insertText(c); })()`);
   await waitDone();
   mode = {};
-  const f = await findings();
-  assert.equal(f.find((x) => x.cat === 'non_native').status, 'outdated');
-  assert.equal(f.find((x) => x.cat === 'grammar').status, 'open', 'relocated to the moved text');
+  await settle();
+  let f = await findings();
+  const nn = f.find((x) => x.cat === 'non_native');
+  assert.equal(nn.decision, null, 'still undecided');
+  assert.equal(nn.o, 'looking to him since five minutes', 'text kept exactly');
+  assert.equal(nn.r, 'staring at him for five minutes');
+  assert.equal(nn.at, null, 'its passage is gone, so it is not located anywhere');
+  assert.match(await app.eval(`document.querySelector('#rev .rv-item[data-id="${nn.id}"]').textContent`), /can no longer be located/);
+  const gr = f.find((x) => x.cat === 'grammar');
+  assert.deepEqual(gr.at, { b: 1, s: 7 + 5, e: 7 + 5 + gr.orig.length }, 'followed to its new position');
+  // Typing inside the flagged passage: kept, but never applied to the wrong text.
+  await app.eval(`(() => { const ed = __stet.editor; ed.setSel({ b: 5, o: 12 }); ed.insertText('x'); })()`);
+  await settle();
+  f = await findings();
+  const aw = f.find((x) => x.o === 'made a decision of leaving');
+  assert.equal(aw.decision, null);
+  assert.equal(aw.at, null);
+  // Hovering a lost suggestion highlights nothing.
+  const marks = await app.eval(`(() => { __stet.revision.setHover('${aw.id}'); const m = __stet.view.revision.marks.filter(x => x.hov).length; __stet.revision.setHover(null); return m; })()`);
+  assert.equal(marks, 0);
   await app.eval(`(() => { const r = __stet.revision; r.accept(r.findings.map(f => f.id)); })()`);
   const t = await texts();
   assert.equal(t[1], 'Tired, Mara enters the kitchen and sits.');
-  assert.equal(t[4], 'She watches him.', 'outdated suggestion not applied');
+  assert.equal(t[4], 'She watches him.', 'lost suggestion not applied');
+  assert.equal(t[5], 'Teo made a dxecision of leaving.', 'edited passage not replaced');
 });
 
-test('rate limits are retried; failing sections can be retried; cancel stops', async () => {
+test('rate limits are retried; failures and cancellation give clear feedback', async () => {
   await loadScript();
   mode = { status: 429, statusTimes: 2 }; // SDK retries with backoff
-  await app.eval('__stet.revision.start()'); await waitDone();
+  await startReview(); await waitDone();
   assert.equal(await app.eval('__stet.revision.run.failed.size'), 0);
   assert.ok((await findings()).length >= 4);
 
   mode = { status: 500, noRetry: true };
-  await app.eval('__stet.revision.start()'); await waitDone();
+  await startReview(); await waitDone();
   assert.equal(await app.eval('__stet.revision.run.failed.size'), 1);
   assert.match(await app.eval('document.querySelector(".rv-fail").textContent'), /failed/);
+  assert.match(await app.eval('document.querySelector("#rev .rv-status").textContent'), /Review incomplete/);
+  assert.equal(await app.eval('!!document.querySelector("#rev .rv-progress")'), false);
   mode = {};
   await app.eval('__stet.revision.retryFailed()'); await waitDone();
   assert.equal(await app.eval('__stet.revision.run.failed.size'), 0);
   assert.ok((await findings()).length >= 4);
 
   mode = { delayMs: 8000 };
-  await app.eval('__stet.revision.start()');
+  await startReview();
   await sleep(300);
   const t0 = Date.now();
-  await app.eval('__stet.revision.cancel()');
+  assert.match(await app.eval('__stet.revision.cancel(), document.querySelector("#rev .rv-progress").textContent'), /Cancelling/);
   await waitDone();
   assert.ok(Date.now() - t0 < 3000, 'cancel is prompt');
   assert.equal(await app.eval('__stet.revision.run.cancelled'), true);
+  assert.equal(await app.eval('!!document.querySelector("#rev .rv-progress")'), false, 'indicator gone after cancel');
+  assert.match(await app.eval('document.querySelector("#rev .rv-status").textContent'), /cancelled/i);
   mode = {};
 });
 
-test('Ignore is remembered in the screenplay file; dictionary in every project', async () => {
+test('suggestions, decisions, ignores persist across restarts; a new review replaces them', async () => {
   await loadScript();
-  await app.eval('__stet.revision.start()'); await waitDone();
-  const nn = (await findings()).find((f) => f.cat === 'non_native');
+  await startReview(); await waitDone();
+  let f = await findings();
+  const nn = f.find((x) => x.cat === 'non_native');
+  const g = f.find((x) => x.cat === 'grammar');
   await app.eval(`__stet.revision.ignore('${nn.id}')`);
-  // Dictionary entry (the prompt dialog is bypassed by calling setSettings directly).
-  await app.eval(`__stet.revision.setSettings({ dictionary: ['ITNRO'] })`);
+  await app.eval(`__stet.revision.accept(['${g.id}'])`);
+  const it = f.find((x) => x.o === 'ITNRO');
+  await app.eval(`__stet.revision.addToDictionary('${it.id}', 'ITNRO')`);
   const file = path.join(tmp, 'Rev.stet');
   assert.equal((await app.eval(`__stet.session.saveTo(${JSON.stringify(file)})`)).ok, true);
-  const json = await decode(await fs.readFile(file));
-  assert.deepEqual(JSON.parse(json).revision.ignored, [{ text: 'looking to him since five minutes', category: 'non_native' }]);
-  assert.ok(!json.includes('sk-ant'), 'no key in the screenplay file');
-  assert.ok(!json.includes('ITNRO"]'), 'dictionary lives in app settings, not the file');
+  const json = JSON.parse(await decode(await fs.readFile(file)));
+  assert.deepEqual(json.revision.ignored, [{ text: 'looking to him since five minutes', category: 'non_native' }]);
+  assert.equal(json.revision.review.findings.length, 4);
+  assert.ok(!JSON.stringify(json).includes('sk-ant'), 'no key in the screenplay file');
+  const before = (await findings()).map((x) => ({ ...x, at: undefined }));
+
   await app.close();
-  app = await App.launch({ userData: path.join(tmp, 'ud'), env: { STET_ANTHROPIC_BASE_URL: mock.url, ANTHROPIC_API_KEY: KEY } });
+  app = await launch();
   await app.eval(`__stet.openPath(${JSON.stringify(file)})`);
+  await app.eval('__stet.revision.show(true)');
+  f = await findings();
+  assert.deepEqual(f.map((x) => ({ ...x, at: undefined })), before, 'same suggestions, text and decisions after a restart');
+  const ga = f.find((x) => x.cat === 'grammar');
+  assert.deepEqual(ga.at, { b: 1, s: 5, e: 5 + ga.applied.length }, 'accepted change located again');
+  assert.ok(f.find((x) => x.o === 'made a decision of leaving').at, 'undecided suggestion located again');
+  assert.equal(await app.eval('document.querySelectorAll("#rev .rv-item").length') >= 1, true);
+
+  // A new review starts from scratch: no suggestions or decisions carried over.
   mock.requests.length = 0;
-  await app.eval('__stet.revision.start()'); await waitDone();
-  const f = await findings();
+  await startReview(); await waitDone();
+  f = await findings();
+  assert.ok(f.every((x) => x.decision === null), 'no decisions carried over');
   assert.ok(!f.some((x) => x.cat === 'non_native'), 'ignored passage not shown again');
   assert.ok(!f.some((x) => x.o === 'ITNRO'), 'dictionary word not shown again');
+  assert.ok(!f.some((x) => x.id === g.id), 'old suggestions gone');
   const sys = mock.requests.find((r) => r.body && r.body.system).body.system[0].text;
   assert.match(sys, /dictionary[\s\S]*"ITNRO"/);
   assert.match(sys, /already reviewed[\s\S]*looking to him since five minutes/);

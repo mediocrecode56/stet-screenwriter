@@ -3,3 +3,6 @@ dist/
 *.log
 .perf/
 .build/
+STET.exe
+STET.exe.new
+STET.exe.old

@@ -9,6 +9,7 @@ const INVOKE = new Set([
   'backup:create', 'backup:list', 'backup:prune', 'backup:read', 'backup:dir', 'backup:reveal',
   'stats:get', 'stats:set',
   'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'shell:reveal', 'app:pending-open',
+  'recent:list', 'recent:dismiss', 'recent:trash',
   'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'review:start', 'review:cancel',
 ]);
 const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done']);

@@ -11,6 +11,8 @@ import { Input } from './input.js';
 import { Session } from './session.js';
 import { Autocomplete } from './ui/autocomplete.js';
 import { ScenePanel, NotesPanel } from './ui/panels.js';
+import { setPanel, isOpen } from './ui/motion.js';
+import { Dino } from './dino.js';
 import { FindBar } from './ui/find.js';
 import * as cmd from './ui/commands.js';
 import * as dlg from './ui/dialog.js';
@@ -75,7 +77,7 @@ editor.onChange = () => {
   if (editor.rev !== lastRev) {
     lastRev = editor.rev;
     session.changed();
-    scheduleStats();
+    trackWords();
     scenes.refresh();
     notes.refresh();
     if (find.open) find.schedule();
@@ -104,7 +106,8 @@ function onDocLoaded(s) {
   view.scroller.scrollTop = 0;
   tracker.begin(s.doc.meta.id, editor.words);
   lastRev = editor.rev;
-  editor.pastedWords = 0;
+  editor.wordShift = 0;
+  lastWords = editor.words;
   scenes.lastKey = ''; notes.lastKey = '';
   revision.reset();
   scenes.refresh(); notes.refresh(true);
@@ -117,20 +120,32 @@ function onDocLoaded(s) {
 
 // ---- statistics --------------------------------------------------------------------
 
-let statsTimer = 0, statsSaveTimer = 0;
+// Every change is recorded immediately (cheap), so a document switch, a paste
+// and its undo, or a quick close can never be attributed to the wrong state;
+// only redrawing and saving are deferred.
+let statsTimer = 0, statsSaveTimer = 0, lastWords = 0, lastLoads = 0, dino = null;
+function trackWords() {
+  if (!session.doc) return;
+  if (editor.loads !== lastLoads) { lastLoads = editor.loads; lastWords = editor.words; editor.wordShift = 0; return; } // opened/restored: begin()/rebase() handle it
+  const shift = editor.wordShift;
+  editor.wordShift = 0;
+  const written = editor.words - lastWords - shift; // the writer's own net words in this change
+  lastWords = editor.words;
+  tracker.update(session.doc.meta.id, editor.words, shift);
+  if (written > 0 && dino) dino.wrote(written);
+  scheduleStats();
+}
 function scheduleStats() {
   if (statsTimer) return;
   statsTimer = setTimeout(() => {
     statsTimer = 0;
     if (!session.doc) return;
-    tracker.update(session.doc.meta.id, editor.words, editor.pastedWords);
-    editor.pastedWords = 0;
     renderGoal();
     if (tracker.changed) {
       clearTimeout(statsSaveTimer);
       statsSaveTimer = setTimeout(() => { tracker.changed = false; api.invoke('stats:set', tracker.data); }, 4000);
     }
-  }, 1500);
+  }, 300);
 }
 
 // ---- status & chrome ------------------------------------------------------------------
@@ -160,8 +175,10 @@ function renderStatus() {
   }
 }
 
+let goalState = { today: 0, goal: 0 };
 function renderGoal() {
   const s = tracker.summary(settings.goals, 7);
+  goalState = { today: s.today, goal: s.dailyGoal };
   const pct = s.dailyGoal ? Math.min(100, (s.today / s.dailyGoal) * 100) : 0;
   const el = $('st-goal');
   el.innerHTML = `TODAY ${s.today.toLocaleString()}${s.dailyGoal ? ' / ' + s.dailyGoal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`;
@@ -500,8 +517,8 @@ function stepNote(dir) {
 
 function showPanel(which, on) {
   const host = which === 'scenes' ? $('left') : $('right');
-  const want = on ?? host.hidden;
-  host.hidden = !want;
+  const want = on ?? !isOpen(host);
+  setPanel(host, want);
   $(which === 'scenes' ? 'btn-scenes' : 'btn-notes').classList.toggle('on', want);
   api.invoke('settings:set', { panels: { [which]: want } });
   // The view's ResizeObserver re-centres and repaints only what moved; no full teardown.
@@ -549,7 +566,16 @@ const hlCmds = HIGHLIGHT_COLORS.map((c, i) => ({
 cmd.register([
   { id: 'new', cat: 'File', label: 'New Screenplay…', keys: 'Ctrl+N', global: true, run: newDoc },
   { id: 'open', cat: 'File', label: 'Open…', keys: 'Ctrl+O', global: true, run: async () => { const f = await api.invoke('doc:open-dialog'); if (f) openPath(f); } },
-  { id: 'recent', cat: 'File', label: 'Open Recent…', keys: 'Ctrl+Shift+O', global: true, run: async () => { settings = await api.invoke('settings:get'); const f = await dialogs.recentDialog(settings.recent || []); if (f) openPath(f); } },
+  { id: 'recent', cat: 'File', label: 'Open Recent…', keys: 'Ctrl+Shift+O', global: true, run: async () => {
+    const f = await dialogs.recentDialog({
+      list: () => api.invoke('recent:list'),
+      dismiss: (p) => api.invoke('recent:dismiss', p),
+      trash: (p) => api.invoke('recent:trash', p),
+      confirm: dlg.confirm, alert: dlg.alertBox, currentPath: session.path,
+    });
+    settings = await api.invoke('settings:get');
+    if (f) openPath(f);
+  } },
   { id: 'save', cat: 'File', label: 'Save', keys: 'Ctrl+S', global: true, run: save },
   { id: 'save-as', cat: 'File', label: 'Save As…', keys: 'Ctrl+Shift+S', global: true, run: saveAs },
   { id: 'rename', cat: 'File', label: 'Rename…', enabled: () => !!session.path, run: async () => {
@@ -613,6 +639,7 @@ cmd.register([
   { id: 'zoom-reset', cat: 'View', label: 'Actual Size (100%)', keys: 'Ctrl+0', global: true, run: () => { view.setZoom(1); renderZoom(); persistZoom(); } },
   { id: 'panel-scenes', cat: 'View', label: 'Scene Navigator', keys: 'Ctrl+\\', global: true, run: () => showPanel('scenes') },
   { id: 'panel-notes', cat: 'View', label: 'Notes Panel', keys: 'Ctrl+Shift+\\', global: true, run: () => showPanel('notes') },
+  { id: 'companion', cat: 'View', label: () => (dino && dino.enabled ? 'Hide Writing Companion' : 'Show Writing Companion'), run: () => { dino.setEnabled(!dino.enabled); api.invoke('settings:set', { companion: dino.enabled }); } },
   { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => { view.showTitle = !view.showTitle; api.invoke('settings:set', { showTitlePage: view.showTitle }); view.invalidate(); view.revealCaret(); } },
   { id: 'title-edit', cat: 'View', label: 'Edit Title Page', run: () => { if (!view.showTitle) { view.showTitle = true; view.invalidate(); } view.scroller.scrollTop = 0; view.frame(); setTimeout(() => { const f = document.querySelector('.tp-f'); if (f) f.focus(); }, 30); } },
   { id: 'goto-page', cat: 'View', label: 'Go to Page…', keys: 'Ctrl+G', global: true, run: async () => {
@@ -628,7 +655,7 @@ cmd.register([
   { id: 'scene-prev', cat: 'View', label: 'Previous Scene', keys: 'Alt+ArrowUp', run: () => sceneStep(-1) },
 
   { id: 'stats', cat: 'Tools', label: 'Writing Goals & Statistics…', keys: 'F9', global: true, run: async () => {
-    tracker.update(session.doc.meta.id, editor.words, editor.pastedWords); editor.pastedWords = 0;
+    trackWords();
     await dialogs.statsDialog(tracker.summary(settings.goals), editor.words, async (goals) => { settings = await api.invoke('settings:set', { goals }); renderGoal(); });
   } },
   { id: 'revise-panel', cat: 'Tools', label: () => (revision.visible ? 'Hide English Revision' : 'English Revision'), keys: 'Ctrl+Shift+R', global: true, run: () => revision.show() },
@@ -649,7 +676,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
-  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', '-', 'goto-page', 'scene-next', 'scene-prev'] },
+  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', 'about'] },
 ]);
@@ -676,7 +703,7 @@ function isGlobalKey(e) {
 // ---- lifecycle ------------------------------------------------------------------------------------
 
 api.on('app:before-close', async () => {
-  tracker.update(session.doc.meta.id, editor.words, editor.pastedWords);
+  trackWords();
   await api.invoke('stats:set', tracker.data);
   if (await releaseCurrent()) {
     if (!session.dirty) await session.clearRecovery();
@@ -696,7 +723,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, tracker, cmd, revision, openPath, save, exportPdf, checkRecovery, api, settings: () => settings };
+if (info.e2e) window.__stet = { editor, view, session, input, tracker, cmd, revision, openPath, save, exportPdf, checkRecovery, api, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 
@@ -706,6 +733,9 @@ session.autosaveDelay = settings.autosaveDelayMs;
 if (settings.zoom && settings.zoom !== 1) view.setZoom(settings.zoom);
 renderZoom();
 if (settings.panels?.scenes) showPanel('scenes', true);
+// The writing companion above TODAY: fed by trackWords() and the TODAY numbers.
+dino = new Dino({ anchor: $('st-goal'), getProgress: () => goalState });
+dino.setEnabled(settings.companion !== false);
 if (settings.panels?.notes) showPanel('notes', true);
 
 session.newUntitled();

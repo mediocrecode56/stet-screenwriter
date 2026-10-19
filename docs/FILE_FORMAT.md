@@ -95,6 +95,36 @@ Written only when non-empty, so files without ignores are byte-identical to
 0.3.x output. Older builds ignore the field (and would drop it on save). The
 global dictionary is not stored in screenplays — it lives in the app settings.
 
+### Review (optional, since 0.6.0)
+
+```jsonc
+"revision": {
+  "ignored": [ ... ],
+  "review": {
+    "id": "r1a2b3", "at": "2026-10-19T21:30:00.000Z", "model": "claude-opus-5-5",
+    "state": "complete",            // complete | partial | cancelled | failed | interrupted
+    "findings": [ {
+      "id": "f12", "el": 4,           // element index (block ids are not stored)
+      "s": 7, "e": 27,                // last known position of the minimal span
+      "padL": 0, "padR": 13,          // how far the passage shown to the writer extends around it
+      "original": "looking to him since", "replacement": "staring at him for",
+      "shownOriginal": "looking to him since five minutes", "shownReplacement": "staring at him for five minutes",
+      "contextBefore": "She is ", "contextAfter": " five minutes.",
+      "category": "non_native", "confidence": "medium", "explanation": "…",
+      "decision": "discarded",        // absent = undecided; accepted | discarded | ignored | dictionary
+      "appliedText": "…"              // accepted only: the text that was put in
+    } ]
+  }
+}
+```
+
+The latest English review with the writer's decisions. Text fields are kept
+exactly as reviewed; only the position fields move with edits. On load, each
+suggestion is located again from its element index, position and context; one
+that can't be identified reliably is shown as not locatable rather than matched
+elsewhere. Entries with missing or invalid fields are dropped. Written only
+when a review exists; older builds ignore the field.
+
 ### Comments
 
 Only comments referenced by at least one anchor are written. Comment text is

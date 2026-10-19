@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChunks, chunkPrompt, validateFindings, minimalEdit, revalidate, planApply, afterApply, FINDINGS_SCHEMA, REVIEWABLE } from '../src/core/revision.js';
+import { buildChunks, chunkPrompt, validateFindings, minimalEdit, locate, locateAll, planApply, afterApply, FINDINGS_SCHEMA, REVIEWABLE } from '../src/core/revision.js';
 import { Editor, pos } from '../src/core/editor.js';
 import { makeBlock } from '../src/core/model.js';
 import { generateScript } from './fixtures.js';
@@ -65,7 +65,7 @@ test('minimalEdit trims shared words but keeps whole words', () => {
   assert.equal(m.rep, 'staring at him for');
 });
 
-test('accept applies only to unchanged text; undo/redo bring findings back', () => {
+test('accepting records the decision; undo/redo never change decisions', () => {
   const blocks = script();
   const ed = new Editor(blocks.slice());
   const [c] = buildChunks(ed.blocks);
@@ -73,52 +73,56 @@ test('accept applies only to unchanged text; undo/redo bring findings back', () 
     { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enters', explanation: '', confidence: 'high' },
     { element: 'e1', category: 'grammar', original: 'make a coffee', replacement: 'makes coffee', explanation: '', confidence: 'medium' },
   ], refs(ed.blocks));
-  revalidate(findings, ed.blocks);
+  const snapshot = JSON.stringify(findings.map(({ ref, ...f }) => f));
   const plan = planApply([findings[0]], ed.blocks);
   ed.replaceRanges(plan.matches, plan.replacements);
   afterApply(findings, plan, ed.blocks);
   assert.equal(ed.blocks[1].text, 'Mara enters the kitchen and make a coffee.');
-  assert.equal(findings[0].status, 'accepted');
-  // The second finding moved with the text and still applies cleanly.
-  assert.equal(findings[1].original, 'make a');
-  assert.equal(ed.blocks[1].text.slice(findings[1].s, findings[1].e), 'make a');
+  assert.equal(findings[0].decision, 'accepted');
+  assert.equal(findings[0].appliedText, 'enters');
+  // The second suggestion moved exactly with the text and still applies cleanly.
+  const at = locate(findings[1], ed.blocks);
+  assert.equal(ed.blocks[1].text.slice(at.s, at.e), 'make a');
   const p2 = planApply([findings[1]], ed.blocks);
   ed.replaceRanges(p2.matches, p2.replacements);
   afterApply(findings, p2, ed.blocks);
   assert.equal(ed.blocks[1].text, 'Mara enters the kitchen and makes coffee.');
   ed.undo(); ed.undo();
-  revalidate(findings, ed.blocks);
   assert.equal(ed.blocks[1].text, 'Mara enter in the kitchen and make a coffee.');
-  assert.deepEqual(findings.map((f) => f.status), ['open', 'open'], 'undo re-opens accepted findings');
-  ed.redo();
-  revalidate(findings, ed.blocks);
-  assert.equal(findings[0].status, 'accepted', 'redo marks it accepted again');
+  locateAll(findings, ed.blocks);
+  assert.deepEqual(findings.map((f) => f.decision), ['accepted', 'accepted'], 'undo changes text, not decisions');
+  assert.equal(locate(findings[0], ed.blocks), null, 'the applied change is gone, so nothing is highlighted');
+  const kept = JSON.parse(snapshot);
+  findings.forEach((f, i) => {
+    for (const k of ['original', 'replacement', 'shownOriginal', 'shownReplacement', 'explanation', 'category', 'confidence']) assert.equal(f[k], kept[i][k], k + ' unchanged');
+  });
 });
 
-test('editing during a review never produces a wrong replacement', () => {
+test('suggestions survive edits during a review; lost passages are never guessed', () => {
   const ed = new Editor(script());
   const snapshotRefs = refs(ed.blocks);
-  const [c] = buildChunks(ed.blocks); // review starts on this snapshot…
-  // …the writer keeps typing before the answer arrives:
-  ed.setSel(pos(1, 0)); for (const ch of 'Tired, ') ed.insertText(ch);   // text moves: relocatable
+  const [c] = buildChunks(ed.blocks); // review starts on this snapshot...
+  // ...the writer keeps typing before the answer arrives:
+  ed.setSel(pos(1, 0)); for (const ch of 'Tired, ') ed.insertText(ch);   // text moves: followed exactly
   ed.setSel(pos(4, 0), pos(4, ed.blocks[4].text.length)); ed.backspace();
   for (const ch of 'She waits.') ed.insertText(ch);                        // passage gone
   const { findings } = validateFindings(c, [
     { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enters', explanation: '', confidence: 'high' },
     { element: 'e3', category: 'non_native', original: 'looking to him since five minutes', replacement: 'staring at him for five minutes', explanation: '', confidence: 'medium' },
   ], snapshotRefs);
-  revalidate(findings, ed.blocks);
-  assert.equal(findings[0].status, 'open');
-  assert.equal(ed.blocks[1].text.slice(findings[0].s, findings[0].e), 'enter in', 'relocated to the moved text');
-  assert.equal(findings[1].status, 'outdated');
+  const locs = locateAll(findings, ed.blocks);
+  const a = locs.get(findings[0].id);
+  assert.equal(ed.blocks[a.b].text.slice(a.s, a.e), 'enter in', 'followed to the moved text');
+  assert.equal(locs.get(findings[1].id), null, 'cannot be located');
+  assert.equal(findings[1].decision, null, 'but still there, undecided');
   const plan = planApply(findings, ed.blocks);
-  assert.equal(plan.applied.length, 1, 'outdated findings are never applied');
+  assert.equal(plan.applied.length, 1, 'a lost suggestion is never applied');
   ed.replaceRanges(plan.matches, plan.replacements);
   assert.equal(ed.blocks[1].text, 'Tired, Mara enters the kitchen and make a coffee.');
   assert.equal(ed.blocks[4].text, 'She waits.');
 });
 
-test('ambiguous relocation is refused; accept-all is one undo step', () => {
+test('ambiguous passages are not guessed; accept-all is one undo step', () => {
   const ed = new Editor([makeBlock('action', 'He go home. Later he go out.')]);
   const [c] = buildChunks(ed.blocks);
   const { findings } = validateFindings(c, [
@@ -131,20 +135,42 @@ test('ambiguous relocation is refused; accept-all is one undo step', () => {
   assert.equal(ed.blocks[0].text, 'He goes home. Later he goes out.');
   ed.undo();
   assert.equal(ed.blocks[0].text, 'He go home. Later he go out.', 'both changes undone together');
-  revalidate(findings, ed.blocks);
-  assert.deepEqual(findings.map((f) => f.status), ['open', 'open']);
-  // A repeat of the passage elsewhere: nearby context still identifies the right one.
+  findings.forEach((f) => { f.decision = null; f.appliedText = null; }); // the writer re-opens both
+  // A repeat of the passage elsewhere: the exact edit diff still identifies the right one.
   ed.setSel(pos(0, 0)); for (const ch of 'Later he go out. ') ed.insertText(ch);
-  revalidate(findings, ed.blocks);
-  assert.equal(findings[0].status, 'open', 'unique context relocates');
-  assert.equal(ed.blocks[0].text.slice(findings[0].s - 3, findings[0].e), 'He go');
-  assert.equal(findings[1].status, 'open');
-  assert.equal(ed.blocks[0].text.slice(findings[1].s - 9, findings[1].e + 5), 'Later he go out.');
-  assert.ok(findings[1].s > 20, 'the original occurrence, not the new copy');
-  // A repeat that also copies the surroundings is genuinely ambiguous: not guessed.
+  const l1 = locate(findings[1], ed.blocks);
+  assert.ok(l1 && l1.s > 20, 'the original occurrence, not the new copy');
+  assert.equal(l1.s, ed.blocks[0].text.lastIndexOf('go out'), 'the "go" in the original sentence');
+  // Reopened from disk (no edit history) with the surroundings copied too: genuinely ambiguous.
+  const fresh = findings.map((f) => ({ ...f, ref: null, s: 0, e: 0 }));
   ed.setSel(pos(0, 0)); for (const ch of 'home. Later he go out. ') ed.insertText(ch);
-  revalidate(findings, ed.blocks);
-  assert.equal(findings[1].status, 'outdated', 'ambiguous match is not guessed');
+  assert.equal(locate(fresh[1], ed.blocks), null, 'ambiguous match is not guessed');
+});
+
+test('a review and its decisions round-trip through the .stet payload', async () => {
+  const { serialize, deserialize } = await import('../src/core/serialize.js');
+  const { newDocument } = await import('../src/core/model.js');
+  const d = newDocument();
+  d.blocks = script();
+  const [c] = buildChunks(d.blocks);
+  const { findings } = validateFindings(c, [
+    { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enters', explanation: 'Agreement.', confidence: 'high' },
+    { element: 'e3', category: 'non_native', original: 'looking to him since five minutes', replacement: 'staring at him for five minutes', explanation: 'Calque.', confidence: 'medium' },
+  ], refs(d.blocks));
+  findings[1].decision = 'discarded';
+  d.revision.review = { id: 'r1', at: '2026-10-19T10:00:00.000Z', model: 'claude-opus-5-5', state: 'complete', findings };
+  const json = serialize(d);
+  const back = deserialize(json).doc;
+  const r = back.revision.review;
+  assert.equal(r.findings.length, 2);
+  assert.deepEqual(r.findings.map((f) => [f.category, f.decision, f.shownOriginal, f.explanation]), [['grammar', null, 'enter in', 'Agreement.'], ['non_native', 'discarded', 'looking to him since five minutes', 'Calque.']]);
+  const at = locate(r.findings[0], back.blocks);
+  assert.equal(back.blocks[at.b].text.slice(at.s, at.e), 'enter in', 'located again in the reloaded blocks');
+  assert.equal(serialize(back), json, 'deterministic');
+  // Malformed entries are dropped, not trusted.
+  const p = JSON.parse(json);
+  p.revision.review.findings.push({ id: 'x', category: 'nonsense' }, { nope: 1 });
+  assert.equal(deserialize(JSON.stringify(p)).doc.revision.review.findings.length, 2);
 });
 
 test('structured-output schema is strict', () => {

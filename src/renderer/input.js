@@ -7,6 +7,7 @@ import { pos, cmp } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
 import { wordAt } from '../core/text.js';
 import { toPlainText, parsePlainText } from '../core/plaintext.js';
+import { WheelZoom, stepZoom } from '../core/wheelzoom.js';
 
 export class Input {
   constructor({ textarea, view, editor, autocomplete, onCommandKey, onCommentClick }) {
@@ -41,11 +42,13 @@ export class Input {
     sc.addEventListener('mousedown', (e) => this.mousedown(e));
     window.addEventListener('mousemove', (e) => this.mousemove(e));
     window.addEventListener('mouseup', () => { if (this.drag) { this.drag = null; clearInterval(this.autoScroll); } });
+    const wz = new WheelZoom();
     sc.addEventListener('wheel', (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
-      const factor = Math.exp(-e.deltaY * 0.0015);
-      view.setZoom(view.z * factor, e.clientY);
+      const steps = wz.feed(e.deltaY, e.deltaMode, e.timeStamp);
+      if (!steps) return;
+      view.setZoom(stepZoom(view.z, steps), e.clientY);
       if (this.onZoom) this.onZoom();
     }, { passive: false });
   }

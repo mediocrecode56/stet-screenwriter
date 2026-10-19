@@ -4,7 +4,7 @@
 application. Monochrome, typographic, deliberately beta in look; strict about
 formatting and about never losing your work.
 
-Version 0.5.0 β.
+Version 0.6.0 β.
 
 ## Run it
 
@@ -38,12 +38,20 @@ builds every released version that isn't built yet into
 Each version is built from its own git tag, so old versions stay runnable.
 `npm run exe -- v0.2.0` rebuilds one version; `npm run exe -- --all` rebuilds all.
 
+It also keeps **`Documents\STET\STET.exe`** up to date: the newest version that
+built successfully, as one self-contained file (no folder needed). It is only
+replaced after the new build has succeeded and been checked; if anything fails,
+the previous one stays and the reason is printed. On the first launch of a new
+version it unpacks once into `%LOCALAPPDATA%\STET\runtime`; later launches start
+immediately. It is built with the C# compiler that ships with Windows, so there
+is still nothing extra to install.
+
 ### Tests and measurements
 
 | command | what it does |
 |---|---|
-| `npm test` | 71 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, statistics, theme schedule, word-count fuzz |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change), caret/selection/click alignment with rendered glyphs at several display scales and zooms, and the English revision against a local mock of the API and a fake Claude Code CLI (request shape, CLI flags, signed-out errors, accept/undo/redo, edits during a review, rate limits, server errors, cancellation, ignore/dictionary persistence). `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm test` | 89 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, statistics, theme schedule, word counting and TODAY progress (paste/undo/replace/switch/reopen, plus a random-editing fuzz), wheel-zoom steps, English-revision persistence, the companion's pixel art and behaviour scripts |
+| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change), caret/selection/click alignment with rendered glyphs at several display scales and zooms, the English revision against a local mock of the API and a fake Claude Code CLI (request shape, CLI flags, signed-out errors, progress indicator, hover highlighting, decisions, edits during a review, rate limits, server errors, cancellation, persistence across restarts), word counting with real pastes and undo, 2 % wheel-zoom steps, Open Recent dismiss/trash, the writing companion, animation easing and toolbar spacing. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
@@ -64,7 +72,7 @@ Results and test conditions: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 | Ctrl+Alt+M · F8 · Shift+F8 | add note · next · previous |
 | Ctrl+F · Ctrl+H · F3 | find · replace · next |
 | Alt+↑/↓ · Ctrl+G · PgUp/PgDn | previous/next scene · go to page · page |
-| Ctrl+wheel · Ctrl+= / − / 0 | zoom |
+| Ctrl+wheel · Ctrl+= / − / 0 | zoom (the wheel moves in exact 2 % steps) |
 | LIGHT · DARK · AUTO (bottom right) · Ctrl+Shift+L | theme; AUTO follows a schedule — right-click it to set the dark and light start times (AM/PM). Picking LIGHT or DARK turns the schedule off |
 | Ctrl+K | command palette — every command, searchable |
 | Ctrl+P · Ctrl+Shift+E | print preview · export PDF |
@@ -80,13 +88,20 @@ lists findings in three groups — **Grammar Error**, **Non-Native Construction*
 explanation and a confidence level. Flagged passages are underlined in the
 script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
 
-- Per suggestion: **Accept** (one undo step), **Reject**, **Dismiss**, **Ignore**
+- Per suggestion: **Accept** (one undo step), **Discard**, **Ignore**
   (remembered in this screenplay's .stet file — never flagged again here) and
-  **+Dict** (added to your dictionary, shared by every screenplay). *Accept all*
-  per category or overall asks first and is a single undo step.
-- Nothing changes until you click. If you edit during or after a review,
-  suggestions whose text changed are marked *outdated* and can't be applied;
-  moved text is followed only when it can be identified unambiguously.
+  **+Dictionary** (shared by every screenplay). *Accept all* per category or
+  overall asks first and is a single undo step. Decided suggestions move to a
+  folded *Decided* group; **Reopen** makes one undecided again.
+- **Suggestions stay until you decide.** Their text, replacement, explanation,
+  category and decision never change because you edited the script. Hover a
+  suggestion to highlight exactly its passage; if edits make the passage
+  impossible to identify reliably, the suggestion stays and says so — nothing
+  else is ever highlighted or replaced in its place.
+- The latest review and every decision are saved in the .stet file, so they
+  survive restarts. Running a review again replaces them completely.
+- While Claude works, the panel shows an indeterminate progress bar, the
+  current stage, sections done and elapsed time; you can keep writing.
 - **No setup if you use Claude:** with no API key, STET runs the review through
   Claude Code (the copy inside the Claude desktop app, or a `claude` install) on
   your existing Claude sign-in — it counts toward your plan's usage. It runs in
@@ -105,6 +120,22 @@ script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
   at scene headings, with preceding text as context), three at a time, with
   retries on rate limits; cancel at any time; failed sections can be retried.
 - Live check: `node bench/revision-live.js` (uses your Claude sign-in, or a key if set).
+
+## Writing companion
+
+A tiny 8-bit dinosaur lives just above TODAY. It walks about, looks around,
+stretches, rests, naps and occasionally does something silly. Its energy comes
+from the words you actually type (not pastes, not opening files, not the clock)
+and changes gradually; idle, it calms down and dozes. Click it for a reaction —
+reactions join at its next natural moment instead of cutting off what it's
+doing. *View → Hide Writing Companion* turns it off. It redraws a tiny canvas a
+few times a second at most, and not at all while the window is hidden.
+
+## Open Recent
+
+*File → Open Recent…* (Ctrl+Shift+O). Hover a project for two actions: **×**
+removes it from the list only; the **bin icon** moves the file to the Recycle
+Bin after a confirmation (never a permanent delete). Missing files are marked.
 
 ## Your work is safe because
 

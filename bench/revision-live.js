@@ -26,8 +26,8 @@ await app.eval(`(async () => {
 })()`);
 await app.eval('__stet.revision.show(true); __stet.revision.start()');
 for (let i = 0; i < 600 && !(await app.eval('!!(__stet.revision.run && __stet.revision.run.finished)')); i++) await sleep(250);
-const run = await app.eval('({ failed: [...__stet.revision.run.failed.values()], fatal: __stet.revision.run.fatal, usage: __stet.revision.run.usage, rejected: __stet.revision.run.rejected })');
-const findings = await app.eval('__stet.revision.findings.map((f) => ({ category: f.category, confidence: f.confidence, original: f.shownOriginal, replacement: f.shownReplacement, why: f.explanation }))');
+const run = await app.eval('({ failed: [...__stet.revision.run.failed.values()], fatal: __stet.revision.run.fatal, rejected: __stet.revision.run.rejected })');
+const findings = await app.eval('__stet.revision.findings.map((f) => ({ category: f.category, confidence: f.confidence, original: f.shownOriginal, replacement: f.shownReplacement, located: !!__stet.revision.located(f) }))');
 console.log(JSON.stringify(run, null, 1));
 console.table(findings);
 await app.close();

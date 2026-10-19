@@ -50,12 +50,17 @@ export class Tracker {
     if (!day.docs[docId]) { day.docs[docId] = { base: words, peak: words }; this.changed = true; }
   }
 
-  /** Record the current word count. `pasted` = words pasted since last call. */
-  update(docId, words, pasted = 0) {
+  /**
+   * Record the current word count. `shift` = net words added (or removed) since
+   * the last call by changes that aren't writing — pasting, replacing, and
+   * undoing or redoing those. Both marks move with it, so it never counts as
+   * progress and undoing a paste gives the allowance back.
+   */
+  update(docId, words, shift = 0) {
     const day = this._day(dayKey(this.now()));
     let e = day.docs[docId];
-    if (!e) e = day.docs[docId] = { base: words - pasted, peak: words - pasted };
-    if (pasted) { e.base += pasted; e.peak = Math.max(e.peak, e.base); }
+    if (!e) e = day.docs[docId] = { base: words - shift, peak: words - shift };
+    else if (shift) { e.base += shift; e.peak += shift; }
     if (words > e.peak) e.peak = words;
     let w = 0;
     for (const x of Object.values(day.docs)) w += Math.max(0, x.peak - x.base);

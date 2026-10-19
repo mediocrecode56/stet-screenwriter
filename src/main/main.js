@@ -247,6 +247,31 @@ function registerIpc() {
   });
   handle('shell:reveal', (file) => shell.showItemInFolder(file));
 
+  // Open Recent: dismissing only edits the list; trashing moves the file to the
+  // system Recycle Bin / Trash (never a permanent delete) and then drops it from the list.
+  const dropRecent = (file) => { const s = settings.get(); settings.set({ recent: (s.recent || []).filter((r) => r.path !== file) }); return settings.get().recent; };
+  handle('recent:list', async () => {
+    const list = settings.get().recent || [];
+    return Promise.all(list.map(async (r) => ({ ...r, exists: await fs.stat(r.path).then((st) => st.isFile(), () => false) })));
+  });
+  handle('recent:dismiss', (file) => ({ ok: true, recent: dropRecent(file) }));
+  handle('recent:trash', async (file) => {
+    if (!(settings.get().recent || []).some((r) => r.path === file)) return { ok: false, error: 'That project is not in the recent list.' };
+    try { if (!(await fs.stat(file)).isFile()) throw Object.assign(new Error('not a file'), { code: 'ENOENT' }); } catch (e) {
+      if (e.code === 'ENOENT') return { ok: false, missing: true, error: 'The file no longer exists, so there is nothing to move to the bin. It has been removed from the list.', recent: dropRecent(file) };
+      return { ok: false, error: e.message };
+    }
+    try {
+      const testBin = process.env.STET_TEST_TRASH_DIR; // tests only: stands in for the Recycle Bin
+      if (testBin) await fs.rename(file, path.join(testBin, path.basename(file)));
+      else await shell.trashItem(file);
+    } catch (e) {
+      return { ok: false, error: `Could not move it to the bin: ${e.message}` };
+    }
+    queue.forget(file);
+    return { ok: true, recent: dropRecent(file) };
+  });
+
   handle('claude:key-status', () => claude.keyStatus());
   handle('claude:key-set', (key) => claude.setKey(key));
   handle('claude:key-clear', () => claude.clearKey());

@@ -1,123 +1,166 @@
 # Changelog
 
-All notable changes to STET. Each version is one git commit, tagged `vX.Y.Z`.
-Versions stay below 1.0 while the app is in beta.
-Every version also gets a Windows build: `dist/STET-vX.Y.Z-win32-x64/STET.exe` (`npm run exe`).
+What changed in each version of STET, and why it matters to you.
 
-## 0.5.0 — 2026-10-19 — English revision without an API key
+STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
-### Added
-- The English revision now works with **no API key**: it runs through Claude Code on your existing Claude sign-in (the copy bundled with the Claude desktop app is found automatically, as is a `claude` install on PATH or in `~/.local/bin`). Usage counts toward your Claude plan.
-- Claude Code runs locked down: print mode, no tools, no MCP servers, no settings files, no skills, no saved session, in an empty temporary folder that is deleted afterwards. The script is passed on stdin, never on the command line. Same model (`claude-opus-5-5`, high effort), same instructions and the same findings schema; its answers are validated exactly like API answers.
-- Clear errors when Claude Code is signed out, hits a usage limit, or returns something unreadable; Cancel stops the running Claude Code processes.
-- Tests: 3 end-to-end tests against a fake Claude Code CLI (flags, stdin, temp folder, sign-out, cancellation, bad output). Verified live: a real review of the sample scene through Claude Code took 22 s.
+## 0.6.0 — 19 October 2026
 
-### Changed
-- *Tools → Claude API Key…* is now *Claude Connection…* and shows which connection is used. An API key is optional and, when set, takes precedence.
-- The review confirmation says whether usage goes to your Claude plan or your API account.
+English Revision suggestions now stay put until you decide, word counting is reliable again, and a small pixel dinosaur keeps you company while you write.
 
-## 0.4.0 — 2026-10-19 — English revision with Claude
+### New
 
-### Added
-- **English Revision** (Tools menu, REVISE in the toolbar, Ctrl+Shift+R): Claude (`claude-opus-5-5`) reviews action, dialogue and parentheticals and reports Grammar Errors, Non-Native Constructions and Awkward Phrasing. Each finding has the original, a minimal replacement, an explanation and a confidence level.
-- The instructions protect the writer's voice: dialogue isn't formalised; slang, dialect and fragments are left alone; screenplay conventions aren't flagged; possibly deliberate choices are flagged cautiously or not at all; clean text gets no findings.
-- Review panel grouped by category; flagged passages underlined in the script (one style per category); F7 / Shift+F7 navigate.
-- Accept, Reject, Dismiss, **Ignore** (remembered in the screenplay's .stet file) and **+Dict** (a dictionary shared by every screenplay, editable under *Dictionary & Ignored…*). Accept all — per category or overall — asks for confirmation and is one undo step.
-- Every finding is validated against the text it was made for. Edits during or after a review mark affected findings *outdated*; moved text is followed only when unambiguous; overlapping suggestions are never both applied; undo/redo of an accepted suggestion re-opens or re-accepts it.
-- Long scripts are reviewed in scene-aligned sections with preceding text as context, three at a time. Rate limits are retried with backoff; failed sections can be retried; the review can be cancelled. Refusals, truncated answers and unreadable output are reported per section.
-- The API key is stored encrypted (Windows DPAPI via Electron safeStorage) and used only in the main process, never in screenplay files. The script is sent only when you press Review, after a confirmation showing request count and approximate tokens; the title page and notes are never sent; Claude is never called automatically.
-- Tests: 10 unit tests for the revision core and 6 end-to-end tests against a local mock of the Messages API.
+- **Suggestions stay until you decide.** Each suggestion keeps its original text, proposed replacement, explanation, category and confidence exactly as Claude wrote them, until you click Accept, Discard, Ignore or +Dictionary. Editing your script never changes, removes or resolves a suggestion on its own.
+- **Hover to see where.** Pointing at a suggestion highlights exactly the passage it refers to in the script; moving away removes the highlight. If your edits mean the passage can no longer be identified with certainty, the suggestion stays in the list with a note saying so. STET never highlights a different passage by guessing.
+- **Suggestions and decisions are saved with your screenplay.** They're stored in the .stet file, so they are still there after you close STET or restart the computer.
+- **Clear progress while Claude works.** The English Revision panel shows a calm animated bar, what is happening ("Sending the script to Claude…", "Claude is reviewing your script…", "Checking the suggestions…"), how many sections are done and how long it has taken. Because Claude can't report how far along it is, the bar never shows a made-up percentage. You can keep writing, and Cancel, network errors and failed sections each get a clear message. The indicator disappears when the review finishes, fails or is cancelled.
+- **Tidy up Open Recent.** Hover over a project to show two small icons: **×** removes it from the list without touching the file, and the **bin icon** moves the file to the Windows Recycle Bin after you confirm. Nothing is ever permanently deleted. Missing files are marked; the screenplay that's currently open can't be binned.
+- **A writing companion.** A tiny 8-bit dinosaur lives just above TODAY. It walks about, looks around, stretches, sits, naps and now and then does something silly. The more you actually write, the livelier it gets; when you stop, it gradually calms down and eventually dozes off. Pasting, opening files or time passing doesn't excite it. Click it and it reacts: startled, faints, pretends nothing happened, dances, roars back… The reaction joins in at its next natural moment rather than cutting its current move short. Turn it off with *View → Hide Writing Companion*.
+- **One always-current STET.exe.** Every build now also writes the newest version as a single, self-contained file: `Documents\STET\STET.exe`. The versioned copies in `dist` are kept as before. The single file is only replaced after a new build has succeeded and been checked, so a failed build never breaks it. On the first launch of a new version it unpacks once, showing a small "preparing" window; after that it starts straight away.
 
-### Changed
-- No INT./EXT. prompt while typing a scene heading (location and time-of-day suggestions after the prefix remain).
-- Ctrl+F toggles Find & Replace; Escape closes it from the find bar or the script.
+### Improved
 
-## 0.3.1 — 2026-10-19 — the caret no longer covers your text
+- **Ctrl + mouse wheel zoom is precise.** Each wheel notch now changes the zoom by exactly 2 percentage points (100 → 102 → 104 %), in and out. A fast spin can't jump by more than one step at a time, trackpad pinches add up evenly, and the 50–300 % limits are unchanged.
+- **Calmer, smoother animation everywhere.** All motion now uses one shared set of gentle easing curves with no bounce or overshoot. Toolbar buttons change colour smoothly instead of popping, and pressed and active states still appear instantly. Side panels slide in and out with a smooth start and stop at about the same speed as before, and reverse cleanly if you toggle them mid-way. Menus and dialogs fade in briefly. With Windows' "Animation effects" setting turned off, interface motion is switched off too.
+- **The status bar no longer shifts sideways** when you switch between element types (SCENE HEADING ↔ DIALOGUE and so on), because its labels now have fixed widths.
+- **Toolbar spacing.** Highlighted toolbar buttons, such as REVISE when its panel is open, now sit inside the toolbar with a small even margin instead of running into the separator lines above and below them.
+- **English Revision decisions are simpler.** The five buttons are now four clear choices: Accept, Discard, Ignore and +Dictionary. Decided suggestions move to a folded "Decided" group, and Reopen makes one undecided again. Running a review again replaces all suggestions and decisions from the previous review; it asks first if some are still undecided. Your Ignore list and dictionary are kept.
+- TODAY updates within a fraction of a second after you type (it used to wait 1.5 seconds).
 
 ### Fixed
-- **The blinking caret drifted into the text.** Script pages inherited the interface's `letter-spacing: .02em` (0.22 px), so Chromium drew every glyph 0.22 px wider than the caret, selection and click maths assumed. The error grew along the line: 1.8 px after 8 characters, 12.8 px after 58. It was the same at every zoom level and display scale.
-- The caret is now drawn just after the glyph boundary instead of centred on it, so it never covers the previous character. It's snapped to whole device pixels so it stays crisp at 125 %, 150 % and 200 % display scaling.
 
-### Changed — robust text metrics
-- Glyph width is no longer assumed or taken from a canvas. It's measured in the DOM, on a hidden probe page that uses the page's own CSS, so anything that affects glyph placement (fonts, spacing, display scale, zoom) is what the caret, selection, highlights and click hit-testing use.
-- It's re-measured on zoom, when the window moves to a monitor with a different scale, and when fonts finish loading.
-- Script text is isolated from interface typography: no letter-spacing, word-spacing, kerning or ligatures on pages, title-page fields, the input field, suggestions or print-preview sheets.
-- The caret's blink restarts without forcing a layout on every keystroke.
+- **Word counting stopped counting after some pastes.** The WORDS total was always right, but TODAY could freeze for a long time:
+  - After a paste, STET set aside the pasted text's word count as "not your writing". If you then undid the paste, pasted over a selection, or pasted into the middle of a word, that amount was wrong and never given back, so new typing didn't count until you had typed past it.
+  - Now STET measures how many words each change actually added or removed, and undoing or redoing a paste or replace gives the allowance back.
+  - Every change is recorded immediately, so switching documents straight after typing can't credit words to the wrong script.
+  - Covered by new regression tests: typing, large and repeated pastes, odd whitespace, deleting everything, undo/redo, switching documents and reopening, plus a 3,000-step random-editing check.
 
-### Added
-- `test/e2e/caret.e2e.js`: at display scales 1 and 1.5 and zooms 80 / 100 / 125 %, checks that the caret starts at the painted glyph edge (never over it), that selection edges match the glyphs, and that clicking any character puts the caret there. It fails on v0.3.0 and passes now.
-- `bench/caret-drift.js`: measures caret vs glyph across 4 display scales × 3 zooms × 3 line lengths. Worst case went from 12.8 px to 0.02 px.
+### For the technically curious
 
-## 0.3.0 — 2026-10-19 — readability, theme schedule, responsiveness, icon
+- Suggestions are found again after edits by comparing the old and new text of the element exactly, then by the same words with the same surrounding context, and only then by a distinctive phrase that appears exactly once. Otherwise the suggestion is reported as not locatable.
+- The review is saved in the .stet file under `revision.review`; element positions are stored by index because block ids are not saved. Older STET versions ignore this field.
+- The single-file STET.exe is built with the C# compiler included in Windows (`csc.exe`, .NET Framework 4), with the packaged app embedded as a zip. It unpacks to `%LOCALAPPDATA%\STET\runtime\<version>` and cleans up older unpacked versions that aren't in use.
+- Tests: 89 unit tests and 35 end-to-end tests, all passing.
 
-### Changed
-- Dark mode is brighter: lighter page (#1e1e1e) and desk, brighter text at every level. Muted labels rose from about 2.9:1 to 5.2:1 contrast, and the four grey levels stay distinct.
-- Light mode is slightly deeper: darker desk and bars, darker secondary text (muted labels about 2.6:1 → 4.3:1), stronger page edge.
-- Highlight colours retuned for the new dark page (≥ 7.7:1 text contrast in dark, ≥ 14.9:1 in light).
-- The theme toggle moved to the status bar: LIGHT · DARK · AUTO, active state inverted, always visible. Lower-priority status items hide first on narrow windows.
+## 0.5.0 — 19 October 2026
 
-### Added
-- Automatic theme schedule: dark-mode and light-mode start times picked with AM/PM controls (right-click AUTO, View → Theme Schedule…, or Preferences). Applies at launch and as soon as it's enabled, handles schedules that cross midnight, and re-checks every 15 s and on focus/wake, so clock and time-zone changes take effect. Picking LIGHT or DARK by hand turns the schedule off, so it never overrides a manual choice. Settings persist across restarts.
-- Custom icon: a line of text, the typing caret, and the proofreader's stet dots ("let it stand"). Used for the window, the taskbar, the top-bar mark and the .exe, with pixel-grid versions for 16–32 px.
-- Toolbar latency benchmark (`bench/toolbar-latency.js`) and the C/WebAssembly word-count experiment (`bench/native-experiment/`).
-- Tests: 6 scheduler unit tests, a 4 000-case word-count fuzz test, and 5 end-to-end tests (toggle, pressed state, AUTO vs manual, time-zone change, persistence across restart).
+English Revision works without an API key.
 
-### Faster
-- Toolbar controls paint a pressed state at pointerdown. Panels and menus are fully visible on their first frame (a short motion nudge instead of a fade from transparent). Theme and panel toggles no longer repaint every page. Autosave no longer rewrites settings.json on every save.
-- Word counting uses a table-driven state machine instead of a Unicode regex: 2.5× faster on English, 9.6× on Cyrillic. Opening a 456-page script went from 14.5 ms to 13.0 ms. A C kernel compiled to WebAssembly was built and benchmarked; it was not faster than the same algorithm in JavaScript, so it isn't shipped (docs/NATIVE.md).
+### New
 
-## 0.2.1 — 2026-10-19 — an .exe for every version
+- **No API key needed.** If you use Claude, the English review now runs through Claude Code with the Claude account you are already signed in to. STET finds the copy that comes with the Claude desktop app automatically, or a separate `claude` installation. Reviews count toward your Claude plan's usage.
+- It runs in a locked-down way: Claude Code gets the script text and nothing else (no tools, plugins, settings, skills or saved history) in a temporary folder that is deleted afterwards. The same model, instructions and checks are used as with an API key.
+- Clear messages if Claude Code is signed out, has reached a usage limit, or returns something unreadable. Cancel stops the review immediately.
 
-### Added
-- `npm run exe` builds a portable `STET.exe` for every tagged version into `dist/STET-vX.Y.Z-win32-x64/`, each from its own tag in a temporary git worktree (the working tree is untouched). Replaces `npm run package`.
+### Improved
 
-## 0.2.0 — 2026-10-19 — verified, measured, packaged
+- *Tools → Claude API Key…* is now *Tools → Claude Connection…* and shows which connection STET will use. An API key is now optional; if you add one, it takes priority.
+- The confirmation before a review says whether it uses your Claude plan or your API account.
+
+## 0.4.0 — 19 October 2026
+
+English Revision with Claude.
+
+### New
+
+- **English Revision** (*Tools* menu, **REVISE** in the toolbar, or Ctrl+Shift+R). Claude reads your action, dialogue and parentheticals and suggests minimal fixes in three groups:
+  - **Grammar Error**: plain mistakes.
+  - **Non-Native Construction**: phrasing that reads like a translation.
+  - **Awkward Phrasing**: correct but clumsy.
+  
+  Each suggestion shows the original, the replacement, a short explanation and how confident Claude is.
+- **Your voice is protected.** Dialogue isn't made formal; slang, dialect and sentence fragments are left alone; screenplay conventions aren't "corrected"; anything that may be deliberate is flagged cautiously or not at all.
+- Flagged passages are underlined in the script, with a different style per group. F7 / Shift+F7 jump between them.
+- **Ignore** remembers a passage in this screenplay so it is never flagged again. **+Dict** adds words to a personal dictionary used for every screenplay (*Tools → Dictionary & Ignored…* to edit both). *Accept all*, per group or overall, asks first and can be undone in one step.
+- Nothing changes in your script until you accept a suggestion. Every suggestion is checked against the text it was made for, and overlapping suggestions are never both applied.
+- Long scripts are reviewed in sections that follow scene breaks, three at a time, with automatic retries if the service is busy. Failed sections can be retried, and the whole review can be cancelled.
+- **Privacy:** the script is sent only when you press Review, after a confirmation showing how much will be sent. The title page and your notes are never sent, and Claude is never called automatically. An API key is stored encrypted by Windows and never written into screenplay files.
+
+### Improved
+
+- No more INT./EXT. prompt while typing a scene heading. Location and time-of-day suggestions after the prefix remain.
+- Ctrl+F opens and closes Find & Replace; Escape closes it.
+
+## 0.3.1 — 19 October 2026
+
+The caret no longer covers your text.
 
 ### Fixed
-- Tab at the end of written dialogue (or a cue) now starts a parenthetical on a new line instead of converting the dialogue itself; Tab mid-text or on an empty element still cycles the type.
-- Opening a script that has unsaved changes left by a crash now offers to restore them first (the on-disk file is backed up before restoring). Previously, postponing recovery and then opening the script could let the first autosave discard those changes.
-- A session only deletes recovery copies it wrote or restored itself.
-- Find results refresh on a short debounce instead of re-searching synchronously on every keystroke.
-- With side panels open, a page wider than the viewport is centred on the text column instead of clipped.
-- Dialog number fields no longer stretch; checkboxes are monochrome.
-- Print preview thumbnails are larger and readable.
 
-### Added
-- End-to-end test suite (`npm run e2e`) driving the real app over the DevTools protocol: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export and recovery after a forced kill. Runs against a packaged build with `STET_E2E_EXE`.
-- Unit/integration tests for the file container, serialization round-trips, atomic writes, save ordering, external-change detection, backups and retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, plain-text interchange and statistics (54 total).
-- Engine benchmarks (`npm run bench`) and an in-app performance probe (`npm run perf`, *Tools → Run Performance Probe*).
-- `npm run package` builds a portable `dist/STET-win32-x64/STET.exe`.
-- Documentation: architecture, file format, performance (with measured results), native-code decision.
-- Dev flags: `--sample`, `--screenshot=<png>`, `--run=<command>`, `--hidden`, `--e2e`.
+- **The blinking caret drifted into the text, more so on long lines.** Script pages inherited a tiny amount of letter spacing from the interface, so letters were drawn about 0.2 px wider than STET calculated, which added up to 13 px by the end of a line. Script text is now fully isolated from interface typography, and the real letter width is measured on screen, re-measured when you zoom, change display scaling or move the window to another monitor.
+- The caret now sits just after a letter instead of over it, and is aligned to whole screen pixels so it stays sharp at 125 %, 150 % and 200 % display scaling.
 
-## 0.1.0 — 2026-10-19 — first working build
+### For the technically curious
 
-### Engine
-- Semantic document model: immutable blocks (scene, action, character, parenthetical, dialogue, transition, shot) with highlight and comment marks.
-- Character-grid layout (Courier 12pt = 10 cpi × 6 lpi): wrapping is arithmetic, cached per block by identity.
-- Incremental pagination with resync; keep-with-next for headings/cues/parentheticals, widow/orphan control, (MORE)/(CONT'D) for split speeches.
-- Undo/redo as invertible splice transactions, typing grouped by word.
+- Worst-case caret misalignment went from 12.8 px to 0.02 px across 4 display scales × 3 zoom levels (`bench/caret-drift.js`). A new end-to-end test checks the caret, selection and clicks against the painted letters.
 
-### Editor
-- Virtualised page view: only visible pages exist in the DOM; a keystroke repaints one page.
-- Final Draft–style flow: Enter/Tab/Shift+Tab element transitions, Ctrl+1…7 element types, `(` starts a parenthetical, `int.` becomes a scene heading.
-- Autocomplete for scene prefixes, locations, times of day, character names, extensions and transitions.
-- First-appearance capitalisation of known character names in action (Capitalised words only, own undo step).
-- Mouse selection (word/element on double/triple click), keyboard selection, structured copy/paste with Fountain-like plain-text fallback, IME support.
-- Find & replace (case, whole word, replace all in one undo step).
-- Zoom (Ctrl+wheel, Ctrl+=/−/0) anchored to the pointer or caret.
+## 0.3.0 — 19 October 2026
 
-### Files
-- `.stet` format: checksummed binary container + gzip JSON, schema versioning and migrations.
-- Atomic writes with read-back verification; revision-guarded save queue; external-modification detection.
-- Autosave (debounced), crash recovery snapshots, automatic backups every 5 minutes with 30-day retention that never deletes the last good copy.
-- New-document setup (name, location, backup folder, interval, retention); open, recent, save as, rename, restore from backup.
+Easier on the eyes, automatic theme switching, snappier controls and an icon.
 
-### Pages & output
+### New
+
+- **Automatic theme schedule.** Choose when dark mode and light mode start, with AM/PM times (right-click AUTO, *View → Theme Schedule…*, or Preferences). It works across midnight and notices clock, time-zone and sleep/wake changes. Picking LIGHT or DARK by hand turns the schedule off, so it never overrides you.
+- **The theme switch is in the status bar** (LIGHT · DARK · AUTO), always visible.
+- **STET has an icon:** a line of text, the typing caret, and the proofreader's "stet" dots ("let it stand"). It's used for the window, the taskbar and the program file.
+
+### Improved
+
+- **Dark mode is brighter and light mode slightly deeper,** with clearly higher contrast for secondary text in both. Highlight colours were retuned to stay readable on the new page colours.
+- **Toolbar buttons respond instantly** when pressed. Panels and menus appear fully on their first frame. Switching theme or panels no longer redraws every page.
+- **Faster word counting:** 2.5× faster on English and almost 10× on Cyrillic text.
+
+### For the technically curious
+
+- A C version of the word counter (compiled to WebAssembly) was built and measured. It wasn't faster than the improved JavaScript, so it isn't included (`docs/NATIVE.md`).
+
+## 0.2.1 — 19 October 2026
+
+### New
+
+- A Windows program file (`STET.exe`) is built for every version, each from its own saved snapshot, into `dist\STET-vX.Y.Z-win32-x64\`.
+
+## 0.2.0 — 19 October 2026
+
+Verified, measured and packaged.
+
+### Fixed
+
+- Pressing Tab at the end of a dialogue line now starts a parenthetical on the next line instead of turning the dialogue into something else.
+- **Crash recovery is safer.** If a script was left with unsaved changes by a crash, opening it now offers to restore them first, after backing up the file on disk. Previously the first autosave could overwrite those changes.
+- STET only deletes recovery copies it created or restored itself.
+- Find no longer re-searches on every single keystroke, which keeps typing smooth.
+- With side panels open, a page wider than the window is centred on the text instead of being cut off.
+- Smaller fixes to dialog fields, checkboxes and print preview thumbnails, which are now readable.
+
+### New
+
+- Automated tests that drive the real app, plus engine tests (54 at the time), benchmarks and an in-app performance check (*Tools → Run Performance Probe*).
+- Documentation: architecture, file format, performance results and the native-code decision.
+
+## 0.1.0 — 19 October 2026
+
+The first working version.
+
+### Writing
+
+- Standard US screenplay formatting (Courier 12 pt, industry margins) with correct page breaks: headings and character names stay with what follows, speeches split across pages get (MORE) and (CONT'D), and widows and orphans are avoided.
+- Final Draft–style element flow: Enter and Tab move between scene heading, action, character, parenthetical, dialogue and transition; Ctrl+1…7 set the element; typing "int." starts a scene heading; "(" starts a parenthetical.
+- Suggestions while you type for locations, times of day, character names and transitions; character names are capitalised on first appearance in action.
+- Undo and redo grouped by word, mouse and keyboard selection, copy and paste that keeps formatting, find and replace, and zoom.
+
+### Your work is safe
+
+- STET's own `.stet` file format with a checksum, so damage is detected rather than silently loaded.
+- Every save is written safely and verified; autosave; crash recovery; automatic backups every 5 minutes, kept for 30 days (the last good copy is never deleted).
+
+### Pages and output
+
 - Title page edited in place; empty fields are never printed.
-- Print preview, PDF export (pure-JS writer, base-14 Courier, worker thread) and OS printing with page ranges, optional title page, highlights and notes.
+- Print preview, PDF export and printing, with page ranges and optional title page, highlights and notes.
 
 ### Interface
-- Monochrome light and dark themes, compact menu bar, element bar, command palette (Ctrl+K), scene navigator, notes panel.
-- Highlights (blue / yellow / pink) and comments with navigation.
-- Writing goals: daily/weekly targets, net-new-word tracking, averages, streaks, 28-day chart.
+
+- Monochrome light and dark themes, a command palette (Ctrl+K), scene navigator and notes panel.
+- Highlights in three colours, and comments with navigation.
+- Writing goals: daily and weekly targets, counting only new words you write, with averages, streaks and a 28-day chart.

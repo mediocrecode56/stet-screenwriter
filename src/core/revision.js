@@ -201,12 +201,14 @@ export function validateFindings(chunk, raw, blockRefs) {
     const m = minimalEdit(el.text, at, at + r.original.length, r.replacement);
     if (m.e - m.s === 0 && m.rep === '') { rejected++; continue; }
     out.push({
-      id: nextId(), chunk: chunk.index, blockId: el.blockId, blockRef: blockRefs ? blockRefs.get(el.blockId) : null,
+      id: nextId(), chunk: chunk.index, blockId: el.blockId, ref: blockRefs ? blockRefs.get(el.blockId) : null,
       s: m.s, e: m.e, original: el.text.slice(m.s, m.e), replacement: m.rep,
       shownOriginal: r.original, shownReplacement: r.replacement,
+      // How much of the passage shown to the writer lies around the minimal span (for hover).
+      padL: m.s - at, padR: at + r.original.length - m.e,
       contextBefore: el.text.slice(Math.max(0, m.s - 30), m.s), contextAfter: el.text.slice(m.e, m.e + 30),
       category: r.category, confidence: r.confidence, explanation: r.explanation.trim().slice(0, 600),
-      status: 'open',
+      decision: null, appliedText: null,
     });
   }
   return { findings: resolveOverlaps(out), rejected };
@@ -225,22 +227,25 @@ export function resolveOverlaps(findings) {
   return keep.sort((a, b) => (a.chunk - b.chunk) || 0);
 }
 
-// ---- staleness ------------------------------------------------------------------------
+// ---- decisions and locating suggestions ------------------------------------------------
+//
+// A suggestion never changes by itself: its original text, replacement,
+// explanation, category, confidence and decision stay exactly as reviewed until
+// the writer decides. Only *where* it is gets recomputed after edits, and only
+// when that is certain; otherwise it is reported as not locatable, never
+// pointed at a different passage.
 
-function indexById(blocks) {
+export const DECISIONS = ['accepted', 'discarded', 'ignored', 'dictionary'];
+export const DECISION_LABEL = { accepted: 'Accepted', discarded: 'Discarded', ignored: 'Ignored', dictionary: 'In dictionary' };
+
+export function indexById(blocks) {
   const m = new Map();
   for (let i = 0; i < blocks.length; i++) m.set(blocks[i].id, i);
   return m;
 }
 
-/** Where the finding's text is now: unique match of original with nearby context, or of original alone. */
-function relocate(text, f) {
-  const cb = f.contextBefore.slice(-12), ca = f.contextAfter.slice(0, 12);
-  const withCtx = occurrences(text, cb + f.original + ca);
-  if (withCtx.n === 1) return withCtx.at + cb.length;
-  const alone = occurrences(text, f.original);
-  return alone.n === 1 ? alone.at : -1;
-}
+/** The text a suggestion is anchored to: the original, or what accepting it put in. */
+export const anchorText = (f) => (f.decision === 'accepted' && f.appliedText != null ? f.appliedText : f.original);
 
 function occurrences(text, needle) {
   let n = 0, i = -1, at = -1;
@@ -248,109 +253,190 @@ function occurrences(text, needle) {
   return { n, at };
 }
 
-/**
- * Re-check findings against the current document. Returns the number whose
- * status changed. Open findings whose text changed are relocated when the
- * original appears exactly once in the element, otherwise marked outdated.
- * Accepted findings that were undone become open again (and vice versa).
- */
-export function revalidate(findings, blocks) {
-  const idx = indexById(blocks);
-  let changed = 0;
-  for (const f of findings) {
-    if (f.status === 'rejected' || f.status === 'dismissed') continue;
-    const i = idx.get(f.blockId);
-    const b = i === undefined ? null : blocks[i];
-    const before = f.status;
-    if (!b) { if (f.status !== 'outdated') f.status = 'outdated'; }
-    else if (b === f.blockRef) { /* untouched */ }
-    else if (f.status === 'accepted') {
-      // Blocks are immutable and undo restores the exact objects it removed,
-      // so undo/redo of an accepted change is recognised by identity.
-      if (b === f.preRef) { f.status = 'open'; f.s = f.preS; f.e = f.preE; }
-      else if (b !== f.appliedRef) {
-        const at = relocate(b.text, f);
-        if (at !== -1) { f.status = 'open'; f.s = at; f.e = at + f.original.length; }
-      }
-      f.blockRef = b;
-    } else if (f.appliedRef && b === f.appliedRef) {
-      f.status = 'accepted'; f.s = f.appS; f.e = f.appE; f.blockRef = b; // redo
-    } else if (b.text.slice(f.s, f.e) === f.original && b.text.slice(Math.max(0, f.s - f.contextBefore.length), f.s) === f.contextBefore) {
-      f.blockRef = b;
-      if (f.status === 'outdated') f.status = 'open';
-    } else {
-      const at = relocate(b.text, f);
-      if (at !== -1) { f.e = at + (f.e - f.s); f.s = at; f.blockRef = b; if (f.status === 'outdated') f.status = 'open'; }
-      else f.status = 'outdated';
-    }
-    if (f.status !== before) changed++;
-  }
-  return changed;
+/** Changed region between two versions of a text: [p, oldEnd) became [p, newEnd). */
+function diffRegion(a, b) {
+  let p = 0;
+  const n = Math.min(a.length, b.length);
+  while (p < n && a.charCodeAt(p) === b.charCodeAt(p)) p++;
+  let q = 0;
+  while (q < n - p && a.charCodeAt(a.length - 1 - q) === b.charCodeAt(b.length - 1 - q)) q++;
+  return { p, oldEnd: a.length - q, newEnd: b.length - q };
 }
 
 /**
- * Plan replacements for findings (already revalidated). Returns
- * { matches: [{b, s, e}], replacements: [string], applied: [finding] } with
+ * Find a suggestion's passage in the current blocks. Returns {b, s, e} (and
+ * updates the suggestion's stored position) or null. In order:
+ *  1. its element is unchanged;
+ *  2. its element changed elsewhere (exact diff against the last version seen);
+ *  3. reopened from disk and the stored position still holds;
+ *  4. the same text with the same surrounding context, once in its element;
+ *  5. the same text alone, once in its element, if distinctive (2+ words or 8+ characters);
+ *  6. the same text with its surrounding context, once in the whole script.
+ */
+export function locate(f, blocks, idx = indexById(blocks)) {
+  const anchor = anchorText(f);
+  if (!anchor) return null;
+  const found = (i, s) => {
+    f.blockId = blocks[i].id; f.s = s; f.e = s + anchor.length; f.ref = blocks[i];
+    return { b: i, s, e: f.e };
+  };
+  const i = f.blockId == null ? undefined : idx.get(f.blockId);
+  const b = i === undefined ? null : blocks[i];
+  const cb = f.contextBefore.slice(-12), ca = f.contextAfter.slice(0, 12);
+  if (b) {
+    if (b === f.ref) return { b: i, s: f.s, e: f.e };
+    if (f.ref && f.ref.id === b.id) {
+      const d = diffRegion(f.ref.text, b.text);
+      if (d.oldEnd <= f.s) {
+        const s = f.s + (d.newEnd - d.oldEnd);
+        if (b.text.substr(s, anchor.length) === anchor) return found(i, s);
+      } else if (d.p >= f.e) {
+        if (b.text.substr(f.s, anchor.length) === anchor) return found(i, f.s);
+      }
+    } else if (!f.ref && b.text.substr(f.s, anchor.length) === anchor && b.text.slice(Math.max(0, f.s - f.contextBefore.length), f.s) === f.contextBefore) {
+      return found(i, f.s);
+    }
+    const withCtx = occurrences(b.text, cb + anchor + ca);
+    if (withCtx.n === 1) return found(i, withCtx.at + cb.length);
+    if (/\S\s+\S/.test(anchor.trim()) || anchor.trim().length >= 8) {
+      const alone = occurrences(b.text, anchor);
+      if (alone.n === 1) return found(i, alone.at);
+    }
+  }
+  if ((cb + ca).trim().length >= 6) {
+    let hit = -1, at = -1;
+    for (let k = 0; k < blocks.length; k++) {
+      const o = occurrences(blocks[k].text, cb + anchor + ca);
+      if (!o.n) continue;
+      if (o.n > 1 || hit !== -1) { hit = -2; break; }
+      hit = k; at = o.at + cb.length;
+    }
+    if (hit >= 0) return found(hit, at);
+  }
+  return null;
+}
+
+/** The full passage shown in the panel, if it is still intact around the located span. */
+export function shownRange(f, at, blocks) {
+  if (!at || f.decision === 'accepted') return at;
+  const t = blocks[at.b].text, s = at.s - (f.padL || 0), e = at.e + (f.padR || 0);
+  return s >= 0 && t.slice(s, e) === f.shownOriginal ? { b: at.b, s, e } : at;
+}
+
+/** Locate every suggestion; returns Map(id -> {b, s, e} | null). */
+export function locateAll(findings, blocks) {
+  const idx = indexById(blocks);
+  const out = new Map();
+  for (const f of findings) out.set(f.id, locate(f, blocks, idx));
+  return out;
+}
+
+/**
+ * Plan replacements for undecided suggestions whose original text is exactly
+ * where they say. Returns { matches: [{b, s, e}], replacements, applied } with
  * non-overlapping ranges in document order, ready for Editor.replaceRanges().
  */
 export function planApply(findings, blocks) {
   const idx = indexById(blocks);
   const items = [];
   for (const f of findings) {
-    if (f.status !== 'open') continue;
-    const b = idx.get(f.blockId);
-    if (b === undefined || blocks[b].text.slice(f.s, f.e) !== f.original) continue;
-    items.push({ b, s: f.s, e: f.e, f, ref: blocks[b] });
+    if (f.decision) continue;
+    const at = locate(f, blocks, idx);
+    if (!at || blocks[at.b].text.slice(at.s, at.e) !== f.original) continue;
+    items.push({ ...at, f });
   }
   items.sort((x, y) => (x.b - y.b) || (x.s - y.s));
-  const out = { matches: [], replacements: [], applied: [], pre: [] };
+  const out = { matches: [], replacements: [], applied: [] };
   let last = null;
   for (const it of items) {
     if (last && last.b === it.b && it.s < last.e) continue; // never apply overlapping edits
     out.matches.push({ b: it.b, s: it.s, e: it.e });
     out.replacements.push(it.f.replacement);
     out.applied.push(it.f);
-    out.pre.push({ ref: it.ref, s: it.s, e: it.e });
     last = it;
   }
   return out;
 }
 
 /**
- * After a plan was applied (in one edit), mark its findings accepted and move
- * every other finding in the touched elements: shift it past earlier edits, or
- * mark it outdated if an edit overlapped it.
+ * After a plan was applied (one edit): record the accepted suggestions and move
+ * every other suggestion in the touched elements exactly past the edits. One an
+ * edit overlapped keeps its last position and is left to locate().
  */
 export function afterApply(findings, plan, blocks) {
   const edits = new Map(); // block index -> [{s, e, d, f}]
   plan.matches.forEach((m, k) => {
     const list = edits.get(m.b) || [];
-    list.push({ s: m.s, e: m.e, d: plan.replacements[k].length - (m.e - m.s), f: plan.applied[k], pre: plan.pre[k] });
+    list.push({ s: m.s, e: m.e, f: plan.applied[k], d: plan.replacements[k].length - (m.e - m.s) });
     edits.set(m.b, list);
   });
-  const idx = indexById(blocks);
-  for (const f of findings) {
-    const b = idx.get(f.blockId);
-    const list = b === undefined ? null : edits.get(b);
-    if (!list) continue;
-    const own = list.find((ed) => ed.f === f);
-    if (!own && f.status !== 'open' && f.status !== 'accepted') { f.blockRef = blocks[b]; continue; }
-    let shift = 0, broken = false;
-    for (const ed of list) {
-      if (ed === own) continue;
-      if (ed.e <= f.s) shift += ed.d;
-      else if (ed.s < f.e) broken = true;
+  for (const [bi, list] of edits) {
+    const block = blocks[bi];
+    for (const f of findings) {
+      if (f.blockId !== block.id) continue;
+      const own = list.find((ed) => ed.f === f);
+      let shift = 0, broken = false;
+      for (const ed of list) {
+        if (ed === own) continue;
+        if (ed.e <= f.s) shift += ed.d;
+        else if (ed.s < f.e) broken = true;
+      }
+      if (own) {
+        f.decision = 'accepted';
+        f.s += shift;
+        f.e = f.s + f.replacement.length;
+        f.appliedText = block.text.slice(f.s, f.e);
+        f.ref = block;
+      } else if (!broken) {
+        f.s += shift; f.e += shift;
+        if (block.text.substr(f.s, anchorText(f).length) === anchorText(f)) f.ref = block;
+      }
     }
-    f.s += shift;
-    if (own) {
-      f.status = 'accepted'; f.e = f.s + f.replacement.length;
-      f.preRef = own.pre.ref; f.preS = own.pre.s; f.preE = own.pre.e;
-      f.appliedRef = blocks[b]; f.appS = f.s; f.appE = f.e;
-    }
-    else if (broken && f.status === 'open') f.status = 'outdated';
-    else f.e += shift;
-    f.blockRef = blocks[b];
   }
+}
+
+// ---- storing a review in the .stet file -------------------------------------------------
+
+const KEEP = ['id', 's', 'e', 'padL', 'padR', 'original', 'replacement', 'shownOriginal', 'shownReplacement', 'contextBefore', 'contextAfter', 'category', 'confidence', 'explanation', 'decision', 'appliedText'];
+
+/** Plain-JSON form of a review. Block ids aren't stored in files, so positions use element numbers. */
+export function reviewToJSON(review, blocks) {
+  if (!review) return null;
+  const idx = indexById(blocks);
+  return {
+    id: review.id, at: review.at, model: review.model, state: review.state,
+    findings: review.findings.map((f) => {
+      const o = {};
+      for (const k of KEEP) if (f[k] !== undefined && f[k] !== null) o[k] = f[k];
+      o.el = f.blockId != null && idx.has(f.blockId) ? idx.get(f.blockId) : -1;
+      return o;
+    }),
+  };
+}
+
+const isStr = (v) => typeof v === 'string';
+/** Rebuild a stored review against freshly loaded blocks; invalid entries are dropped. */
+export function reviewFromJSON(r, blocks) {
+  if (!r || typeof r !== 'object' || !Array.isArray(r.findings)) return null;
+  const findings = [];
+  for (const x of r.findings) {
+    if (!x || !isStr(x.id) || !isStr(x.original) || !isStr(x.replacement) || !CATEGORIES.includes(x.category)) continue;
+    const el = Number.isInteger(x.el) && x.el >= 0 && x.el < blocks.length ? x.el : -1;
+    findings.push({
+      id: x.id, blockId: el === -1 ? null : blocks[el].id, ref: null,
+      s: Number.isInteger(x.s) ? x.s : 0, e: Number.isInteger(x.e) ? x.e : 0,
+      padL: Number.isInteger(x.padL) && x.padL >= 0 ? x.padL : 0, padR: Number.isInteger(x.padR) && x.padR >= 0 ? x.padR : 0,
+      original: x.original, replacement: x.replacement,
+      shownOriginal: isStr(x.shownOriginal) ? x.shownOriginal : x.original,
+      shownReplacement: isStr(x.shownReplacement) ? x.shownReplacement : x.replacement,
+      contextBefore: isStr(x.contextBefore) ? x.contextBefore : '', contextAfter: isStr(x.contextAfter) ? x.contextAfter : '',
+      category: x.category, confidence: CONFIDENCE.includes(x.confidence) ? x.confidence : 'medium',
+      explanation: isStr(x.explanation) ? x.explanation : '',
+      decision: DECISIONS.includes(x.decision) ? x.decision : null,
+      appliedText: isStr(x.appliedText) ? x.appliedText : null,
+    });
+  }
+  return { id: isStr(r.id) ? r.id : 'r0', at: isStr(r.at) ? r.at : null, model: isStr(r.model) ? r.model : MODEL, state: isStr(r.state) ? r.state : 'complete', findings };
 }
 
 /** Rough size of a review for the consent dialog. */

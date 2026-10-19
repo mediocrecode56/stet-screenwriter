@@ -2,6 +2,7 @@
 // Both refresh lazily (on idle after edits) and only while visible.
 
 import { pageOf } from '../../core/layout.js';
+import { isOpen } from './motion.js';
 import { linesOf } from '../../core/layout.js';
 import { lineIndexOf } from '../../core/nav.js';
 import { pos } from '../../core/editor.js';
@@ -25,7 +26,7 @@ export class ScenePanel {
     });
   }
 
-  get visible() { return !this.host.hidden; }
+  get visible() { return isOpen(this.host); }
 
   refresh() {
     if (!this.visible || this.pending) return;
@@ -83,7 +84,7 @@ export class NotesPanel {
     });
   }
 
-  get visible() { return !this.host.hidden; }
+  get visible() { return isOpen(this.host); }
 
   refresh(force = false) {
     if (!this.visible || this.pending) return;

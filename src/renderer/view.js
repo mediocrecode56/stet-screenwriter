@@ -7,6 +7,7 @@
 // grid arithmetic — no text measurement after the initial glyph-width probe.
 
 import { PAGE, ELEMENT, lineText, lineX } from '../core/format.js';
+import { ZOOM_MIN, ZOOM_MAX } from '../core/wheelzoom.js';
 import { linesOf, paginate, pageOf, rowOf } from '../core/layout.js';
 import { lineIndexOf, lineEndOffset } from '../core/nav.js';
 import { cmp, pos } from '../core/editor.js';
@@ -51,7 +52,7 @@ export class View {
     this.selLayer = el('div', 'layer');
     this.findLayer = el('div', 'layer');
     this.revLayer = el('div', 'layer');
-    this.revision = null; // { marks: [{b, s, e, cat, cur}] } from the English revision panel
+    this.revision = null; // { marks: [{b, s, e, cat, cur, hov}] } from the English revision panel
     this.caretEl = el('div', '');
     this.caretEl.id = 'caret';
     content.append(this.revLayer, this.findLayer, this.selLayer, this.caretEl);
@@ -338,7 +339,7 @@ export class View {
               const m = rm[k];
               const a = Math.max(m.s, ls), z = Math.min(m.e, le === b.text.length ? le : le + 1);
               if (z <= a) continue;
-              revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}" style="left:${left + this.xAt(x0, a - ls)}px;top:${y}px;width:${(z - a) * this.cw}px;height:${this.row}px"></div>`;
+              revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}${m.hov ? ' hov' : ''}" style="left:${left + this.xAt(x0, a - ls)}px;top:${y}px;width:${(z - a) * this.cw}px;height:${this.row}px"></div>`;
             }
           }
         }
@@ -449,7 +450,7 @@ export class View {
 
   /** Set zoom, keeping the content point under `anchorClientY` (or the caret) fixed. */
   setZoom(z, anchorClientY) {
-    z = Math.max(0.5, Math.min(3, Math.round(z * 100) / 100));
+    z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
     if (z === this.z) return;
     const sc = this.scroller;
     const rect = sc.getBoundingClientRect();

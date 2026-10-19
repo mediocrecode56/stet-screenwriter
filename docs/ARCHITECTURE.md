@@ -124,8 +124,42 @@ runs the Claude Code CLI instead (`claude -p --output-format json --json-schema 
 found on PATH, in `~/.local/bin`, or inside the Claude desktop app's folder;
 the prompt goes over stdin, cancelling kills the process, and its result is
 validated exactly like an API response.
-`src/renderer/revision.js` is the panel. Accepting goes through
+Since 0.6 a suggestion never changes or resolves by itself: `locate()`
+recomputes only its position — unchanged element, exact diff against the
+element version last seen, same text with the same context, a distinctive
+unique phrase — and otherwise reports it as not locatable. Decisions
+(accepted / discarded / ignored / dictionary) change only through the panel.
+The review is stored in the document (`doc.revision.review`) and serialised
+with it. `src/renderer/revision.js` is the panel. Accepting goes through
 `Editor.replaceRanges`, so it is ordinary, undoable editing.
+
+## Word counting and TODAY
+
+`Editor.words` is kept incrementally per transaction (cached per immutable
+block). Edits that aren't the writer's own writing — paste, replace (including
+accepted suggestions), and undo/redo of those — add their *measured* word
+change to `Editor.wordShift`; the app drains it into `Tracker.update()` on every
+change, which moves the day's base and high-water mark together so the change
+never counts as progress and undoing it gives the allowance back. Document
+loads are recognised by `Editor.loads` and never counted.
+
+## Motion
+
+One set of easing curves and durations (CSS variables `--ease-out`,
+`--ease-in-out`, `--dur-fast`, `--dur-panel`, mirrored in `ui/motion.js`).
+Nothing overshoots. Side panels slide by animating their outer margin (Web
+Animations API), so the page glides and panel text never re-wraps; a toggle
+mid-way reverses from the current position. `prefers-reduced-motion` turns
+interface motion off.
+
+## Writing companion
+
+`src/renderer/dino.js`: pixel art as character grids, behaviours as generator
+functions yielding short steps (≤ ~1.5 s). Clicks queue a reaction that runs at
+the next step boundary (after getting up if needed), then the interrupted
+behaviour resumes. Energy is an exponentially decaying count of words written
+(fed by the same change tracking as TODAY), smoothed over ~20 s. One small
+canvas; redrawn only when its picture changes; no timers while hidden.
 
 ## Native code
 

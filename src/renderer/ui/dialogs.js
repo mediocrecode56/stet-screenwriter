@@ -294,15 +294,28 @@ export async function previewDialog(doc, initial) {
   return { action: v, options: { titlePage: tp.checked, highlights: hl.checked, comments: cm.checked, range: range.value } };
 }
 
+// Renders the changelog's small Markdown subset: headings, paragraphs, lists
+// (one nesting level), **bold**, *italics* and `code`.
 export async function changelogDialog(md, version) {
-  const html = md.split('\n').map((line) => {
-    if (/^##\s/.test(line)) return `<h3>${esc(line.replace(/^##\s*/, ''))}</h3>`;
-    if (/^###\s/.test(line)) return `<p><b>${esc(line.replace(/^###\s*/, ''))}</b></p>`;
-    if (/^\s*[-*]\s/.test(line)) return `<li>${esc(line.replace(/^\s*[-*]\s*/, '')).replace(/`([^`]+)`/g, '<code>$1</code>')}</li>`;
-    if (/^#\s/.test(line) || !line.trim()) return '';
-    return `<p>${esc(line)}</p>`;
-  }).join('').replace(/(<li>.*?<\/li>)+/gs, (m) => `<ul>${m}</ul>`);
-  return open({ title: 'CHANGELOG', sub: 'v' + version, body: h('div', { class: 'body md', style: 'width:640px', html }), buttons: [{ label: 'Close', value: null, primary: true }] });
+  const inline = (t) => esc(t)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>');
+  let html = '', list = 0;
+  const setList = (n) => { while (list < n) { html += '<ul>'; list++; } while (list > n) { html += '</ul>'; list--; } };
+  for (const line of md.split('\n')) {
+    const li = /^(\s*)[-*]\s+(.*)$/.exec(line);
+    if (li) { setList(li[1].length >= 2 ? 2 : 1); html += `<li>${inline(li[2])}</li>`; continue; }
+    if (!line.trim()) continue; // blank lines don't end a list item's group
+    if (/^\s{2,}\S/.test(line) && list) { html += `<p class="li-p">${inline(line.trim())}</p>`; continue; }
+    setList(0);
+    if (/^#\s/.test(line)) continue;
+    if (/^##\s/.test(line)) html += `<h3>${inline(line.replace(/^##\s*/, ''))}</h3>`;
+    else if (/^###\s/.test(line)) html += `<h4>${inline(line.replace(/^###\s*/, ''))}</h4>`;
+    else html += `<p>${inline(line)}</p>`;
+  }
+  setList(0);
+  return open({ title: 'CHANGELOG', sub: 'v' + version, body: h('div', { class: 'body md', style: 'width:680px', html }), buttons: [{ label: 'Close', value: null, primary: true }] });
 }
 
 export async function shortcutsDialog(cmds) {
@@ -316,14 +329,59 @@ export async function shortcutsDialog(cmds) {
   return open({ title: 'KEYS', body: h('div', { class: 'body', style: 'width:640px' }, h('table', { class: 't' }, h('tbody', {}, ...extra, ...rows))), buttons: [{ label: 'Close', value: null, primary: true }] });
 }
 
-export function recentDialog(recent) {
-  let chosen = null;
-  const tbody = h('tbody', {}, ...recent.map((r) => {
-    const tr = h('tr', { class: 'pick' }, h('td', {}, r.name), h('td', { class: 'hint' }, r.path), h('td', {}, fmtTime(r.opened)));
-    tr.addEventListener('click', () => { chosen = r.path; for (const x of tbody.children) x.classList.remove('on'); tr.classList.add('on'); });
-    tr.addEventListener('dblclick', () => { chosen = r.path; document.querySelector('.dlg .btn.primary').click(); });
-    return tr;
-  }));
-  const body = h('div', { class: 'body', style: 'width:700px' }, recent.length ? h('table', { class: 't' }, tbody) : h('div', { class: 'empty' }, 'No recent documents.'));
-  return open({ title: 'RECENT', body, buttons: [{ label: 'Cancel', value: null }, { label: 'Open', value: () => chosen, primary: true, disabled: !recent.length }] });
+/**
+ * Open Recent. Each row has two hover actions, kept visually apart:
+ *  × (dismiss): removes the entry from this list only; the file is untouched.
+ *  bin icon (trash): after a confirmation, moves the file to the Recycle Bin.
+ * `api` = { list, dismiss, trash, confirm, alert, currentPath }.
+ */
+export async function recentDialog(api) {
+  let recent = await api.list();
+  let chosen = null, openBtn = null, inSub = false, done;
+  const result = new Promise((r) => { done = r; });
+  const tbody = h('tbody');
+  const body = h('div', { class: 'body recent', style: 'width:740px' });
+  // Only one modal exists at a time: a confirmation replaces this dialog, which reopens afterwards.
+  const sub = async (fn) => { inSub = true; try { await fn(); } finally { inSub = false; show(); } };
+  const render = () => {
+    tbody.replaceChildren(...recent.map((r) => {
+      const dismiss = h('button', { class: 'ra ra-dismiss', title: 'Remove from this list (the file is kept)', 'aria-label': `Remove ${r.name} from the recent list` }, '×');
+      const trash = h('button', { class: 'ra ra-trash', title: 'Move the file to the Recycle Bin…', 'aria-label': `Move ${r.name} to the Recycle Bin`, html: TRASH_SVG });
+      dismiss.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        recent = withExists(recent, (await api.dismiss(r.path)).recent);
+        if (chosen === r.path) chosen = null;
+        render();
+      });
+      trash.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sub(async () => {
+          if (api.currentPath && api.currentPath === r.path) { await api.alert('MOVE TO BIN', `"${r.name}" is open right now. Open or create another screenplay first, then move this one to the bin.`); return; }
+          if (!(await api.confirm('MOVE TO RECYCLE BIN', `Move "${r.name}" to the Recycle Bin? (${r.path}) You can restore it from the Recycle Bin; its backups are kept.`, 'Move to Bin'))) return;
+          const res = await api.trash(r.path);
+          if (res.recent) recent = withExists(recent, res.recent);
+          if (chosen === r.path) chosen = null;
+          if (!res.ok) await api.alert(res.missing ? 'FILE NOT FOUND' : 'COULD NOT MOVE TO BIN', res.error);
+        });
+      });
+      const tr = h('tr', { class: 'pick recent-row' + (r.path === chosen ? ' on' : '') + (r.exists ? '' : ' missing') },
+        h('td', { class: 'nowrap' }, r.name), h('td', { class: 'hint' }, r.exists ? r.path : 'missing · ' + r.path), h('td', { class: 'nowrap' }, fmtTime(r.opened)),
+        h('td', { class: 'ra-cell' }, dismiss, trash));
+      tr.addEventListener('click', () => { chosen = r.exists ? r.path : null; render(); });
+      tr.addEventListener('dblclick', () => { if (r.exists) { chosen = r.path; if (openBtn) openBtn.click(); } });
+      return tr;
+    }));
+    body.replaceChildren(recent.length ? h('table', { class: 't' }, tbody) : h('div', { class: 'empty' }, 'No recent documents.'),
+      h('p', { class: 'hint', style: 'margin:10px 0 0' }, '× removes an entry from this list only. The bin icon moves the file itself to the Recycle Bin.'));
+    if (openBtn) openBtn.disabled = !chosen;
+  };
+  const show = () => {
+    render();
+    open({ title: 'RECENT', body, buttons: [{ label: 'Cancel', value: null }, { label: 'Open', value: () => chosen, primary: true, disabled: !chosen }], init: (_d, _c, btns) => { openBtn = btns[1]; } })
+      .then((v) => { if (!inSub) done(v); });
+  };
+  show();
+  return result;
 }
+const withExists = (old, list) => (list || []).map((r) => ({ ...r, exists: (old.find((o) => o.path === r.path) || { exists: true }).exists }));
+const TRASH_SVG = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true"><path d="M1 3h9M4 3V1.5h3V3M2.2 3l.6 8h5.4l.6-8M4.5 5v4.5M6.5 5v4.5" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';

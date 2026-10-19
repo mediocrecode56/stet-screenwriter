@@ -4,6 +4,7 @@
 // runtime ids), so save(load(save(doc))) is byte-identical to save(doc).
 
 import { TYPES, HIGHLIGHT_COLORS, makeBlock, defaultDocSettings, emptyTitlePage, uuid } from './model.js';
+import { reviewToJSON, reviewFromJSON } from './revision.js';
 
 export const SCHEMA_VERSION = 1;
 
@@ -41,11 +42,18 @@ export function toPayload(doc, appVersion) {
     titlePage: tp,
     blocks: doc.blocks.map((b) => (b.marks.length ? { t: b.type, x: b.text, m: b.marks.map((m) => [m.s, m.e, m.k, m.v]) } : { t: b.type, x: b.text })),
     comments,
-    // Optional (v0.4+): English-revision passages the writer chose to ignore in this script.
-    ...(doc.revision && doc.revision.ignored && doc.revision.ignored.length
-      ? { revision: { ignored: doc.revision.ignored.map((x) => ({ text: x.text, category: x.category })) } }
-      : {}),
+    // Optional: English-revision passages ignored in this script (v0.4+) and the
+    // latest review with its suggestions and decisions (v0.6+).
+    ...revisionPayload(doc),
   };
+}
+
+function revisionPayload(doc) {
+  const rv = doc.revision || {};
+  const out = {};
+  if (rv.ignored && rv.ignored.length) out.ignored = rv.ignored.map((x) => ({ text: x.text, category: x.category }));
+  if (rv.review) out.review = reviewToJSON(rv.review, doc.blocks);
+  return Object.keys(out).length ? { revision: out } : {};
 }
 
 function referencedComments(blocks) {
@@ -147,6 +155,10 @@ export function deserialize(json) {
     for (const x of rv.ignored) {
       if (x && typeof x.text === 'string' && x.text && typeof x.category === 'string') doc.revision.ignored.push({ text: x.text, category: x.category });
     }
+  }
+  if (rv && rv.review) {
+    const review = reviewFromJSON(rv.review, doc.blocks);
+    if (review) doc.revision.review = review;
   }
   return { doc, warnings, migratedFrom };
 }
