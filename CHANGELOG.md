@@ -4,6 +4,36 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.16.1 — 21 October 2026
+
+### Fixed
+
+- **The streak and the shield follow your daily goal.** A day now joins your streak when you reach your daily goal, not with its first word. Each day that ends short of the goal uses one of the week's two rest days, whether or not a streak is running. The shield counts down from there.
+  - **Example:** this week you wrote 1 word on Tuesday with a goal of 600, so the shield now shows 1 left instead of 2. Today counts once it's over, or as soon as you reach the goal.
+  - **Your flame:** since your statistics were reset on Tuesday, no day has reached 600 yet. So the flame shows 0 for now, and the dinosaur is back to its first size. The first day you reach 600 starts it.
+- **The rest of the rules are unchanged:** a third day short of the goal in the same week ends the streak, and Monday brings two new rest days. With no daily goal set, any day with a new word counts, as before.
+- **The shield is only dimmed when no rest days are left.** Before, it was also dimmed when there was no streak.
+
+### For the technically curious
+
+- **The cause:** the streak in the status bar was booked when a day got its first word. Only the weekly view's goal streak used the goal. Rest days were also spent only while a streak was running.
+- **Now:**
+  - `StatsBook.setGoal()`: the window tells both copies of the statistics the daily goal, with every batch of credits (`goal`) and whenever it changes.
+  - A day is booked when it reaches that goal, and unbooked if its words drop below it.
+  - Each day stores the goal it was written under (`days[k].g`), so a later goal change only re-judges today.
+  - A streak starting mid-week counts the week's earlier missed days as already spent.
+  - With no streak, the shield counts the week's missed days directly.
+  - The weekly view's goal streak is now the same number.
+- **Upgrading:** a record from 0.16.0 or earlier, booked by any word, is rebuilt once from your daily totals when the goal is first known, and marked `rule: "goal"`. A Reset still keeps the streak.
+- **Tests:** 167 unit tests pass, four of them new:
+  - your week, day by day;
+  - a streak starting mid-week;
+  - goal changes not rewriting earlier days;
+  - the one-time rebuild, with the window and the main process agreeing through a restart.
+
+  The day-by-day reference check over random months now follows the new rule.
+- **End to end:** a new test checks that typing up to the goal is what lights the flame. All the streak, statistics, layout and quick end-to-end tests pass.
+
 ## 0.16.0 — 21 October 2026
 
 ### New

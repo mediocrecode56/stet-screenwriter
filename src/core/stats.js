@@ -20,14 +20,14 @@
 //     start: ISO time recording began (first run, migration or last reset),
 //     since: day key of `start`        — days before it have no data
 //     total: words written since start (all screenplays),
-//     days:  { 'YYYY-MM-DD': { w, docs: { [docId]: words } } },
+//     days:  { 'YYYY-MM-DD': { w, docs: { [docId]: words }, g? } },  g: the daily goal when last written on
 //     docs:  { [docId]: { w, title, path, first, last, from? } },
 //     resets: [{ at, total }],          — when the writer reset, and what was cleared
-//     streak: { last, count, best, spared, prev } — the writing streak (see core/streak.js); kept through a reset
+//     streak: { last, count, best, spared, prev, rule } — the streak (see core/streak.js); kept through a reset
 //     migrated?: { from: 1, at } }
 // Invariant: total = Σ days[*].w = Σ docs[*].w, and days[k].w = Σ days[k].docs.
 
-import { emptyStreak, cleanStreak, streakFromDays, replayStreak, bookDay, unbookDay, currentStreak, restUsed, REST_DAYS, growthFor, unlocksFor, nextMilestone } from './streak.js';
+import { emptyStreak, cleanStreak, streakFromDays, bookDay, unbookDay, currentStreak, restUsed, REST_DAYS, growthFor, unlocksFor, nextMilestone } from './streak.js';
 
 export const STATS_VERSION = 2;
 const UNKNOWN_DOC = '(earlier)'; // per-document detail the old format had already dropped
@@ -117,6 +117,7 @@ function repair(raw, now) {
     for (const [id, n] of Object.entries(d.docs || {})) { const v = Math.max(0, Math.round(+n) || 0); if (v) { docs[id] = v; w += v; } }
     if (!w) continue;
     out.days[k] = { w, docs };
+    if (Number.isFinite(d.g) && d.g >= 0) out.days[k].g = Math.round(d.g);
     out.total += w;
     for (const [id, n] of Object.entries(docs)) {
       const prev = raw.docs && raw.docs[id];
@@ -135,6 +136,52 @@ export class StatsBook {
   constructor(data, now = () => new Date()) {
     this.now = now;
     this.data = upgradeStats(data, now()).data;
+    this.goal = null; // the daily goal, once told (setGoal); until then any word counts
+  }
+
+  // ---- the streak's days ------------------------------------------------------------------
+  //
+  // A day counts for the streak when it reached the daily goal (any writing, with no goal).
+  // Each day keeps the goal it was written under (`g`), so changing the goal later never
+  // rewrites earlier days; today follows the goal as it is now.
+
+  /** Whether day k counts for the streak. */
+  hits(k) {
+    const d = this.data.days[k];
+    if (!d) return false;
+    const goal = d.g ?? this.goal ?? 0;
+    return goal ? d.w >= goal : d.w > 0;
+  }
+
+  /** Book or unbook day k by what it has now. */
+  evaluate(k) {
+    const s = this.data.streak;
+    if (!this.hits(k)) { unbookDay(s, k); return; }
+    if (!bookDay(s, k) || s.count !== 1) return;
+    // A streak starting mid-week: the days that week has already missed have used its rest days.
+    const week = weekStart(k);
+    const missed = [];
+    for (let d = week; d < k; d = addDays(d, 1)) if (this.known(d, k) && !this.hits(d)) missed.push(d);
+    s.spared = [...new Set([...(s.spared || []), ...missed])].sort();
+  }
+
+  /**
+   * The daily goal now in force (the window tells both copies: with every batch of credits,
+   * and when it changes). Today is re-judged by it; a record booked before goals counted
+   * (0.16.0 and earlier: any word) is rebuilt once from the days on record.
+   */
+  setGoal(goal) {
+    goal = Math.max(0, Math.round(+goal) || 0);
+    if (goal === this.goal && this.data.streak.rule === 'goal') return;
+    this.goal = goal;
+    const today = dayKey(this.now());
+    if (this.data.days[today]) this.data.days[today].g = goal;
+    if (this.data.streak.rule !== 'goal') {
+      this.data.streak = { ...emptyStreak(), rule: 'goal' };
+      for (const k of Object.keys(this.data.days).filter((x) => this.known(x, today)).sort()) this.evaluate(k);
+      return;
+    }
+    this.evaluate(today);
   }
 
   get startMs() { return Date.parse(this.data.start) || 0; }
@@ -145,8 +192,10 @@ export class StatsBook {
    * before the last reset are ignored; a negative credit never takes a
    * document's day below zero).
    */
-  apply(entries, meta = {}) {
+  apply(entries, meta = {}, goal) {
+    if (goal != null) this.setGoal(goal);
     let net = 0;
+    const touched = new Set();
     for (const e of entries || []) {
       const n = Math.round(+e.n) || 0;
       const t = +e.t || 0;
@@ -157,11 +206,12 @@ export class StatsBook {
         if (!day) day = this.data.days[k] = { w: 0, docs: {} };
         day.docs[e.doc] = (day.docs[e.doc] || 0) + n;
         day.w += n;
+        if (this.goal != null) day.g = this.goal;
         const m = this._doc(e.doc, k);
         m.w += n;
         this.data.total += n;
         net += n;
-        bookDay(this.data.streak, k);
+        touched.add(k);
       } else {
         const have = day ? day.docs[e.doc] || 0 : 0;
         const take = Math.min(-n, have);
@@ -169,7 +219,8 @@ export class StatsBook {
         day.docs[e.doc] = have - take;
         if (!day.docs[e.doc]) delete day.docs[e.doc];
         day.w -= take;
-        if (!day.w) { delete this.data.days[k]; unbookDay(this.data.streak, k); }
+        if (!day.w) delete this.data.days[k];
+        touched.add(k);
         const m = this.data.docs[e.doc];
         if (m) m.w = Math.max(0, m.w - take);
         this.data.total -= take;
@@ -184,6 +235,7 @@ export class StatsBook {
       if (info.path !== undefined) m.path = info.path;
       if (info.from && !m.from) m.from = info.from;
     }
+    for (const k of [...touched].sort()) this.evaluate(k);
     return net;
   }
 
@@ -227,30 +279,31 @@ export class StatsBook {
       if (rec) for (const [id, n] of Object.entries(rec.docs)) byDoc[id] = (byDoc[id] || 0) + n;
     }
     const docs = Object.entries(byDoc).map(([id, words]) => ({ id, words, title: this.title(id) })).sort((a, b) => b.words - a.words);
-    // Goal streak: days up to today reaching the daily goal (any writing when there is none), with the
-    // same two rest days a week as the writing streak; today only extends it once reached, so an
-    // unfinished today never breaks it.
-    const hit = (k) => (daily ? this.wordsOn(k) >= daily : this.wordsOn(k) > 0);
-    const streak = currentStreak(replayStreak(Object.keys(this.data.days).filter((k) => this.known(k, today) && hit(k))), today);
+    const writing = this.streak(today);
     return {
       today: { day: today, words: this.wordsOn(today) },
       goals: { daily, weekly },
       week: { start, end: addDays(start, 6), offset: Math.min(0, weekOffset | 0), days, total, active, met, best, docs, current: start === weekStart(today) },
       hasEarlier: start > weekStart(this.data.since),
-      streak,
-      writing: this.streak(today),
+      streak: writing.days, // the goal streak (the same one the status bar shows)
+      writing,
       total: this.data.total,
       since: this.data.since,
       documents: Object.keys(this.data.docs).length,
     };
   }
 
-  /** The writing streak on day `today`, and what it has earned the dinosaur. */
+  /**
+   * The streak on day `today`, what it has earned the dinosaur, and this week's rest days:
+   * two days a week may miss the goal. Every finished day this week that missed it has used
+   * one, streak or no streak (today, not over yet, never has).
+   */
   streak(today = dayKey(this.now())) {
     const s = this.data.streak || emptyStreak();
     const days = currentStreak(s, today);
     const growth = growthFor(days);
-    const rest = days ? restUsed(s, today) : 0;
+    let rest = days ? restUsed(s, today) : 0;
+    if (!days) for (let d = weekStart(today); d < today; d = addDays(d, 1)) if (this.known(d, today) && !this.hits(d)) rest++;
     return { days, best: s.best, today: s.last === today, growth, unlocked: unlocksFor(growth), next: nextMilestone(days), rest: { used: rest, left: Math.max(0, REST_DAYS - rest) } };
   }
 

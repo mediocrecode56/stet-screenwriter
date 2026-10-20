@@ -8,7 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { StatsBook, upgradeStats, dayKey, addDays, weekStart } from '../src/core/stats.js';
 import { StatsStore } from '../src/main/statsstore.js';
-import { MILESTONES, growthFor, unlocksFor, currentStreak, bookDay, unbookDay, emptyStreak, cleanStreak, spareGap, restUsed, replayStreak } from '../src/core/streak.js';
+import { MILESTONES, growthFor, unlocksFor, currentStreak, bookDay, unbookDay, emptyStreak, cleanStreak, spareGap, restUsed } from '../src/core/streak.js';
 
 function clock(start) {
   let t = new Date(start);
@@ -266,29 +266,114 @@ test('rest days against a day-by-day reference, over random months of writing', 
     const p = 0.35 + 0.6 * rnd(), start = '2026-03-02';
     const written = new Set();
     for (let i = 0; i < 90; i++) if (rnd() < p) written.add(addDays(start, i));
-    // Reference: day by day. A day off spends one of its week's two while the streak lives, else ends it.
-    let count = 0, alive = false;
+    // Reference: day by day. Every day off uses one of its week's two, streak or not; a day off past
+    // the two ends a streak. (Today is judged once it is over: the count is read before it is.)
+    let count = 0, alive = false, best = 0;
     const used = {};
     const now = clock(noon(start));
     const book = new StatsBook(null, now);
     for (let i = 0; i < 90; i++) {
       const k = addDays(start, i);
       now.set(noon(k));
-      if (written.has(k)) { write(book, k); count = alive ? count + 1 : 1; alive = true; }
+      if (written.has(k)) { write(book, k); count = alive ? count + 1 : 1; alive = true; best = Math.max(best, count); }
       assert.equal(book.summary({}).writing.days, alive ? count : 0, `run ${run}, ${k}`);
-      if (!written.has(k) && alive) { const w = weekStart(k); if ((used[w] || 0) < 2) used[w] = (used[w] || 0) + 1; else { alive = false; count = 0; } }
+      if (!written.has(k)) { const w = weekStart(k); used[w] = (used[w] || 0) + 1; if (used[w] > 2) { alive = false; count = 0; } }
     }
-    if (written.size) assert.equal(replayStreak([...written]).best, book.data.streak.best, 'replaying the days gives the same streak');
+    assert.equal(book.data.streak.best, best, 'and the same best streak');
   }
 });
 
 test('the weekly view’s goal streak has the same two rest days a week', () => {
   const now = clock('2026-10-05T09:00:00');
   const book = new StatsBook(null, now);
+  book.setGoal(500); // as the window tells it
   const put = (k, n) => book.apply([{ doc: 'x', n, t: noon(k).getTime() }]);
   put('2026-10-05', 600); put('2026-10-06', 100); put('2026-10-07', 700); put('2026-10-08', 50); put('2026-10-09', 900);
   now.set(noon('2026-10-09'));
   assert.equal(book.summary({ daily: 500 }).streak, 3, 'Tue and Thu short of the goal: spared');
   now.set(noon('2026-10-11'));
   assert.equal(book.summary({ daily: 500 }).streak, 0, 'Saturday short too: the third that week');
+});
+
+// ---- the daily goal decides the days (0.16.1) ----------------------------------------------
+
+test('the streak counts days that reach the daily goal; two days a week may miss it, streak or not', () => {
+  // The writer's own week (October 2026): statistics reset on Tuesday the 20th, goal 600.
+  const now = clock('2026-10-20T10:00:00');
+  const book = new StatsBook(null, now);
+  book.setGoal(600);
+  const at = (k, h = 12) => { now.set(new Date(`${k}T${String(h).padStart(2, '0')}:00:00`)); };
+  at('2026-10-20'); write(book, '2026-10-20', 1);               // a word, far short of 600
+  at('2026-10-21'); write(book, '2026-10-21', 2);
+  let k = book.summary({ daily: 600 }).writing;
+  assert.equal(k.days, 0, 'no day has reached the goal yet');
+  assert.equal(k.rest.left, 1, 'Tuesday missed it: one rest day left (today is not over)');
+  write(book, '2026-10-21', 598);                                // today reaches 600
+  k = book.summary({ daily: 600 }).writing;
+  assert.deepEqual([k.days, k.today, k.rest.left], [1, true, 1], 'today counts once the goal is reached');
+  at('2026-10-23'); k = book.summary({ daily: 600 }).writing;  // Thursday went by short
+  assert.deepEqual([k.days, k.rest.left], [1, 0], 'Thursday used the second');
+  at('2026-10-24'); k = book.summary({ daily: 600 }).writing;  // Friday too: the third that week
+  assert.deepEqual([k.days, k.rest.left], [0, 0], 'a third day short in one week ends it');
+  at('2026-10-26'); k = book.summary({ daily: 600 }).writing;
+  assert.equal(k.rest.left, 2, 'two new ones on Monday');
+});
+
+test('a streak starting mid-week has the week\'s earlier missed days already spent', () => {
+  const now = clock('2026-10-05T12:00:00'); // Monday
+  const book = new StatsBook(null, now);
+  book.setGoal(100);
+  const day = (k, n) => { now.set(noon(k)); if (n) write(book, k, n); };
+  day('2026-10-05', 30); day('2026-10-06', 0); day('2026-10-07', 150); // Mon short, Tue nothing, Wed reached
+  now.set(noon('2026-10-08'));
+  let k = book.summary({}).writing;
+  assert.deepEqual([k.days, k.rest.left], [1, 0], 'Monday and Tuesday used both');
+  now.set(noon('2026-10-09'));
+  assert.equal(book.summary({}).writing.days, 0, 'so Thursday short ends it');
+});
+
+test('changing the goal never rewrites earlier days; today follows the goal as it is now', () => {
+  const now = clock('2026-10-05T12:00:00');
+  const book = new StatsBook(null, now);
+  book.setGoal(600);
+  write(book, '2026-10-05', 700);
+  now.set(noon('2026-10-06')); write(book, '2026-10-06', 700);
+  assert.equal(book.summary({}).writing.days, 2);
+  book.setGoal(1000); // raised on Tuesday
+  let k = book.summary({}).writing;
+  assert.deepEqual([k.days, k.today], [1, false], 'Monday still counts (600 then); today now needs 1000');
+  write(book, '2026-10-06', 300);
+  assert.equal(book.summary({}).writing.days, 2, 'and gets it at 1000');
+  book.setGoal(0);
+  assert.equal(book.summary({}).writing.days, 2, 'with no goal, any writing counts');
+});
+
+test('a record from 0.16.0 (any word) is rebuilt once by the goal; window and main process agree, through a restart', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-goal-'));
+  const now = clock(noon('2026-10-19'));
+  let store = new StatsStore(dir, now), id = 0;
+  // Written under 0.16.0: a few words a day, booked as streak days.
+  for (const [k, n] of [['2026-10-19', 110], ['2026-10-20', 1], ['2026-10-21', 2]]) { now.set(noon(k)); store.add({ id: 'o' + ++id, entries: [{ doc: 'a', n, t: now().getTime() }] }); }
+  assert.equal(store.data.streak.count, 3, 'any word counted');
+  assert.equal(store.data.streak.rule, undefined);
+  // 0.16.1 opens: the window tells both copies the goal.
+  const mirror = new StatsBook(structuredClone(store.data), now);
+  mirror.setGoal(600);
+  store.add({ id: 'o' + ++id, entries: [], goal: 600 });
+  for (const b of [mirror, store.book]) {
+    const k = b.summary({}).writing;
+    assert.deepEqual([k.days, k.rest.left, b.data.streak.rule], [0, 0, 'goal'], 'Mon and Tue short of 600: none left this week');
+  }
+  // Rebuilt once only: booking and the goal carry on as normal afterwards.
+  store.add({ id: 'o' + ++id, entries: [{ doc: 'a', n: 600, t: now().getTime() }], goal: 600 });
+  mirror.apply([{ doc: 'a', n: 600, t: now().getTime() }], {}, 600);
+  assert.equal(store.book.summary({}).writing.days, 1);
+  assert.equal(mirror.summary({}).writing.days, 1, 'the mirror agrees');
+  await store.flush();
+  store = new StatsStore(dir, now);
+  assert.equal(store.data.streak.rule, 'goal', 'kept');
+  assert.equal(store.data.days['2026-10-21'].g, 600, 'each day keeps the goal it was written under');
+  store.add({ id: 'o' + ++id, entries: [], goal: 600 });
+  assert.equal(store.book.summary({}).writing.days, 1, 'no second rebuild after a restart');
+  await fs.rm(dir, { recursive: true, force: true });
 });

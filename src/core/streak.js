@@ -1,6 +1,8 @@
-// The writing streak: calendar days (local time, the same day boundary as
-// every other statistic) on which the writer wrote at least one new word, and
-// what it earns the dinosaur.
+// The streak: calendar days (local time, the same day boundary as every
+// other statistic) on which the writer reached the daily goal — or wrote at
+// least one new word, with no daily goal set — and what it earns the dinosaur.
+// Which days count is decided by StatsBook (core/stats.js); this module keeps
+// the record.
 //
 // Stored with the statistics (stats.json → streak), never derived from a
 // document: opening, importing or pasting text books no credits, so it can
@@ -14,13 +16,15 @@
 // to the week, not to the streak: writing again doesn't give it back, and
 // each new week brings two more. A rest day is spent on the day it carries the
 // streak over (so a streak that breaks later that week has still spent it,
-// and the next one doesn't get it again); a day is never spent twice, and a
-// day missed once the streak has broken spends nothing.
+// and the next one doesn't get it again); a day is never spent twice. Days
+// missed earlier in the week a streak starts in have spent theirs too
+// (StatsBook adds them to `spared`): the allowance is two missed days a week.
 //
 //   { last: 'YYYY-MM-DD' | null,   the latest day written on
 //     count: n,                    days written in the streak ending on `last`
 //     best: n,                     the longest streak so far
 //     spared: ['YYYY-MM-DD', …]    rest days spent (only those from the week of `last` on are kept)
+//     rule: 'goal' | undefined     booked by the daily goal (since 0.16.1); older records are rebuilt once
 //     prev: { last, count, spared } | null  the streak before `last` was booked (to unbook it) }
 //
 // The current streak is `count` while every day between `last` and today
@@ -50,7 +54,7 @@ export function cleanStreak(s) {
   const count = last ? Math.max(1, n(s.count)) : 0;
   const prev = s.prev && typeof s.prev === 'object' ? { last: day(s.prev.last), count: day(s.prev.last) ? n(s.prev.count) : 0, spared: dayList(s.prev.spared) } : null;
   const spared = last ? dayList(s.spared).filter((k) => k < last) : [];
-  return { last, count, best: Math.max(count, n(s.best)), spared, prev };
+  return { last, count, best: Math.max(count, n(s.best)), spared, prev, ...(s.rule === 'goal' ? { rule: 'goal' } : {}) };
 }
 
 /**

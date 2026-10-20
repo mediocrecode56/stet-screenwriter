@@ -16,8 +16,8 @@ const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 const dayAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return key(d); };
 const H = 14;
 
-/** stats.json with `n` days of writing in a row ending `endAgo` days ago (with or without a streak record, as 0.8 saved it). */
-async function seed(ud, n, endAgo = 1, { record = true, words = 10 } = {}) {
+/** stats.json with `n` days of writing in a row ending `endAgo` days ago (with or without a streak record, as 0.8 saved it), and a daily goal. */
+async function seed(ud, n, endAgo = 1, { record = true, words = 10, goal = 1000 } = {}) {
   await fs.mkdir(ud, { recursive: true });
   const days = {};
   for (let i = 0; i < n; i++) days[dayAgo(endAgo + i)] = { w: words, docs: { a: words } };
@@ -25,7 +25,7 @@ async function seed(ud, n, endAgo = 1, { record = true, words = 10 } = {}) {
   const data = { version: 2, start: new Date(Date.now() - (endAgo + n + 3) * 864e5).toISOString(), since, total: n * words, days, docs: n ? { a: { w: n * words, title: 'Night Ferry', path: null, first: dayAgo(endAgo + n - 1), last: dayAgo(endAgo) } } : {}, resets: [] };
   if (record) data.streak = n ? { last: dayAgo(endAgo), count: n, best: n, prev: null } : { last: null, count: 0, best: 0, prev: null };
   await fs.writeFile(path.join(ud, 'stats.json'), JSON.stringify(data));
-  await fs.writeFile(path.join(ud, 'settings.json'), JSON.stringify({ goals: { daily: 1000, weekly: 6000 } }));
+  await fs.writeFile(path.join(ud, 'settings.json'), JSON.stringify({ goals: { daily: goal, weekly: 6000 } }));
 }
 const launch = (ud) => App.launch({ userData: ud });
 /** Quit with everything written saved (the window's credits sent, the main process's copy on disk). */
@@ -94,7 +94,7 @@ test('the streak beside TODAY: 0, 1, 2, 3, 4, 7, 8, 15, 16, 31 and 32 days, and 
 
 test('a shield beside the flame: the rest days left this week', { timeout: 120000 }, async () => {
   const ud = path.join(tmp, 'rest');
-  await seed(ud, 3, 0);
+  await seed(ud, 3, 0, { goal: 10 }); // (days that reach the goal, as the records below say)
   app = await launch(ud);
   await sleep(500);
   const read = () => app.eval(`(() => { const r = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; };
@@ -110,7 +110,7 @@ test('a shield beside the flame: the rest days left this week', { timeout: 12000
     const want = Math.max(0, REST_DAYS - restUsed(rec, today));
     await app.eval(`(() => { __stet.writing.book.data.streak = { ...${JSON.stringify(rec)}, best: 3, prev: null }; __stet.renderGoal(); })()`);
     const z = await read();
-    if (z.flameText === '0') { assert.ok(z.cls.includes('none'), 'no streak: the shield is dimmed'); continue; } // (a week boundary can end the streak)
+    if (z.flameText === '0') continue; // (a week boundary can end the streak)
     assert.equal(z.text, String(want), `${rec.last}: ${want} rest days left`);
     assert.ok(z.shield, 'a pixel shield');
     assert.match(z.title, new RegExp(`Rest days left this week: ${want} of 2`));
@@ -122,9 +122,29 @@ test('a shield beside the flame: the rest days left this week', { timeout: 12000
   await app.close(); app = null;
 });
 
+test('a day joins the streak when it reaches the daily goal, not with its first word', { timeout: 120000 }, async () => {
+  const ud = path.join(tmp, 'goal');
+  await seed(ud, 0, 1, { goal: 6 });
+  app = await launch(ud);
+  await sleep(500);
+  await newDoc('Goal');
+  await app.type('Mara waits there.'); // 3 of 6
+  let s = await shown();
+  assert.equal(s.text, '0', 'three words: not yet');
+  assert.ok(!s.cls.includes('lit'));
+  assert.ok(s.title.includes('reach your daily goal (6 words)'), s.title);
+  const rest = await app.eval('document.getElementById("st-rest").title');
+  assert.match(rest, /misses the daily goal/);
+  await app.type(' The ferry comes.'); // 6 of 6
+  s = await shown();
+  assert.equal(s.text, '1', 'the goal reached: today counts');
+  assert.ok(s.cls.includes('lit'));
+  await closeApp();
+});
+
 test('one streak day for several screenplays; opening and pasting text never count; a milestone grows it while you watch', { timeout: 180000 }, async () => {
   const ud = path.join(tmp, 'b');
-  await seed(ud, 1, 1); // wrote yesterday
+  await seed(ud, 1, 1, { goal: 1 }); // wrote yesterday; any word reaches the goal
   app = await launch(ud);
   await sleep(500);
   assert.equal((await shown()).text, '1');
@@ -184,7 +204,7 @@ test('one streak day for several screenplays; opening and pasting text never cou
 
 test('an update from 0.8: the streak its statistics already show, with the size to match', { timeout: 180000 }, async () => {
   const ud = path.join(tmp, 'c');
-  await seed(ud, 8, 1, { record: false }); // 0.8 saved no streak
+  await seed(ud, 8, 1, { record: false, goal: 10 }); // 0.8 saved no streak (days that reach the goal)
   app = await launch(ud);
   await sleep(500);
   const s = await shown();

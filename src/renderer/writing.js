@@ -23,6 +23,17 @@ export class WritingStats {
     this.timer = 0;
     this.failures = 0;
     this.onChange = null;
+    this.goal = null;       // the daily goal, sent with every batch so both copies count the same days
+  }
+
+  /** The daily goal now in force (the streak counts the days that reach it). */
+  setGoal(goal) {
+    goal = Math.max(0, Math.round(+goal) || 0);
+    if (goal === this.goal) return;
+    this.goal = goal;
+    this.book.setGoal(goal);
+    this.goalDirty = true;
+    this.schedule();
   }
 
   /** Record a document's credits ([{ n, t }]). Returns the net words booked. */
@@ -30,7 +41,7 @@ export class WritingStats {
     if (!this.enabled || !credits.length) return 0;
     const entries = credits.map((c) => ({ doc: docId, n: c.n, t: c.t }));
     const first = !this.book.data.docs[docId];
-    const net = this.book.apply(entries);
+    const net = this.book.apply(entries, {}, this.goal);
     this.queue.push(...entries);
     if (first && this.info[docId]) { this.meta[docId] = this.info[docId]; this.book.apply([], { [docId]: this.info[docId] }); }
     this.schedule();
@@ -61,11 +72,12 @@ export class WritingStats {
     clearTimeout(this.timer);
     this.timer = 0;
     if (!this.enabled) return true;
-    while (this.inflight || this.queue.length || Object.keys(this.meta).length) {
+    while (this.inflight || this.queue.length || Object.keys(this.meta).length || this.goalDirty) {
       if (!this.inflight) {
-        this.inflight = { id: `${this.session}:${++this.seq}`, entries: this.queue, meta: this.meta };
+        this.inflight = { id: `${this.session}:${++this.seq}`, entries: this.queue, meta: this.meta, goal: this.goal };
         this.queue = [];
         this.meta = {};
+        this.goalDirty = false;
       }
       let r;
       try { r = await this.api.invoke('stats:add', this.inflight); } catch (e) { r = { ok: false, error: e }; }

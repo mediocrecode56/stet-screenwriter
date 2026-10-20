@@ -95,8 +95,9 @@ export class StatsStore {
     if (this.seen.has(batch.id)) return { ok: true, duplicate: true };
     this.seen.add(batch.id);
     if (this.seen.size > 5000) this.seen = new Set([...this.seen].slice(-2500));
-    const net = this.book.apply(batch.entries, batch.meta);
-    if (net || batch.meta) this.schedule();
+    const before = JSON.stringify(this.book.data.streak);
+    const net = this.book.apply(batch.entries, batch.meta, batch.goal);
+    if (net || batch.meta || JSON.stringify(this.book.data.streak) !== before) this.schedule();
     return { ok: true, net };
   }
 

@@ -202,21 +202,25 @@ const SHIELD_ART = [
 const SHIELD = `<svg class="shield" viewBox="0 0 9 12" width="9" height="12" aria-hidden="true" shape-rendering="crispEdges">`
   + SHIELD_ART.flatMap((row, y) => [...row.matchAll(/#+/g)].map((m) => `<rect x="${m.index}" y="${y}" width="${m[0].length}" height="1"/>`)).join('') + '</svg>';
 function renderGoal() {
+  writing.setGoal(settings.goals && settings.goals.daily); // the streak counts the days that reach it
   const s = writing.summary(settings.goals);
   const today = s.today.words, goal = s.goals.daily;
   goalState = { today, goal };
   const pct = goal ? Math.min(100, (today / goal) * 100) : 0;
   const el = $('st-goal');
   const k = s.writing;
+  // The streak counts the days that reach the daily goal (any new word, with no goal set).
+  const aim = goal ? `reach your daily goal (${goal.toLocaleString()} words)` : 'write at least one new word';
+  const missed = goal ? 'misses the daily goal' : 'goes by without writing';
   const streakTip = k.days
-    ? `Writing streak: ${k.days} day${k.days === 1 ? '' : 's'}${k.best > k.days ? ` (best ${k.best})` : ''}${k.today ? '' : ' — write a word today to keep it going'}.`
+    ? `Streak: ${k.days} day${k.days === 1 ? '' : 's'}${k.best > k.days ? ` (best ${k.best})` : ''}${k.today ? '' : ` — ${aim} today to add today`}.`
       + ` The dinosaur has grown ${k.growth} px${k.next ? `; it grows again at ${k.next} days` : ', its full size'}.${k.unlocked ? ` Special routines unlocked: ${k.unlocked} of 3.` : ''}`
-    : 'Writing streak: none yet — write at least one new word a day to start one; up to two days off a week don’t break it (the dinosaur grows at 1, 2, 4, 8, 16 and 32 days).';
-  // Beside the flame, a shield with the rest days left this week: days without writing that keep the streak going.
-  const restTip = `Rest days left this week: ${k.rest.left} of 2. A day without writing uses one and ${k.days ? 'your streak carries on' : 'a streak carries on'}; a third day off in the same week ends it. Two new ones every Monday.`;
+    : `Streak: none yet — ${aim} to start one; up to two days a week that miss it don’t break it (the dinosaur grows at 1, 2, 4, 8, 16 and 32 days).`;
+  // Beside the flame, a shield with this week's rest days left: two days a week may miss the goal.
+  const restTip = `Rest days left this week: ${k.rest.left} of 2. Each day that ${missed} uses one, and the streak carries on; a third in the same week ends it. Today counts once it is over. Two new ones every Monday.`;
   el.innerHTML = `TODAY ${today.toLocaleString()}${goal ? ' / ' + goal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`
     + `<span id="st-streak" class="streak${k.days ? '' : ' none'}${k.today ? ' lit' : ''}" title="${streakTip}">${FLAME}${k.days}</span>`
-    + `<span id="st-rest" class="rest${k.days && k.rest.left ? '' : ' none'}" title="${restTip}">${SHIELD}${k.rest.left}</span>`;
+    + `<span id="st-rest" class="rest${k.rest.left ? '' : ' none'}" title="${restTip}">${SHIELD}${k.rest.left}</span>`;
   el.title = `Today: ${today.toLocaleString()} words written${goal ? (today >= goal ? ' — goal met' : ` — ${(goal - today).toLocaleString()} to go`) : ''}. This week: ${s.week.total.toLocaleString()}${s.goals.weekly ? ' of ' + s.goals.weekly.toLocaleString() : ''}. Click for your week.`;
   // The dinosaur's size and special routines follow the streak: restored as they were at
   // start-up, a milestone reached while writing shown with a little ceremony.
