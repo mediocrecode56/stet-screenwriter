@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { App, sleep } from './cdp.js';
+import { restUsed, REST_DAYS } from '../../src/core/streak.js';
 
 let tmp, app;
 const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -88,6 +89,36 @@ test('the streak beside TODAY: 0, 1, 2, 3, 4, 7, 8, 15, 16, 31 and 32 days, and 
   assert.equal(broken.targetG, 0);
   assert.equal(broken.unlocked, 0);
   assert.match(broken.title, /none yet/);
+  await app.close(); app = null;
+});
+
+test('a shield beside the flame: the rest days left this week', { timeout: 120000 }, async () => {
+  const ud = path.join(tmp, 'rest');
+  await seed(ud, 3, 0);
+  app = await launch(ud);
+  await sleep(500);
+  const read = () => app.eval(`(() => { const r = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; };
+    const z = document.getElementById('st-rest'), f = document.getElementById('st-streak');
+    return { text: z.textContent, title: z.title, cls: z.className, shield: !!z.querySelector('svg.shield'), at: r(z), flame: r(f), status: r(document.getElementById('status')), parent: z.parentElement.id, flameText: f.textContent }; })()`);
+  const today = dayAgo(0);
+  const cases = [
+    { last: dayAgo(0), count: 3, spared: [] },  // written today
+    { last: dayAgo(2), count: 3, spared: [] },  // yesterday missed: a rest day (if yesterday is this week)
+    { last: dayAgo(3), count: 3, spared: [] },  // two missed
+  ];
+  for (const rec of cases) {
+    const want = Math.max(0, REST_DAYS - restUsed(rec, today));
+    await app.eval(`(() => { __stet.writing.book.data.streak = { ...${JSON.stringify(rec)}, best: 3, prev: null }; __stet.renderGoal(); })()`);
+    const z = await read();
+    if (z.flameText === '0') { assert.ok(z.cls.includes('none'), 'no streak: the shield is dimmed'); continue; } // (a week boundary can end the streak)
+    assert.equal(z.text, String(want), `${rec.last}: ${want} rest days left`);
+    assert.ok(z.shield, 'a pixel shield');
+    assert.match(z.title, new RegExp(`Rest days left this week: ${want} of 2`));
+    assert.equal(z.cls.includes('none'), want === 0, 'dimmed when none are left');
+    assert.equal(z.parent, 'st-goal', 'part of TODAY');
+    assert.ok(z.at.l >= z.flame.r && z.at.l - z.flame.r < 14, 'right beside the flame');
+    assert.ok(z.at.t >= z.status.t && z.at.b <= z.status.b, 'inside the status bar');
+  }
   await app.close(); app = null;
 });
 

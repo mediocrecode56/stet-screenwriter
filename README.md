@@ -177,7 +177,8 @@ joins the streak with your first word, and a day that isn't over yet never
 breaks it. Up to two days a week (Monday to Sunday) may go by without writing,
 together or days apart, and the streak carries on; a third day off in the same
 week ends it. Writing again doesn't give a rest day back, and every Monday
-brings two new ones (hover the flame to see how many are left). The weekly
+brings two new ones. A little shield beside the flame shows how many rest days
+are left this week (hover it for the details); it is dimmed when none are. The weekly
 view's goal streak follows the same rule. Opening, importing or pasting
 text never counts, and writing in several screenplays on one day counts once.
 It is kept with your statistics, so restarts and new versions keep it (and so

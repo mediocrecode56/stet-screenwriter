@@ -76,9 +76,14 @@ function createWindow() {
       backgroundThrottling: false,
     },
   });
-  if (b.maximized) win.maximize();
   win.loadURL('stet://app/renderer/index.html');
-  win.once('ready-to-show', () => { if (!SHOT && !flag('--hidden')) win.show(); });
+  // Shown only once the interface has painted, in one go. A maximized window is maximized here,
+  // not at creation: on Windows maximize() shows a hidden window at once, so it used to appear
+  // empty and then fill in (a jump on every start).
+  win.once('ready-to-show', () => {
+    if (SHOT || flag('--hidden')) return;
+    if (b.maximized) win.maximize(); else win.show();
+  });
   win.on('close', (e) => {
     saveBounds();
     if (allowClose) return;

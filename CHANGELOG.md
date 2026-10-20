@@ -4,6 +4,25 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.16.0 — 21 October 2026
+
+### New
+
+- **A shield for your rest days.** Next to the streak flame at the bottom, a small shield shows how many of this week's two rest days you have left. It's dimmed when none are left, or when there's no streak yet. Hover it to see how rest days work.
+
+### Fixed
+
+- **No more jump when STET opens.** If you had left the window maximized, STET appeared empty for a moment and then filled in. Now it opens maximized with everything already drawn.
+
+### For the technically curious
+
+- **The jump:** on Windows, `BrowserWindow.maximize()` shows a hidden window at once, so maximizing right after creating the window put it on screen before the interface had loaded. A maximized window is now maximized at `ready-to-show` instead, so it appears in one go. A recording of the first frames from the first paint showed nothing moving inside the page.
+- **The shield:** `#st-rest`, after `#st-streak` inside `#st-goal`. It's a 9×12 pixel drawing (`SHIELD_ART` in `app.js`, drawn in the text colour) showing `rest.left` from the statistics. The flame's tooltip no longer repeats the rest days.
+- **Tests:**
+  - an end-to-end test for the shield's count, tooltip, dimming and place beside the flame;
+  - all 163 unit tests, the 23 quick end-to-end tests, and the streak, layout and app tests pass.
+- **New checks:** `bench/launch-shift.js` and `bench/launch-frames.js` record layout shifts and the first frames when STET opens.
+
 ## 0.15.4 — 21 October 2026
 
 ### Improved
