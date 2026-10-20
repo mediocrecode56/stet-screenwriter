@@ -250,44 +250,63 @@ test('suggestions, decisions, ignores persist across restarts; a new review repl
   assert.match(sys, /already reviewed[\s\S]*looking to him since five minutes/);
 });
 
-test('clicking a suggestion glides the script smoothly to its passage', async () => {
-  // A shown window: a hidden one draws no frames, and a smooth scroll moves frame by frame.
-  await app.close();
-  app = await App.launch({ userData: path.join(tmp, 'ud'), env: { STET_ANTHROPIC_BASE_URL: mock.url, ANTHROPIC_API_KEY: KEY }, hidden: false });
-  await consent();
-  await app.eval(`(async () => {
+test('clicking a suggestion always glides its passage to the middle of the screen', async () => {
+  const longScript = () => app.eval(`(async () => {
     const { newDocument, makeBlock } = await import('../core/model.js');
     const d = newDocument('GLIDE'); d.settings.backup.enabled = false;
     d.blocks = [makeBlock('scene', 'INT. KITCHEN - NIGHT'), makeBlock('action', 'Mara enter in the kitchen and sits.')];
-    for (let i = 0; i < 160; i++) d.blocks.push(makeBlock('action', 'The rain goes on and on against the window, line ' + (i + 1) + '.'));
+    for (let i = 0; i < 90; i++) d.blocks.push(makeBlock('action', 'The rain goes on and on against the window, line ' + (i + 1) + '.'));
+    d.blocks.push(makeBlock('action', 'She is looking to him since five minutes.'));
+    for (let i = 0; i < 90; i++) d.blocks.push(makeBlock('action', 'Still the rain, line ' + (i + 1) + '.'));
     d.blocks.push(makeBlock('action', 'Teo made a decision of leaving.'));
+    for (let i = 0; i < 60; i++) d.blocks.push(makeBlock('action', 'After, line ' + (i + 1) + '.'));
     __stet.session.load(d, null);
   })()`);
-  await startReview(); await waitDone();
-  const sc = 'document.getElementById("scroller")';
-  await app.eval(`${sc}.scrollTop = 0`);
+  const press = (o) => `[...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes(${JSON.stringify(o)})).querySelector('[data-act="select"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`;
+  // Where the selected passage sits: its middle against the middle of the view (or the scroll stops at an end of the script).
+  const where = () => app.eval(`(() => {
+    const v = __stet.view, s = v.scroller, sel = __stet.editor.sel, a = v.caretRect(sel.a), b = v.caretRect(sel.f);
+    const mid = (Math.min(a.y, b.y) + Math.max(a.y + a.h, b.y + b.h)) / 2;
+    const max = s.scrollHeight - s.clientHeight;
+    return { off: Math.round(mid - (s.scrollTop + s.clientHeight / 2)), top: s.scrollTop, max, atEnd: s.scrollTop <= 0 || s.scrollTop >= max - 1, row: v.row };
+  })()`);
+  const centred = (w, what) => assert.ok(Math.abs(w.off) <= w.row || w.atEnd, `${what}: passage centred (off by ${w.off} px, scroll ${w.top}/${w.max})`);
+  const run = async (label) => {
+    await longScript();
+    await startReview(); await waitDone();
+    await app.eval('document.getElementById("scroller").scrollTop = 0');
+    await sleep(100);
+    // Far down, then far up, then one already on screen: each time it ends in the middle.
+    for (const o of ['made a decision', 'looking to him', 'made a decision', 'made a decision', 'enter in the kitchen', 'looking to him']) {
+      await app.eval(press(o)); await sleep(900);
+      centred(await where(), `${label} ${o}`);
+    }
+    // Clicked again and again, mid-glide: it always ends on the last one, centred.
+    for (const o of ['made a decision', 'looking to him', 'made a decision', 'enter in the kitchen', 'looking to him']) { await app.eval(press(o)); await sleep(120); }
+    await sleep(900);
+    centred(await where(), `${label} after rapid clicks`);
+    assert.match(await app.eval('__stet.editor.blocks[__stet.view.editor.caret.b].text'), /looking to him/);
+  };
+  await run('hidden window'); // no animation frames at all: it still gets there
+  // A shown window: the glide itself, frame by frame.
+  await app.close();
+  app = await App.launch({ userData: path.join(tmp, 'ud'), env: { STET_ANTHROPIC_BASE_URL: mock.url, ANTHROPIC_API_KEY: KEY }, hidden: false });
+  await consent();
+  await run('shown window');
+  await app.eval('document.getElementById("scroller").scrollTop = 0');
   await sleep(100);
-  const click = (o) => app.eval(`[...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes(${JSON.stringify(o)})).querySelector('[data-act="select"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`);
-  // Far down the script: it moves there over several frames, not in one jump, and ends with the passage in view.
   const samples = await app.eval(`new Promise((done) => {
-    const out = [];
-    [...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes('made a decision')).querySelector('[data-act="select"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    const s = document.getElementById('scroller'), out = [];
+    ${press('made a decision')};
     const t0 = performance.now();
-    const tick = () => { out.push(${sc}.scrollTop); performance.now() - t0 < 1500 ? requestAnimationFrame(tick) : done(out); };
+    const tick = () => { out.push(s.scrollTop); performance.now() - t0 < 1200 ? requestAnimationFrame(tick) : done(out); };
     requestAnimationFrame(tick);
   })`);
   const end = samples.at(-1);
-  const between = samples.filter((y) => y > 5 && y < end - 5);
-  assert.ok(end > 300, `scrolled down the script (${end})`);
-  assert.ok(between.length >= 3, `glided through ${between.length} in-between positions`);
-  for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1] - 0.5, 'one way only, no jumps back');
-  const inView = await app.eval(`(() => { const r = __stet.view.caretRect(); const s = ${sc}; return r.y > s.scrollTop && r.y + r.h < s.scrollTop + s.clientHeight; })()`);
-  assert.ok(inView, 'the passage is in view');
-  // A passage already in view: nothing moves.
-  await click('made a decision');
-  await sleep(600);
-  const y = await app.eval(`${sc}.scrollTop`);
-  await click('made a decision');
-  await sleep(600);
-  assert.equal(await app.eval(`${sc}.scrollTop`), y, 'already in view: it stays put');
+  assert.ok(samples.filter((y) => y > 5 && y < end - 5).length >= 5, 'a glide through in-between positions, not a jump');
+  for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1] - 0.5, 'one way only');
+  // The marks: neutral, never yellow (colour belongs to your own highlights).
+  const bg = await app.eval(`getComputedStyle(document.querySelector('.revr.cur')).backgroundColor`);
+  const [r, g, b] = bg.match(/[\d.]+/g).map(Number);
+  assert.ok(r === g && g === b, `the selected suggestion's shade is a grey (${bg})`);
 });

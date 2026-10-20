@@ -24,7 +24,8 @@
   --page-shadow: 0 0 0 1px rgba(0, 0, 0, .16);
   --warn: #000;
   --ph: #8e8e89;
-  --rev-hover: rgba(240, 200, 0, .42);
+  --rev-hover: rgba(0, 0, 0, .08);  /* review marks: neutral greys, text always readable (colour is for your own highlights) */
+  --rev-cur: rgba(0, 0, 0, .10);
   /* Motion: one set of curves and durations for the whole app. Nothing
      overshoots or bounces; state changes are colour/opacity fades or a single
      decelerating move. ui/motion.js reads the same values for scripted motion. */
@@ -56,7 +57,8 @@
   --note-line: #f0f0ed;
   --page-shadow: 0 0 0 1px rgba(255, 255, 255, .10);
   --ph: #6b6b67;
-  --rev-hover: rgba(255, 214, 10, .30);
+  --rev-hover: rgba(255, 255, 255, .12);
+  --rev-cur: rgba(255, 255, 255, .14);
 }
 
 * { box-sizing: border-box; }
@@ -344,7 +346,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .revr.r-grammar { box-shadow: inset 0 -2px 0 var(--ink); }
 .revr.r-non_native { border-bottom: 2px dashed var(--ink); }
 .revr.r-awkward { border-bottom: 2px dotted var(--ink); }
-.revr.cur { background: var(--find-cur); }
+.revr.cur { background: var(--rev-cur); }
 .rv-status { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--rule); }
 .rv-status > span:first-child { flex: 1; }
 /* progress: indeterminate (no fabricated percentage), transform-only so it costs nothing */

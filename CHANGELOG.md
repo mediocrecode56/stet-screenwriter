@@ -4,6 +4,20 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.15.2 — 21 October 2026
+
+### Fixed
+
+- **Clicking a suggestion always takes you there, centred.** The glide could stop partway, or not move at all if the passage was already somewhere on screen. Now every click glides the passage to the middle of the screen, as near as the start and end of the script allow. That works whether it's far away or already visible, and if you click again mid-glide it simply heads for the new one. Scrolling with the wheel or clicking in the script takes over at once. With reduced motion turned on, it goes straight there.
+- **Review highlights are no longer yellow.** The passage you clicked is now marked with a soft light grey in the dark theme, and a soft grey in the light theme. The text stays easy to read. Colour is kept for your own highlights.
+
+### For the technically curious
+
+- **Why it stopped:** the browser's built-in smooth scroll could be interrupted while pages were drawn in as they came into view, and it never moves in a window that isn't drawing.
+- **The glide:** `View.glideTo(a, b)` now moves the scroll itself, frame by frame, recomputing the passage's middle each time. It always ends exactly there, and is put there when its time is up even if no frames were drawn. A wheel or a press on the script cancels it.
+- **The shades:** `--rev-cur` and `--rev-hover` are neutral greys.
+- **The test:** every click on a 240-line script, in a hidden and a shown window, must end with the passage centred to within a line. That covers far away, already on screen, rapid clicks mid-glide, and checking the shade is a grey. It passed three runs in a row.
+
 ## 0.15.1 — 20 October 2026
 
 ### Improved

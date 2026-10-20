@@ -48,11 +48,12 @@ input.onEscape = () => { if (!find.open) return false; find.close(); return true
 input.onZoom = () => { renderZoom(); persistZoom(); };
 ac.onAccepted = () => input.after(false);
 
-const jump = (p, center = false, end = null, smooth = false) => {
+const jump = (p, center = false, end = null, glide = false) => {
   editor.setSel(p, end || p);
   view.relayout();
   view.frame();
-  view.revealCaret(center, smooth);
+  if (glide) view.glideTo(p, end || p); // glides until the passage is in the middle
+  else view.revealCaret(center);
   input.focus();
   input.placeTextarea();
 };

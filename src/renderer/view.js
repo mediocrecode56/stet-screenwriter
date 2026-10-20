@@ -444,27 +444,65 @@ export class View {
     return pos(best.bi, Math.min(o, lineEndOffset(b.text, starts, l)));
   }
 
-  /**
-   * Scroll so the caret is visible with some margin (`center`: in the middle). `smooth`
-   * glides there instead (unless motion is reduced), and only if it isn't comfortably in view already.
-   */
-  revealCaret(center = false, smooth = false) {
+  /** Scroll so the caret is visible with some margin (`center`: in the middle). */
+  revealCaret(center = false) {
     const r = this.caretRect();
     if (!r) return;
+    this.stopGlide(); // an explicit scroll wins over a glide under way
     const sc = this.scroller;
     const margin = this.row * 4;
-    if (smooth) {
-      const room = Math.min(sc.clientHeight / 4, margin * 2);
-      if (r.y < sc.scrollTop + room || r.y + r.h > sc.scrollTop + sc.clientHeight - room) {
-        sc.scrollTo({ top: Math.max(0, center ? r.y - sc.clientHeight / 2 : r.y - margin), behavior: reducedMotion() ? 'auto' : 'smooth' });
-      }
-      return;
-    }
     if (center) { sc.scrollTop = r.y - sc.clientHeight / 2; return; }
     if (r.y < sc.scrollTop + margin) sc.scrollTop = r.y - margin;
     else if (r.y + r.h > sc.scrollTop + sc.clientHeight - margin) sc.scrollTop = r.y + r.h - sc.clientHeight + margin;
     const lx = r.x - sc.scrollLeft;
     if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2;
+  }
+
+  /**
+   * Glide so the passage from `a` to `b` sits in the middle of the view (as near as the
+   * ends of the script allow), whether or not it is already on screen. STET moves the
+   * scroll itself, frame by frame, recomputing where the passage is each time (pages
+   * drawn as they come into view never knock it off course), and it always ends exactly
+   * there: with no frames at all (a hidden window) it is put there when the time is up.
+   * A wheel or a press on the script takes over at once; reduced motion goes straight there.
+   */
+  glideTo(a, b = a) {
+    const sc = this.scroller;
+    this.stopGlide();
+    const goal = () => {
+      const r0 = this.caretRect(a), r1 = this.caretRect(b);
+      if (!r0) return sc.scrollTop;
+      const mid = r1 && r1.y >= r0.y ? (r0.y + r1.y + r1.h) / 2 : r0.y + r0.h / 2;
+      return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(mid - sc.clientHeight / 2)));
+    };
+    const r = this.caretRect(a);
+    if (r) { const lx = r.x - sc.scrollLeft; if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2; }
+    if (reducedMotion()) { sc.scrollTop = goal(); return; }
+    const from = sc.scrollTop, t0 = performance.now();
+    const dur = Math.min(700, 280 + Math.abs(goal() - from) / 10);
+    const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+    const g = this.glide = {};
+    const step = () => {
+      if (this.glide !== g) return;
+      const k = Math.min(1, (performance.now() - t0) / dur);
+      sc.scrollTop = from + (goal() - from) * ease(k);
+      if (k < 1) g.raf = requestAnimationFrame(step); else this.stopGlide();
+    };
+    const takeOver = () => this.stopGlide();
+    sc.addEventListener('wheel', takeOver, { passive: true });
+    sc.addEventListener('pointerdown', takeOver);
+    g.off = () => { sc.removeEventListener('wheel', takeOver); sc.removeEventListener('pointerdown', takeOver); };
+    g.timer = setTimeout(() => { if (this.glide === g) { sc.scrollTop = goal(); this.stopGlide(); } }, dur + 200);
+    g.raf = requestAnimationFrame(step);
+  }
+
+  stopGlide() {
+    const g = this.glide;
+    if (!g) return;
+    this.glide = null;
+    cancelAnimationFrame(g.raf);
+    clearTimeout(g.timer);
+    g.off();
   }
 
   scrollToPage(pi) {
