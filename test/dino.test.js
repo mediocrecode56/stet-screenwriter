@@ -52,7 +52,7 @@ function run(c, ms, { from = 0, dt = 100, each } = {}) {
       prev = s;
     }
     assert.ok(c.queue.length <= 2, 'at most two reactions queued');
-    assert.ok(c.props.length <= 8, `props bounded (${c.props.map((p) => p.kind)})`);
+    assert.ok(c.loose <= 8 && c.tufts().length <= c.T.tuftsMax, `props bounded (${c.props.map((p) => p.kind)})`); // (tufts grown in the background have their own cap)
     if (!c.resized) assert.ok(c.x > -c.dw - 6 && c.x < c.stripW + 6, 'never wanders far off');
   }
   return { steps, now };
@@ -483,7 +483,8 @@ test('every environmental event runs its course from many situations, one at a t
       assert.ok(!c.props.some((p) => ['cloud', 'bird', 'tumbleweed'].includes(p.kind)), `${kind}: visitors gone`);
     }
   }
-  const env = Object.keys(REACTIONS).filter((n) => REACTIONS[n].cat === 'env');
+  // (Noticing a plant comes after the sprout event is over, and waking from a deep sleep belongs to the window's focus: both tested on their own.)
+  const env = Object.keys(REACTIONS).filter((n) => REACTIONS[n].cat === 'env' && n !== 'plantNotice' && n !== 'deepWake');
   const missing = env.filter((n) => !reacted.has(n));
   assert.ok(missing.length <= 2, `environment reactions seen: ${[...reacted]}; not seen: ${missing}`);
 });
@@ -846,5 +847,220 @@ test('plants come up on their own: one at a time, it notices in its own time, so
       if (chomped) assert.equal(p.cut, 1, 'a bite out of the grass');
     }
     assert.ok(frames.filter((f) => seen.has(f)).length >= 2, `${kind}: different visits (${frames.filter((f) => seen.has(f))})`);
+  }
+});
+
+// ---- 0.14: the window in the background, deep sleep, large plants, four new routines ----
+
+const MINUTE = 60000;
+/** Writing now and then (about every `every` ms on average) while it runs. */
+const writer = (c, rng, every = 4000, dt = 100) => () => { if (rng() < dt / every) c.wrote(3, c.now); };
+
+test('in the background, tufts of grass come up slowly and only so many — on the clock, not on frames', () => {
+  // A window that is hardly ticking at all (throttled, or hidden): one tick an hour later still finds every tuft that was due.
+  const a = world(201);
+  run(a, 30000, { dt: 100 });
+  a.setFocus(false, a.now);
+  const t0 = a.now;
+  a.advance(t0 + 60 * MINUTE);
+  const tufts = a.tufts().sort((p, q) => p.born - q.born);
+  assert.equal(tufts.length, a.T.tuftsMax, `${tufts.length} tufts after an hour away, at most ${a.T.tuftsMax}`);
+  assert.ok(tufts[0].born - t0 >= a.T.tuftFirst[0] && tufts[0].born - t0 <= a.T.tuftFirst[1], 'the first one not at once');
+  for (let i = 1; i < tufts.length; i++) assert.ok(tufts[i].born - tufts[i - 1].born >= a.T.tuftEvery[0], 'one at a time, minutes apart');
+  for (const p of tufts) { assert.equal(p.kind, 'grass'); assert.ok(p.x >= 0 && p.x + a.propW(p) <= a.stripW, 'on the playground'); }
+  a.advance(t0 + 61 * MINUTE);
+  assert.ok(tufts.every((p) => p.frame === GROW_FULL.grass || a.now - p.born < 2 * a.T.tuftGrow), 'grown as much as their age says');
+  a.advance(t0 + 300 * MINUTE);
+  assert.equal(a.tufts().length, a.T.tuftsMax, 'and never more, however long');
+  // Ticking all the while: the same pace, and it never eats or touches them while the window is in the background.
+  for (const seed of [202, 203]) {
+    const c = world(seed);
+    const rng = seeded(seed);
+    run(c, 60000, { dt: 100, each: writer(c, rng) });
+    c.setFocus(false, c.now);
+    const from = c.now, seen = new Map();
+    let at10 = null;
+    run(c, 45 * MINUTE, { from: c.now, dt: 200, each: (now) => {
+      for (const [p, f] of seen) { assert.ok(c.has(p), 'never eaten while away'); assert.ok(p.frame >= f, 'never nibbled while away'); }
+      for (const p of c.tufts()) seen.set(p, p.frame);
+      assert.notEqual(c.activity, 'graze');
+      if (c.activity === 'visitPlant') assert.ok(!['chomp'].includes(c.frame) || c.step?.f !== 'chomp' || !c.plantToVisit(), 'no nibbling');
+      if (at10 == null && now - from >= 10 * MINUTE) at10 = c.tufts().length;
+    } });
+    assert.ok(at10 <= 3, `slowly: ${at10} after ten minutes`);
+    assert.ok(c.tufts().length >= 4 && c.tufts().length <= c.T.tuftsMax, `${c.tufts().length} after 45 minutes`);
+  }
+});
+
+test('back at the window, it eats the grass only once writing resumes — progressively, a bite at a time', () => {
+  for (const seed of [211, 212, 213]) {
+    const c = world(seed);
+    const rng = seeded(seed);
+    c.setFocus(false, 0);
+    run(c, 40 * MINUTE, { dt: 250 });
+    const grass = c.tufts();
+    assert.ok(grass.length >= 3, `${grass.length} tufts grew`);
+    c.setFocus(true, c.now);
+    // Back, but not writing yet (reading, thinking): the grass stays.
+    run(c, 3 * MINUTE, { from: c.now, dt: 100 });
+    assert.equal(c.tufts().length, grass.length, 'nothing eaten before writing resumes');
+    assert.ok(grass.every((p) => p.frame === GROW_FULL.grass), 'not a bite');
+    // Writing again: it gets round to them in its own time, a bite at a time.
+    const lastFrame = new Map(), eatenAt = [];
+    let bites = 0;
+    run(c, 40 * MINUTE, { from: c.now, dt: 100, each: (now) => {
+      writer(c, rng)();
+      for (const p of grass) {
+        if (!lastFrame.has(p) || !c.has(p)) continue;
+        if (p.frame < lastFrame.get(p)) { bites++; assert.equal(c.activity, 'graze', 'only when grazing'); }
+      }
+      for (const p of grass) if (lastFrame.has(p) && !c.has(p) && !eatenAt.some((e) => e.p === p)) { assert.equal(lastFrame.get(p), 0, 'the last bite takes the last of it'); eatenAt.push({ p, at: now }); }
+      for (const p of grass) if (c.has(p)) lastFrame.set(p, p.frame);
+      walksNotSlides(c);
+    } });
+    assert.ok(eatenAt.length >= Math.min(3, grass.length), `ate ${eatenAt.length} of ${grass.length}`);
+    assert.ok(bites >= eatenAt.length * 2, 'bite by bite');
+    assert.ok(eatenAt[eatenAt.length - 1].at - eatenAt[0].at > MINUTE, 'not all at once');
+  }
+});
+
+test('a long while in the background: it settles into a deep sleep, sleeps on quietly, and wakes gently when you are back', () => {
+  for (const seed of [221, 222]) {
+    const c = world(seed);
+    run(c, 60000, { dt: 100 });
+    c.setFocus(false, c.now);
+    const away = c.now;
+    run(c, 11 * MINUTE, { from: c.now, dt: 100 });
+    assert.ok(!c.deep, 'not yet');
+    until(c, () => c.deep && c.asleep(), 8 * MINUTE, 'falls into a deep sleep (after what it was doing)');
+    assert.ok(c.now - away >= c.T.deepSleep);
+    // Asleep for good while the window stays in the background, and little to do: no events, few ticks.
+    let ticks = 0, now = c.now;
+    const end = now + 40 * MINUTE;
+    while (now < end) {
+      const moving = c.advance(now);
+      assert.ok(c.asleep() && c.deep, `sleeps on [${c.activity}/${c.frame}]`);
+      assert.equal(c.event, null, 'nothing happens around it');
+      ticks++;
+      now += Math.max(16, Math.min(c.deep ? (moving ? 250 : 1500) : moving ? 90 : 250, c.nextEvent() - now)); // as Dino.tick schedules
+    }
+    assert.ok(ticks < 40 * 60, `${ticks} ticks in 40 minutes (under one a second)`);
+    assert.ok(c.tufts().length >= 3, 'the grass grew meanwhile');
+    const grass = c.tufts().length, x = c.x;
+    // Back for a moment and away again before it wakes: it sleeps on (no wake left over for later).
+    c.setFocus(true, c.now);
+    c.setFocus(true, c.now); // focus events can come twice
+    run(c, 500, { from: c.now, dt: 50 });
+    c.setFocus(false, c.now);
+    run(c, 20000, { from: c.now, dt: 50, each: () => assert.notEqual(c.inReaction, 'deepWake') });
+    assert.ok(c.deep && c.asleep());
+    // Back for good: it comes round slowly, where it lay.
+    c.setFocus(true, c.now);
+    const frames = [];
+    until(c, () => c.inReaction === 'deepWake', 5000, 'starts to wake');
+    until(c, () => c.inReaction !== 'deepWake', 20000, 'wakes up', () => { frames.push(c.frame); assert.ok(Math.abs(c.x - x) < 0.01, 'no teleport'); });
+    for (const f of ['lieUp', 'lieUpHowl', 'sitChew', 'stretch']) assert.ok(frames.includes(f), `wakes with ${f}`);
+    assert.ok(!c.deep);
+    run(c, 30000, { from: c.now, dt: 100 });
+    assert.ok(c.activity !== 'sleep' || !c.deep, 'back to its day');
+    assert.equal(c.tufts().length, grass, 'the grass is still there for later');
+  }
+  // Hidden all that time (no ticks at all): found asleep when you come back, then wakes the same gentle way.
+  const h = world(223);
+  run(h, 30000, { dt: 100 });
+  h.setFocus(false, h.now);
+  h.advance(h.now + 30 * MINUTE);
+  assert.ok(h.deep && h.asleep(), 'asleep');
+  h.setFocus(true, h.now + 1000);
+  until(h, () => h.inReaction === 'deepWake', 5000, 'wakes');
+  until(h, () => !h.inReaction, 20000, 'awake');
+});
+
+test('palms and cacti last longer than small plants, are never eaten, and their time stands still in the background', () => {
+  const life = { grass: [], cactus: [], palm: [] };
+  for (let seed = 0; seed < 40; seed++) {
+    const c = world(300 + seed);
+    c.envNext = Infinity;
+    const p = c.sprout(0);
+    if (p) life[p.kind].push(p.life);
+  }
+  assert.ok(life.cactus.length && life.palm.length && life.grass.length);
+  for (const k of ['cactus', 'palm']) assert.ok(Math.min(...life[k]) >= 6 * MINUTE && Math.max(...life[k]) <= 14 * MINUTE, `${k}: 6 to 14 minutes`);
+  assert.ok(Math.max(...life.grass) < Math.min(...life.cactus, ...life.palm), 'small plants come and go sooner');
+  assert.ok(new Set(life.cactus.map(Math.round)).size > 1, 'not all the same');
+  // In the background its clock stops; back at the window it carries on where it was.
+  const c = world(340);
+  run(c, 10000, { dt: 100 });
+  c.envNext = Infinity;
+  const cactus = c.spawn('cactus', { x: c.clampProp(c.zone(0.5) + 120, 7), grows: true, wild: true, life: 7 * MINUTE, noticeAt: Infinity });
+  run(c, 2 * MINUTE, { from: c.now, dt: 100 });
+  c.setFocus(false, c.now);
+  run(c, 30 * MINUTE, { from: c.now, dt: 250 });
+  assert.ok(c.has(cactus), 'still there after half an hour in the background');
+  c.setFocus(true, c.now);
+  const back = c.now;
+  until(c, () => !c.has(cactus), 7 * MINUTE, 'withers in its time once you are back');
+  assert.ok(c.now - back > 4 * MINUTE, 'the five minutes it had left');
+  // Visits to a cactus or a palm never take it away.
+  for (const kind of ['cactus', 'palm']) for (let seed = 0; seed < 6; seed++) {
+    const d = doing('look', 350 + seed);
+    const p = d.spawn(kind, { x: d.clampProp(d.center() + 60, kind === 'palm' ? 11 : 7), frame: GROW_FULL[kind], grows: true, wild: true, life: 1e9, noticed: d.now, visitAt: d.now, noticeAt: d.now });
+    d.pending = 'visitPlant'; d.gen = null;
+    until(d, () => d.recent.includes('visitPlant') && d.activity !== 'visitPlant', 60000, `${kind} visit`);
+    assert.ok(d.has(p) && !p.cut, `${kind} untouched`);
+  }
+});
+
+test('two longer everyday routines (making its bed, lining up pebbles) and two rarer ones (a tightrope act, planting a flower)', () => {
+  const counts = { settleIn: 0, gatherPebbles: 0, tightrope: 0, plantSeed: 0 }, hours = 4;
+  for (const seed of [401, 402, 403, 404, 405, 406]) {
+    const c = world(seed);
+    const rng = seeded(seed);
+    const times = { tightrope: [], plantSeed: [] };
+    let last = '';
+    run(c, hours * 3600e3, { dt: 200, each: (now) => {
+      if (rng() < 0.002) c.wrote(4, now);
+      if (c.activity !== last) { last = c.activity; if (last in counts) counts[last]++; if (last in times) times[last].push(now); }
+    } });
+    for (const k in times) for (let i = 1; i < times[k].length; i++) assert.ok(times[k][i] - times[k][i - 1] > 35 * MINUTE, `${k} never twice in 35 minutes`);
+  }
+  const n = 6 * hours;
+  assert.ok(counts.settleIn / n >= 1 && counts.gatherPebbles / n >= 1, `the everyday ones come up often: ${JSON.stringify(counts)} in ${n} h`);
+  assert.ok(counts.tightrope >= 1 && counts.plantSeed >= 1, 'the rarer ones do happen');
+  assert.ok(counts.tightrope / n <= 0.8 && counts.plantSeed / n <= 0.8, 'but now and then, not every hour');
+  assert.ok(counts.tightrope * 3 < counts.settleIn && counts.plantSeed * 3 < counts.gatherPebbles, 'much rarer than the everyday ones');
+  // Each has its beginning, middle and end.
+  for (let seed = 0; seed < 4; seed++) {
+    // Making its bed: round and round, a scrape, down — and it ends lying down.
+    const a = doing('look', 410 + seed);
+    a.pending = 'settleIn'; a.gen = null;
+    const fs = [];
+    until(a, () => a.recent.includes('settleIn') && a.activity !== 'settleIn', 60000, 'settles in', () => { if (a.activity === 'settleIn') fs.push(a.frame); walksNotSlides(a); });
+    assert.ok(fs.includes('walk1') && fs.includes('crouch') && fs.includes('lie'), 'turns round, scrapes, lies down');
+    // Lining up pebbles: a row, a pebble apart.
+    const b = doing('look', 420 + seed);
+    b.pending = 'gatherPebbles'; b.gen = null;
+    let row = [];
+    until(b, () => b.recent.includes('gatherPebbles') && b.activity !== 'gatherPebbles', 90000, 'lines up pebbles', () => {
+      const now = b.props.filter((p) => p.kind === 'pebble' && !p.carried && !p.vx && p.y === 0);
+      if (b.activity === 'gatherPebbles' && now.length >= row.length) row = now; // (before any swish of the tail)
+      walksNotSlides(b);
+    });
+    assert.ok(row.length >= 3, `${row.length} pebbles set down`);
+    const xs = row.map((p) => p.x).sort((p, q) => p - q);
+    for (let i = 1; i < xs.length; i++) assert.ok(Math.abs(xs[i] - xs[i - 1] - 4 * b.u) < 1.5 * b.u, `in a row (${xs.map((x) => x.toFixed(1))})`);
+    // The tightrope: careful steps along the line, a wobble, and off.
+    const t = doing('look', 430 + seed);
+    t.pending = 'tightrope'; t.gen = null;
+    const tf = new Set();
+    until(t, () => t.recent.includes('tightrope') && t.activity !== 'tightrope', 60000, 'tightrope', () => { if (t.activity === 'tightrope') tf.add(t.frame); walksNotSlides(t); });
+    for (const f of ['armsUp', 'creep1', 'creep2', 'oneLeg']) assert.ok(tf.has(f), `tightrope: ${f}`);
+    // Planting: the seed goes in the ground, and up comes a flower.
+    const p = doing('look', 440 + seed);
+    p.pending = 'plantSeed'; p.gen = null;
+    let grown = 0;
+    until(p, () => p.recent.includes('plantSeed') && p.activity !== 'plantSeed', 90000, 'plants a seed', () => { const fl = p.find('flower'); if (fl) grown = Math.max(grown, fl.frame); walksNotSlides(p); });
+    assert.equal(grown, 3, 'a flower came up and opened');
+    assert.ok(!p.props.some((q) => q.kind === 'seed' && q.carried), 'the seed went in the ground');
   }
 });

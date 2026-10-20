@@ -88,7 +88,7 @@ test('weekly summary: totals, goals, unavailable days vs genuine zeros, future d
   assert.deepEqual(s.week.best, { day: '2026-10-16', words: 1200 });
   assert.deepEqual(s.week.docs.map((d) => [d.id, d.words]), [['y', 1200], ['x', 600]]);
   assert.equal(s.today.words, 0);
-  assert.equal(s.streak, 1, 'Friday met; Saturday not over yet so it does not break the streak');
+  assert.equal(s.streak, 2, 'Wednesday and Friday met (Thursday a rest day); Saturday not over yet so it does not break the streak');
   assert.equal(s.hasEarlier, false);
   // Next week: last week is browsable and unchanged.
   now.set('2026-10-20T10:00:00');

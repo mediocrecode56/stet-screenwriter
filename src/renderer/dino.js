@@ -18,6 +18,10 @@
 // the bottom-left corner of the window, to have a bite at the border. Visitors
 // come in from out of sight at the ends. It never walks out of sight.
 //
+// While the window is in the background, tufts of grass slowly come up (on the clock, not on
+// frames) and after a long while it sleeps deeply, with hardly any ticks; back at the window it
+// wakes gently, and eats the grass only once the writer is writing again (see TIMING).
+//
 // Behaviour is a sequence of activities. Each is a generator yielding short
 // steps (≤ 1.5 s), so a reaction — to a click, or to something happening
 // around it — is slotted in at the next step boundary: the current motion
@@ -65,11 +69,24 @@ const CALM = new Set(['rest', 'look', 'sleep', 'stargaze', 'watchWriter', 'readS
 const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800], cactus: [2, 1400], grass: [2, 900] };
 // Plants that come up on their own (the 'sprout' event), for it to notice and perhaps visit.
 const WILD = ['cactus', 'grass', 'palm'];
+// The large plants: they last a good while, and their time stands still while the window is in the background.
+const LARGE = new Set(['cactus', 'palm']);
+// While the window is in the background (another application has the focus) small tufts of grass creep
+// up, slowly and only so many, and after a long while it falls into a deep sleep; back at work, it wakes
+// and in its own time eats the grass. All in ms; Critter's `timing` option overrides any of them.
+export const TIMING = {
+  deepSleep: 12 * MIN,          // in the background this long: a deep sleep
+  tuftFirst: [1.5 * MIN, 4 * MIN], // the first tuft after the window loses the focus…
+  tuftEvery: [3 * MIN, 7 * MIN],   // …and then one every so often
+  tuftsMax: 5,
+  tuftGrow: 45000,              // per stage of a tuft's growth
+  grazeAfter: [8000, 45000],    // back and writing again: a while before it starts on the grass
+};
 // Things that float or fly about: only a few at a time, so the scene never gets busy.
 const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug']);
 // What tends to follow what: a romp leaves it ready for a sit, a long rest for a stretch and a stroll.
-const LIVELY = new Set(['zoomies', 'hop', 'dance', 'fetch', 'pounce', 'workout', 'chaseTail', 'juggle', 'somersault', 'patrol', 'explore', 'shadowbox', 'skateboard']);
-const RESTFUL = new Set(['rest', 'sleep', 'doze', 'daydream', 'treeShade', 'stargaze', 'sunbathe', 'yoga']);
+const LIVELY = new Set(['zoomies', 'hop', 'dance', 'fetch', 'pounce', 'workout', 'chaseTail', 'juggle', 'somersault', 'patrol', 'explore', 'shadowbox', 'skateboard', 'tightrope']);
+const RESTFUL = new Set(['rest', 'sleep', 'doze', 'daydream', 'treeShade', 'stargaze', 'sunbathe', 'yoga', 'settleIn']);
 const AFTER_LIVELY = { rest: 2, daydream: 1.6, look: 1.4, wag: 1.3, sleep: 1.2, scratch: 1.2 };
 const AFTER_REST = { stretch: 2.4, walk: 1.6, look: 1.4, explore: 1.4, wag: 1.2 };
 
@@ -80,14 +97,15 @@ const EVENTS = {
   bird: { cool: 7 * MIN, w: 0.8, ok: (c) => !c.find('bird') && c.floating() < 2 && c.hat?.kind !== 'bird' && (!!c.grownTree() || (CALM.has(c.activity) && (postureOf(c.frame) !== 'lie' || c.asleep()))) },
   tumbleweed: { cool: 9 * MIN, w: 0.6, ok: (c) => !c.find('tumbleweed') },
   shootingStar: { cool: 10 * MIN, w: 1.2, ok: (c) => c.night() && !c.asleep() },
-  sprout: { cool: 8 * MIN, w: 0.8, ok: (c) => !c.props.some((p) => p.wild) && c.props.length < 4 },
+  sprout: { cool: 8 * MIN, w: 0.8, ok: (c) => !c.props.some((p) => p.wild) && c.loose < 4 },
 };
 
 // ---- the behaviour engine ---------------------------------------------------------------------
 
 export class Critter {
-  constructor({ rng = Math.random, unit = () => 1.25, width = () => 160, margin = () => 24, home = () => null, corner = () => false, progress = () => ({}), clock = () => Date.now() } = {}) {
+  constructor({ rng = Math.random, unit = () => 1.25, width = () => 160, margin = () => 24, home = () => null, corner = () => false, progress = () => ({}), clock = () => Date.now(), timing = {} } = {}) {
     this.rng = rng;
+    this.T = { ...TIMING, ...timing };
     this.unitOf = unit;
     this.widthOf = width;
     this.marginOf = margin;  // room out of sight beyond each end of the strip (where visitors come from)
@@ -142,6 +160,15 @@ export class Critter {
     this.unlocked = 0;
     this.lastRare = 0;      // when the last rare surprise (an egg, a UFO) came along
     this.lastCorner = 0;    // when it last went all the way to the corner
+    this.lastDone = {};     // activity → when it last began (for the rarer ones' cooldowns)
+    // The window in the background.
+    this.focused = true;
+    this.blurAt = null;     // when the window lost the focus
+    this.backAt = -Infinity; // when it last got it back
+    this.grazeAt = 0;       // from when it may start on the grass that grew meanwhile
+    this.tuftNext = null;   // when the next tuft comes up (only while in the background)
+    this.deep = false;      // in a deep sleep
+    this.gapMs = 0;         // real time since the previous tick (uncapped)
   }
 
   // -- randomness --
@@ -215,6 +242,10 @@ export class Critter {
   find(kind) { return this.props.find((p) => p.kind === kind && !p.carried) || null; }
   grownTree() { return this.props.find((p) => p.kind === 'palm' && p.frame === GROW.palm[0] && !p.withering) || null; }
   windDir() { return this.wind ? this.wind.dir : -this.face; }
+  /** Props, not counting the tufts that grew while the window was in the background (they get in nobody's way). */
+  get loose() { let n = 0; for (const p of this.props) if (!p.tuft) n++; return n; }
+  tufts() { return this.props.filter((p) => p.tuft && !p.carried); }
+  nearestTuft() { let best = null; for (const p of this.tufts()) if (!best || this.gapTo(p) < this.gapTo(best)) best = p; return best; }
   /** How many things are floating or flying about. */
   floating() { let n = 0; for (const p of this.props) if (FLOATING.has(p.kind) || (p.kind === 'leaf' && p.blown)) n++; return n; }
   /**
@@ -231,7 +262,7 @@ export class Critter {
   /** A visitor heading out (direction `dir`) is well past its home stretch: time to fade away. */
   gone(p, dir) { return dir > 0 ? p.x > this.zone(1) + this.dw + 240 : p.x + this.propW(p) < this.zone(0) - 240; }
   /** The plant it has noticed and not yet been to see, once it has let it be a while. */
-  plantToVisit() { return this.props.find((p) => p.wild && p.noticed && !p.visited && this.now >= p.visitAt && p.life - (this.now - p.born) > 30000 + 80 * this.gapTo(p)) || null; } // time to get there and back
+  plantToVisit() { return this.props.find((p) => p.wild && p.noticed && !p.visited && this.now >= p.visitAt && (this.focused || !p.tuft && p.kind !== 'grass') && p.life - (this.now - p.born) > 30000 + 80 * this.gapTo(p)) || null; } // time to get there and back; small plants only while you're here
   night() { const h = new Date(this.clock()).getHours(); return h >= 21 || h < 6; }
 
   /** What it is doing right now — the context a click or an event is answered in. */
@@ -289,18 +320,23 @@ export class Critter {
   setUnlocked(n) { this.unlocked = Math.max(0, Math.min(SPECIALS.length, n | 0)); }
 
   // -- choosing what to do --
-  envOk(kind, cool = 4 * MIN) { return !this.event && this.props.length < 4 && this.now - (this.lastEnv[kind] ?? -1e12) > cool; }
+  envOk(kind, cool = 4 * MIN) { return !this.event && this.loose < 4 && this.now - (this.lastEnv[kind] ?? -1e12) > cool; }
+  /** How long since activity `a` last began. */
+  since(a) { return this.now - (this.lastDone[a] ?? -1e12); }
   envMark(kind) { this.lastEnv[kind] = this.now; }
 
   pickActivity(now) {
     if (this.pending) { const a = this.pending; this.pending = null; return a; }
+    if (this.deepDue(now)) { this.deep = true; return 'sleep'; } // long in the background: off to sleep, properly
     if (this.targetG !== this.g) return this.targetG > this.g ? 'grow' : 'shrink';
     const e = this.energy;
     const idle = (now - this.lastWrite) / 1000;
     const writing = this.heat > 6;
     const h = new Date(this.clock()).getHours();
     const night = this.night(), late = h >= 22 || h < 5, morning = h >= 6 && h < 11;
-    const free = this.props.length < 2;
+    const free = this.loose < 2;
+    // Back at work after a while away, and writing again: the grass that grew meanwhile.
+    const tuft = this.focused && this.lastWrite > this.backAt && now >= this.grazeAt ? this.nearestTuft() : null;
     const tree = this.grownTree(), cloud = this.find('cloud');
     const luck = Math.min(5, 1 + (now - this.lastRare) / (30 * MIN)); // the longer since the last rare surprise, the likelier the next
     const calmSky = this.floating() < 2;
@@ -356,6 +392,11 @@ export class Critter {
       cornerBite: this.cornerOf() && this.zone(0) > 120 && now - this.lastCorner > 40 * MIN ? 0.004 * Math.min(4, (now - this.lastCorner) / (60 * MIN)) : 0, // very rare
       stargaze: late ? 0.8 : 0,
       daydream: (night ? 0.3 : 0.45) + 0.5 * (1 - e),
+      settleIn: 0.2 + 0.55 * (1 - e),                     // makes its bed before a rest
+      gatherPebbles: free ? 0.35 + 0.25 * e : 0,          // lines up pebbles
+      tightrope: this.since('tightrope') > 35 * MIN ? 0.05 + 0.05 * e : 0, // less common: a balancing act on the line
+      plantSeed: this.focused && free && !this.find('flower') && this.since('plantSeed') > 35 * MIN ? 0.06 : 0, // less common: it plants a flower
+      graze: tuft ? 1.4 + 0.25 * this.tufts().length : 0,
       // The environment: new things now and then, and what it does with them while they last.
       palmTree: !this.find('palm') && this.envOk('palm', 6 * MIN) ? 0.12 : 0,
       treeShade: tree ? 1.1 : 0,
@@ -402,7 +443,7 @@ export class Critter {
     if (dark && this.asleep()) {
       const old = this.find('sun');
       if (old) this.fadeOut(old, 1500);
-      if (this.props.length < 7) this.sky('moon', { x: this.clampProp(this.center() + (this.inward() || 1) * 80, 5), y: 2, ty: 24, alpha: 0, fadeIn: true, life: 40000 });
+      if (this.loose < 7) this.sky('moon', { x: this.clampProp(this.center() + (this.inward() || 1) * 80, 5), y: 2, ty: 24, alpha: 0, fadeIn: true, life: 40000 });
       return;
     }
     this.pending = dark ? 'nightfall' : 'daybreak';
@@ -438,6 +479,67 @@ export class Critter {
   acking(now) { return this.ack && now - this.ack.t0 < 160 ? (now - this.ack.t0 < 90 ? 2 : 1) : 0; }
 
   asleep() { return this.activity === 'sleep' && postureOf(this.frame) === 'lie'; }
+
+  // -- the window in the background --
+  /**
+   * The window got (true) or lost (false) the focus. Away, tufts of grass come up
+   * now and then (growWhileAway) and after T.deepSleep it sleeps deeply; back,
+   * a deep sleeper wakes gently, and the grass waits until writing resumes.
+   */
+  setFocus(on, now = this.now) {
+    if (on === this.focused) return;
+    this.focused = on;
+    if (!on) {
+      this.blurAt = now;
+      this.tuftNext = now + this.rnd(...this.T.tuftFirst);
+      if (this.envDue && this.envDue.name === 'deepWake') this.envDue = null; // away again before it woke: it sleeps on
+      return;
+    }
+    // Long enough away for a deep sleep it was never seen to fall into (the window was hidden): found asleep.
+    if (!this.deep && this.blurAt != null && now - this.blurAt >= this.T.deepSleep && now - (this.lastTick ?? now) > 5000) this.sleepDeeply();
+    this.blurAt = null;
+    this.tuftNext = null;
+    this.backAt = now;
+    this.grazeAt = now + this.rnd(...this.T.grazeAfter);
+    if (this.deep) this.envDue = { name: 'deepWake', at: now + this.rnd(1200, 3500) };
+  }
+  /** Long enough in the background for a deep sleep. */
+  deepDue(now = this.now) { return !this.focused && this.blurAt != null && now - this.blurAt >= this.T.deepSleep; }
+  /** Straight into a deep sleep where it is (only ever while nobody can see). */
+  sleepDeeply() {
+    this.tidy();
+    if (this.step) this.x = this.step.x1;
+    this.step = null; this.queue = []; this.held = []; this.envDue = null; this.pending = null;
+    this.inReaction = null; this.paused = null; this.wakeUp = false;
+    this.y = 0; this.flip = false; this.frame = 'lie';
+    this.deep = true;
+    this.activity = 'sleep';
+    this.gen = ACTIVITIES.sleep(this);
+  }
+  /**
+   * Tufts of grass come up while the window is in the background. Timed by the
+   * clock, not by frames: however late a tick comes (a throttled or hidden
+   * window), each tuft comes up when it was due, and has grown as much since.
+   */
+  growWhileAway(now) {
+    if (this.focused || this.tuftNext == null) return;
+    while (this.tuftNext <= now) {
+      if (this.tufts().length >= this.T.tuftsMax) { this.tuftNext = null; return; } // enough: no more until next time
+      this.tuft(this.tuftNext);
+      this.tuftNext += this.rnd(...this.T.tuftEvery);
+    }
+  }
+  tuft(born = this.now) {
+    const x = this.clearSpot(PROPS.grass[0][0].length * this.u, 0.08, 4);
+    return x == null ? null : this.spawn('grass', { x, born, grows: true, tuft: true, per: this.T.tuftGrow });
+  }
+  /** A bite out of a tuft (a stage shorter); the last bite takes it. */
+  bite(p) {
+    if (!this.has(p)) return;
+    if (p.frame <= 0) { this.remove(p); return; }
+    p.frame -= 1;
+    p.cut = GROW.grass[0] - p.frame;
+  }
 
   chooseReaction(now, agitation = 1, k = this.context()) {
     if (this.force) { const n = this.force; this.force = null; this.remember(n, now); return n; }
@@ -547,11 +649,12 @@ export class Critter {
   canHost() {
     const s = this.step;
     return this.onstage() && !this.inReaction && !this.queue.length && !this.envDue && !this.event && !this.held.length &&
-      !ABSORBED.has(this.activity) && this.props.length < 6 && !(s && (s.lift || s.flip));
+      !ABSORBED.has(this.activity) && this.loose < 6 && !(s && (s.lift || s.flip));
   }
   maybeEvent(now) {
     if (this.envNext == null) this.envNext = now + this.rnd(2, 5) * MIN;
     if (now < this.envNext) return;
+    if (this.deep) { this.envNext = now + this.rnd(3.5, 8) * MIN; return; } // nothing happens around a deep sleeper
     if (!this.canHost()) { this.envNext = now + 4000; return; }
     this.envNext = now + this.rnd(3.5, 8) * MIN; // a few well-spaced events an hour, not a constant bustle
     const w = {};
@@ -570,7 +673,7 @@ export class Critter {
       // A breeze: a few faint gusts and perhaps a leaf, rather than a gale.
       const dir = this.chance(0.5) ? 1 : -1;
       this.wind = { dir, t0: now, until: now + this.rnd(6000, 9000) };
-      if (this.props.length < 6 && this.chance(0.6)) this.spawn('leaf', this.arrive({ y: this.rnd(6, 16), vx: dir * this.rnd(40, 55), blown: true, life: 14000 }, 4, -dir));
+      if (this.loose < 6 && this.chance(0.6)) this.spawn('leaf', this.arrive({ y: this.rnd(6, 16), vx: dir * this.rnd(40, 55), blown: true, life: 14000 }, 4, -dir));
       if (this.hat) this.blowHat(dir);
       this.envDue = { name: this.envReaction('wind'), at: now + 600 };
     } else if (kind === 'bird') {
@@ -590,18 +693,22 @@ export class Critter {
    */
   sprout(now = this.now) {
     const kind = this.pick({ grass: 3, cactus: 2, palm: this.find('palm') ? 0 : 0.8 });
-    const cols = PROPS[kind][0][0].length, w = cols * this.u;
+    const x = this.clearSpot(PROPS[kind][0][0].length * this.u, 0.15, 8);
+    if (x == null) return null;
+    // Small plants come and go within a couple of minutes; a cactus or a palm stays a good while.
+    const life = LARGE.has(kind) ? this.rnd(6 * MIN, 14 * MIN) : this.rnd(70000, 120000);
+    return this.spawn(kind, { x, grows: true, wild: true, life, noticeAt: now + this.rnd(3000, 30000) });
+  }
+  /** Somewhere clear along the ground for something `w` px wide: usually in or near its home stretch (`far`: the chance of anywhere). */
+  clearSpot(w, far = 0.15, room = 8) {
     const lo = this.zone(0), hi = this.zone(1) + this.dw;
     const clear = (x) => x >= 0 && x + w <= this.stripW && Math.abs(x + w / 2 - this.center()) > this.dw / 2 + w / 2 + 16 &&
-      this.props.every((q) => q.carried || q.y > 0 || x + w + 8 < q.x || x > q.x + this.propW(q) + 8);
-    let x = null;
-    for (let i = 0; i < 10 && x == null; i++) {
-      const c = this.chance(0.15) ? this.rnd(0, this.stripW - w) : this.rnd(lo - 60, hi + 60 - w);
-      if (clear(c)) x = c;
+      this.props.every((q) => q.carried || q.y > 0 || x + w + room < q.x || x > q.x + this.propW(q) + room);
+    for (let i = 0; i < 12; i++) {
+      const c = this.chance(far) ? this.rnd(0, this.stripW - w) : this.rnd(lo - 60, hi + 60 - w);
+      if (clear(c)) return c;
     }
-    if (x == null) return null;
-    const life = kind === 'grass' ? this.rnd(70000, 120000) : this.rnd(100000, 160000);
-    return this.spawn(kind, { x, grows: true, wild: true, life, noticeAt: now + this.rnd(3000, 30000) });
+    return null;
   }
   /** Its distance (px) to a prop. */
   gapTo(p) { return Math.abs(this.propCenter(p) - this.center()); }
@@ -654,7 +761,7 @@ export class Critter {
     }
   }
   spawnRainbow() {
-    if (this.find('rainbow') || this.props.length >= 7) return;
+    if (this.find('rainbow') || this.loose >= 7) return;
     this.spawn('rainbow', { x: this.clampProp(this.center() - 18.5 * this.u, 37), alpha: 0, life: 14000, fadeIn: true });
   }
   blowHat(dir) {
@@ -728,7 +835,7 @@ export class Critter {
       if (p.balance) { p.balance = false; p.gravity = true; }
       if (p.held) { p.held = false; p.vy = 4; } // a balloon floats off
       p.ride = false;
-      if (p.life === Infinity && p.kind !== 'puddle') this.expire(p, 8000);
+      if (p.life === Infinity && p.kind !== 'puddle' && !p.tuft) this.expire(p, 8000);
       if (p.kind === 'cloud' && p.dance && p.phase !== 'leave') this.endRain();
     }
     this.sheltered = false;
@@ -767,7 +874,7 @@ export class Critter {
     // Reactions go in between steps of the current activity, never through one;
     // its part in the environment comes first, then clicks.
     if (!this.inReaction && this.onstage()) {
-      if (this.envDue && this.envDue.at <= now) { const { name } = this.envDue; this.envDue = null; this.startReaction(name); }
+      if (this.envDue && this.envDue.at <= now) { const { name } = this.envDue; this.envDue = null; if (name !== 'deepWake' || this.deep) this.startReaction(name); }
       else if (this.queue.length && this.queue[0].at <= now) this.startReaction(this.queue.shift().name);
     }
     for (let guard = 0; guard < 6; guard++) {
@@ -776,6 +883,7 @@ export class Critter {
         this.inReaction = null; this.paused = null; // a fresh activity: nothing left over from a reaction
         this.tidy();
         this.activity = a;
+        this.lastDone[a] = now;
         this.recent.push(a);
         if (this.recent.length > 4) this.recent.shift();
         this.gen = ACTIVITIES[a](this);
@@ -785,6 +893,7 @@ export class Critter {
       if (this.inReaction) {
         this.inReaction = null;
         this.gen = this.wakeUp ? null : this.paused; // a poked sleeper stays awake
+        if (this.wakeUp) this.deep = false;
         this.wakeUp = false;
         this.paused = null;
         if (this.dueNow(now)) return this.nextStep(now);
@@ -817,13 +926,14 @@ export class Critter {
           this.envDue = { name: 'plantNotice', at: now };
         } else p.noticeAt = now + this.rnd(2000, 6000);
       }
+      if (!this.focused && p.wild && LARGE.has(p.kind)) p.life += this.gapMs; // in the background its time stands still
       if (GROW[p.kind] && p.grows) {
-        const [full, per] = GROW[p.kind], age = now - p.born, left = p.life - age;
+        const full = GROW[p.kind][0], per = p.per || GROW[p.kind][1], age = now - p.born, left = p.life - age;
         const f = Math.max(0, Math.min(full - (p.cut || 0), Math.floor(age / per), Math.floor(left / per)));
         p.withering = left < per * full;
-        if (p.kind === 'palm' && p.withering && !p.shed && this.props.length < 7) { p.shed = true; this.spawn('leaf', { x: p.x + 4 * u, y: 14, fall: true, life: 9000 }); }
+        if (p.kind === 'palm' && p.withering && !p.shed && this.loose < 7) { p.shed = true; this.spawn('leaf', { x: p.x + 4 * u, y: 14, fall: true, life: 9000 }); }
         if (f !== p.frame) p.frame = f;
-        p.live = p.live || age < per * (full + 1) || p.withering;
+        p.live = p.live || (!p.tuft && age < per * (full + 1)) || p.withering; // a tuft grows too slowly to need frames
         continue;
       }
       switch (p.kind) {
@@ -1080,8 +1190,12 @@ export class Critter {
   advance(now) {
     this.now = now;
     if (this.lastTick === null) this.lastTick = now;
-    const dt = Math.min(1000, now - this.lastTick);
+    this.gapMs = Math.max(0, now - this.lastTick);
+    const dt = Math.min(1000, this.gapMs);
+    // Long in the background with nobody to see it nod off (the window was hidden): it is simply asleep.
+    if (!this.deep && this.deepDue(now) && this.gapMs > 5000) this.sleepDeeply();
     this.lastTick = now;
+    this.growWhileAway(now);
     this.updateEnergy(dt);
     this.updateMood(now);
     const { today = 0, goal = 0 } = this.getProgress() || {};
@@ -1101,8 +1215,8 @@ export class Critter {
       const x1 = Math.max(Math.min(0, this.x), Math.min(Math.max(this.maxX, this.x), this.x + (v.dx || 0)));
       // On the ground it moves by stepping: the stride is taken with the frame and held,
       // never glided through while the legs stay still. Legs that cannot go anywhere stand.
-      const ground = !!v.dx && !v.jump && !v.lift && !v.flip;
-      if (ground && x1 === this.x && STEPPING.test(v.f)) v.f = 'stand';
+      let ground = !!v.dx && !v.jump && !v.lift && !v.flip;
+      if (ground && x1 === this.x && STEPPING.test(v.f)) { v.f = 'stand'; v.dx = 0; ground = false; }
       s = this.step = { ...v, start: now, end: now + v.t, x0: this.x, x1, ground };
       this.frame = v.f;
       this.flip = !!v.flip;
@@ -1181,6 +1295,12 @@ export class Dino {
     window.addEventListener('pointerdown', (e) => { if (e.target !== this.hit) this.root.classList.add('pass'); }, true);
     window.addEventListener('pointerup', () => this.root.classList.remove('pass'), true);
     window.addEventListener('blur', () => this.root.classList.remove('pass'));
+    // In the background (another application has the focus) its little world carries on more quietly.
+    const focus = () => { this.c.setFocus(document.hasFocus(), performance.now()); this.schedule(0); };
+    window.addEventListener('focus', focus);
+    window.addEventListener('blur', focus);
+    this.c.focused = document.hasFocus();
+    if (!this.c.focused) { this.c.focused = true; this.c.setFocus(false, performance.now()); }
     // TODAY moves whenever anything before it in the status bar changes width;
     // the editor area narrows and widens as side panels open and close.
     const ro = new ResizeObserver(() => this.place());
@@ -1290,8 +1410,9 @@ export class Dino {
     const moving = this.c.advance(now);
     if (this.wide && this.c.onstage()) this.place(); // back inside: the canvas can shrink again
     this.draw(now);
-    // While anything moves, ~11 frames a second, and always on time for the next step, so every stride is shown.
-    this.schedule(Math.max(16, Math.min(moving ? 90 : 250, this.c.nextEvent() - now)));
+    // While anything moves, ~11 frames a second, and always on time for the next step, so every stride is shown;
+    // in a deep sleep, only when the next breath is due (and a drifting z at a sleepy 4 frames a second).
+    this.schedule(Math.max(16, Math.min(this.c.deep ? (moving ? 250 : 1500) : moving ? 90 : 250, this.c.nextEvent() - now)));
   }
 
   draw(now = performance.now()) {

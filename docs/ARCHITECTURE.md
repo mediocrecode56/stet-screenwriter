@@ -197,7 +197,7 @@ off.
 ## Writing companion
 
 The pixel art (`dino-art.js`: frames, props, glyphs as character grids) and
-the repertoire (`dino-acts.js`: 74 activities and 101 reactions, generator
+the repertoire (`dino-acts.js`: 79 activities and 102 reactions, generator
 functions yielding short steps of ≤ 1.5 s) are data for the engine in
 `dino.js`. `Critter` is the behaviour engine, pure and simulated in tests for
 hours at a time: props with a little physics, a drifting mood and a memory of
@@ -217,6 +217,20 @@ time (`event`), a few minutes apart and each kind on its own cooldown.
 A sprouted plant (`wild`: cactus, grass or palm, one at a time) is noticed
 when the dinosaur is free (`plantNotice`, a few to thirty seconds after it
 comes up) and may be visited later (`visitPlant`) while it has time left.
+A cactus or a palm lasts 6–14 minutes, small plants a minute or two.
+**In the background.** `Dino` passes the window's focus to `Critter.setFocus()`
+(window `focus`/`blur`, `document.hasFocus()`), which is separate from being idle
+(no writing) with the window focused. While unfocused, tufts of grass
+(`tuft` props, outside the `loose` count the other limits use) come up on a
+timestamp schedule (`growWhileAway()`, `TIMING`), so a throttled or hidden
+window catches up on its next tick; at most `tuftsMax`. Nothing eats small
+plants while unfocused (`graze` and the grass nibble require `focused`), and
+large plants' lifetimes are extended by the time spent unfocused. After
+`TIMING.deepSleep` unfocused it ends what it was doing and sleeps (`deep`): no
+events, and ticks only at each 1.5 s breath. If no ticks ran meanwhile
+(hidden), `sleepDeeply()` puts it straight to sleep, unseen. On focus a
+`deepWake` reaction is queued a moment later (dropped if the window loses focus
+first); grazing waits for writing after the return plus `grazeAfter`.
 Things floating about (`floating()`) are kept to a few: floating visitors and
 events wait while two are already up, and a breeze is one or two faint gusts.
 Things that grow (palm, flower, mushroom, dandelion) and visitors (a balloon,

@@ -81,8 +81,8 @@ test('the streak beside TODAY: 0, 1, 2, 3, 4, 7, 8, 15, 16, 31 and 32 days, and 
     assert.ok(Math.abs(m.dev - (base.dev + g * m.dpr)) <= 1, `${n} days: ${m.css} px tall (${base.css} + ${g})`);
     assert.equal(m.soft, 0, 'crisp: every pixel solid, no blur');
   }
-  // A full day missed: back to 0 and to its first size.
-  await app.eval(`(() => { __stet.writing.book.data.streak = { last: ${JSON.stringify(dayAgo(2))}, count: 10, best: 10, prev: null }; __stet.renderGoal(); })()`);
+  // Five days missed in a row (more than any week's two rest days): back to 0 and to its first size.
+  await app.eval(`(() => { __stet.writing.book.data.streak = { last: ${JSON.stringify(dayAgo(6))}, count: 10, best: 10, prev: null }; __stet.renderGoal(); })()`);
   const broken = await shown();
   assert.equal(broken.text, '0');
   assert.equal(broken.targetG, 0);

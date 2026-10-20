@@ -4,6 +4,52 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.14.0 — 20 October 2026
+
+Your streak now has two rest days a week. The dinosaur notices when you're in another program: grass grows around it, it eventually falls fast asleep, and when you're back and writing it eats the grass. It also has four new routines.
+
+### New
+
+- **Two rest days a week for your streak.** You can miss up to two days a week (Monday to Sunday) without losing your writing streak, whether they're back to back or days apart. A third day off in the same week ends it. Writing in between doesn't give a rest day back, and you get two fresh ones every Monday. Hover the flame to see how many are left this week. The goal streak in the weekly view follows the same rule.
+- **Grass while you're away.** When STET is in the background because you're working in another program, little tufts of grass slowly come up around the dinosaur, five at most. It leaves them alone while you're gone.
+- **A deep sleep.** If you're away for a good while (about twelve minutes), it finishes what it was doing and settles into a deep sleep. When you come back it wakes up slowly, with a stretch and a yawn. Once you're writing again, it gets round to eating the grass, a bite at a time, over the next quarter of an hour or so.
+- **Making its bed.** Before a proper rest it often turns round and round on the spot, scrapes it smooth and flops down with a sigh. Sometimes it isn't quite right and it starts again.
+- **Lining up pebbles.** It finds pebbles one by one and sets them down in a neat little row. Then it's proud of it, sits and admires it, or knocks it flying with its tail.
+- **Now and then: a tightrope act.** Arms out, careful steps along the line it stands on, a wobble that nearly has it off, then a bow, a hop down or a tumble.
+- **Now and then: planting a flower.** It digs a little hole, drops in a seed, pats it down and waits, and up comes a flower.
+
+### Improved
+
+- **Cacti and palms stay longer:** six to fourteen minutes instead of under three. They don't wither while STET is in the background. The dinosaur never eats them.
+- **Quieter in the background.** In a deep sleep nothing else happens, and the dinosaur needs less than one update a second.
+
+### For the technically curious
+
+- **Streak data:**
+  - The streak record gains `spared`, the rest days spent; only those from the week of `last` are kept.
+  - A day off spends a rest day on the day it carries the streak over, using the Monday-start local weeks of the weekly view.
+  - The goal streak in `summary()` is replayed through the same code.
+  - Records from 0.13 load with no rest days spent.
+- **Focus and timing:** `Critter.setFocus()` and `TIMING` (deep sleep 12 min, tufts every 3–7 min, at most 5) handle the background behaviour. Tuft growth runs on timestamps, so a throttled or hidden window catches up on its next tick.
+- **Repertoire:**
+  - Activities: `graze`, `settleIn`, `gatherPebbles`, `tightrope` and `plantSeed`.
+  - Reaction: `deepWake`.
+  - Rare routines: the last two are on a 35-minute cooldown.
+- **Engine fix:** a step that can't move at the end of the strip no longer keeps its `dx`.
+- **Twelve new unit tests:**
+  - streak rest days:
+    - consecutive and separate days off;
+    - the weekly reset;
+    - a day never spent twice, through evaluation, rebooking, undo and restart;
+    - migration;
+    - a day-by-day reference over random months;
+    - the goal streak;
+  - grass growth on the clock;
+  - eating only after you're back and writing;
+  - deep sleep and the gentle wake-up, including coming and going at once and a hidden window;
+  - large plants;
+  - the four routines and how often they come up.
+
 ## 0.13.0 — 20 October 2026
 
 The dinosaur has the whole width of the window to play in, walks properly wherever it goes, stands on the line instead of on top of it, and its little world is calmer, with plants that come and go.

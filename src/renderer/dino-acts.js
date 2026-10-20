@@ -37,11 +37,13 @@ export const ACTIVITIES = {
     }
   },
   *sleep(d) {
-    yield* d.getTo('sit');
-    yield { f: 'sitBlink', t: 500 };
-    if (d.chance(0.3)) { yield { f: 'sitChew', t: 700 }; yield { f: 'sitBlink', t: 300 }; } // a big yawn first
-    yield { f: 'lie', t: 500 };
-    const n = d.rint(12, 30);
+    if (!d.deep || postureOf(d.frame) !== 'lie') { // (found asleep after a long while away: already down)
+      yield* d.getTo('sit');
+      yield { f: 'sitBlink', t: 500 };
+      if (d.chance(0.3)) { yield { f: 'sitChew', t: 700 }; yield { f: 'sitBlink', t: 300 }; } // a big yawn first
+      yield { f: 'lie', t: 500 };
+    }
+    const n = d.deep ? 0 : d.rint(12, 30);
     const turn = d.chance(0.4) ? d.rint(3, n - 3) : -1, back = d.chance(0.25) ? d.rint(2, n - 4) : -1;
     for (let i = 0; i < n; i++) {
       if (i === turn) { yield { f: 'lieBreath', t: 400 }; yield { f: 'fallen', t: 500 }; yield { f: 'lie', t: 500, face: -d.face }; } // turns over
@@ -49,6 +51,12 @@ export const ACTIVITIES = {
       const dream = d.chance(0.06) ? d.pick({ note: 1, heart: 1, '?': 0.6 }) : null;
       yield { f: 'lie', t: 600, fx: dream || (i % 3 === 0 ? 'z' : null) };
       yield { f: 'lieBreath', t: 600 };
+    }
+    // Long in the background: it sleeps on, slow breaths and the odd z, until the writer is back (deepWake).
+    if (d.deepDue()) d.deep = true;
+    while (d.deep) {
+      yield { f: 'lie', t: 1500, fx: d.chance(0.1) ? 'z' : null };
+      yield { f: 'lieBreath', t: 1500 };
     }
     yield { f: 'lie', t: 400 };
     if (d.chance(0.5)) { yield { f: 'lieUpBlink', t: 500 }; yield { f: 'lieUp', t: 800 }; yield { f: 'lieUpBlink', t: 200 }; } // a look at the sky before getting up
@@ -291,7 +299,7 @@ export const ACTIVITIES = {
     yield { f: 'lie', t: 500 };
     yield { f: 'lieUp', t: 900 };
     let b = null;
-    if (d.props.length < 3 && d.floating() < 2 && d.chance(0.35)) { const left = d.chance(0.5); b = d.spawn('butterfly', d.arrive({ y: 14, vx: left ? 14 : -14, life: 14000 }, 3, left ? -1 : 1)); }
+    if (d.loose < 3 && d.floating() < 2 && d.chance(0.35)) { const left = d.chance(0.5); b = d.spawn('butterfly', d.arrive({ y: 14, vx: left ? 14 : -14, life: 14000 }, 3, left ? -1 : 1)); }
     const n = d.rint(5, 10);
     for (let i = 0; i < n; i++) {
       const r = d.rng();
@@ -830,7 +838,7 @@ export const ACTIVITIES = {
         yield* d.getTo('stand');
       } else { yield { f: 'hunch', t: 700, fx: '?' }; yield { f: 'stand', t: 300, face: -d.face }; }
     } else {
-      const plan = d.pick({ nibble: 2, lieBy: 1.2, sniff: 0.8 });
+      const plan = d.pick({ nibble: d.focused ? 2 : 0, lieBy: 1.2, sniff: 0.8 }); // it eats only while you're here
       if (plan === 'nibble') {
         for (let i = 0; i < 3; i++) { yield { f: 'chomp', t: 220 }; yield { f: 'sniff', t: 220 }; }
         yield { f: 'sniff', t: 200, do: () => { p.cut = 1; } }; // a bite taken out of it
@@ -845,6 +853,157 @@ export const ACTIVITIES = {
     }
     yield { f: d.sitting() ? 'sit' : postureOf(d.frame) === 'lie' ? 'lie' : 'stand', t: 400 };
     if (d.away() && d.chance(0.7)) yield* d.walkTo(d.spot(), 1, { max: 600 }); // and back home
+  },
+  // -- longer routines --
+  *settleIn(d) {
+    // Makes its bed before a proper rest: sniffs out the spot, turns round and round on it, scrapes it
+    // smooth and flops down with a sigh. Sometimes it isn't quite right, and it gets up and starts again.
+    yield* d.getTo('stand');
+    if (d.chance(0.6)) yield* d.walkTo(d.clampX(d.x + d.rnd(-40, 40)), 0.8, { max: 50 });
+    yield { f: 'sniff', t: d.rnd(500, 800) };
+    yield { f: 'sniffBlink', t: 200 };
+    for (let tries = 0; tries < 2; tries++) {
+      for (let i = 0, n = d.rint(2, 3); i < n; i++) {
+        // Round on the spot: two little steps, and about.
+        for (let k = 0; k < 2; k++) yield { f: k ? 'walk2' : 'walk1', t: 170, dx: d.face * 1.5 * d.du };
+        yield { f: 'stand', t: 150, face: -d.face };
+      }
+      for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'sniff' : 'crouch', t: 150, do: k % 2 ? (c) => c.dirt(1) : undefined }; // scrapes it smooth
+      yield* d.getTo('sit');
+      yield { f: 'sitBlink', t: 400 };
+      yield { f: 'lie', t: 600, fx: 'dots' }; // flop — and a sigh
+      if (tries || !d.chance(0.3)) break;
+      yield { f: 'lieUpBlink', t: 400, fx: '?' }; // not quite right: up again
+      yield* d.getTo('stand');
+    }
+    for (let i = 0, n = d.rint(3, 6); i < n; i++) {
+      yield { f: 'lie', t: d.rnd(800, 1200) };
+      yield { f: 'lieBreath', t: d.rnd(700, 1000) };
+      if (d.chance(0.3)) { yield { f: 'lieUp', t: d.rnd(800, 1200) }; yield { f: d.chance(0.5) ? 'lieUpTail' : 'lieUpBlink', t: 300 }; }
+    }
+    if (!d.pending && d.energy < 0.2 && d.chance(0.35)) d.pending = 'sleep'; // so comfortable it drops off
+    yield { f: 'lie', t: 500, fx: d.chance(0.3) ? 'heart' : null };
+  },
+  *gatherPebbles(d) {
+    // Lines up pebbles: finds them one by one along the ground and sets each down next to the last,
+    // in a neat little row. Then it stands back to look, and is proud of it, sits and admires it, or
+    // knocks it flying with a swish of its tail.
+    yield* d.getTo('stand');
+    const f0 = d.inward() || d.face, x0 = d.x, row = [];
+    yield { f: 'sniff', t: 500, face: f0, fx: d.chance(0.4) ? '?' : null };
+    for (let i = 0, n = d.rint(3, 4); i < n; i++) {
+      yield* d.walkTo(d.clampX(x0 + (d.chance(0.5) ? 1 : -1) * d.rnd(30, 70)), d.rnd(0.8, 1.15), { max: 80 }); // off to look for one
+      yield { f: 'sniff', t: d.rnd(400, 700) };
+      if (d.chance(0.35)) { // not that one: a little further
+        yield { f: 'sniffBlink', t: 200 };
+        yield* d.walkTo(d.clampX(d.x + d.face * d.rnd(8, 16)), 0.7, { max: 12, creep: true });
+        yield { f: 'sniff', t: 400 };
+      }
+      let p = null;
+      yield { f: 'chomp', t: 220, do: (c) => { p = c.spawn('pebble', { carried: true }); } };
+      yield { f: 'up', t: 300 };
+      yield* d.walkTo(d.clampX(x0 - f0 * i * 4 * d.u), d.rnd(0.9, 1.2), { max: 80 }); // back to the row, a step further back each time, so the row stays in front of it
+      yield { f: 'stand', t: 200, face: f0 };
+      yield { f: 'sniff', t: 300, do: (c) => { c.drop(p, 0); c.expire(p, c.rnd(40000, 70000)); row.push(p); } };
+      yield { f: 'stand', t: 250 };
+    }
+    yield* d.walkTo(d.clampX(d.x - f0 * 14), 0.8, { max: 20 }); // stands back to look
+    yield { f: 'stand', t: 300, face: f0 };
+    const end = d.pick({ proud: 2, admire: 1.4, swish: 0.8 });
+    if (end === 'proud') { yield { f: 'up', t: 700 }; yield { f: 'armsUp', t: 500, fx: 'heart' }; yield { f: 'stand', t: 300 }; }
+    else if (end === 'admire') { yield* d.getTo('sit'); for (let i = 0; i < 3; i++) yield { f: i % 2 ? 'sitUp' : 'sit', t: d.rnd(600, 900), fx: i === 1 ? 'note' : null }; }
+    else {
+      yield { f: 'stand', t: 200, face: -f0 };
+      yield { f: 'wag', t: 200, do: (c) => { for (const q of row) if (c.has(q)) c.kick(q, f0, 0.35); } };
+      yield { f: 'stand', t: 500, fx: '!' };
+      yield { f: 'blink', t: 300, face: f0, fx: 'dots' };
+    }
+  },
+  *tightrope(d) {
+    // Less common: a balancing act along the line it stands on. Arms out, one careful foot in front of the
+    // other, a wobble that nearly has it off, and at the end a bow, a hop down or a tumble.
+    yield* d.getTo('stand');
+    const dir = d.inward() || (d.chance(0.5) ? 1 : -1);
+    yield { f: 'sniff', t: 600, face: dir }; // eyes the line
+    yield { f: 'up', t: 500, fx: '!' };
+    yield { f: 'armsUp', t: 600 }; // arms out
+    const steps = d.rint(8, 12), wobble = d.rint(3, steps - 3);
+    for (let i = 0; i < steps; i++) {
+      yield { f: i % 2 ? 'creep2' : 'creep1', t: d.rnd(340, 440), dx: dir * 1.2 * d.du }; // a slow step, watching its feet
+      yield { f: 'armsUp', t: d.rnd(200, 320) };
+      if (i === wobble) {
+        yield { f: 'oneLeg', t: 280, fx: '!' };
+        yield { f: 'armsUp', t: 220, face: -dir };
+        yield { f: 'oneLeg', t: 260, face: dir };
+        yield { f: 'cower', t: 300 };
+        yield { f: 'armsUp', t: 500, fx: 'dots' }; // phew
+      }
+    }
+    const end = d.pick({ bow: 2, hop: 1, tumble: 0.6 });
+    if (end === 'bow') { yield { f: 'stand', t: 300, face: d.inward() || -dir }; yield { f: 'sniff', t: 700 }; yield { f: 'sniffBlink', t: 250 }; yield { f: 'armsUp', t: 500, fx: 'star' }; }
+    else if (end === 'hop') { yield { f: 'crouch', t: 150 }; yield { f: 'jump', t: 420, jump: 6, dx: dir * 4 * d.du, fx: 'star' }; yield { f: 'crouch', t: 150 }; yield { f: 'armsUp', t: 500 }; }
+    else { yield { f: 'oneLeg', t: 250, fx: '!' }; yield { f: 'fallen', t: 1000, fx: 'star' }; yield { f: 'sit', t: 400 }; yield { f: 'sitBlink', t: 300, fx: 'dots' }; yield* d.getTo('stand'); }
+    yield { f: 'stand', t: 300 };
+  },
+  *plantSeed(d) {
+    // Less common: it plants something. It finds a seed, digs a little hole, drops the seed in, pats it down,
+    // and sits and waits… until a flower comes up. It is delighted, or sneezes at it.
+    yield* d.getTo('stand');
+    yield { f: 'up', t: 500, fx: '?' };
+    let seed = null;
+    yield { f: 'sniff', t: 400, do: (c) => { seed = c.spawn('seed', { carried: true }); } };
+    yield { f: 'up', t: 500, fx: 'heart' };
+    yield* d.walkTo(d.spot(), d.rnd(0.8, 1.1), { max: 120 }); // a good spot
+    yield { f: 'sniff', t: 500 };
+    for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'sniff' : 'crouch', t: 150, do: (c) => c.dirt(2) }; // a little hole
+    const x = d.front(7, 1);
+    yield { f: 'sniff', t: 350, do: (c) => { c.remove(seed); c.dirt(1); } }; // in it goes
+    for (let i = 0; i < 3; i++) { yield { f: 'crouch', t: 160 }; yield { f: 'stand', t: 160, do: (c) => c.dirt(1) }; } // patted down
+    yield* d.getTo('sit');
+    for (let i = 0, n = d.rint(3, 5); i < n; i++) { yield { f: 'sit', t: d.rnd(700, 1100) }; yield { f: d.chance(0.5) ? 'sitBlink' : 'sitTap1', t: 300, fx: i === 1 ? 'dots' : null }; }
+    let fl = null;
+    yield { f: 'sitUp', t: 500, fx: '!', do: (c) => { fl = c.spawn('flower', { x: c.clampProp(x, 7), grows: true, life: 70000 }); } };
+    for (let i = 0; i < 8 && d.has(fl) && fl.frame < 3; i++) yield { f: 'sitUp', t: 450 };
+    yield* d.getTo('stand');
+    if (d.chance(0.7)) {
+      yield { f: 'crouch', t: 120 };
+      yield { f: 'jump', t: 380, jump: 5, fx: 'heart' };
+      yield { f: 'stand', t: 300 };
+      for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'wag' : 'stand', t: 170 };
+    } else {
+      yield { f: 'sniff', t: 600 };
+      yield { f: 'up', t: 300 };
+      yield { f: 'yawn', t: 300 };
+      yield { f: 'crouch', t: 160, jump: 2, dx: -2 * d.face, fx: 'puff' };
+      yield { f: 'stand', t: 500, fx: 'dots' };
+    }
+  },
+  *graze(d) {
+    // Back at work after a while away: the grass that grew meanwhile. It eats its way through a tuft at a
+    // time and a bite at a time (each bite leaves it shorter), and leaves the rest for later. Only ever
+    // while you're here: if the window goes into the background, it stops.
+    let p = d.nearestTuft();
+    if (!p) return yield* ACTIVITIES.look(d);
+    yield* d.getTo('stand');
+    yield { f: 'up', t: 400, face: d.dirTo(p), fx: d.chance(0.4) ? '!' : null };
+    for (let n = 0; p && n < 3; n++) {
+      yield* d.walkTo(() => (d.has(p) ? d.reach(p, 1) : null), d.gap(p) > 150 ? 1.6 : d.rnd(0.8, 1.1), { max: 600 });
+      if (!d.has(p) || !d.focused) break;
+      yield { f: 'sniff', t: d.rnd(300, 600), face: d.dirTo(p) };
+      while (d.has(p) && d.focused) {
+        yield { f: 'chomp', t: 220 };
+        yield { f: 'sniff', t: 220, do: (c) => { if (c.focused) c.bite(p); } };
+        if (d.chance(0.4)) { yield { f: 'stand', t: d.rnd(250, 500) }; yield { f: 'chomp', t: 200 }; yield { f: 'stand', t: 200 }; } // a good chew
+      }
+      yield { f: 'stand', t: d.rnd(300, 700), fx: d.chance(0.25) ? 'heart' : null };
+      const next = d.nearestTuft();
+      p = next && d.gap(next) < 90 && d.chance(0.5) ? next : null; // the next one is right there
+    }
+    const end = d.pick({ content: 1.2, sit: 1, wag: 0.8 });
+    if (end === 'sit') { yield* d.getTo('sit'); for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'sitChew' : 'sit', t: 280 }; yield { f: 'sitBlink', t: 400 }; }
+    else if (end === 'wag') for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'wag' : 'stand', t: 170 };
+    else { yield { f: 'blink', t: 300 }; yield { f: 'up', t: 600, fx: d.chance(0.5) ? 'heart' : null }; }
+    yield { f: d.sitting() ? 'sit' : 'stand', t: 400 };
   },
   *flower(d) {
     // A flower comes up and opens. A sniff — and then a sneeze, a snack, a long look, or a gift.
@@ -1360,7 +1519,7 @@ export const ACTIVITIES = {
 // Activities that start something of their own in the environment.
 export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm']);
 // Activities in the middle of which nothing else should happen in the environment.
-export const ABSORBED = new Set([...ENV_ACTIVITIES, 'cornerBite', 'egg', 'ufo', 'skateboard', 'fireworks', 'grow', 'shrink', 'celebrate', 'zoomies', 'nightfall', 'daybreak']);
+export const ABSORBED = new Set([...ENV_ACTIVITIES, 'cornerBite', 'tightrope', 'plantSeed', 'egg', 'ufo', 'skateboard', 'fireworks', 'grow', 'shrink', 'celebrate', 'zoomies', 'nightfall', 'daybreak']);
 // The streak's special loops, in the order they are unlocked.
 export const SPECIALS = ['skateboard', 'fireworks', 'rainDance'];
 
@@ -1906,6 +2065,25 @@ export const REACTIONS = {
     else if (pose === 'sit') { yield { f: 'sitUp', t: 800, face, fx }; yield { f: 'sitBlink', t: 200 }; }
     else { yield { f: 'up', t: 700, face, fx }; yield { f: d.chance(0.5) ? 'hunch' : 'blink', t: 400 }; yield { f: 'stand', t: 300 }; }
   } },
+  deepWake: { cat: 'env', w: 1, asleep: true, stay: true, lying: true, *fn(d) {
+    // The writer is back after a long while: it comes round slowly — a stir, a long look about, a big yawn,
+    // up onto its haunches with a chew, and a good stretch.
+    d.deep = false;
+    yield* d.getTo('lie');
+    yield { f: 'lieBreath', t: 900 };
+    yield { f: 'lie', t: 700, face: d.chance(0.3) ? -d.face : undefined };
+    yield { f: 'lieUpBlink', t: 600 };
+    yield { f: 'lieUp', t: 900 };
+    yield { f: 'lieUpBlink', t: 300 };
+    yield { f: 'lieUpHowl', t: 900 };
+    yield { f: 'lieUp', t: 500 };
+    yield* d.getTo('sit');
+    yield { f: 'sitBlink', t: 500 };
+    yield { f: 'sitChew', t: 600 };
+    yield* d.getTo('stand');
+    yield { f: 'stretch', t: 900 };
+    yield { f: 'stand', t: 400, fx: d.tufts().length ? '!' : null }; // oh — grass
+  } },
   rainbowLook: { cat: 'env', w: 1, *fn(d) {
     yield { f: 'up', t: 900, fx: '!' };
     yield { f: 'armsUp', t: 600, fx: 'heart' };
@@ -1931,11 +2109,11 @@ export const CATEGORY = {
 // Moods drift every several minutes and tilt the odds.
 export const MOODS = {
   content: { act: {}, react: {} },
-  playful: { act: { balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
-  curious: { act: { explore: 2.2, visitPlant: 2, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
-  sleepy: { act: { explore: 0.4, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
+  playful: { act: { tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
+  curious: { act: { explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
+  sleepy: { act: { explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
   grumpy: { act: { roar: 2.5, look: 1.3, dance: 0.3, rest: 1.2, scratch: 1.5, wag: 0.3, sing: 0.4 }, react: { normal: 1.2, none: 1.6, big: 0.8 } },
-  silly: { act: { trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 2.5, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
+  silly: { act: { tightrope: 2, trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 2.5, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
 };
 
 /** The audit baseline: what 0.8.0 had (activities + click reactions + the cursor glance). */

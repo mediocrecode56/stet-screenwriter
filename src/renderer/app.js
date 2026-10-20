@@ -190,9 +190,10 @@ function renderGoal() {
   const el = $('st-goal');
   const k = s.writing;
   const streakTip = k.days
-    ? `Writing streak: ${k.days} day${k.days === 1 ? '' : 's'} in a row${k.best > k.days ? ` (best ${k.best})` : ''}${k.today ? '' : ' — write a word today to keep it going'}.`
+    ? `Writing streak: ${k.days} day${k.days === 1 ? '' : 's'}${k.best > k.days ? ` (best ${k.best})` : ''}${k.today ? '' : ' — write a word today to keep it going'}.`
+      + ` Rest days left this week: ${k.rest.left} of 2.`
       + ` The dinosaur has grown ${k.growth} px${k.next ? `; it grows again at ${k.next} days` : ', its full size'}.${k.unlocked ? ` Special routines unlocked: ${k.unlocked} of 3.` : ''}`
-    : 'Writing streak: none yet — write at least one new word a day to start one (the dinosaur grows at 1, 2, 4, 8, 16 and 32 days).';
+    : 'Writing streak: none yet — write at least one new word a day to start one; up to two days off a week don’t break it (the dinosaur grows at 1, 2, 4, 8, 16 and 32 days).';
   el.innerHTML = `TODAY ${today.toLocaleString()}${goal ? ' / ' + goal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`
     + `<span id="st-streak" class="streak${k.days ? '' : ' none'}${k.today ? ' lit' : ''}" title="${streakTip}">${FLAME}${k.days}</span>`;
   el.title = `Today: ${today.toLocaleString()} words written${goal ? (today >= goal ? ' — goal met' : ` — ${(goal - today).toLocaleString()} to go`) : ''}. This week: ${s.week.total.toLocaleString()}${s.goals.weekly ? ' of ' + s.goals.weekly.toLocaleString() : ''}. Click for your week.`;

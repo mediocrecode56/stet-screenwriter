@@ -50,7 +50,7 @@ is still nothing extra to install.
 
 | command | what it does |
 |---|---|
-| `npm test` | 144 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, theme schedule, the word-count rule against an independent reference implementation, word counting under typing / large pastes / replacing / deleting / undo / redo / reopening with a 20 000-edit fuzz, writing statistics (accumulation across documents and projects, restarts, upgrade from the 0.6 format, damaged files, double-send protection, consistency of per-document / per-project / weekly / all-time totals, Reset and a failed Reset, a year of heavy use), wheel-zoom steps, English-revision persistence, the weekly chart's adaptive scale and number formatting, the companion simulated over hours of use (every activity and reaction, seamless posture changes, reactions chosen by what it was doing at the click, click variety and escalation, clicks acknowledged at once without cutting a move short, the pointer passing by ignored, rain, wind, a bird, a tumbleweed, a shooting star and a palm tree from start to finish and one at a time, staying in view on the whole-width playground with its home around TODAY, curious excursions and the very rare walk to the corner for a bite at the border, walking (never sliding) whenever it moves, a gentle breeze and only a few things floating at once, plants that come up, are noticed, sometimes visited and wither away, walking back in when the area shrinks, props cleaned up, exactly one pixel of growth per streak milestone, special loops unlocked at every second one, lying chin up, the sunset and sunrise when the theme turns on its schedule — also flipped at random moments for hours —, everyday activities that come out different each time, every visitor coming and going, and rare surprises that never go missing for long), and the writing streak (the day rules, every milestone, several screenplays a day, undone words, restarts, statistics from before streaks, Reset) |
+| `npm test` | 156 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, theme schedule, the word-count rule against an independent reference implementation, word counting under typing / large pastes / replacing / deleting / undo / redo / reopening with a 20 000-edit fuzz, writing statistics (accumulation across documents and projects, restarts, upgrade from the 0.6 format, damaged files, double-send protection, consistency of per-document / per-project / weekly / all-time totals, Reset and a failed Reset, a year of heavy use), wheel-zoom steps, English-revision persistence, the weekly chart's adaptive scale and number formatting, the companion simulated over hours of use (every activity and reaction, seamless posture changes, reactions chosen by what it was doing at the click, click variety and escalation, clicks acknowledged at once without cutting a move short, the pointer passing by ignored, rain, wind, a bird, a tumbleweed, a shooting star and a palm tree from start to finish and one at a time, staying in view on the whole-width playground with its home around TODAY, curious excursions and the very rare walk to the corner for a bite at the border, walking (never sliding) whenever it moves, a gentle breeze and only a few things floating at once, plants that come up, are noticed, sometimes visited and wither away, grass that grows only while the window is in the background (on the clock, even with no ticks at all) and is eaten bite by bite only once you are back and writing, the deep sleep after a long while away and the gentle wake-up (also when you come and go again at once), palms and cacti that last longer and stand still in the background, making its bed, lining up pebbles, the tightrope act and planting a flower, walking back in when the area shrinks, props cleaned up, exactly one pixel of growth per streak milestone, special loops unlocked at every second one, lying chin up, the sunset and sunrise when the theme turns on its schedule — also flipped at random moments for hours —, everyday activities that come out different each time, every visitor coming and going, and rare surprises that never go missing for long), and the writing streak (the day rules, two rest days a week together or apart, the weekly reset, a day never spared twice, against a day-by-day reference over random months, every milestone, several screenplays a day, undone words, restarts, statistics from before streaks, Reset) |
 | `npm run quick` | a fast check, under a minute: every unit test plus the core of the real-app tests (writing flow, text styles, caret alignment, themes) |
 | `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, bold/italic/underline/strikethrough (shortcuts, toolbar, Format menu, drawn on the character grid), notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change, and the dinosaur’s sunset and sunrise when AUTO turns the theme), caret/selection/click alignment with rendered glyphs at several display scales and zooms, the English revision against a local mock of the API and a fake Claude Code CLI (request shape, CLI flags, signed-out errors, progress indicator, hover highlighting, decisions, edits during a review, rate limits, server errors, cancellation, persistence across restarts), word counting and writing statistics in the real app (every editing route, switching and reopening documents, a restart, a crash, the upgrade from 0.6, the weekly view and the Reset confirmation), 5-point wheel-zoom steps, Open Recent dismiss/trash (also with long names and paths at two window widths: icons visible on hover, no horizontal scrolling), the writing companion (play area spanning the editor, feet on the status bar’s border and never over it, clicks answered and the pointer passing over it ignored, drags passing through it, a rain shower, a palm tree and a special loop drawn whole), the writing streak beside TODAY (0 to 32 days with the growth measured pixel by pixel, restarts, an update from 0.8, several screenplays a day, opening and pasting text, Reset), the weekly view’s top boxes in both themes, the weekly view with tens of thousands of words a day, the same slide for every panel (Ctrl+F included, and with reduced motion), the header layout, animation easing and toolbar spacing. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
@@ -161,10 +161,14 @@ screenplay and project, for good:
 
 ### Writing streak
 
-Beside TODAY in the status bar, a little flame and the number of days in a row
-on which you have written at least one new word (calendar days, local time).
-Today joins the streak with your first word; a day that isn't over yet never
-breaks it, a whole day without writing does. Opening, importing or pasting
+Beside TODAY in the status bar, a little flame and the number of days on which
+you have written at least one new word (calendar days, local time). Today
+joins the streak with your first word, and a day that isn't over yet never
+breaks it. Up to two days a week (Monday to Sunday) may go by without writing,
+together or days apart, and the streak carries on; a third day off in the same
+week ends it. Writing again doesn't give a rest day back, and every Monday
+brings two new ones (hover the flame to see how many are left). The weekly
+view's goal streak follows the same rule. Opening, importing or pasting
 text never counts, and writing in several screenplays on one day counts once.
 It is kept with your statistics, so restarts and new versions keep it (and so
 does a Reset).
@@ -184,7 +188,12 @@ everything else work underneath it as before). Its home is the stretch above
 TODAY, but the whole width of the editor is its playground: now and then
 curiosity takes it out towards the ends, and very, very rarely it walks all
 the way to the bottom-left corner of the window to have a bite at the border.
-It walks whenever it moves, one step at a time, and never slides. It walks, runs and
+It walks whenever it moves, one step at a time, and never slides. When STET is
+in the background (you're working in another program), tufts of grass slowly
+come up around it, five at most, and it leaves them alone; after a long while
+away it curls up for a deep sleep. When you come back it wakes slowly, and once
+you're writing again it gets round to the grass in its own time, a bite at a
+time. It walks, runs and
 paces about, naps and dozes, stretches and does its yoga, chases a ball and
 its tail, digs up bones (and sometimes a disappointing pebble), builds little
 mounds of earth, reads a page of its own, takes a coffee break, sings, blows
@@ -193,7 +202,11 @@ while you're writing — sometimes types along on a tiny typewriter or just
 watches the page fill up. Sometimes it just lies on its front, chin up, and
 watches the sky. Even its everyday things come out a little different each
 time — a rest with a tail tap or a scratch, a walk at its own pace with a sniff
-on the way, a dance with a favourite move of the day. Its mood drifts over the
+on the way, a dance with a favourite move of the day. Before a proper rest it
+often makes its bed (round and round, a scrape, a flop and a sigh), and it
+likes to line up pebbles in a neat little row. Once in a while it does a
+balancing act along the line it stands on, or plants a seed and waits for the
+flower to come up. Its mood drifts over the
 day, and it remembers what it did recently, so it doesn't repeat itself.
 
 Its little world has a life too, now and then and never two things at once: a

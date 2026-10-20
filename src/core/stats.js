@@ -23,11 +23,11 @@
 //     days:  { 'YYYY-MM-DD': { w, docs: { [docId]: words } } },
 //     docs:  { [docId]: { w, title, path, first, last, from? } },
 //     resets: [{ at, total }],          — when the writer reset, and what was cleared
-//     streak: { last, count, best, prev } — the writing streak (see core/streak.js); kept through a reset
+//     streak: { last, count, best, spared, prev } — the writing streak (see core/streak.js); kept through a reset
 //     migrated?: { from: 1, at } }
 // Invariant: total = Σ days[*].w = Σ docs[*].w, and days[k].w = Σ days[k].docs.
 
-import { emptyStreak, cleanStreak, streakFromDays, bookDay, unbookDay, currentStreak, growthFor, unlocksFor, nextMilestone } from './streak.js';
+import { emptyStreak, cleanStreak, streakFromDays, replayStreak, bookDay, unbookDay, currentStreak, restUsed, REST_DAYS, growthFor, unlocksFor, nextMilestone } from './streak.js';
 
 export const STATS_VERSION = 2;
 const UNKNOWN_DOC = '(earlier)'; // per-document detail the old format had already dropped
@@ -227,11 +227,11 @@ export class StatsBook {
       if (rec) for (const [id, n] of Object.entries(rec.docs)) byDoc[id] = (byDoc[id] || 0) + n;
     }
     const docs = Object.entries(byDoc).map(([id, words]) => ({ id, words, title: this.title(id) })).sort((a, b) => b.words - a.words);
-    // Streak: consecutive days up to today reaching the daily goal (any writing when there is none);
-    // today only extends it once reached, so an unfinished today never breaks it.
+    // Goal streak: days up to today reaching the daily goal (any writing when there is none), with the
+    // same two rest days a week as the writing streak; today only extends it once reached, so an
+    // unfinished today never breaks it.
     const hit = (k) => (daily ? this.wordsOn(k) >= daily : this.wordsOn(k) > 0);
-    let streak = 0;
-    for (let k = hit(today) ? today : addDays(today, -1); k >= this.data.since && hit(k); k = addDays(k, -1)) streak++;
+    const streak = currentStreak(replayStreak(Object.keys(this.data.days).filter((k) => this.known(k, today) && hit(k))), today);
     return {
       today: { day: today, words: this.wordsOn(today) },
       goals: { daily, weekly },
@@ -250,7 +250,8 @@ export class StatsBook {
     const s = this.data.streak || emptyStreak();
     const days = currentStreak(s, today);
     const growth = growthFor(days);
-    return { days, best: s.best, today: s.last === today, growth, unlocked: unlocksFor(growth), next: nextMilestone(days) };
+    const rest = days ? restUsed(s, today) : 0;
+    return { days, best: s.best, today: s.last === today, growth, unlocked: unlocksFor(growth), next: nextMilestone(days), rest: { used: rest, left: Math.max(0, REST_DAYS - rest) } };
   }
 
   title(id) {
