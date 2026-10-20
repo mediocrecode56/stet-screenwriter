@@ -242,7 +242,7 @@ export async function statsDialog(api) {
     });
     if (v === 'nav-1') { offset--; continue; }
     if (v === 'nav1') { offset = Math.min(0, offset + 1); continue; }
-    if (v && v.goals) { await api.saveGoals(v.goals); flash = 'Goals saved.'; continue; }
+    if (v && v.goals) { await api.saveGoals(v.goals); return; } // saved: done
     if (v === 'reset') {
       if (await confirmReset(s)) {
         const r = await api.reset();
@@ -306,10 +306,21 @@ const BAR_H = 104, BAND = 16;
 
 function weekChart(s) {
   const goal = s.goals.daily;
-  const { px, over } = weekScale(s.week.days, goal, BAR_H);
+  const { top, px, over } = weekScale(s.week.days, goal, BAR_H);
   const plot = h('div', { class: 'wk-plot', style: `height:${BAR_H + BAND}px` });
-  // The daily goal: a dashed line across the whole chart (its figure is in the box above).
-  if (goal) plot.append(h('div', { class: 'wk-goal', style: `bottom:${px(goal)}px`, title: `Daily goal: ${goal.toLocaleString()} words` }));
+  // Equal gutters either side keep the chart centred: the word scale on the left (gridlines at
+  // half and full scale, the scale following the week), the daily goal's label on the right.
+  const scale = h('div', { class: 'wk-axis wk-axis-l', style: `height:${BAR_H + BAND}px` });
+  const marks = h('div', { class: 'wk-axis wk-axis-r', style: `height:${BAR_H + BAND}px` });
+  for (const v of [0, top / 2, top]) {
+    const y = px(v);
+    if (v) plot.append(h('div', { class: 'wk-grid', style: `bottom:${y}px` }));
+    scale.append(h('span', { class: 'wk-tick', style: `bottom:${y - 5}px` }, fmtWords(v, true)));
+  }
+  if (goal) {
+    plot.append(h('div', { class: 'wk-goal', style: `bottom:${px(goal)}px`, title: `Daily goal: ${goal.toLocaleString()} words` }));
+    marks.append(h('span', { class: 'wk-tick wk-goal-t', style: `bottom:${px(goal) - 5}px` }, 'goal'));
+  }
   s.week.days.forEach((d, i) => {
     const state = d.future ? 'future' : !d.known ? 'na' : d.words === 0 ? 'zero' : goal && d.words >= goal ? 'met' : 'under';
     const label = d.future ? '' : !d.known ? '—' : fmtWords(d.words);
@@ -320,7 +331,7 @@ function weekChart(s) {
       h('div', { class: 'wk-bar', style: `height:${bh}px` })));
   });
   const days = h('div', { class: 'wk-days' }, ...s.week.days.map((d, i) => h('div', { class: d.today ? 'today' : '' }, DOW[i], h('small', {}, ' ' + d.day.slice(8).replace(/^0/, '')))));
-  return h('div', { class: 'wk-chart' }, plot, days);
+  return h('div', { class: 'wk-chart' }, h('div', { class: 'wk-frame' }, scale, plot, marks), days);
 }
 
 function weekDocs(s) {

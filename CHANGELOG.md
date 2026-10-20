@@ -4,6 +4,16 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.16.6 — 21 October 2026
+
+### Fixed
+
+- **Save goals closes the window.** Before, it saved your goals but then opened the same window again, so it looked stuck.
+
+### Improved
+
+- **A word scale on the chart.** Down the left side of the weekly chart: 0, half and full, adjusting to the week's amounts. The daily goal's line is labelled "goal" on the right. Both sides have the same width, so the chart stays centred.
+
 ## 0.16.5 — 21 October 2026
 
 ### Improved

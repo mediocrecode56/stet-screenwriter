@@ -147,7 +147,7 @@ test('weekly view with thousands of words a day: readable, proportional, compact
     const dlg = document.querySelector('#overlay .dlg'), body = dlg.querySelector('.body');
     const cols = [...dlg.querySelectorAll('.wk-col')].map((c) => { const val = c.querySelector('.wk-val'), r = val.getBoundingClientRect(), cr = c.getBoundingClientRect(); return { text: val.textContent, l: r.left, r: r.right, bar: c.querySelector('.wk-bar').getBoundingClientRect().height, over: c.classList.contains('over'), colL: cr.left, colR: cr.right, clipped: val.scrollWidth > val.clientWidth + 1 }; });
     const plot = dlg.querySelector('.wk-plot').getBoundingClientRect();
-    return { cols, h: dlg.getBoundingClientRect().height, w: dlg.getBoundingClientRect().width, scroll: [body.scrollWidth - body.clientWidth, body.scrollHeight - body.clientHeight], goalLine: !!dlg.querySelector('.wk-goal'), centred: (() => { const b = dlg.querySelector('.body').getBoundingClientRect(), p = dlg.querySelector('.wk-plot').getBoundingClientRect(); return Math.abs((p.left - b.left) - (b.right - p.right)) <= 1; })(), head: [...dlg.querySelectorAll('.wk-n')].map((n) => n.textContent), plotTop: plot.top };
+    return { cols, h: dlg.getBoundingClientRect().height, w: dlg.getBoundingClientRect().width, scroll: [body.scrollWidth - body.clientWidth, body.scrollHeight - body.clientHeight], goalLine: !!dlg.querySelector('.wk-goal'), centred: (() => { const b = dlg.querySelector('.wk-chart').getBoundingClientRect(), p = dlg.querySelector('.wk-plot').getBoundingClientRect(); return Math.abs((p.left - b.left) - (b.right - p.right)) <= 1; })(), ticks: [...dlg.querySelectorAll('.wk-axis-l .wk-tick')].map((t) => t.textContent), head: [...dlg.querySelectorAll('.wk-n')].map((n) => n.textContent), plotTop: plot.top };
   })()`);
   const total = LAST.reduce((a, b) => a + b, 0);
   const fmt = (n) => app.eval(`(${n}).toLocaleString()`); // as the app formats numbers
@@ -165,6 +165,7 @@ test('weekly view with thousands of words a day: readable, proportional, compact
   assert.ok(Math.abs(mon.bar / fri.bar - 18450 / 9420) < 0.1 && Math.abs(fri.bar / tue.bar - 9420 / 2240) < 0.3, 'bars in proportion');
   assert.ok(v.goalLine, 'the goal drawn as a line across the chart');
   assert.ok(v.centred, 'the chart is centred: the same margin on both sides');
+  assert.equal(v.ticks.length, 3, 'a word scale: 0, half and full (' + v.ticks.join(', ') + ')');
   await app.key('Escape');
   await sleep(200);
   // Reset still asks first, and Cancel leaves everything as it was.

@@ -410,7 +410,15 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-nav { padding: 0 5px; line-height: 13px; font-size: 12px; }
 .wk-nav:disabled { opacity: .25; }
 .wk-chart { padding-top: 2px; }
-.wk-plot { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; border-bottom: 1px solid var(--rule-strong); }
+.wk-frame { display: flex; }
+.wk-plot { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; border-bottom: 1px solid var(--rule-strong); }
+.wk-axis { position: relative; width: 34px; flex: none; }
+.wk-axis-l { border-right: 1px solid var(--rule); }
+.wk-tick { position: absolute; font-size: 9px; line-height: 10px; color: var(--ink-3); white-space: nowrap; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.wk-axis-l .wk-tick { right: 5px; }
+.wk-axis-r .wk-tick { left: 5px; }
+.wk-goal-t { color: var(--ink-2); }
+.wk-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--rule); opacity: .6; pointer-events: none; }
 .wk-goal { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--ink-2); z-index: 2; pointer-events: none; }
 .wk-col { position: relative; min-width: 0; z-index: 1; }
 .wk-val { position: absolute; left: 50%; transform: translateX(-50%); padding: 0 2px; text-shadow: 0 0 2px var(--page), 0 0 2px var(--page), 0 0 3px var(--page); text-align: center; font-size: 11px; line-height: 13px; white-space: nowrap; color: var(--ink); font-variant-numeric: tabular-nums; z-index: 3; }
@@ -421,7 +429,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-col.zero .wk-val, .wk-col.na .wk-val { color: var(--ink-3); }
 .wk-col.future::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); width: min(100%, 34px); bottom: 0; height: 2px; border-bottom: 1px dotted var(--ink-3); }
 .wk-col.today .wk-val { font-weight: 700; }
-.wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; padding-top: 4px; text-align: center; color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
+.wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; padding-top: 4px; margin: 0 34px; text-align: center; color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
 .wk-days .today { color: var(--ink); font-weight: 700; }
 .wk-days small { font-size: 10px; letter-spacing: 0; }
 .wk-docs { display: flex; flex-direction: column; gap: 1px; }
