@@ -4,6 +4,17 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.15.3 — 21 October 2026
+
+### Improved
+
+- **Click anywhere on a suggestion to go to it.** Clicking anywhere on a suggestion's card now glides the script to the passage: the change, the explanation, the space around the buttons or the card's edge. Before, only the line with the change worked. The buttons (Accept, Discard, Ignore, +Dictionary, Reopen) still do just their own job.
+
+### For the technically curious
+
+- The whole `.rv-item` is the `select` target. The panel acts on the nearest `data-act`, so a button inside the card still wins.
+- The glide test now presses a different part of the card each time (the explanation, the change, the button row, the card itself), and checks that Discard still discards.
+
 ## 0.15.2 — 21 October 2026
 
 ### Fixed

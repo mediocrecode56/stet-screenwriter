@@ -430,8 +430,9 @@ export class Revision {
       const extra = f.decision === 'accepted' && !at ? ' · change no longer found in the script' : '';
       actions = `<span class="rv-dec">${DECISION_LABEL[f.decision]}${extra}</span><button class="tb" data-act="reopen" title="Make this suggestion undecided again (does not change the script)">REOPEN</button>`;
     }
-    return `<div class="rv-item k-${f.category} ${cls}" data-id="${esc(f.id)}">
-      <div class="rv-diff" data-act="select" title="${at ? 'Show in script' : 'Passage not found'}">${diff} ${conf}</div>
+    // A press anywhere on the card shows its passage; the buttons on it keep their own jobs (the nearest data-act wins).
+    return `<div class="rv-item k-${f.category} ${cls}" data-id="${esc(f.id)}" data-act="select" title="${at ? 'Show in script' : 'Passage not found'}">
+      <div class="rv-diff">${diff} ${conf}</div>
       <div class="rv-why">${esc(f.explanation)}</div>${note}
       <div class="rv-acts">${actions}</div></div>`;
   }

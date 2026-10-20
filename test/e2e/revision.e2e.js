@@ -262,7 +262,10 @@ test('clicking a suggestion always glides its passage to the middle of the scree
     for (let i = 0; i < 60; i++) d.blocks.push(makeBlock('action', 'After, line ' + (i + 1) + '.'));
     __stet.session.load(d, null);
   })()`);
-  const press = (o) => `[...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes(${JSON.stringify(o)})).querySelector('[data-act="select"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`;
+  // Anywhere on the card: the explanation, the change itself, the gaps in the button row, the card's own edge (in turn).
+  let part = 0;
+  const PARTS = ['.rv-why', '.rv-diff', '.rv-acts', null];
+  const press = (o) => { const p = PARTS[part++ % PARTS.length]; return `(() => { const card = [...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes(${JSON.stringify(o)})); (${JSON.stringify(p)} ? card.querySelector(${JSON.stringify(p)}) : card).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })); })()`; };
   // Where the selected passage sits: its middle against the middle of the view (or the scroll stops at an end of the script).
   const where = () => app.eval(`(() => {
     const v = __stet.view, s = v.scroller, sel = __stet.editor.sel, a = v.caretRect(sel.a), b = v.caretRect(sel.f);
@@ -305,6 +308,11 @@ test('clicking a suggestion always glides its passage to the middle of the scree
   const end = samples.at(-1);
   assert.ok(samples.filter((y) => y > 5 && y < end - 5).length >= 5, 'a glide through in-between positions, not a jump');
   for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1] - 0.5, 'one way only');
+  // The buttons on a card still do their own job, not just show the passage.
+  const before = await app.eval('__stet.revision.findings.filter(f => !f.decision).length');
+  await app.eval(`[...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes('enter in the kitchen')).querySelector('[data-act="discard"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`);
+  await sleep(200);
+  assert.equal(await app.eval('__stet.revision.findings.filter(f => !f.decision).length'), before - 1, 'DISCARD discards');
   // The marks: neutral, never yellow (colour belongs to your own highlights).
   const bg = await app.eval(`getComputedStyle(document.querySelector('.revr.cur')).backgroundColor`);
   const [r, g, b] = bg.match(/[\d.]+/g).map(Number);
