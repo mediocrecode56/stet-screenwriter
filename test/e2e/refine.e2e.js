@@ -182,7 +182,7 @@ test('poking the dinosaur blends a reaction in without cutting its animation', a
   assert.ok(saw, 'reaction starts at the next step boundary');
   let back = false;
   for (let i = 0; i < 100 && !back; i++) { await sleep(100); back = await app.eval('!__stet.dino.c.inReaction'); }
-  assert.ok(back, 'then it carries on');
+  assert.ok(back, 'then it carries on: ' + JSON.stringify(await app.eval('(() => { const c = __stet.dino.c; return { r: c.inReaction, a: c.activity, f: c.frame, x: c.x, maxX: c.maxX, q: c.queue, hist: c.history.slice(-4), held: c.held.length }; })()')));
   // Many quick pokes are absorbed: at most two queued.
   await app.eval(`for (let i = 0; i < 8; i++) document.querySelector('.dino-hit').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
   assert.ok(await app.eval('__stet.dino.c.queue.length') <= 2);
@@ -190,8 +190,8 @@ test('poking the dinosaur blends a reaction in without cutting its animation', a
   const props = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.queue = []; c.pending = 'fetch'; c.gen = null; await new Promise((r) => setTimeout(r, 2500)); return { kinds: c.props.map((p) => p.kind), activity: c.activity }; })()`);
   assert.equal(props.activity, 'fetch');
   assert.ok(props.kinds.includes('ball'), 'a ball rolled in');
-  const glance = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.pending = 'rest'; c.gen = null; c.props = []; await new Promise((r) => setTimeout(r, 3000)); const r = d.canvas.getBoundingClientRect(); c.face = 1; const x = r.left + c.x - 12, y = r.bottom - 5; window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); let turned = false; for (let i = 0; i < 40 && !turned; i++) { await new Promise((r) => setTimeout(r, 100)); window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); turned = c.face === -1; } return { turned, activity: c.activity, reaction: c.inReaction }; })()`);
-  assert.ok(glance.turned, 'it glanced at the cursor');
+  const glance = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.pending = 'rest'; c.gen = null; c.props = []; await new Promise((r) => setTimeout(r, 3000)); const r = d.canvas.getBoundingClientRect(); c.face = 1; const x = r.left + c.x - 12, y = r.bottom - 5; window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); let turned = false; for (let i = 0; i < 40 && !turned; i++) { await new Promise((r) => setTimeout(r, 100)); window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); turned = c.face === -1; } return { turned, activity: c.activity, reaction: c.inReaction, frame: c.frame, near: c.cursorNear(performance.now()), A: c.attention, held: c.held.length, q: c.queue.length, x: c.x, cur: c.cursor, centre: c.center(), step: c.step && [c.step.f, c.step.t, c.step.dx] }; })()`);
+  assert.ok(glance.turned, 'it glanced at the cursor ' + JSON.stringify(glance));
   assert.equal(glance.activity, 'rest');
   assert.equal(glance.reaction, null);
   // Its ink follows the theme.

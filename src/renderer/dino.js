@@ -1097,6 +1097,7 @@ export class Critter {
     for (let guard = 0; guard < 6; guard++) {
       if (!this.gen) {
         const a = this.pickActivity(now);
+        this.inReaction = null; this.paused = null; // a fresh activity: nothing left over from a reaction
         this.activity = a;
         this.recent.push(a);
         if (this.recent.length > 4) this.recent.shift();
