@@ -339,10 +339,8 @@ function weekFacts(s) {
     `wrote on ${w.active} of ${elapsed} day${elapsed === 1 ? '' : 's'}`,
     dg ? `goal met ${w.met} ${w.met === 1 ? 'time' : 'times'}` : null,
     w.best ? `best ${DOW[w.days.findIndex((d) => d.day === w.best.day)]} ${fmtWords(w.best.words)}` : null,
-    w.current ? `writing streak ${s.writing.days} day${s.writing.days === 1 ? '' : 's'}${s.writing.best > s.writing.days ? ` (best ${s.writing.best})` : ''}` : null,
-    w.current && dg && s.streak ? `goal streak ${s.streak}` : null,
   ].filter(Boolean);
-  return h('div', { class: 'wk-facts' }, ...facts.map((f) => h('span', {}, f)));
+  return h('div', { class: 'wk-facts' }, facts.join(' · ')); // (the streak is on the flame in the status bar)
 }
 
 function weekDocs(s) {
