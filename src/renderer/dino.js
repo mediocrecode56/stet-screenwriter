@@ -11,11 +11,12 @@
 //    the writer's words. It redraws only when the picture changes, ~11 times a
 //    second at most while something moves, and not at all while hidden.
 //
-// The play area is a generous stretch of the desk centred on TODAY (up to
-// 560 px), with an invisible margin around it where props, glyphs and visitors
-// can still be drawn, so nothing is ever cut off by the canvas edge. The
-// dinosaur prefers the middle of it and only now and then strolls out towards
-// the ends. It never walks out of sight.
+// The playground is the whole width of the editor area, along the top edge of
+// the status bar: its feet stand on that line, never on it. Its home is the
+// stretch around TODAY (up to 560 px), where it spends nearly all its time;
+// now and then curiosity takes it further out, and very rarely all the way to
+// the bottom-left corner of the window, to have a bite at the border. Visitors
+// come in from out of sight at the ends. It never walks out of sight.
 //
 // Behaviour is a sequence of activities. Each is a generator yielding short
 // steps (≤ 1.5 s), so a reaction — to a click, or to something happening
@@ -29,9 +30,13 @@
 // typing, sleeping, under a palm tree, in the rain…), its mood, and what it
 // did recently. The pointer merely passing over it does nothing at all.
 //
+// It walks whenever it moves: the body only ever moves as far as its legs
+// step, one stride per frame, so its feet never slide.
+//
 // The environment has a life of its own: now and then a rain cloud drifts
-// over, the wind gets up, a bird drops by, a tumbleweed rolls through, a star
-// falls at night — and the dinosaur may grow a palm tree, find a flower, a
+// over, a breeze gets up, a bird drops by, a tumbleweed rolls through, a star
+// falls at night, a cactus or a tuft of grass comes up (it notices, in its own
+// time, and may go over to see) — and the dinosaur may grow a palm tree, find a flower, a
 // mushroom or a snail, or meet a balloon, a paper plane, a frog, a ladybird,
 // a dandelion or a worm. When the theme turns dark or light on its schedule,
 // it sees the sun go down or come up. Each has a beginning, its part for the dinosaur, and a
@@ -51,29 +56,43 @@ const MIN = 60000;
 // Poses that are merely held: one of these can be cut short (never a move, a jump or a lift).
 const HOLD = new Set(['stand', 'blink', 'up', 'sit', 'sitBlink', 'sitBreath', 'sitUp', 'armsUp', 'yawn', 'oneLeg', 'wag', 'hunch', 'lie', 'lieBreath', 'lieUp', 'lieUpBlink']);
 const isHold = (s) => HOLD.has(s.f) && !s.dx && !s.jump && !s.lift && !s.flip;
-const WALKING = new Set(['walk', 'patrol', 'zoomies', 'ponder']);
+const WALKING = new Set(['walk', 'patrol', 'zoomies', 'ponder', 'explore', 'cornerBite']);
+// Frames whose legs carry it along the ground (any other move on the ground would slide).
+const STEPPING = /^(walk|run|creep)/;
 const DANCING = new Set(['dance', 'sing', 'celebrate', 'rainDance', 'boogie']);
 const CALM = new Set(['rest', 'look', 'sleep', 'stargaze', 'watchWriter', 'readScript', 'coffeeBreak', 'writeAlong', 'treeShade', 'doze', 'scratch', 'wag', 'yoga', 'daydream']);
 // Things that grow and wither: frames from sprout to full, and how long each stage takes.
-const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800] };
+const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800], cactus: [2, 1400], grass: [2, 900] };
+// Plants that come up on their own (the 'sprout' event), for it to notice and perhaps visit.
+const WILD = ['cactus', 'grass', 'palm'];
+// Things that float or fly about: only a few at a time, so the scene never gets busy.
+const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug']);
+// What tends to follow what: a romp leaves it ready for a sit, a long rest for a stretch and a stroll.
+const LIVELY = new Set(['zoomies', 'hop', 'dance', 'fetch', 'pounce', 'workout', 'chaseTail', 'juggle', 'somersault', 'patrol', 'explore', 'shadowbox', 'skateboard']);
+const RESTFUL = new Set(['rest', 'sleep', 'doze', 'daydream', 'treeShade', 'stargaze', 'sunbathe', 'yoga']);
+const AFTER_LIVELY = { rest: 2, daydream: 1.6, look: 1.4, wag: 1.3, sleep: 1.2, scratch: 1.2 };
+const AFTER_REST = { stretch: 2.4, walk: 1.6, look: 1.4, explore: 1.4, wag: 1.2 };
 
 // Environmental events: started by time, only one at a time, and only when the dinosaur can take part.
 const EVENTS = {
   rain: { cool: 8 * MIN, w: 1, ok: (c) => !c.find('cloud') },
-  wind: { cool: 6 * MIN, w: 0.9, ok: (c) => !c.wind },
-  bird: { cool: 7 * MIN, w: 0.8, ok: (c) => !c.find('bird') && c.hat?.kind !== 'bird' && (!!c.grownTree() || (CALM.has(c.activity) && (postureOf(c.frame) !== 'lie' || c.asleep()))) },
+  wind: { cool: 10 * MIN, w: 0.6, ok: (c) => !c.wind && c.floating() < 2 },
+  bird: { cool: 7 * MIN, w: 0.8, ok: (c) => !c.find('bird') && c.floating() < 2 && c.hat?.kind !== 'bird' && (!!c.grownTree() || (CALM.has(c.activity) && (postureOf(c.frame) !== 'lie' || c.asleep()))) },
   tumbleweed: { cool: 9 * MIN, w: 0.6, ok: (c) => !c.find('tumbleweed') },
   shootingStar: { cool: 10 * MIN, w: 1.2, ok: (c) => c.night() && !c.asleep() },
+  sprout: { cool: 8 * MIN, w: 0.8, ok: (c) => !c.props.some((p) => p.wild) && c.props.length < 4 },
 };
 
 // ---- the behaviour engine ---------------------------------------------------------------------
 
 export class Critter {
-  constructor({ rng = Math.random, unit = () => 1.25, width = () => 160, margin = () => 24, progress = () => ({}), clock = () => Date.now() } = {}) {
+  constructor({ rng = Math.random, unit = () => 1.25, width = () => 160, margin = () => 24, home = () => null, corner = () => false, progress = () => ({}), clock = () => Date.now() } = {}) {
     this.rng = rng;
     this.unitOf = unit;
     this.widthOf = width;
-    this.marginOf = margin;  // drawable room beyond each end of the strip (props, visitors)
+    this.marginOf = margin;  // room out of sight beyond each end of the strip (where visitors come from)
+    this.homeOf = home;      // the home stretch around TODAY { lo, hi } in strip px (null: all of it)
+    this.cornerOf = corner;  // whether the strip's left end is the window's bottom-left corner
     this.getProgress = progress;
     this.clock = clock;     // wall clock (time of day: night-time things)
     this.x = 30; this.face = 1; this.y = 0; this.flip = false;
@@ -122,6 +141,7 @@ export class Critter {
     this.targetG = 0;
     this.unlocked = 0;
     this.lastRare = 0;      // when the last rare surprise (an egg, a UFO) came along
+    this.lastCorner = 0;    // when it last went all the way to the corner
   }
 
   // -- randomness --
@@ -149,13 +169,20 @@ export class Critter {
   get maxX() { return Math.max(0, this.stripW - this.dw); }
   clampX(x) { return Math.max(0, Math.min(this.maxX, x)); }
   clampProp(x, cols = 6) { return Math.max(0, Math.min(this.stripW - cols * this.u, x)); }
-  /** A place to go: usually the middle stretch of the strip, now and then further out. */
-  spot() {
-    if (this.chance(0.12)) return this.rnd(0.05, 0.95) * this.maxX;
-    return (0.5 + (this.rng() + this.rng() - 1) * 0.38) * this.maxX;
+  /** Dinosaur x at fraction `f` of its home stretch (0 its left end, 1 its right end, 0.5 the middle). */
+  zone(f) {
+    const h = this.homeOf(), lo = this.clampX(h ? h.lo : 0), hi = Math.max(lo, this.clampX(h ? h.hi - this.dw : this.maxX));
+    return lo + f * (hi - lo);
   }
-  /** Near an end of the strip: the direction back towards the middle (else 0). */
-  inward() { return this.x > this.maxX * 0.8 ? -1 : this.x < this.maxX * 0.2 ? 1 : 0; }
+  /** Out beyond its home stretch (on an excursion). */
+  away() { return this.x < this.zone(0) - 1 || this.x > this.zone(1) + 1; }
+  /** A place to go: usually the middle of its home stretch, now and then further out in it. */
+  spot() {
+    if (this.chance(0.12)) return this.zone(this.rnd(0.05, 0.95));
+    return this.zone(0.5 + (this.rng() + this.rng() - 1) * 0.38);
+  }
+  /** Near an end of its home stretch (or beyond it): the direction back towards the middle (else 0). */
+  inward() { return this.x > this.zone(0.8) ? -1 : this.x < this.zone(0.2) ? 1 : 0; }
   sitting() { return postureOf(this.frame) === 'sit'; }
   onstage() { return this.x >= -0.5 && this.x <= this.maxX + 0.5; }
   center() { return this.x + this.dw / 2; }
@@ -188,6 +215,23 @@ export class Critter {
   find(kind) { return this.props.find((p) => p.kind === kind && !p.carried) || null; }
   grownTree() { return this.props.find((p) => p.kind === 'palm' && p.frame === GROW.palm[0] && !p.withering) || null; }
   windDir() { return this.wind ? this.wind.dir : -this.face; }
+  /** How many things are floating or flying about. */
+  floating() { let n = 0; for (const p of this.props) if (FLOATING.has(p.kind) || (p.kind === 'leaf' && p.blown)) n++; return n; }
+  /**
+   * Where a visitor comes in from on side `from` (-1 left, 1 right): just out of
+   * sight at that end of the strip, or, if that is a long way off, fading in a
+   * little beyond its home stretch. Sets x (and the fade) on the options `o`.
+   */
+  arrive(o, cols, from) {
+    const far = from < 0 ? -this.margin : this.stripW + this.margin - cols * this.u;
+    const near = from < 0 ? this.zone(0) - 140 : this.zone(1) + this.dw + 140 - cols * this.u;
+    const x = from < 0 ? Math.max(far, near) : Math.min(far, near);
+    return Object.assign(o, { x }, x === far ? {} : { alpha: 0, fadeIn: true });
+  }
+  /** A visitor heading out (direction `dir`) is well past its home stretch: time to fade away. */
+  gone(p, dir) { return dir > 0 ? p.x > this.zone(1) + this.dw + 240 : p.x + this.propW(p) < this.zone(0) - 240; }
+  /** The plant it has noticed and not yet been to see, once it has let it be a while. */
+  plantToVisit() { return this.props.find((p) => p.wild && p.noticed && !p.visited && this.now >= p.visitAt && p.life - (this.now - p.born) > 30000 + 80 * this.gapTo(p)) || null; } // time to get there and back
   night() { const h = new Date(this.clock()).getHours(); return h >= 21 || h < 6; }
 
   /** What it is doing right now — the context a click or an event is answered in. */
@@ -199,7 +243,7 @@ export class Critter {
       activity: this.activity,
       reaction: this.inReaction,
       posture,
-      moving: !!(s && s.dx && this.now < s.end && /^(walk|run)/.test(s.f)) || (WALKING.has(this.activity) && posture === 'stand' && !this.inReaction),
+      moving: !!(s && s.dx && this.now < s.end && STEPPING.test(s.f)) || (WALKING.has(this.activity) && posture === 'stand' && !this.inReaction),
       air: !!(s && (s.jump || s.lift || s.flip)),
       asleep: this.asleep(),
       near,
@@ -259,6 +303,9 @@ export class Critter {
     const free = this.props.length < 2;
     const tree = this.grownTree(), cloud = this.find('cloud');
     const luck = Math.min(5, 1 + (now - this.lastRare) / (30 * MIN)); // the longer since the last rare surprise, the likelier the next
+    const calmSky = this.floating() < 2;
+    const roomOut = this.zone(0) > 60 || this.zone(1) < this.maxX - 60; // somewhere beyond its home stretch to explore
+    const plant = this.plantToVisit();
     const w = {
       sleep: e < 0.15 ? (idle > 240 ? 6 : 0.8) : 0,
       rest: 4 * (1 - e) + 0.4,
@@ -293,18 +340,20 @@ export class Critter {
       fetch: free ? 0.25 + 1.3 * e : 0,
       dig: free ? 0.3 + 0.3 * (1 - e) : 0,
       leaf: free ? 0.15 + 0.4 * (1 - e) : 0,
-      butterfly: free ? 0.3 : 0,
+      butterfly: free && calmSky ? 0.3 : 0,
       inspect: this.restingProp() ? 1.4 : 0,
       writeAlong: writing ? 0.5 + 1.5 * e : 0,
       juggle: free ? 0.08 + 0.5 * e * e : 0,
       pebbleToss: free ? 0.18 : 0,
       sandcastle: free ? 0.18 : 0,
-      bubbles: free ? 0.12 + 0.2 * e : 0,
+      bubbles: free && calmSky ? 0.12 + 0.2 * e : 0,
       hiccups: 0.12,
       flamingo: 0.15,
       peekaboo: 0.12 + 0.2 * e,
       shadowbox: 0.08 + 0.35 * e,
       patrol: 0.2 + 0.3 * e,
+      explore: roomOut ? 0.1 + 0.1 * e : 0,
+      cornerBite: this.cornerOf() && this.zone(0) > 120 && now - this.lastCorner > 40 * MIN ? 0.004 * Math.min(4, (now - this.lastCorner) / (60 * MIN)) : 0, // very rare
       stargaze: late ? 0.8 : 0,
       daydream: (night ? 0.3 : 0.45) + 0.5 * (1 - e),
       // The environment: new things now and then, and what it does with them while they last.
@@ -314,14 +363,15 @@ export class Critter {
       flower: !this.find('flower') && this.envOk('flower') ? 0.13 : 0,
       mushroom: !this.find('mushroom') && this.envOk('mushroom') ? 0.1 : 0,
       snail: this.envOk('snail', 6 * MIN) ? 0.09 : 0,
-      fireflies: night && this.envOk('fireflies') ? 0.35 : 0,
+      fireflies: night && calmSky && this.envOk('fireflies') ? 0.35 : 0,
       puddleJump: this.find('puddle') ? 2 : 0,
+      visitPlant: plant ? (this.gapTo(plant) > 300 ? 1 : 2.6) : 0, // not every plant, and not at once
       // Visitors now and then.
-      balloon: free && this.envOk('balloon', 5 * MIN) ? 0.12 : 0,
-      paperPlane: free && this.envOk('paperPlane', 5 * MIN) ? 0.12 : 0,
+      balloon: free && calmSky && this.envOk('balloon', 5 * MIN) ? 0.12 : 0,
+      paperPlane: free && calmSky && this.envOk('paperPlane', 5 * MIN) ? 0.12 : 0,
       frog: free && this.envOk('frog', 5 * MIN) ? 0.12 : 0,
-      ladybug: free && this.envOk('ladybug', 4 * MIN) ? 0.15 : 0,
-      dandelion: free && !this.find('dandelion') && this.envOk('dandelion', 5 * MIN) ? 0.1 : 0,
+      ladybug: free && calmSky && this.envOk('ladybug', 4 * MIN) ? 0.15 : 0,
+      dandelion: free && calmSky && !this.find('dandelion') && this.envOk('dandelion', 5 * MIN) ? 0.1 : 0,
       worm: free && this.envOk('worm', 5 * MIN) ? 0.12 : 0,
       // Unlocked by the writing streak.
       skateboard: this.unlocked >= 1 && free ? 0.3 : 0,
@@ -332,9 +382,14 @@ export class Critter {
     };
     const m = MOODS[this.mood].act;
     for (const k in m) if (w[k]) w[k] *= m[k];
+    const after = LIVELY.has(this.activity) ? AFTER_LIVELY : RESTFUL.has(this.activity) ? AFTER_REST : null; // what it just did colours what comes next
+    if (after) for (const k in after) if (w[k]) w[k] *= after[k];
+    if (LIVELY.has(this.activity)) for (const k of LIVELY) if (w[k]) w[k] *= 0.6;
+    if (this.away()) for (const k of ['explore', 'patrol', 'cornerBite']) w[k] = 0; // already out on an excursion
     this.recent.forEach((k, i) => { if (w[k]) w[k] *= i === this.recent.length - 1 ? 0.2 : 0.55; }); // variety
     const a = this.pick(w);
     if (a === 'egg' || a === 'ufo') this.lastRare = now;
+    if (a === 'cornerBite') this.lastCorner = now;
     return a;
   }
 
@@ -495,10 +550,10 @@ export class Critter {
       !ABSORBED.has(this.activity) && this.props.length < 6 && !(s && (s.lift || s.flip));
   }
   maybeEvent(now) {
-    if (this.envNext == null) this.envNext = now + this.rnd(1.5, 4) * MIN;
+    if (this.envNext == null) this.envNext = now + this.rnd(2, 5) * MIN;
     if (now < this.envNext) return;
     if (!this.canHost()) { this.envNext = now + 4000; return; }
-    this.envNext = now + this.rnd(2.5, 6.5) * MIN;
+    this.envNext = now + this.rnd(3.5, 8) * MIN; // a few well-spaced events an hour, not a constant bustle
     const w = {};
     for (const [k, E] of Object.entries(EVENTS)) if (now - (this.lastEnv[k] ?? -1e12) > E.cool && E.ok(this)) w[k] = E.w;
     if (Object.keys(w).length) this.startEvent(this.pick(w), now);
@@ -507,28 +562,49 @@ export class Critter {
   startEvent(kind, now = this.now) {
     this.lastEnv[kind] = now;
     this.event = { kind, t0: now };
-    const u = this.u, side = this.center() < this.stripW / 2 ? 1 : -1; // visitors come from the roomier side
-    const edge = (cols, from) => (from < 0 ? -this.margin : this.stripW + this.margin - cols * u);
+    const u = this.u, side = this.center() < this.zone(0.5) + this.dw / 2 ? 1 : -1; // visitors come from the roomier side
     if (kind === 'rain') {
-      const cloud = this.spawn('cloud', { x: edge(18, side), y: this.cloudY(), tx: this.center() - 9 * u, phase: 'enter', alpha: 0, fadeIn: true, life: 60000, ctx: this.context() });
+      const cloud = this.spawn('cloud', this.arrive({ y: this.cloudY(), tx: this.center() - 9 * u, phase: 'enter', alpha: 0, fadeIn: true, life: 60000, ctx: this.context() }, 18, side));
       this.event.cloud = cloud;
     } else if (kind === 'wind') {
+      // A breeze: a few faint gusts and perhaps a leaf, rather than a gale.
       const dir = this.chance(0.5) ? 1 : -1;
-      this.wind = { dir, t0: now, until: now + this.rnd(7000, 10000) };
-      for (let i = 0, n = this.rint(1, 2); i < n && this.props.length < 6; i++) this.spawn('leaf', { x: edge(4, -dir), y: this.rnd(6, 16), vx: dir * this.rnd(45, 65), blown: true, life: 12000 });
+      this.wind = { dir, t0: now, until: now + this.rnd(6000, 9000) };
+      if (this.props.length < 6 && this.chance(0.6)) this.spawn('leaf', this.arrive({ y: this.rnd(6, 16), vx: dir * this.rnd(40, 55), blown: true, life: 14000 }, 4, -dir));
       if (this.hat) this.blowHat(dir);
       this.envDue = { name: this.envReaction('wind'), at: now + 600 };
     } else if (kind === 'bird') {
       const tree = this.grownTree();
-      this.spawn('bird', { x: edge(5, side), y: 26, fly: true, target: tree ? 'tree' : 'head', frame: 1, life: 40000 });
+      this.spawn('bird', this.arrive({ y: 26, fly: true, target: tree ? 'tree' : 'head', frame: 1, life: 40000 }, 5, side));
     } else if (kind === 'tumbleweed') {
-      this.spawn('tumbleweed', { x: edge(7, side), vx: -side * 40, life: 60000 });
+      this.spawn('tumbleweed', this.arrive({ vx: -side * 40, life: 60000 }, 7, side));
     } else if (kind === 'shootingStar') {
       const x = this.rnd(0.1, 0.4) * this.stripW, dir = this.chance(0.5) ? 1 : -1;
       this.sparks.push({ x: dir > 0 ? x : this.stripW - x, y: 31, vx: dir * 170, vy: -9, g: 0, t0: now, life: 1100, trail: true });
       this.envDue = { name: 'wish', at: now + 300 };
-    }
+    } else if (kind === 'sprout') this.sprout(now);
   }
+  /**
+   * A plant comes up on its own, somewhere clear along the ground: usually in
+   * its home stretch, now and then further out. It is noticed in its own time.
+   */
+  sprout(now = this.now) {
+    const kind = this.pick({ grass: 3, cactus: 2, palm: this.find('palm') ? 0 : 0.8 });
+    const cols = PROPS[kind][0][0].length, w = cols * this.u;
+    const lo = this.zone(0), hi = this.zone(1) + this.dw;
+    const clear = (x) => x >= 0 && x + w <= this.stripW && Math.abs(x + w / 2 - this.center()) > this.dw / 2 + w / 2 + 16 &&
+      this.props.every((q) => q.carried || q.y > 0 || x + w + 8 < q.x || x > q.x + this.propW(q) + 8);
+    let x = null;
+    for (let i = 0; i < 10 && x == null; i++) {
+      const c = this.chance(0.15) ? this.rnd(0, this.stripW - w) : this.rnd(lo - 60, hi + 60 - w);
+      if (clear(c)) x = c;
+    }
+    if (x == null) return null;
+    const life = kind === 'grass' ? this.rnd(70000, 120000) : this.rnd(100000, 160000);
+    return this.spawn(kind, { x, grows: true, wild: true, life, noticeAt: now + this.rnd(3000, 30000) });
+  }
+  /** Its distance (px) to a prop. */
+  gapTo(p) { return Math.abs(this.propCenter(p) - this.center()); }
   eventDone(now) {
     const e = this.event;
     switch (e.kind) {
@@ -601,19 +677,26 @@ export class Critter {
   }
 
   /** Steps that walk to x (a number or a function, re-read every step, so moving targets can be chased). */
-  *walkTo(target, speed = 1, { max = 200, pauses = false } = {}) {
+  *walkTo(target, speed = 1, { max = 200, pauses = false, creep = false } = {}) {
     yield* this.getTo('stand');
     let k = 0;
-    const run = speed >= 2.4;
-    for (let i = 0; i < max; i++) {
+    const run = speed >= 2.4 && !creep;
+    // A stride never goes further than its legs reach (2.5 of its pixels walking, 3
+    // running): a faster pace takes more, quicker strides instead. `max` counts
+    // full-pace strides, so it means the same distance at any pace.
+    const legs = (run ? 3 : 2.5) * this.du;
+    for (let i = 0; i < max;) {
       const tx = typeof target === 'function' ? target() : target;
       if (tx == null || Number.isNaN(tx)) return;
       const goal = this.clampX(tx);
       const diff = goal - this.x;
       if (Math.abs(diff) < 1) return;
       const dir = Math.sign(diff);
-      const stride = Math.min((2 + 2 * this.energy) * speed, Math.abs(diff));
-      yield { f: run ? (k++ % 2 ? 'run2' : 'run1') : (k++ % 2 ? 'walk2' : 'walk1'), t: Math.max(110, (240 - 90 * this.energy) / Math.sqrt(speed)), dx: stride * dir, face: dir };
+      const full = (2 + 2 * this.energy) * speed, reach = Math.min(full, legs);
+      const t = Math.max(60, (Math.max(110, (240 - 90 * this.energy) / Math.sqrt(speed)) * reach) / full);
+      i += reach / full;
+      const f = creep ? (k++ % 2 ? 'creep2' : 'creep1') : run ? (k++ % 2 ? 'run2' : 'run1') : (k++ % 2 ? 'walk2' : 'walk1');
+      yield { f, t, dx: Math.min(reach, Math.abs(diff)) * dir, face: dir };
       if (pauses && this.chance(0.05)) { yield { f: 'stand', t: 500 }; yield { f: 'up', t: 400 }; }
     }
   }
@@ -727,9 +810,16 @@ export class Critter {
         continue;
       }
       if (p.wobble) { p.wobble = Math.max(0, p.wobble - dt); p.live = true; }
+      if (p.wild && !p.noticed && now >= p.noticeAt) {
+        // It notices the new plant when it is free to (not asleep, not busy with something else).
+        if (!this.envDue && !this.inReaction && !this.queue.length && !this.held.length && !this.asleep() && !ABSORBED.has(this.activity) && this.onstage()) {
+          p.noticed = now; p.visitAt = now + this.rnd(5000, 60000);
+          this.envDue = { name: 'plantNotice', at: now };
+        } else p.noticeAt = now + this.rnd(2000, 6000);
+      }
       if (GROW[p.kind] && p.grows) {
         const [full, per] = GROW[p.kind], age = now - p.born, left = p.life - age;
-        const f = Math.max(0, Math.min(full, Math.floor(age / per), Math.floor(left / per)));
+        const f = Math.max(0, Math.min(full - (p.cut || 0), Math.floor(age / per), Math.floor(left / per)));
         p.withering = left < per * full;
         if (p.kind === 'palm' && p.withering && !p.shed && this.props.length < 7) { p.shed = true; this.spawn('leaf', { x: p.x + 4 * u, y: 14, fall: true, life: 9000 }); }
         if (f !== p.frame) p.frame = f;
@@ -741,7 +831,7 @@ export class Critter {
           if (p.blown) {
             p.x += p.vx * s; p.y = Math.max(2, p.y + Math.sin((now - p.born) / 250) * 6 * s);
             p.frame = Math.floor((now - p.born) / 200) % 2; p.live = true;
-            if (p.x < -M || p.x > W2 + M - cols * u) { p.x = inView(p, cols); this.fadeOut(p, 400); p.vx = 0; }
+            if (p.x < -M || p.x > W2 + M - cols * u || this.gone(p, Math.sign(p.vx))) { p.x = inView(p, cols); this.fadeOut(p, 600); p.vx = 0; }
             break;
           }
           if (p.y > 0) { p.live = true; p.y = Math.max(0, p.y - 5 * s); p.x = this.clampProp(p.x + Math.sin((now - p.born) / 380) * 9 * s, cols); p.frame = Math.sin((now - p.born) / 380) > 0 ? 0 : 1; }
@@ -853,7 +943,7 @@ export class Critter {
           p.y = Math.abs(Math.sin((now - p.born) / 180)) * 3 + p.bump * 6;
           p.frame = Math.floor((now - p.born) / 120) % 2;
           const out = p.vx > 0 ? p.x > W2 + M - cols * u : p.x < -M;
-          if (out) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, 300); }
+          if (out || (p.told && this.gone(p, Math.sign(p.vx)))) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, out ? 300 : 900); }
           if (!p.told && p.vx && this.onstage() && Math.sign(this.center() - this.propCenter(p)) === Math.sign(p.vx) && this.gap(p) < 70) {
             p.told = true;
             if (!this.envDue && !this.inReaction) this.envDue = { name: this.envReaction('tumbleweed'), at: now };
@@ -895,7 +985,7 @@ export class Critter {
           p.y = Math.max(0, p.y - p.sink * s + Math.sin((now - p.born) / 260) * 2 * s);
           p.frame = 0;
           if (p.y === 0) { p.vx *= Math.exp(-s * 8); if (Math.abs(p.vx) < 3) { p.vx = 0; p.frame = 1; } }
-          if (p.x < -M || p.x > W2 + M - cols * u) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, 400); }
+          if (p.x < -M || p.x > W2 + M - cols * u || (p.vx && this.gone(p, Math.sign(p.vx)))) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, 400); }
           break;
         case 'frog': {
           if (!p.vx && !p.bounce) { p.y = 0; p.frame = 0; break; }
@@ -968,13 +1058,16 @@ export class Critter {
         return false;
       });
     }
-    // Gusts.
+    // Gusts: one or two faint ones at a time, across its home stretch.
     if (this.wind) {
       const wd = this.wind.dir;
-      if (now < this.wind.until && this.rng() < s * 9) this.streaks.push({ x: wd > 0 ? -M : W2 + M - 8, y: this.rnd(2, 30), len: this.rnd(4, 9), vx: wd * this.rnd(140, 190) });
+      if (now < this.wind.until && this.streaks.length < 2 && this.rng() < s * 1.2) {
+        const from = wd > 0 ? Math.max(-M, this.zone(0) - 60) : Math.min(W2 + M - 14, this.zone(1) + this.dw + 60);
+        this.streaks.push({ x: from, y: this.rnd(4, 24), len: this.rnd(8, 14), vx: wd * this.rnd(85, 115), to: from + wd * (this.zone(1) - this.zone(0) + this.dw + 120) });
+      }
       if (now >= this.wind.until && !this.streaks.length) this.wind = null;
     }
-    this.streaks = this.streaks.filter((q) => { q.x += q.vx * s; return q.x > -M && q.x + q.len < W2 + M; });
+    this.streaks = this.streaks.filter((q) => { q.x += q.vx * s; return q.x > -M && q.x + q.len < W2 + M && (q.vx > 0 ? q.x < q.to : q.x > q.to); });
     this.sparks = this.sparks.filter((q) => { q.x += q.vx * s; q.y += q.vy * s; q.vy -= (q.g ?? 30) * s; return now - q.t0 < q.life; });
     this.particles = this.particles.filter((q) => now - q.t0 < 650);
     for (const q of this.particles) { q.x += q.vx * s; q.y = Math.max(0, q.y + q.vy * s); q.vy -= (q.g ?? 90) * s; }
@@ -1006,13 +1099,17 @@ export class Critter {
       if (v.face) this.face = v.face;
       // Steps stay on the strip; off it (after a resize), they may only head back.
       const x1 = Math.max(Math.min(0, this.x), Math.min(Math.max(this.maxX, this.x), this.x + (v.dx || 0)));
-      s = this.step = { ...v, start: now, end: now + v.t, x0: this.x, x1 };
+      // On the ground it moves by stepping: the stride is taken with the frame and held,
+      // never glided through while the legs stay still. Legs that cannot go anywhere stand.
+      const ground = !!v.dx && !v.jump && !v.lift && !v.flip;
+      if (ground && x1 === this.x && STEPPING.test(v.f)) v.f = 'stand';
+      s = this.step = { ...v, start: now, end: now + v.t, x0: this.x, x1, ground };
       this.frame = v.f;
       this.flip = !!v.flip;
       if (v.fx) this.effects.push({ g: v.fx, t0: now, face: this.face });
     }
     const k = Math.min(1, (now - s.start) / (s.end - s.start));
-    this.x = s.x0 + (s.x1 - s.x0) * k;
+    this.x = s.ground ? s.x1 : s.x0 + (s.x1 - s.x0) * k;
     this.y = (s.lift ? s.lift[0] + (s.lift[1] - s.lift[0]) * k : 0) + (s.jump ? s.jump * 4 * k * (1 - k) : 0);
     this.effects = this.effects.filter((e) => now - e.t0 < 1400);
     return s.x1 !== s.x0 || !!s.jump || !!s.lift || this.effects.length > 0 || this.particles.length > 0 || this.acking(now) > 0 ||
@@ -1040,14 +1137,14 @@ export class Critter {
 
 // ---- drawing and wiring ---------------------------------------------------------------------
 
-// The play area: a stretch of the desk just above the status bar, centred on
-// TODAY, up to PLAY_MAX px wide, kept inside the editor area (never over the
-// side panels). MARGIN px beyond each end are drawn too, so props and visitors
-// that roll or fly a little past the ends stay whole. HEADROOM rows above the
-// dinosaur hold jumps, glyphs, clouds and fireworks.
-const PLAY_MAX = 560, MARGIN = 24, HEADROOM = 30;
+// The playground: the whole width of the editor area (never over the side
+// panels or the scrollbar), just above the status bar. Its home stretch is
+// centred on TODAY, up to HOME_MAX px wide. Visitors come from MARGIN px out of
+// sight beyond the ends. HEADROOM rows above the dinosaur hold jumps, glyphs,
+// clouds and fireworks.
+const HOME_MAX = 560, MARGIN = 24, HEADROOM = 30;
 // Drawn behind everything else.
-const BACKDROP = ['sun', 'moon', 'rainbow', 'palm', 'cloud', 'puddle'];
+const BACKDROP = ['sun', 'moon', 'rainbow', 'palm', 'cactus', 'grass', 'cloud', 'puddle'];
 
 export class Dino {
   constructor({ anchor, area, getProgress }) {
@@ -1065,7 +1162,8 @@ export class Dino {
     this.stripW = 300;
     this.stripLeft = null;          // the strip's left edge in the window
     this.off = MARGIN;              // canvas x of the strip's left edge
-    this.c = new Critter({ unit: () => this.pxDev / (window.devicePixelRatio || 1), width: () => this.stripW, margin: () => MARGIN, progress: getProgress });
+    this.home = null;               // the home stretch { lo, hi } in strip px, around TODAY
+    this.c = new Critter({ unit: () => this.pxDev / (window.devicePixelRatio || 1), width: () => this.stripW, margin: () => MARGIN, home: () => this.home, corner: () => this.stripLeft === 0, progress: getProgress });
     this.c.lastWrite = performance.now(); // idle time counts from launch: it starts awake
     this.born = performance.now();
     this.timer = 0;
@@ -1127,24 +1225,29 @@ export class Dino {
   get pxDev() { return Math.max(1, Math.round(1.25 * (window.devicePixelRatio || 1))); }
 
   /**
-   * Fit the play area to the window. The dinosaur and its props keep their
+   * Fit the playground to the window. The dinosaur and its props keep their
    * place on screen when the area moves or changes size; if the area shrinks
    * out from under it, it walks back in (Critter.nextStep) rather than jumping,
-   * and the canvas stretches to keep it whole meanwhile.
+   * and the canvas stretches to keep it whole meanwhile. The canvas's bottom
+   * edge is the top of the status bar's border, on a whole device pixel, so
+   * the feet stand on the line and never cover it.
    */
   place() {
-    const r = this.anchor.getBoundingClientRect();
+    const r = this.anchor.getBoundingClientRect(), bar = this.anchor.parentElement.getBoundingClientRect();
     const a = this.area ? this.area.getBoundingClientRect() : { left: 0, right: window.innerWidth };
-    const lo = Math.max(a.left, 0) + MARGIN, hi = Math.min(a.right - 10, window.innerWidth) - MARGIN; // 10: the editor's scrollbar
+    const lo = Math.max(a.left, 0), hi = Math.min(a.right - 10, window.innerWidth); // 10: the editor's scrollbar
     const visible = this.enabled && r.width > 0 && getComputedStyle(this.anchor).display !== 'none' && hi - lo >= 140;
     this.root.hidden = !visible;
     if (!visible) return;
     const c = this.c, dpr = window.devicePixelRatio || 1, p = this.pxDev;
-    const width = Math.round(Math.min(PLAY_MAX, hi - lo));
-    const left = Math.round(Math.max(lo, Math.min(hi - width, r.left + r.width / 2 - width / 2)));
-    // While the window is still laying itself out it simply starts in the middle; after that it
-    // keeps its place on screen.
-    if (performance.now() - this.born < 1500 && !c.step?.dx) c.x = (width - c.dw) / 2;
+    const left = Math.round(lo), width = Math.round(hi) - left;
+    const span = Math.min(HOME_MAX, width), mid = r.left + r.width / 2 - left;
+    const homeLo = Math.max(0, Math.min(width - span, mid - span / 2));
+    this.home = { lo: homeLo, hi: homeLo + span };
+    this.stripW = width;
+    // While the window is still laying itself out it simply starts in the middle of home; after
+    // that it keeps its place on screen.
+    if (performance.now() - this.born < 1500 && !c.step?.dx) c.x = c.zone(0.5);
     else if (this.stripLeft != null && left !== this.stripLeft) {
       const d = this.stripLeft - left;
       c.x += d;
@@ -1154,15 +1257,14 @@ export class Dino {
       if (c.cursor) c.cursor.x += d;
     }
     this.stripLeft = left;
-    this.stripW = width;
     // Never further out than the window allows.
     const dw = c.dw;
     c.x = Math.max(-left + 2, Math.min(window.innerWidth - left - dw - 2, c.x));
-    // The canvas: the strip, its margins, and wherever the dinosaur is right now.
-    const from = Math.max(-left, Math.min(-MARGIN, Math.floor(c.x) - 4));
-    const to = Math.min(window.innerWidth - left, Math.max(width + MARGIN, Math.ceil(c.x + dw) + 4));
+    // The canvas: the strip, and wherever the dinosaur is right now.
+    const from = Math.max(-left, Math.min(0, Math.floor(c.x) - 4));
+    const to = Math.min(window.innerWidth - left, Math.max(width, Math.ceil(c.x + dw) + 4));
     this.off = -from;
-    this.wide = from < -MARGIN || to > width + MARGIN;
+    this.wide = !c.onstage(); // stretched to keep it whole while it walks back in
     const wDev = Math.round((to - from) * dpr), hDev = (H + HEADROOM) * p;
     if (this.canvas.width !== wDev || this.canvas.height !== hDev) {
       this.canvas.width = wDev;
@@ -1170,8 +1272,9 @@ export class Dino {
       this.canvas.style.width = wDev / dpr + 'px';
       this.canvas.style.height = hDev / dpr + 'px';
     }
-    this.bottom = Math.round(r.top);
-    Object.assign(this.root.style, { left: left + from + 'px', top: Math.round(r.top - hDev / dpr) + 'px' });
+    const ground = Math.floor(bar.top * dpr + 0.01); // device row of the border's top edge
+    this.bottom = ground / dpr;
+    Object.assign(this.root.style, { left: left + from + 'px', top: (ground - hDev) / dpr + 'px' });
     this.lastSig = '';
     this.draw();
   }
@@ -1187,7 +1290,8 @@ export class Dino {
     const moving = this.c.advance(now);
     if (this.wide && this.c.onstage()) this.place(); // back inside: the canvas can shrink again
     this.draw(now);
-    this.schedule(moving ? 90 : Math.max(16, Math.min(250, this.c.nextEvent() - now)));
+    // While anything moves, ~11 frames a second, and always on time for the next step, so every stride is shown.
+    this.schedule(Math.max(16, Math.min(moving ? 90 : 250, this.c.nextEvent() - now)));
   }
 
   draw(now = performance.now()) {
@@ -1268,7 +1372,7 @@ export class Dino {
       g.globalAlpha = 0.6;
       for (const q of c.drops) g.fillRect(snap(q.x), ground - (Math.round(q.y) + 2) * p, p, 2 * p);
     }
-    g.globalAlpha = 0.4;
+    g.globalAlpha = 0.25;
     for (const q of c.streaks) g.fillRect(snap(q.x), ground - Math.round(q.y) * p, Math.max(p, Math.round((q.len * dpr) / p) * p), p);
     for (const q of c.sparks) {
       g.globalAlpha = Math.max(0, 1 - (now - q.t0) / q.life);

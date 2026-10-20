@@ -178,6 +178,12 @@ export const FRAMES = {
   oneLeg: compose('open', BODY_ARMS_UP, LEGS.oneLeg),
   sniff: headOver(STAND_BASE, 'open', 4),
   sniffBlink: headOver(STAND_BASE, 'blink', 4),
+  // Creeping along with its nose to the ground: the sniffing head on walking legs.
+  creep1: headOver([BLANK, BLANK, BLANK, BLANK, BLANK, ...BODY, ...LEGS.walk1], 'open', 4),
+  creep2: headOver([BLANK, BLANK, BLANK, BLANK, BLANK, ...BODY, ...LEGS.walk2], 'open', 4),
+  // Crouched right down, jaws at the ground: biting at the very edge of things.
+  gnaw: headOver(CROUCH_BASE, 'roar', 7),
+  gnawShut: headOver(CROUCH_BASE, 'blink', 7),
   chomp: headOver(STAND_BASE, 'roar', 4),
   hunch: headOver(STAND_BASE, 'blink', 2),
   stretch: STRETCH,
@@ -210,13 +216,13 @@ export const GET_UP = new Set(['crouch', 'cower', 'sniff', 'sniffBlink']);
 const at = (pairs) => Object.fromEntries(pairs.flatMap(([names, v]) => names.split(' ').map((n) => [n, v])));
 export const MOUTH = at([
   ['stand blink walk1 walk2 run1 run2 roar yawn jump wag kick armsUp oneLeg', [16, 3]],
-  ['up howl', [16, 2]], ['sniff sniffBlink chomp', [16, 7]], ['cower', [16, 7]], ['hunch', [16, 5]], ['crouch', [16, 4]],
+  ['up howl', [16, 2]], ['sniff sniffBlink chomp creep1 creep2', [16, 7]], ['gnaw gnawShut', [16, 10]], ['cower', [16, 7]], ['hunch', [16, 5]], ['crouch', [16, 4]],
   ['sit sitChew sitBlink sitBreath sitTap1 sitTap2 sitScratch1 sitScratch2', [16, 5]], ['sitUp sitHowl', [16, 4]],
   ['stretch', [17, 3]], ['lie lieBreath', [17, 8]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [16, 6]],
 ]);
 export const HEAD_TOP = at([
   ['stand blink walk1 walk2 run1 run2 roar yawn armsUp kick oneLeg jump wag', [14, 0]], ['up howl stretch', [15, 0]],
-  ['crouch', [14, 1]], ['sniff sniffBlink chomp cower', [14, 4]], ['hunch', [14, 2]],
+  ['crouch', [14, 1]], ['sniff sniffBlink chomp cower creep1 creep2', [14, 4]], ['gnaw gnawShut', [14, 7]], ['hunch', [14, 2]],
   ['sit sitBlink sitBreath sitChew sitTap1 sitTap2 sitScratch1 sitScratch2', [14, 2]], ['sitUp sitHowl', [15, 2]],
   ['lie lieBreath', [14, 6]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [15, 4]],
 ]);
@@ -304,6 +310,17 @@ export const PROPS = {
     ['..#..', '.##..', '..#..', '..#..'],
     ['#.#.#', '.###.', '#.#.#', '..#..', '.##..', '..#..', '..#..'],
     ['.....', '..#..', '.....', '..#..', '.##..', '..#..', '..#..'],
+  ],
+  // Plants that come up on their own along the ground, and wither away in their time.
+  cactus: [
+    ['...#...', '...#...'],
+    ['...#...', '..###..', '..###.#', '..#####', '..###..', '..###..'],
+    ['...#...', '..###..', '..###.#', '#.###.#', '#.#####', '#.###..', '#####..', '..###..', '..###..', '..###..'],
+  ],
+  grass: [
+    ['.#..#..', '.##.#..'],
+    ['#..#...', '.#.#.#.', '.##.##.'],
+    ['...#...', '#..#..#', '.#.#.#.', '.##.##.'],
   ],
   worm: [['.....', '.....', '#####'], ['..#..', '..#..', '#####'], ['.##..', '..#..', '#####']],
 };

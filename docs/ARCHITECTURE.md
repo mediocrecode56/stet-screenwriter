@@ -197,7 +197,7 @@ off.
 ## Writing companion
 
 The pixel art (`dino-art.js`: frames, props, glyphs as character grids) and
-the repertoire (`dino-acts.js`: 71 activities and 100 reactions, generator
+the repertoire (`dino-acts.js`: 74 activities and 101 reactions, generator
 functions yielding short steps of ≤ 1.5 s) are data for the engine in
 `dino.js`. `Critter` is the behaviour engine, pure and simulated in tests for
 hours at a time: props with a little physics, a drifting mood and a memory of
@@ -210,10 +210,15 @@ reactions only exist where they fit. At most two queue, they run at the next
 step boundary, and the interrupted activity then resumes. The pointer is not
 tracked at all: only a click tells it where you are.
 
-**The environment.** Timed events (rain, wind, a bird, a tumbleweed, a
-shooting star) start only when it can take part (`canHost()`: on stage, not
+**The environment.** Timed events (rain, a breeze, a bird, a tumbleweed, a
+shooting star, a plant sprouting) start only when it can take part (`canHost()`: on stage, not
 reacting, nothing queued, not in the middle of something absorbing), one at a
 time (`event`), a few minutes apart and each kind on its own cooldown.
+A sprouted plant (`wild`: cactus, grass or palm, one at a time) is noticed
+when the dinosaur is free (`plantNotice`, a few to thirty seconds after it
+comes up) and may be visited later (`visitPlant`) while it has time left.
+Things floating about (`floating()`) are kept to a few: floating visitors and
+events wait while two are already up, and a breeze is one or two faint gusts.
 Things that grow (palm, flower, mushroom, dandelion) and visitors (a balloon,
 a paper plane, a frog, a ladybird, a worm) are activities it starts itself,
 each on its own cooldown. When AUTO turns the theme, `app.js` tells the
@@ -241,13 +246,23 @@ Responsiveness is separate from pacing: a click is acknowledged in the same
 moment (`ack`: a blink and a one-pixel start drawn over the current frame),
 and a step that merely holds a pose (`isHold`) may end early so a due
 reaction starts at once. Moves, jumps and lifts always run their
-full length. Destinations are centre-weighted (`spot()`); nothing walks off
-the strip.
+full length. Destinations are centre-weighted within the home stretch
+(`zone()`, `spot()`); `explore` and the very rare `cornerBite` (only where
+the strip's left end is the window's corner) go beyond it, and what it just
+did tilts what comes next. Nothing walks off the strip. Moving along the
+ground is always stepping: `walkTo()` never strides further than the legs
+reach (2.5 dinosaur pixels walking, 3 running; a faster pace means quicker
+strides), the engine takes each ground stride with its frame rather than
+gliding through it, and legs that cannot move stand. The canvas ticks on time
+for each step, so every stride is shown.
 
-`Dino` draws it on one canvas laid over the bottom of the editor area: a strip
-up to 560 px wide centred on TODAY and kept inside `#scroller` (never over a
-side panel), plus a 24 px margin each side and 30 rows of headroom where props,
-clouds, fireworks and visitors stay whole.
+`Dino` draws it on one canvas laid over the bottom of the editor area: the
+whole width of `#scroller` (never over a side panel or the scrollbar), with
+its home stretch up to 560 px wide centred on TODAY, and 30 rows of headroom
+where props, clouds, fireworks and visitors stay whole. Visitors come in from
+24 px out of sight (or fade in, when that end is far off). The canvas's bottom
+edge is the status bar's top edge, on a whole device pixel, so the feet stand
+on the border without covering it.
 When the strip moves, the dinosaur keeps its place on screen; if the strip
 shrank out from under it, the critter walks back in (`comeBack`) and the
 canvas stretches to keep it whole meanwhile. Only the dinosaur's own hit box

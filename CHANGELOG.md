@@ -4,6 +4,36 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.13.0 — 20 October 2026
+
+The dinosaur has the whole width of the window to play in, walks properly wherever it goes, stands on the line instead of on top of it, and its little world is calmer, with plants that come and go.
+
+### New
+
+- **The whole width is its playground.** The stretch above TODAY is still home, and that's where it spends nearly all its time. But now and then curiosity takes it out towards the ends of the window for a look around before it strolls back.
+- **A very rare trip to the corner.** Every so often (expect it once in a few hours at most) it walks all the way to the bottom-left corner of the window and has a good bite at the border. Then it walks home again, proud, puzzled or a little sore.
+- **Plants come and go.** A cactus, a tuft of grass or a palm sometimes comes up out of the ground, growing stage by stage. The dinosaur notices it in its own good time, and sometimes goes over to see. It sniffs the cactus (and learns why you shouldn't), takes a bite of the grass, lies down beside it, or sits in the palm's shade. After a while the plant withers away again. Only one comes up at a time.
+
+### Improved
+
+- **Its feet stand on the line.** The dinosaur used to stand a pixel too low, its feet covering the status bar's top border. Now it stands on top of the border, at any window size and display scale, in every pose.
+- **No more sliding.** It sometimes glided along the ground without moving its legs. Now it only moves when it takes a step, one stride per step and never further than its legs reach. That goes for creeping up on something too. Little hops and shuffles are real hops, and if it can't go any further it stands still instead of walking on the spot.
+- **A calmer scene.** The wind used to send a stream of streaks across the screen. Now it's a gentle breeze: a faint gust or two and perhaps a single leaf. Fewer things float about at once (balloons, butterflies, bubbles, seeds, fireflies), and the weather and other surprises come along a little less often.
+- **Less predictable.** What it just did now colours what it does next: after a romp it is more likely to sit down for a while, after a long rest to stretch and go for a stroll.
+
+### For the technically curious
+
+- The strip is now the whole width of `#scroller` (minus the scrollbar). The home stretch around TODAY is `Dino.home`, and `Critter.zone(f)` replaces fractions of `maxX` in the repertoire. The ground is the status bar's top edge (`Math.floor(bar.top × dpr)`), not TODAY's top.
+- Ground steps (`dx` without `jump`, `lift` or `flip`) set `x` to `x1` for the whole step, and `walkTo()` caps strides at 2.5 or 3 `du`. Ticks are scheduled to land on step ends.
+- New: the `sprout` event, the `wild` plants `cactus` and `grass`, the `creep`/`gnaw` frames, the `explore`, `cornerBite` and `visitPlant` activities, and the `plantNotice` reaction. Wind streaks are capped at 2.
+- Five new tests:
+  - no ground move without stepping, and every stride held, over hours of use;
+  - the home preference and excursions;
+  - the corner bite: rare, walked the whole way, biting at x = 0 facing the corner;
+  - the breeze and the floating cap;
+  - the plants' life cycle.
+- The layout test now checks that the canvas's bottom edge sits on the border's top edge, both at full width and with a side panel open.
+
 ## 0.12.0 — 20 October 2026
 
 The dinosaur stays itself when it sits or lies down, it is now STET's icon, its rarest surprises always come round again, and the status bar is tidier.

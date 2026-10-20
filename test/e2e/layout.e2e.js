@@ -83,6 +83,14 @@ test('header: File/Edit/Element at the left edge, only the title, centred on the
 test('the dinosaur: wide play area, ignores the pointer passing over it, acknowledges clicks at once, never gets in the way of a drag', async () => {
   const d = await app.eval(`(() => { const d = __stet.dino, c = d.c; return { strip: d.stripW, left: d.stripLeft, bottom: d.bottom, maxX: c.maxX }; })()`);
   assert.ok(d.strip >= 400, `strip ${d.strip}`);
+  // Its feet stand on the status bar's top border, never over it, and the playground spans the editor's whole width.
+  const feet = `(() => { const d = document.getElementById('dino').getBoundingClientRect(), s = document.getElementById('status').getBoundingClientRect(), a = document.getElementById('scroller').getBoundingClientRect();
+    return { bottom: d.bottom, line: s.top, px: 1 / devicePixelRatio, width: __stet.dino.stripW, area: a.width, home: __stet.dino.home }; })()`;
+  const onLine = (g, when) => assert.ok(g.bottom <= g.line + 1e-6 && g.bottom > g.line - g.px - 1e-6, `${when}: feet at ${g.bottom}, border at ${g.line}`);
+  let g = await app.eval(feet);
+  onLine(g, 'full width');
+  assert.ok(g.width >= g.area - 12, `the whole editor width (${g.width} of ${g.area})`);
+  assert.ok(g.home.hi - g.home.lo <= 560 && g.home.hi - g.home.lo < g.width, 'with a home stretch around TODAY');
   // Put it in a resting pose, then sweep the pointer over it, around it, in and out.
   await app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.props = []; c.inReaction = null; c.paused = null; c.held = []; c.envNext = Infinity; c.pending = 'rest'; c.gen = null; c.cursor = null; c.rng = () => 0.5; })()`);
   await sleep(900);
@@ -125,6 +133,7 @@ test('the dinosaur: wide play area, ignores the pointer passing over it, acknowl
   let inside = false;
   for (let i = 0; i < 60 && !inside; i++) { await sleep(250); inside = await app.eval(`(() => { const r = document.getElementById('dino').getBoundingClientRect(), s = document.getElementById('scroller').getBoundingClientRect(); return __stet.dino.c.onstage() && r.right <= s.right + 0.5; })()`); }
   assert.ok(inside, 'back inside the narrower area, never over the panel');
+  onLine(await app.eval(feet), 'with a side panel open');
   await app.eval(`__stet.cmd.run('panel-notes')`);
   await sleep(300);
 });

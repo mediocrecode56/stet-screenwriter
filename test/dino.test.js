@@ -1,7 +1,8 @@
 // The dinosaur's pixel art and behaviour engine, simulated headlessly: every
 // activity and reaction, hours of use with writing bursts, idle spells and
 // clicks, reactions that follow what it was doing, the environment (rain,
-// wind, a bird, a tumbleweed, a shooting star, a palm tree…), growing with the
+// wind, a bird, a tumbleweed, a shooting star, plants coming up…), the whole-width
+// playground with its home around TODAY, walking (never sliding), growing with the
 // writing streak, and the rules that keep it seamless (reactions only between
 // steps, no impossible jumps between postures, bounded queue and props,
 // everything in view).
@@ -9,7 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Critter, _test } from '../src/renderer/dino.js';
 
-const { FRAMES, PROPS, GLYPHS, W, H, ACTIVITIES, REACTIONS, SPECIALS, GET_UP, BASELINE_0_8, postureOf } = _test;
+const { FRAMES, PROPS, GLYPHS, W, H, ACTIVITIES, REACTIONS, SPECIALS, GET_UP, BASELINE_0_8, EVENTS, postureOf } = _test;
+const GROW_FULL = { cactus: 2, grass: 2, palm: 3 };
 const HEADROOM = 30;
 
 function seeded(seed) { // mulberry32
@@ -466,7 +468,7 @@ test('a palm tree grows from the ground, it goes over and settles in, and the tr
 
 test('every environmental event runs its course from many situations, one at a time, never stuck', () => {
   const night = Date.parse('2026-10-21T23:30:00');
-  const kinds = ['rain', 'wind', 'bird', 'tumbleweed', 'shootingStar'];
+  const kinds = ['rain', 'wind', 'bird', 'tumbleweed', 'shootingStar', 'sprout'];
   const reacted = new Set();
   for (const kind of kinds) {
     for (const [activity, setup] of [['rest'], ['look'], ['walk'], ['sleep'], ['look', (c) => c.spawn('palm', { x: c.clampProp(c.center() - 70, 11), frame: 3, life: 1e9 })], ['look', (c) => c.wear('party', 60000)]]) for (let seed = 0; seed < 3; seed++) {
@@ -692,5 +694,157 @@ test('rare surprises (an egg, a UFO) stay rare, but never go missing for long', 
       },
     });
     assert.ok(rare >= 1 && rare <= 12, `seed ${seed}: ${rare} rare surprises in 4 hours`);
+  }
+});
+
+// ---- 0.13: the whole width, walking not sliding, restrained weather, plants that come and go ----
+
+/** The app's playground at 1280 px: the editor's whole width, its home stretch around TODAY, the window's corner at its left end. */
+function world(seed, opts = {}) { return make(seed, { width: () => 1270, margin: () => 24, home: () => ({ lo: 450, hi: 1010 }), corner: () => true, ...opts }); }
+const STEPPING = /^(walk|run|creep)/;
+/** Every move along the ground is a step of the legs, taken with the frame and held (never glided), no longer than they reach. */
+function walksNotSlides(c) {
+  const s = c.step;
+  if (!s || !s.ground) return;
+  const wiggle = Math.abs(s.dx) <= 1 && (s.f === 'crouch' || s.f === 'cower'); // a wiggle on the spot before a pounce, a shiver
+  const roll = s.f === 'fallen' || s.f === 'lie';                               // rolling over and over
+  assert.ok(STEPPING.test(s.f) || wiggle || roll, `${s.f} moves ${s.dx.toFixed(1)} px on the ground without stepping [${c.activity}/${c.inReaction}]`);
+  assert.equal(c.x, s.x1, `the stride is taken with the frame, not glided through [${s.f} in ${c.activity}]`);
+  if (STEPPING.test(s.f)) assert.ok(Math.abs(s.x1 - s.x0) <= 3 * c.du + 1e-9, `a stride its legs can reach: ${(s.x1 - s.x0).toFixed(2)} px [${c.activity}]`);
+}
+
+test('it walks whenever it moves: every move along the ground is a stride of its legs, never a slide', () => {
+  for (const seed of [31, 32]) {
+    const c = world(seed);
+    const rng = seeded(seed);
+    let walked = 0;
+    run(c, 2 * 3600 * 1000, { dt: 40, each: (now) => {
+      if (rng() < 0.004) c.wrote(4, now);
+      if (rng() < 0.0002) c.poke(now);
+      if (c.step) { walksNotSlides(c); if (c.step.ground && STEPPING.test(c.step.f)) walked++; }
+    } });
+    assert.ok(walked > 1000, `it did walk (${walked} frames)`);
+  }
+  // Legs that can't go anywhere (at the very end of the strip) stand still instead of walking on the spot.
+  const c = world(5);
+  c.envNext = Infinity; c.x = 0; c.activity = 'test';
+  c.gen = (function* () { for (let i = 0; i < 40; i++) yield { f: i % 2 ? 'walk2' : 'walk1', t: 200, dx: -3 }; })();
+  run(c, 400, { dt: 20 });
+  assert.equal(c.step.f, 'stand');
+});
+
+test('home is around TODAY: nearly all its time is spent there, with curious excursions now and then', () => {
+  let away = 0, n = 0, explored = 0;
+  for (const seed of [41, 42, 43]) {
+    const c = world(seed);
+    const rng = seeded(seed);
+    let last = '';
+    run(c, 4 * 3600 * 1000, { dt: 150, each: (now) => {
+      if (rng() < 0.003) c.wrote(4, now);
+      n++; if (c.away()) away++;
+      if (c.activity !== last) { last = c.activity; if (last === 'explore') explored++; }
+      inView(c);
+      assert.ok(c.onstage(), 'always on the playground');
+    } });
+  }
+  assert.ok(away / n < 0.12, `mostly at home (${(100 * away / n).toFixed(1)} % away)`);
+  assert.ok(away > 0 && explored >= 3, `but it does go exploring (${explored} excursions, ${(100 * away / n).toFixed(1)} % away)`);
+});
+
+test('very rarely it walks all the way to the bottom-left corner and has a bite at the border', () => {
+  // On its own: rare (never twice within 40 minutes), but it does happen.
+  let bites = 0, hours = 0;
+  for (const seed of [51, 52, 53, 54]) {
+    const c = world(seed);
+    const times = [];
+    let last = '';
+    run(c, 6 * 3600 * 1000, { dt: 200, each: () => { if (c.activity !== last) { last = c.activity; if (last === 'cornerBite') times.push(c.now); } } });
+    for (let i = 1; i < times.length; i++) assert.ok(times[i] - times[i - 1] > 40 * 60000, 'never twice in 40 minutes');
+    bites += times.length; hours += 6;
+  }
+  assert.ok(bites >= 1 && bites / hours <= 0.5, `${bites} corner bites in ${hours} hours`);
+  // The excursion itself: it walks the whole way (no jumps, no teleport), bites facing the corner, and comes home.
+  const c = world(7);
+  c.envNext = Infinity;
+  c.x = c.zone(0.5);
+  c.pending = 'cornerBite';
+  let prev = c.x, maxMove = 0, bitAt = null, minX = Infinity, done = false;
+  run(c, 4 * 60000, { dt: 40, each: () => {
+    if (done) return;
+    walksNotSlides(c);
+    maxMove = Math.max(maxMove, Math.abs(c.x - prev)); prev = c.x;
+    minX = Math.min(minX, c.x);
+    if (c.frame === 'gnaw' && bitAt == null) bitAt = { x: c.x, face: c.face };
+    if (bitAt && c.activity !== 'cornerBite') done = true;
+  } });
+  assert.ok(done, 'the excursion ends');
+  assert.ok(maxMove <= 3 * c.du + 1e-9, `walked all the way (largest move ${maxMove.toFixed(2)} px)`);
+  assert.deepEqual(bitAt, { x: 0, face: -1 }, 'bites at the very corner, facing it');
+  assert.equal(minX, 0);
+  assert.ok(c.x > c.zone(0) - 1, 'and walked home again');
+  // Never where the strip's left end is not the window's corner (a side panel open there).
+  const p = world(8, { corner: () => false });
+  p.now = 3 * 3600e3;
+  for (let i = 0; i < 4000; i++) assert.notEqual(p.pickActivity(3 * 3600e3), 'cornerBite');
+});
+
+test('a gentle breeze: a gust or two at a time, not a gale; and only a few things float about at once', () => {
+  const c = doing('look', 61);
+  c.startEvent('wind', c.now);
+  let most = 0, leaves = 0;
+  until(c, () => !c.event && !c.envDue && !c.inReaction, 30000, 'the breeze passes', () => { most = Math.max(most, c.streaks.length); leaves = Math.max(leaves, c.props.filter((p) => p.kind === 'leaf').length); });
+  assert.ok(most >= 1 && most <= 2, `${most} gusts at most`);
+  assert.ok(leaves <= 1, 'one leaf at most');
+  for (const seed of [62, 63]) {
+    const w = world(seed, { clock: () => Date.parse('2026-10-21T22:30:00') });
+    const rng = seeded(seed);
+    let peak = 0;
+    run(w, 3 * 3600 * 1000, { dt: 150, each: (now) => { if (rng() < 0.004) w.wrote(4, now); peak = Math.max(peak, w.floating()); assert.ok(w.streaks.length <= 2, 'never more than two gusts'); } });
+    assert.ok(peak <= 4, `at most ${peak} things floating at once`);
+  }
+});
+
+test('plants come up on their own: one at a time, it notices in its own time, sometimes goes to see, and they wither away', () => {
+  const kinds = new Set();
+  let visits = 0, plants = 0;
+  for (let seed = 0; seed < 16; seed++) {
+    const c = doing('look', 70 + seed, (d) => { d.widthOf = () => 1270; d.homeOf = () => ({ lo: 450, hi: 1010 }); d.x = 700; });
+    c.startEvent('sprout', c.now);
+    const p = c.props.find((q) => q.wild);
+    if (!p) continue;
+    plants++; kinds.add(p.kind);
+    assert.equal(p.frame, 0, 'starts as a sprout');
+    assert.ok(p.x >= 0 && p.x + c.propW(p) <= c.stripW, 'on the playground');
+    assert.ok(Math.abs(c.propCenter(p) - c.center()) > c.dw / 2, 'not under its feet');
+    assert.equal(EVENTS.sprout.ok(c), false, 'no second plant while this one is up');
+    const born = c.now;
+    let noticedAt = null, visitedAt = null, closest = Infinity, maxFrame = 0;
+    until(c, () => !c.has(p), p.life + 10000, 'the plant withers away', () => {
+      if (c.inReaction === 'plantNotice' && noticedAt == null) noticedAt = c.now;
+      if (c.activity === 'visitPlant' && visitedAt == null) visitedAt = c.now;
+      if (c.has(p)) { maxFrame = Math.max(maxFrame, p.frame); if (c.activity === 'visitPlant') closest = Math.min(closest, c.gap(p)); }
+      walksNotSlides(c);
+      inView(c);
+    });
+    assert.equal(maxFrame, GROW_FULL[p.kind], `${p.kind} grew to full size`);
+    assert.ok(noticedAt != null && noticedAt - born >= 3000, `noticed, but not at once (${noticedAt && noticedAt - born} ms)`);
+    if (visitedAt != null) { visits++; assert.ok(visitedAt > noticedAt, 'visited after noticing'); assert.ok(closest < 8, `went right up to it (${closest.toFixed(1)} px)`); }
+  }
+  assert.ok(plants >= 12, `${plants} plants came up`);
+  assert.deepEqual([...kinds].sort(), ['cactus', 'grass', 'palm'], 'cacti, grass and palms');
+  assert.ok(visits >= 3 && visits < plants, `it went to see ${visits} of ${plants} — some, not all`);
+  // What it does there depends on the plant.
+  for (const [kind, frames] of [['cactus', ['cower', 'sitUp', 'hunch']], ['grass', ['chomp', 'lieUp', 'wag']]]) {
+    const seen = new Set();
+    for (let seed = 0; seed < 12; seed++) {
+      const c = doing('look', 90 + seed);
+      const p = c.spawn(kind, { x: c.clampProp(c.center() + 60, 7), grows: true, wild: true, life: 120000, noticed: c.now, visitAt: c.now, noticeAt: c.now });
+      c.pending = 'visitPlant'; c.gen = null;
+      let chomped = false;
+      until(c, () => c.recent.includes('visitPlant') && c.activity !== 'visitPlant', 60000, `${kind} visit`, () => { if (c.activity === 'visitPlant') { seen.add(c.frame); if (c.frame === 'chomp') chomped = true; } walksNotSlides(c); });
+      assert.equal(p.visited, true);
+      if (chomped) assert.equal(p.cut, 1, 'a bite out of the grass');
+    }
+    assert.ok(frames.filter((f) => seen.has(f)).length >= 2, `${kind}: different visits (${frames.filter((f) => seen.has(f))})`);
   }
 });
