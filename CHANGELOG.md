@@ -4,6 +4,25 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.11.0 — 20 October 2026
+
+The dinosaur watches the sky, sees the sun set and rise with your theme, varies its everyday routines, and gets more visitors.
+
+### New
+
+- **Chin up, looking at the sky.** A new pose: lying on its front with its head raised. It daydreams like this (a butterfly may drift over), stargazes like this, sometimes ends a rest stretched out like this, lies like this in the palm's shade, and looks up at the sky before getting up from a nap.
+- **Sunset and sunrise.** When AUTO switches the theme on its schedule, the dinosaur stops to watch. Going dark, the sun sinks, it waves goodbye and yawns, the moon rises, and it lies chin up as stars come out (with a little song for the moon). Going light, the moon fades, the sun comes up — waking it if it was asleep — and it stretches, roars good morning and hops for joy. Switching the theme by hand doesn't trigger it, and a dinosaur asleep at nightfall sleeps on while the moon comes up.
+- **Visitors now and then:** a balloon on the breeze (it catches it and is lifted a little, misses, or pops it), a paper plane (it reads the note or sends it flying again), a frog (they take turns hopping), a ladybird (it climbs onto the dinosaur's head), a dandelion (a deep breath or a sneeze, and the seeds float away) and a worm that pops up here and there, always a moment too quick.
+- **A few more answers to a click:** a smile, a peek, a sneeze, and lifting its chin to look at you when it is lying down.
+
+### Improved
+
+- **Less repetition.** The things it does most often now come out a little different each time. A rest has its own habit (a tail tap, a gaze about, a scratch). A walk has its own pace, sometimes a sniff halfway and a different arrival. Looking about can be at the ground, the sky or into the distance. Naps can include turning over, a spell on its back with its feet in the air, a dream or a yawn first. Hops sometimes end with a big one, a dance has a favourite move of the day, and a stretch may be a long one on the ground or end in a wobbly balance.
+
+### For the technically curious
+
+- New frames `lieUp`, `lieUpBlink`, `lieUpHowl` and `lieUpTail` (posture `lie`), and new props: sun, moon, balloon, plane, frog, ladybird, seed, dandelion and worm. `Dino.themeChanged()` is called from `refreshTheme()` only while the schedule is on. `Critter.themeShift()` queues `nightfall` or `daybreak`, and `sky()` reuses a sun or moon that is already up. There are now 71 activities and 100 reactions. New tests cover the chin-up pose, sunset and sunrise (also flipped at random over two simulated hours), variety in the everyday activities and every visitor coming and going; a new real-app test checks that AUTO, and not a manual switch, triggers the scene.
+
 ## 0.10.0 — 20 October 2026
 
 Bold, italic, underline and strikethrough, one keystroke away.

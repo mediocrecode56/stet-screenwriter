@@ -32,7 +32,9 @@
 // The environment has a life of its own: now and then a rain cloud drifts
 // over, the wind gets up, a bird drops by, a tumbleweed rolls through, a star
 // falls at night — and the dinosaur may grow a palm tree, find a flower, a
-// mushroom or a snail. Each has a beginning, its part for the dinosaur, and a
+// mushroom or a snail, or meet a balloon, a paper plane, a frog, a ladybird,
+// a dandelion or a worm. When the theme turns dark or light on its schedule,
+// it sees the sun go down or come up. Each has a beginning, its part for the dinosaur, and a
 // natural end; only one event runs at a time, and one starts only when the
 // dinosaur can take part.
 //
@@ -47,13 +49,13 @@ import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECI
 
 const MIN = 60000;
 // Poses that are merely held: one of these can be cut short (never a move, a jump or a lift).
-const HOLD = new Set(['stand', 'blink', 'up', 'sit', 'sitBlink', 'sitBreath', 'sitUp', 'armsUp', 'yawn', 'oneLeg', 'wag', 'hunch', 'lie', 'lieBreath']);
+const HOLD = new Set(['stand', 'blink', 'up', 'sit', 'sitBlink', 'sitBreath', 'sitUp', 'armsUp', 'yawn', 'oneLeg', 'wag', 'hunch', 'lie', 'lieBreath', 'lieUp', 'lieUpBlink']);
 const isHold = (s) => HOLD.has(s.f) && !s.dx && !s.jump && !s.lift && !s.flip;
 const WALKING = new Set(['walk', 'patrol', 'zoomies', 'ponder']);
 const DANCING = new Set(['dance', 'sing', 'celebrate', 'rainDance', 'boogie']);
-const CALM = new Set(['rest', 'look', 'sleep', 'stargaze', 'watchWriter', 'readScript', 'coffeeBreak', 'writeAlong', 'treeShade', 'doze', 'scratch', 'wag', 'yoga']);
+const CALM = new Set(['rest', 'look', 'sleep', 'stargaze', 'watchWriter', 'readScript', 'coffeeBreak', 'writeAlong', 'treeShade', 'doze', 'scratch', 'wag', 'yoga', 'daydream']);
 // Things that grow and wither: frames from sprout to full, and how long each stage takes.
-const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260] };
+const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800] };
 
 // Environmental events: started by time, only one at a time, and only when the dinosaur can take part.
 const EVENTS = {
@@ -302,6 +304,7 @@ export class Critter {
       shadowbox: 0.08 + 0.35 * e,
       patrol: 0.2 + 0.3 * e,
       stargaze: late ? 0.8 : 0,
+      daydream: (night ? 0.3 : 0.45) + 0.5 * (1 - e),
       // The environment: new things now and then, and what it does with them while they last.
       palmTree: !this.find('palm') && this.envOk('palm', 6 * MIN) ? 0.12 : 0,
       treeShade: tree ? 1.1 : 0,
@@ -311,6 +314,13 @@ export class Critter {
       snail: this.envOk('snail', 6 * MIN) ? 0.09 : 0,
       fireflies: night && this.envOk('fireflies') ? 0.35 : 0,
       puddleJump: this.find('puddle') ? 2 : 0,
+      // Visitors now and then.
+      balloon: free && this.envOk('balloon', 5 * MIN) ? 0.12 : 0,
+      paperPlane: free && this.envOk('paperPlane', 5 * MIN) ? 0.12 : 0,
+      frog: free && this.envOk('frog', 5 * MIN) ? 0.12 : 0,
+      ladybug: free && this.envOk('ladybug', 4 * MIN) ? 0.15 : 0,
+      dandelion: free && !this.find('dandelion') && this.envOk('dandelion', 5 * MIN) ? 0.1 : 0,
+      worm: free && this.envOk('worm', 5 * MIN) ? 0.12 : 0,
       // Unlocked by the writing streak.
       skateboard: this.unlocked >= 1 && free ? 0.3 : 0,
       fireworks: this.unlocked >= 2 && free ? 0.22 : 0,
@@ -322,6 +332,23 @@ export class Critter {
     for (const k in m) if (w[k]) w[k] *= m[k];
     this.recent.forEach((k, i) => { if (w[k]) w[k] *= i === this.recent.length - 1 ? 0.2 : 0.55; }); // variety
     return this.pick(w);
+  }
+
+  /**
+   * The theme just turned dark or light on its schedule: the sun sets (or rises)
+   * and it stops what it is doing to see it. A sleeper sleeps on through
+   * nightfall (the moon still comes up), but the sunrise wakes it.
+   */
+  themeShift(dark) {
+    if (dark && this.asleep()) {
+      const old = this.find('sun');
+      if (old) this.fadeOut(old, 1500);
+      if (this.props.length < 7) this.sky('moon', { x: this.clampProp(this.center() + (this.inward() || 1) * 80, 5), y: 2, ty: 24, alpha: 0, fadeIn: true, life: 40000 });
+      return;
+    }
+    this.pending = dark ? 'nightfall' : 'daybreak';
+    if (ABSORBED.has(this.activity) && this.activity !== 'nightfall' && this.activity !== 'daybreak') return; // finish that first
+    if (this.inReaction) this.paused = null; else this.gen = null;
   }
 
   // -- clicks --
@@ -438,6 +465,14 @@ export class Critter {
   splashAt(x, n, dir = 0) { for (let i = 0; i < n; i++) this.particles.push({ x: x + this.rnd(-6, 6), y: 1, vx: (dir || (this.chance(0.5) ? 1 : -1)) * this.rnd(15, 45), vy: this.rnd(20, 40), t0: this.now }); }
   steam(p) { if (p) for (let i = 0; i < 2; i++) this.particles.push({ x: p.x + this.rnd(0, 3 * this.u), y: 5 + i, vx: this.rnd(-3, 3), vy: this.rnd(4, 7), g: 0, t0: this.now }); }
   spark(x, y, n) { for (let i = 0; i < n; i++) this.sparks.push({ x, y, vx: this.rnd(-15, 15), vy: this.rnd(5, 18), g: 30, t0: this.now, life: 500 }); }
+  /** The sun or the moon: the one already in the sky (turned round to rise or set), or a new one. */
+  sky(kind, o) {
+    const p = this.find(kind);
+    if (!p) return this.spawn(kind, o);
+    return Object.assign(p, { ty: o.ty, fadeOutAt: null, fadeIn: true, life: this.now - p.born + o.life });
+  }
+  /** Stars coming out, here and there in the sky. */
+  twinkle(n) { for (let i = 0; i < n; i++) this.sparks.push({ x: this.rnd(0.05, 0.95) * this.stripW, y: this.rnd(22, 33), vx: 0, vy: 0, g: 0, t0: this.now, life: this.rnd(1500, 2600) }); }
   /** A ring of sparkles around it (growing). */
   sparkle() {
     const cx = this.center(), cy = this.height() / 2;
@@ -604,6 +639,7 @@ export class Critter {
     for (const p of this.props) {
       if (p.carried) this.drop(p, 0);
       if (p.balance) { p.balance = false; p.gravity = true; }
+      if (p.held) { p.held = false; p.vy = 4; } // a balloon floats off
       p.ride = false;
       if (p.life === Infinity && p.kind !== 'puddle') this.expire(p, 8000);
       if (p.kind === 'cloud' && p.dance && p.phase !== 'leave') this.endRain();
@@ -828,6 +864,63 @@ export class Critter {
             if (p.y >= 22) this.burst(p);
           }
           break;
+        case 'sun':
+        case 'moon':
+          // Rises or sets towards ty, unhurried; fades out at the end of its time.
+          if (p.ty != null && Math.abs(p.ty - p.y) > 0.05) {
+            p.live = true;
+            p.y += (p.ty - p.y) * (1 - Math.exp(-s * 0.7));
+            if (p.kind === 'sun') p.frame = Math.floor((now - p.born) / 600) % 2;
+          } else if (p.kind === 'sun') p.frame = 0;
+          if (p.life - (now - p.born) < 2600) this.fadeOut(p, 2500);
+          break;
+        case 'balloon': {
+          p.live = true;
+          const top = H + 22 - PROPS.balloon[0].length;
+          if (p.held) { const m = this.mouthAt(); p.x = this.clampProp(m.x - (this.face > 0 ? 1 : 3) * u, cols); p.y = Math.min(top, m.y - 1); p.frame = 0; break; }
+          p.x = Math.max(-M, Math.min(W2 + M - cols * u, p.x + (p.vx + Math.sin((now - p.born) / 500) * 5) * s));
+          p.y = Math.min(top, p.y + p.vy * s);
+          p.frame = Math.floor((now - p.born) / 500) % 2;
+          if (p.y >= top || (now - p.born > 3000 && (p.x <= -M || p.x >= W2 + M - cols * u))) this.fadeOut(p, 900); // up and away, or off the side
+          break;
+        }
+        case 'plane':
+          if (!p.vx) break;
+          p.live = true;
+          p.x += p.vx * s;
+          p.y = Math.max(0, p.y - p.sink * s + Math.sin((now - p.born) / 260) * 2 * s);
+          p.frame = 0;
+          if (p.y === 0) { p.vx *= Math.exp(-s * 8); if (Math.abs(p.vx) < 3) { p.vx = 0; p.frame = 1; } }
+          if (p.x < -M || p.x > W2 + M - cols * u) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, 400); }
+          break;
+        case 'frog': {
+          if (!p.vx && !p.bounce) { p.y = 0; p.frame = 0; break; }
+          p.live = true;
+          if (p.vx) p.face = Math.sign(p.vx);
+          const ph = ((now - p.born) / 700) % 1; // a hop, then a sit (on the spot while it bounces)
+          if (ph < 0.45) { p.x += p.vx * s; p.y = Math.sin((ph / 0.45) * Math.PI) * 4; p.frame = 1; } else { p.y = 0; p.frame = 0; }
+          if (p.tx != null && Math.abs(p.tx - p.x) < 2) { p.vx = 0; p.tx = null; }
+          if (p.x < -M || p.x > W2 + M - cols * u) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, 300); }
+          break;
+        }
+        case 'ladybug':
+          if (p.fly) {
+            p.live = true;
+            p.x = Math.max(-M, Math.min(W2 + M - cols * u, p.x + p.vx * s));
+            p.y = Math.min(H + 20, p.y + 6 * s);
+            p.frame = Math.floor((now - p.born) / 120) % 2;
+            if (p.y > H + 4) this.fadeOut(p, 1500);
+            break;
+          }
+          p.frame = 0;
+          if (p.tx != null && Math.abs(p.tx - p.x) > 0.5) { p.live = true; p.x += Math.sign(p.tx - p.x) * Math.min(6 * s, Math.abs(p.tx - p.x)); }
+          break;
+        case 'seed':
+          p.live = true;
+          p.x = Math.max(-M, Math.min(W2 + M - cols * u, p.x + (p.vx + Math.sin((now - p.born) / 300 + p.id) * 6) * s));
+          p.y = Math.min(H + 24, p.y + p.vy * s);
+          if (p.y >= H + 24 || p.x <= -M || p.x >= W2 + M - cols * u) this.fadeOut(p, 600);
+          break;
         case 'skateboard':
           if (p.ride) { p.live = true; p.x = this.x + (this.dw - cols * u) / 2; p.y = Math.max(0, this.y - 2); }
           break;
@@ -950,7 +1043,7 @@ export class Critter {
 // dinosaur hold jumps, glyphs, clouds and fireworks.
 const PLAY_MAX = 560, MARGIN = 24, HEADROOM = 30;
 // Drawn behind everything else.
-const BACKDROP = ['rainbow', 'palm', 'cloud', 'puddle'];
+const BACKDROP = ['sun', 'moon', 'rainbow', 'palm', 'cloud', 'puddle'];
 
 export class Dino {
   constructor({ anchor, area, getProgress }) {
@@ -1006,6 +1099,12 @@ export class Dino {
 
   /** Words the writer just wrote (net, own writing only). */
   wrote(n) { this.c.wrote(n, performance.now()); }
+  /** The theme turned on its own (its AM/PM schedule): a sunset or a sunrise. */
+  themeChanged(theme) {
+    if (performance.now() - this.born < 3000) return; // just opened: nothing to see
+    this.c.themeShift(theme === 'dark');
+    this.schedule(0);
+  }
   poke(x, y) { this.c.poke(performance.now(), x, y); this.schedule(0); }
   /**
    * The writing streak's rewards: `growth` px (one per milestone) and the
@@ -1126,7 +1225,7 @@ export class Dino {
       const art = PROPS[q.kind][q.frame] || PROPS[q.kind][0];
       const jitter = q.wobble ? (Math.round(now / 90) % 2 ? p : -p) : 0;
       g.globalAlpha = (ALPHA[q.kind] ?? 1) * (q.alpha ?? 1);
-      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0);
+      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0) || ((q.kind === 'plane' || q.kind === 'frog') && q.face < 0);
       grid(art, snap(q.x) + jitter, ground - Math.round(q.y) * p, p, mirror);
       if (q.kind === 'ufo' && q.beam) {
         const bx = snap(q.x) + 4 * p;
@@ -1188,7 +1287,7 @@ export class Dino {
 
   /** Props about to vanish blink for their last 1.2 s (scenery fades or withers instead). */
   blinkOut(q, now) {
-    if (q.grows || q.fadeOutAt != null || q.kind === 'rainbow' || q.kind === 'cloud' || q.kind === 'puddle') return false;
+    if (q.grows || q.fadeOutAt != null || ['rainbow', 'cloud', 'puddle', 'sun', 'moon'].includes(q.kind)) return false;
     const left = q.life - (now - q.born);
     return left < 1200 && Math.floor(left / 150) % 2 === 1;
   }

@@ -197,7 +197,7 @@ off.
 ## Writing companion
 
 The pixel art (`dino-art.js`: frames, props, glyphs as character grids) and
-the repertoire (`dino-acts.js`: 62 activities and 96 reactions, generator
+the repertoire (`dino-acts.js`: 71 activities and 100 reactions, generator
 functions yielding short steps of ≤ 1.5 s) are data for the engine in
 `dino.js`. `Critter` is the behaviour engine, pure and simulated in tests for
 hours at a time: props with a little physics, a drifting mood and a memory of
@@ -214,7 +214,14 @@ tracked at all: only a click tells it where you are.
 shooting star) start only when it can take part (`canHost()`: on stage, not
 reacting, nothing queued, not in the middle of something absorbing), one at a
 time (`event`), a few minutes apart and each kind on its own cooldown.
-Things that grow (palm, flower, mushroom) are activities it starts itself.
+Things that grow (palm, flower, mushroom, dandelion) and visitors (a balloon,
+a paper plane, a frog, a ladybird, a worm) are activities it starts itself,
+each on its own cooldown. When AUTO turns the theme, `app.js` tells the
+companion (`Dino.themeChanged`, ignored in the first seconds after launch):
+`Critter.themeShift()` queues `nightfall` or `daybreak` as the next
+activity and ends the current one at its next step, unless it is something
+absorbing; a sleeper sleeps on through nightfall (only the moon rises), and a
+sun or moon already in the sky is turned round rather than doubled.
 Each has a lifecycle — fading or growing in, its part for the dinosaur
 (`envDue`, chosen by `envReaction()` from the context at the start, run like a
 reaction), and a natural end (fading, withering, drying) with failsafes so

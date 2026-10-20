@@ -76,6 +76,35 @@ test('a time-zone change moves the theme on the next check', async () => {
   assert.equal(await theme(), 'light');
 });
 
+test('when AUTO turns the theme, the dinosaur sees the sun set or rise; a manual switch leaves it be', async () => {
+  const now = new Date();
+  const scene = () => app.eval('[__stet.dino.c.activity, __stet.dino.c.pending]');
+  const fresh = () => app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.envDue = null; c.inReaction = null; c.paused = null; c.held = []; c.gen = null; c.pending = 'look'; })()`);
+  await sleep(Math.max(0, 3200 - await app.eval('performance.now() - __stet.dino.born'))); // not in the first moments after launch
+  await click('th-light');
+  await fresh();
+  await click('th-dark');
+  await sleep(300);
+  assert.ok(!(await scene()).includes('nightfall'), 'a manual switch: no sunset');
+  await click('th-light');
+  await fresh();
+  const night = { enabled: true, darkAt: hhmm(new Date(+now - 60e3)), lightAt: hhmm(new Date(+now + 3600e3)) };
+  await app.eval(`__stet.settings().schedule = ${JSON.stringify(night)}`);
+  await refocus();
+  assert.equal(await theme(), 'dark');
+  let seen = false;
+  for (let i = 0; i < 30 && !seen; i++) { await sleep(100); seen = await app.eval(`__stet.dino.c.activity === 'nightfall' && !!__stet.dino.c.find('sun')`); }
+  assert.ok(seen, 'the sun goes down: ' + await scene());
+  const day = { enabled: true, darkAt: hhmm(new Date(+now + 3600e3)), lightAt: hhmm(new Date(+now - 60e3)) };
+  await app.eval(`__stet.settings().schedule = ${JSON.stringify(day)}`);
+  await refocus();
+  assert.equal(await theme(), 'light');
+  seen = false;
+  for (let i = 0; i < 30 && !seen; i++) { await sleep(100); seen = await app.eval(`__stet.dino.c.activity === 'daybreak'`); }
+  assert.ok(seen, 'and comes up again: ' + await scene());
+  await app.eval(`__stet.settings().schedule = { ...__stet.settings().schedule, enabled: false }`);
+});
+
 test('schedule persists across restarts and applies at launch', async () => {
   const now = new Date();
   const sched = { enabled: true, darkAt: hhmm(new Date(+now - 3600e3)), lightAt: hhmm(new Date(+now + 3600e3)) };

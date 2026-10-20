@@ -104,6 +104,20 @@ const FALLEN = [
   '..########...####.',
   BLANK,
 ];
+// Lying on its front with the head raised, looking up at the sky.
+const LIE_UP = [
+  BLANK, BLANK, BLANK, BLANK,
+  '............#####.',
+  '...........##o###.',
+  '..........#######.',
+  '..........#####...',
+  '..........####....',
+  '#........#####....',
+  '#############.....',
+  '.##############...',
+  '..############....',
+  BLANK,
+];
 // Tall and long: head pushed up and forward, arms up, legs straight.
 const STRETCH = [
   '.............#####',
@@ -173,11 +187,15 @@ export const FRAMES = {
   sitScratch2: withRow(withRow(sit('blink'), 9, '##.....##########.'), 10, '###...########....'),
   lie: LIE,
   lieBreath: LIE.map((r, i) => (i === 10 ? '############......' : r)),
+  lieUp: LIE_UP,
+  lieUpBlink: LIE_UP.map((r) => r.replace('o', '#')),
+  lieUpHowl: withRow(withRow(LIE_UP, 6, '..........#####...'), 7, '..........###.....'),
+  lieUpTail: withRow(LIE_UP, 9, '.........#####....'),
   fallen: FALLEN,
 };
 
 // Postures, so a reaction can get up first and the activity can sit back down after.
-const POSTURE = { sit: 'sit', sitBlink: 'sit', sitBreath: 'sit', sitUp: 'sit', sitHowl: 'sit', sitChew: 'sit', sitTap1: 'sit', sitTap2: 'sit', sitScratch1: 'sit', sitScratch2: 'sit', lie: 'lie', lieBreath: 'lie', fallen: 'lie' };
+const POSTURE = { sit: 'sit', sitBlink: 'sit', sitBreath: 'sit', sitUp: 'sit', sitHowl: 'sit', sitChew: 'sit', sitTap1: 'sit', sitTap2: 'sit', sitScratch1: 'sit', sitScratch2: 'sit', lie: 'lie', lieBreath: 'lie', lieUp: 'lie', lieUpBlink: 'lie', lieUpHowl: 'lie', lieUpTail: 'lie', fallen: 'lie' };
 export const postureOf = (f) => POSTURE[f] || 'stand';
 // Frames that may follow a sitting one directly (they are the getting-up movement themselves).
 export const GET_UP = new Set(['crouch', 'cower', 'sniff', 'sniffBlink']);
@@ -188,13 +206,13 @@ export const MOUTH = at([
   ['stand blink walk1 walk2 run1 run2 roar yawn jump wag kick armsUp oneLeg', [16, 3]],
   ['up howl', [16, 2]], ['sniff sniffBlink chomp', [16, 7]], ['cower', [16, 7]], ['hunch', [16, 5]], ['crouch', [16, 4]],
   ['sit sitChew sitBlink sitBreath sitTap1 sitTap2 sitScratch1 sitScratch2', [16, 5]], ['sitUp sitHowl', [16, 4]],
-  ['stretch', [17, 3]], ['lie lieBreath', [17, 10]],
+  ['stretch', [17, 3]], ['lie lieBreath', [17, 10]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [16, 6]],
 ]);
 export const HEAD_TOP = at([
   ['stand blink walk1 walk2 run1 run2 roar yawn armsUp kick oneLeg jump wag', [14, 0]], ['up howl stretch', [15, 0]],
   ['crouch', [14, 1]], ['sniff sniffBlink chomp cower', [14, 4]], ['hunch', [14, 2]],
   ['sit sitBlink sitBreath sitChew sitTap1 sitTap2 sitScratch1 sitScratch2', [14, 2]], ['sitUp sitHowl', [15, 2]],
-  ['lie lieBreath', [14, 7]],
+  ['lie lieBreath', [14, 7]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [15, 4]],
 ]);
 
 /** A rainbow: two dotted arcs, w×h. */
@@ -266,9 +284,25 @@ export const PROPS = {
   skateboard: [['#######', '.#...#.']],
   rocket: [['.#.', '###', '###', '#.#']],
   umbrella: [['..###..', '.#####.', '#######', '...#...']],
+  // The sun and the moon, for the theme turning to day or to night.
+  sun: [['...#...', '.#...#.', '..###..', '#.###.#', '..###..', '.#...#.', '...#...'], ['.......', '..#.#..', '.#####.', '..###..', '.#####.', '..#.#..', '.......']],
+  moon: [['..##.', '.##..', '##...', '##...', '.##..', '..##.']],
+  // Visitors that turn up now and then.
+  balloon: [['.###.', '#####', '#####', '.###.', '..#..', '..#..', '.#...'], ['.###.', '#####', '#####', '.###.', '..#..', '..#..', '...#.']],
+  plane: [['###...', '.#####', '..##..'], ['......', '######', '.###..']],
+  frog: [['....#.', '.#####', '######', '##..##'], ['....#.', '.#####', '#####.', '#....#']],
+  ladybug: [['.#.', '###'], ['#.#', '.#.']],
+  seed: [['#.#', '.#.', '.#.']],
+  dandelion: [
+    ['..#..', '..#..'],
+    ['..#..', '.##..', '..#..', '..#..'],
+    ['#.#.#', '.###.', '#.#.#', '..#..', '.##..', '..#..', '..#..'],
+    ['.....', '..#..', '.....', '..#..', '.##..', '..#..', '..#..'],
+  ],
+  worm: [['.....', '.....', '#####'], ['..#..', '..#..', '#####'], ['.##..', '..#..', '#####']],
 };
 // Drawn lighter: water, light and things far off.
-export const ALPHA = { puddle: 0.5, rainbow: 0.4, cloud: 0.85 };
+export const ALPHA = { puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8 };
 
 // 3×5 pixel glyphs for little effects above the head.
 export const GLYPHS = {

@@ -248,6 +248,7 @@ function refreshTheme() {
   if (document.documentElement.dataset.theme !== t) {
     document.documentElement.dataset.theme = t;
     api.invoke('theme:apply', t);
+    if (schedule().enabled && dino) dino.themeChanged(t); // the schedule turned it: a sunset or a sunrise
   }
   renderThemeSeg(t);
 }

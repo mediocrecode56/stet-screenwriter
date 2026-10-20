@@ -555,3 +555,126 @@ test('its part in the weather follows what it was doing when the weather came', 
   assert.deepEqual(Object.keys(dist('tumbleweed', { posture: 'sit' })), ['tumbleWatch'], 'sitting: watches it roll by');
   assert.deepEqual(Object.keys(dist('wind', { asleep: true, posture: 'lie' })), ['windHunker']);
 });
+
+// ---- 0.11: chin up, the theme's sunset and sunrise, more variety, more visitors ----------------
+
+test('it lies on its front, chin up, to look at the sky — and does so while resting, sleeping, stargazing and stretching', () => {
+  for (const f of ['lieUp', 'lieUpBlink', 'lieUpHowl', 'lieUpTail']) assert.equal(postureOf(f), 'lie', f);
+  const top = (f) => FRAMES[f].findIndex((r) => r.includes('#'));
+  assert.ok(top('lieUp') < top('lie') - 2, 'the head is raised above the lying body');
+  const c = doing('daydream', 5);
+  const { steps } = run(c, 30000, { from: c.now + 50, dt: 50 });
+  assert.ok(steps.filter((s) => s.activity === 'daydream' && s.f.startsWith('lieUp')).length >= 4, 'daydreaming, chin up');
+  const seen = new Set();
+  for (let seed = 1; seed < 30 && seen.size < 4; seed++) {
+    for (const a of ['rest', 'stargaze', 'sleep', 'stretch']) {
+      const d = wide(seed * 7 + a.length);
+      d.envNext = Infinity;
+      d.pending = a;
+      for (const s of run(d, 50000, { dt: 100 }).steps) if (s.activity === a && s.f.startsWith('lieUp')) seen.add(a);
+    }
+  }
+  assert.deepEqual([...seen].sort(), ['rest', 'sleep', 'stargaze', 'stretch']);
+});
+
+test('the theme turning dark on its schedule: it watches the sun go down and the moon come up, then lies chin up under the stars', () => {
+  for (let seed = 1; seed <= 4; seed++) {
+    const c = doing('look', 20 + seed);
+    c.themeShift(true);
+    until(c, () => c.activity === 'nightfall', 3000, 'stops what it was doing to watch');
+    let sunSet = false, moonUp = false, stars = 0, chinUp = false;
+    until(c, () => c.activity !== 'nightfall', 60000, 'nightfall ends', () => {
+      const sun = c.find('sun');
+      if (sun && sun.y < 3) sunSet = true;
+      if ((c.find('moon')?.y ?? 0) > 15) moonUp = true;
+      stars = Math.max(stars, c.sparks.filter((q) => !q.vx && !q.vy).length);
+      if (c.frame.startsWith('lieUp')) chinUp = true;
+      inView(c);
+    });
+    assert.ok(sunSet && moonUp && stars > 0 && chinUp, JSON.stringify({ sunSet, moonUp, stars, chinUp }));
+    assert.ok(!c.find('sun'), 'the sun has gone');
+  }
+});
+
+test('the theme turning light: the sun comes up and wakes it, and it greets the day', () => {
+  const c = doing('sleep', 31);
+  until(c, () => c.asleep(), 10000, 'falls asleep');
+  c.themeShift(true); // nightfall while it sleeps: it sleeps on, the moon comes up all the same
+  assert.equal(c.activity, 'sleep');
+  assert.ok(c.find('moon'));
+  run(c, 3000, { from: c.now + 50, dt: 50 });
+  assert.ok(c.asleep(), 'still asleep');
+  c.themeShift(false);
+  until(c, () => c.activity === 'daybreak', 3000, 'the light wakes it');
+  let sunUp = false, roar = false;
+  until(c, () => c.activity !== 'daybreak', 60000, 'daybreak ends', () => {
+    if ((c.find('sun')?.y ?? 0) > 15) sunUp = true;
+    if (c.step.f === 'roar') roar = true;
+    inView(c);
+  });
+  assert.ok(sunUp, 'the sun rose');
+  assert.ok(roar, 'a good-morning roar');
+  assert.ok(!c.find('moon'), 'the moon has gone');
+  // In the middle of something it shouldn't drop, it finishes that first.
+  const e = doing('egg', 32);
+  e.themeShift(true);
+  assert.equal(e.activity, 'egg');
+  until(e, () => e.activity === 'nightfall', 60000, 'then watches the sunset');
+});
+
+test('the everyday activities come out a little different each time', () => {
+  for (const a of ['rest', 'look', 'walk', 'sleep', 'dance', 'stretch']) {
+    const shapes = new Set();
+    for (let seed = 0; seed < 30; seed++) {
+      const c = wide(seed * 31 + a.length);
+      c.envNext = Infinity;
+      c.pending = a;
+      const own = [];
+      for (const s of run(c, 60000, { dt: 100 }).steps) { if (s.activity !== a || s.reaction) { if (own.length) break; continue; } own.push(s); }
+      shapes.add([...new Set(own.map((s) => s.f + (s.fx ? '+' + s.fx : '')))].sort().join());
+    }
+    assert.ok(shapes.size >= 4, `${a}: ${shapes.size} different shapes in 30 runs`);
+  }
+});
+
+test('visitors now and then: a balloon, a paper plane, a frog, a ladybird, a dandelion, a worm — each comes, plays its part and goes', () => {
+  const kinds = { balloon: ['balloon'], paperPlane: ['plane'], frog: ['frog'], ladybug: ['ladybug'], dandelion: ['dandelion', 'seed'], worm: ['worm'] };
+  for (const [a, props] of Object.entries(kinds)) {
+    for (let seed = 0; seed < 6; seed++) {
+      const c = wide(seed * 17 + a.length);
+      c.envNext = Infinity;
+      c.pending = a;
+      const seen = new Set();
+      const look = () => { for (const p of c.props) seen.add(p.kind); if (c.hat) seen.add(c.hat.kind); inView(c); };
+      run(c, 1000, { dt: 50, each: look });
+      until(c, () => c.activity !== a, 60000, `${a} ends`, look);
+      assert.ok(props.every((k) => seen.has(k)), `${a}: ${[...seen]}`);
+      run(c, 70000, { from: c.now + 50, each: () => { c.pending = c.pending || 'look'; inView(c); } });
+      assert.ok(!c.props.some((p) => props.includes(p.kind)), `${a}: gone afterwards (${c.props.map((p) => p.kind)})`);
+    }
+  }
+  const c = make(5);
+  const n = {};
+  for (let i = 0; i < 40000; i++) { c.recent = []; c.lastEnv = {}; c.energy = c.rng(); const a = c.pickActivity(1e9); n[a] = (n[a] || 0) + 1; }
+  for (const k of Object.keys(kinds)) assert.ok(n[k] > 0 && n[k] / 40000 < 0.02, `${k} turns up now and then (${n[k]})`);
+});
+
+test('theme changes at any moment — walking, mid-reaction, asleep, mid-sunset — are always seamless', () => {
+  const c = wide(2027);
+  const rng = seeded(7);
+  let dark = false, shifts = 0;
+  const seen = new Set();
+  run(c, 2 * 3600 * 1000, {
+    dt: 120,
+    each: (now) => {
+      if (rng() < 0.0005) { dark = !dark; shifts++; c.themeShift(dark); }
+      if (rng() < 0.001) c.poke(now, c.center() + (rng() - 0.5) * 20, 8);
+      if (rng() < 0.002) c.wrote(2, now);
+      seen.add(c.activity);
+      inView(c);
+    },
+  });
+  assert.ok(shifts > 10, `${shifts} theme changes`);
+  assert.ok(seen.has('nightfall') && seen.has('daybreak'));
+  assert.ok(c.props.filter((p) => p.kind === 'sun' || p.kind === 'moon').length <= 2, 'never a sky full of suns');
+});
