@@ -4,6 +4,12 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.16.3 — 21 October 2026
+
+### Improved
+
+- **The weekly view is more compact.** The line of facts under the chart is gone: days written, goal met, best day. The chart and the boxes at the top already show all of it.
+
 ## 0.16.2 — 21 October 2026
 
 ### Improved

@@ -237,10 +237,7 @@ test('the weekly view’s top boxes: just the day, the count and the target — 
     assert.match(b[0].n, /^[\d,. ]+ \/ 6[,.]?000$/, 'week: total / weekly goal');
     assert.match(b[1].label, /^TODAY · (MON|TUE|WED|THU|FRI|SAT|SUN) \d+$/, 'today, with its date');
     assert.match(b[1].n, /^123[,.]?456 \/ 1[,.]?000$/, 'today: count / daily goal, thousands and all');
-    // The detail is still there further down.
-    const facts = await app.eval(`document.querySelector('#overlay .wk-facts').textContent`);
-    assert.match(facts, /wrote on .* · goal met/, 'one compact line');
-    assert.ok(!/streak/.test(facts), 'no streak line (it is on the flame)');
+    assert.equal(await app.eval(`!!document.querySelector('#overlay .wk-facts')`), false, 'no list of facts under the chart');
     await app.key('Escape');
     await sleep(250);
   }

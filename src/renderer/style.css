@@ -428,7 +428,6 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; padding-top: 3px; margin-right: 52px; text-align: center; color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
 .wk-days .today { color: var(--ink); font-weight: 700; }
 .wk-days small { font-size: 10px; letter-spacing: 0; }
-.wk-facts { color: var(--ink-2); font-size: 11px; line-height: 1.3; }
 .wk-docs { display: flex; flex-direction: column; gap: 1px; }
 .wk-docs .wk-k { margin-bottom: 2px; }
 .wk-row { display: flex; gap: 12px; border-bottom: 1px dotted var(--rule); padding: 1px 0; }

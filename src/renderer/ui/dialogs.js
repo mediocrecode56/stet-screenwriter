@@ -225,7 +225,6 @@ export async function statsDialog(api) {
       flash ? h('div', { class: 'wk-flash' }, flash) : null,
       weekHeader(s, nav),
       weekChart(s),
-      weekFacts(s),
       weekDocs(s),
       h('div', { class: 'wk-goals' },
         h('span', { class: 'wk-k' }, 'GOALS'),
@@ -330,17 +329,6 @@ function weekChart(s) {
   });
   const days = h('div', { class: 'wk-days' }, ...s.week.days.map((d, i) => h('div', { class: d.today ? 'today' : '' }, DOW[i], h('small', {}, ' ' + d.day.slice(8).replace(/^0/, '')))));
   return h('div', { class: 'wk-chart' }, h('div', { class: 'wk-frame' }, plot, axis), days);
-}
-
-function weekFacts(s) {
-  const w = s.week, dg = s.goals.daily;
-  const elapsed = w.days.filter((d) => !d.future && d.known).length;
-  const facts = [
-    `wrote on ${w.active} of ${elapsed} day${elapsed === 1 ? '' : 's'}`,
-    dg ? `goal met ${w.met} ${w.met === 1 ? 'time' : 'times'}` : null,
-    w.best ? `best ${DOW[w.days.findIndex((d) => d.day === w.best.day)]} ${fmtWords(w.best.words)}` : null,
-  ].filter(Boolean);
-  return h('div', { class: 'wk-facts' }, facts.join(' · ')); // (the streak is on the flame in the status bar)
 }
 
 function weekDocs(s) {
