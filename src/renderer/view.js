@@ -13,6 +13,7 @@ import { lineIndexOf, lineEndOffset } from '../core/nav.js';
 import { cmp, pos } from '../core/editor.js';
 import { TITLE_FIELDS_SPEC } from '../core/titlepage.js';
 import { styleRuns } from '../core/model.js';
+import { reducedMotion } from './ui/motion.js';
 
 const PX_COL = 9.6;   // 0.1in at 96dpi
 const PX_ROW = 16;    // 1/6in at 96dpi (Courier 12pt line)
@@ -443,12 +444,22 @@ export class View {
     return pos(best.bi, Math.min(o, lineEndOffset(b.text, starts, l)));
   }
 
-  /** Scroll so the caret is visible with some margin. */
-  revealCaret(center = false) {
+  /**
+   * Scroll so the caret is visible with some margin (`center`: in the middle). `smooth`
+   * glides there instead (unless motion is reduced), and only if it isn't comfortably in view already.
+   */
+  revealCaret(center = false, smooth = false) {
     const r = this.caretRect();
     if (!r) return;
     const sc = this.scroller;
     const margin = this.row * 4;
+    if (smooth) {
+      const room = Math.min(sc.clientHeight / 4, margin * 2);
+      if (r.y < sc.scrollTop + room || r.y + r.h > sc.scrollTop + sc.clientHeight - room) {
+        sc.scrollTo({ top: Math.max(0, center ? r.y - sc.clientHeight / 2 : r.y - margin), behavior: reducedMotion() ? 'auto' : 'smooth' });
+      }
+      return;
+    }
     if (center) { sc.scrollTop = r.y - sc.clientHeight / 2; return; }
     if (r.y < sc.scrollTop + margin) sc.scrollTop = r.y - margin;
     else if (r.y + r.h > sc.scrollTop + sc.clientHeight - margin) sc.scrollTop = r.y + r.h - sc.clientHeight + margin;

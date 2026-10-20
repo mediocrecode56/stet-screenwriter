@@ -278,7 +278,7 @@ export class Revision {
     if (!f) return;
     this.cur = id;
     const at = this.located(f);
-    if (at) this.jump(pos(at.b, at.s), true, pos(at.b, at.e));
+    if (at) this.jump(pos(at.b, at.s), true, pos(at.b, at.e), true); // a glide to its passage, not a jump
     this.render();
     this.paint();
     if (focus) {

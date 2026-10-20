@@ -102,6 +102,8 @@ script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
   else is ever highlighted or replaced in its place.
 - The latest review and every decision are saved in the .stet file, so they
   survive restarts. Running a review again replaces them completely.
+- Clicking a suggestion glides the script smoothly to its passage (straight
+  there with reduced motion) and selects it.
 - While Claude works, the panel shows an indeterminate progress bar, the
   current stage, sections done and elapsed time; you can keep writing.
 - **No setup if you use Claude:** with no API key, STET runs the review through

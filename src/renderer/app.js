@@ -48,11 +48,11 @@ input.onEscape = () => { if (!find.open) return false; find.close(); return true
 input.onZoom = () => { renderZoom(); persistZoom(); };
 ac.onAccepted = () => input.after(false);
 
-const jump = (p, center = false, end = null) => {
+const jump = (p, center = false, end = null, smooth = false) => {
   editor.setSel(p, end || p);
   view.relayout();
   view.frame();
-  view.revealCaret(center);
+  view.revealCaret(center, smooth);
   input.focus();
   input.placeTextarea();
 };

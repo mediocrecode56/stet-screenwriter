@@ -4,6 +4,20 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.15.1 — 20 October 2026
+
+### Improved
+
+- **Clicking a suggestion glides you to it.** The script now scrolls smoothly to the passage instead of jumping there, so you keep your bearings. If the passage is already comfortably on screen, nothing moves. With reduced motion turned on in Windows, it goes straight there as before.
+
+### For the technically curious
+
+- `View.revealCaret(center, smooth)` scrolls with `behavior: "smooth"`, and only when the caret isn't comfortably in view. The review panel uses it through `jump(…, smooth)`.
+- A new end-to-end test, in a shown window (a hidden one draws no frames):
+  - the script passes through several in-between positions on the way down, never jumping back;
+  - the passage ends up in view;
+  - a passage already in view stays put.
+
 ## 0.15.0 — 20 October 2026
 
 The English review works again with no API key, through your Claude sign-in, and you can now choose how STET connects. The dinosaur's face stays itself in every pose. And while it sleeps deeply, STET rests too.

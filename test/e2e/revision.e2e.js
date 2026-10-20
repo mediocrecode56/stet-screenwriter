@@ -249,3 +249,45 @@ test('suggestions, decisions, ignores persist across restarts; a new review repl
   assert.match(sys, /dictionary[\s\S]*"ITNRO"/);
   assert.match(sys, /already reviewed[\s\S]*looking to him since five minutes/);
 });
+
+test('clicking a suggestion glides the script smoothly to its passage', async () => {
+  // A shown window: a hidden one draws no frames, and a smooth scroll moves frame by frame.
+  await app.close();
+  app = await App.launch({ userData: path.join(tmp, 'ud'), env: { STET_ANTHROPIC_BASE_URL: mock.url, ANTHROPIC_API_KEY: KEY }, hidden: false });
+  await consent();
+  await app.eval(`(async () => {
+    const { newDocument, makeBlock } = await import('../core/model.js');
+    const d = newDocument('GLIDE'); d.settings.backup.enabled = false;
+    d.blocks = [makeBlock('scene', 'INT. KITCHEN - NIGHT'), makeBlock('action', 'Mara enter in the kitchen and sits.')];
+    for (let i = 0; i < 160; i++) d.blocks.push(makeBlock('action', 'The rain goes on and on against the window, line ' + (i + 1) + '.'));
+    d.blocks.push(makeBlock('action', 'Teo made a decision of leaving.'));
+    __stet.session.load(d, null);
+  })()`);
+  await startReview(); await waitDone();
+  const sc = 'document.getElementById("scroller")';
+  await app.eval(`${sc}.scrollTop = 0`);
+  await sleep(100);
+  const click = (o) => app.eval(`[...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes(${JSON.stringify(o)})).querySelector('[data-act="select"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`);
+  // Far down the script: it moves there over several frames, not in one jump, and ends with the passage in view.
+  const samples = await app.eval(`new Promise((done) => {
+    const out = [];
+    [...document.querySelectorAll('.rv-item')].find(n => n.textContent.includes('made a decision')).querySelector('[data-act="select"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    const t0 = performance.now();
+    const tick = () => { out.push(${sc}.scrollTop); performance.now() - t0 < 1500 ? requestAnimationFrame(tick) : done(out); };
+    requestAnimationFrame(tick);
+  })`);
+  const end = samples.at(-1);
+  const between = samples.filter((y) => y > 5 && y < end - 5);
+  assert.ok(end > 300, `scrolled down the script (${end})`);
+  assert.ok(between.length >= 3, `glided through ${between.length} in-between positions`);
+  for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1] - 0.5, 'one way only, no jumps back');
+  const inView = await app.eval(`(() => { const r = __stet.view.caretRect(); const s = ${sc}; return r.y > s.scrollTop && r.y + r.h < s.scrollTop + s.clientHeight; })()`);
+  assert.ok(inView, 'the passage is in view');
+  // A passage already in view: nothing moves.
+  await click('made a decision');
+  await sleep(600);
+  const y = await app.eval(`${sc}.scrollTop`);
+  await click('made a decision');
+  await sleep(600);
+  assert.equal(await app.eval(`${sc}.scrollTop`), y, 'already in view: it stays put');
+});
