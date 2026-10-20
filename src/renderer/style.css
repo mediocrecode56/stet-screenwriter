@@ -242,7 +242,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .st { display: flex; align-items: center; padding: 0 8px; white-space: nowrap; }
 .st + .st { box-shadow: -1px 0 0 var(--rule); }
 /* Application icon and version: bottom left, small and quiet. Click for the changelog. */
-#brand { gap: 6px; padding: 0 9px 0 6px; color: var(--ink-3); font-size: 10px; letter-spacing: .04em; cursor: default; }
+#brand { gap: 6px; padding: 0 8px; color: var(--ink-3); font-size: 10px; letter-spacing: .04em; cursor: default; }
 #brand:hover { color: var(--ink-2); }
 #mark { display: block; flex: none; opacity: .85; }
 #st-goal { cursor: default; gap: 6px; }
@@ -250,7 +250,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #st-page { min-width: 14ch; }
 #st-scene { min-width: 11ch; }
 #st-words { min-width: 13ch; }
-#st-el, #st-page, #st-scene, #st-words { font-variant-numeric: tabular-nums; }
+#st-el, #st-page, #st-scene, #st-words { font-variant-numeric: tabular-nums; justify-content: center; } /* centred in their reserved width */
 #st-goal:hover { color: var(--ink); }
 .meter { width: 60px; height: 6px; border: 1px solid var(--ink-2); position: relative; display: inline-block; }
 .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); transition: width var(--dur-panel) var(--ease-out); }

@@ -82,27 +82,35 @@ const LEGS = {
   kick: ['....##.....###....', '....###.......##..'],
   oneLeg: ['......##..........', '......###.........'],
 };
-const SIT_BOTTOM = ['..############....', '.##############...'];
+// Sitting and lying keep the head and body at their standing size, so it is always recognisably itself.
+// Sitting: the legs folded under, a thigh and a foot on the ground.
+const SIT_BOTTOM = ['..###########.....', '.#####...#####....'];
 const BLANK = '..................';
+// Lying on its front, chin on the ground.
 const LIE = [
-  BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK,
+  BLANK, BLANK, BLANK, BLANK, BLANK, BLANK,
   '...........######.',
+  '..........##o#####',
   '..........########',
-  '#.....############',
-  '###########.......',
-  '.##############...',
-  '..############....',
-  BLANK,
+  '..........####....',
+  '........######....',
+  '#.....##########..',
+  '################..',
+  '..#############...',
 ];
+// On its back, feet in the air: the standing dinosaur upside down, its head turned to the side.
 const FALLEN = [
-  BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK,
-  '...#..#...........',
-  '...#..#...........',
+  BLANK, BLANK, BLANK, BLANK,
+  '....###..###......',
+  '....##...##.......',
+  '...########.......',
   '..##########......',
-  '#############.###.',
-  '.#############o##.',
-  '..########...####.',
-  BLANK,
+  '.############.....',
+  '###...##########..',
+  '##.....#########..',
+  '#.......##########',
+  '#........###o#####',
+  '...........######.',
 ];
 // Lying on its front with the head raised, looking up at the sky.
 const LIE_UP = [
@@ -112,11 +120,9 @@ const LIE_UP = [
   '..........#######.',
   '..........#####...',
   '..........####....',
-  '#........#####....',
-  '#############.....',
-  '.##############...',
-  '..############....',
-  BLANK,
+  '..........####....',
+  '.........#####....',
+  ...LIE.slice(11),
 ];
 // Tall and long: head pushed up and forward, arms up, legs straight.
 const STRETCH = [
@@ -186,11 +192,11 @@ export const FRAMES = {
   sitScratch1: withRow(sit('blink'), 10, '###...########.##.'),
   sitScratch2: withRow(withRow(sit('blink'), 9, '##.....##########.'), 10, '###...########....'),
   lie: LIE,
-  lieBreath: LIE.map((r, i) => (i === 10 ? '############......' : r)),
+  lieBreath: withRow(LIE, 10, '.......#######....'),
   lieUp: LIE_UP,
   lieUpBlink: LIE_UP.map((r) => r.replace('o', '#')),
   lieUpHowl: withRow(withRow(LIE_UP, 6, '..........#####...'), 7, '..........###.....'),
-  lieUpTail: withRow(LIE_UP, 9, '.........#####....'),
+  lieUpTail: withRow(LIE_UP, 11, '##....##########..'),
   fallen: FALLEN,
 };
 
@@ -206,13 +212,13 @@ export const MOUTH = at([
   ['stand blink walk1 walk2 run1 run2 roar yawn jump wag kick armsUp oneLeg', [16, 3]],
   ['up howl', [16, 2]], ['sniff sniffBlink chomp', [16, 7]], ['cower', [16, 7]], ['hunch', [16, 5]], ['crouch', [16, 4]],
   ['sit sitChew sitBlink sitBreath sitTap1 sitTap2 sitScratch1 sitScratch2', [16, 5]], ['sitUp sitHowl', [16, 4]],
-  ['stretch', [17, 3]], ['lie lieBreath', [17, 10]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [16, 6]],
+  ['stretch', [17, 3]], ['lie lieBreath', [17, 8]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [16, 6]],
 ]);
 export const HEAD_TOP = at([
   ['stand blink walk1 walk2 run1 run2 roar yawn armsUp kick oneLeg jump wag', [14, 0]], ['up howl stretch', [15, 0]],
   ['crouch', [14, 1]], ['sniff sniffBlink chomp cower', [14, 4]], ['hunch', [14, 2]],
   ['sit sitBlink sitBreath sitChew sitTap1 sitTap2 sitScratch1 sitScratch2', [14, 2]], ['sitUp sitHowl', [15, 2]],
-  ['lie lieBreath', [14, 7]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [15, 4]],
+  ['lie lieBreath', [14, 6]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [15, 4]],
 ]);
 
 /** A rainbow: two dotted arcs, w×h. */

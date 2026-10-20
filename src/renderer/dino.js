@@ -121,6 +121,7 @@ export class Critter {
     this.g = 0;
     this.targetG = 0;
     this.unlocked = 0;
+    this.lastRare = 0;      // when the last rare surprise (an egg, a UFO) came along
   }
 
   // -- randomness --
@@ -257,6 +258,7 @@ export class Critter {
     const night = this.night(), late = h >= 22 || h < 5, morning = h >= 6 && h < 11;
     const free = this.props.length < 2;
     const tree = this.grownTree(), cloud = this.find('cloud');
+    const luck = Math.min(5, 1 + (now - this.lastRare) / (30 * MIN)); // the longer since the last rare surprise, the likelier the next
     const w = {
       sleep: e < 0.15 ? (idle > 240 ? 6 : 0.8) : 0,
       rest: 4 * (1 - e) + 0.4,
@@ -325,13 +327,15 @@ export class Critter {
       skateboard: this.unlocked >= 1 && free ? 0.3 : 0,
       fireworks: this.unlocked >= 2 && free ? 0.22 : 0,
       rainDance: this.unlocked >= 3 && !tree && !cloud && !this.find('palm') && this.envOk('rainDance', 8 * MIN) ? 0.2 : 0,
-      egg: free ? 0.012 : 0,   // rare surprises
-      ufo: 0.01,
+      egg: free ? 0.012 * luck : 0,   // rare surprises
+      ufo: 0.01 * luck,
     };
     const m = MOODS[this.mood].act;
     for (const k in m) if (w[k]) w[k] *= m[k];
     this.recent.forEach((k, i) => { if (w[k]) w[k] *= i === this.recent.length - 1 ? 0.2 : 0.55; }); // variety
-    return this.pick(w);
+    const a = this.pick(w);
+    if (a === 'egg' || a === 'ufo') this.lastRare = now;
+    return a;
   }
 
   /**

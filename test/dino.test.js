@@ -561,7 +561,7 @@ test('its part in the weather follows what it was doing when the weather came', 
 test('it lies on its front, chin up, to look at the sky — and does so while resting, sleeping, stargazing and stretching', () => {
   for (const f of ['lieUp', 'lieUpBlink', 'lieUpHowl', 'lieUpTail']) assert.equal(postureOf(f), 'lie', f);
   const top = (f) => FRAMES[f].findIndex((r) => r.includes('#'));
-  assert.ok(top('lieUp') < top('lie') - 2, 'the head is raised above the lying body');
+  assert.ok(top('lieUp') <= top('lie') - 2, 'the head is raised above the lying body');
   const c = doing('daydream', 5);
   const { steps } = run(c, 30000, { from: c.now + 50, dt: 50 });
   assert.ok(steps.filter((s) => s.activity === 'daydream' && s.f.startsWith('lieUp')).length >= 4, 'daydreaming, chin up');
@@ -677,4 +677,20 @@ test('theme changes at any moment — walking, mid-reaction, asleep, mid-sunset 
   assert.ok(shifts > 10, `${shifts} theme changes`);
   assert.ok(seen.has('nightfall') && seen.has('daybreak'));
   assert.ok(c.props.filter((p) => p.kind === 'sun' || p.kind === 'moon').length <= 2, 'never a sky full of suns');
+});
+
+test('rare surprises (an egg, a UFO) stay rare, but never go missing for long', () => {
+  for (let seed = 1; seed <= 5; seed++) {
+    const c = wide(500 + seed);
+    const rng = seeded(seed);
+    let last = '', rare = 0;
+    run(c, 4 * 3600 * 1000, {
+      dt: 150,
+      each: (now) => {
+        if (rng() < 0.01) c.wrote(1, now);
+        if (c.activity !== last) { last = c.activity; if (last === 'egg' || last === 'ufo') rare++; }
+      },
+    });
+    assert.ok(rare >= 1 && rare <= 12, `seed ${seed}: ${rare} rare surprises in 4 hours`);
+  }
 });

@@ -79,7 +79,10 @@ test('a time-zone change moves the theme on the next check', async () => {
 test('when AUTO turns the theme, the dinosaur sees the sun set or rise; a manual switch leaves it be', async () => {
   const now = new Date();
   const scene = () => app.eval('[__stet.dino.c.activity, __stet.dino.c.pending]');
-  const fresh = () => app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.envDue = null; c.inReaction = null; c.paused = null; c.held = []; c.gen = null; c.pending = 'look'; })()`);
+  const fresh = async () => { // awake and just looking about (a sleeper rightly sleeps through nightfall)
+    await app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.envDue = null; c.inReaction = null; c.paused = null; c.held = []; c.gen = null; c.pending = 'look'; })()`);
+    for (let i = 0; i < 40 && await app.eval(`__stet.dino.c.activity !== 'look'`); i++) await sleep(50);
+  };
   await sleep(Math.max(0, 3200 - await app.eval('performance.now() - __stet.dino.born'))); // not in the first moments after launch
   await click('th-light');
   await fresh();

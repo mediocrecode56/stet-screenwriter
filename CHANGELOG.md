@@ -4,6 +4,24 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.12.0 — 20 October 2026
+
+The dinosaur stays itself when it sits or lies down, it is now STET's icon, its rarest surprises always come round again, and the status bar is tidier.
+
+### New
+
+- **The dinosaur is STET's icon.** The program, the taskbar, the window and the little mark at the bottom left all show the pixel dinosaur now, drawn crisp at every size.
+
+### Improved
+
+- **Sitting and lying down look like the dinosaur.** These poses used to squash it into a shapeless lump. Now its head, eye and body keep their standing size. Sitting, its legs fold under it with a thigh and a foot on the ground. Lying down, it rests its chin on the ground. Looking up from lying, only its head and neck rise, and on its back it is clearly itself upside down with its feet in the air.
+- **Rare surprises always come round again.** The hatching egg and the UFO stay rare, but the longer it has been since the last one, the likelier the next. Expect one every hour or two of the app being open. The weather, the visitors and the growing things were checked too: they still turn up regularly.
+- **Status bar labels are centred.** The element, page, scene and word count now sit in the middle of their boxes instead of hugging the left edge, and the version label has the same space on both sides.
+
+### For the technically curious
+
+- `SIT_BOTTOM`, `LIE`, `LIE_UP` and `FALLEN` are redrawn from the standing head and body; mouth and hat anchors follow. `scripts/icon.svg.js` now draws `FRAMES.stand` (or a slimmer 14 × 13 version where that comes out larger) on whole device pixels; `npx electron scripts/make-icon.cjs` rebuilds `build/icon.ico` and `mark.svg`. Rare surprises get a `luck` factor (up to 5×) from `lastRare`. A new test checks that over 4 simulated hours there is always at least one rare surprise, and never a flood of them.
+
 ## 0.11.0 — 20 October 2026
 
 The dinosaur watches the sky, sees the sun set and rise with your theme, varies its everyday routines, and gets more visitors.
