@@ -217,6 +217,10 @@ export async function statsDialog(api) {
     const s = api.summary(offset);
     const goalIn = h('input', { type: 'number', value: s.goals.daily, min: 0, step: 50, class: 'wk-in' });
     const weekIn = h('input', { type: 'number', value: s.goals.weekly, min: 0, step: 250, class: 'wk-in' });
+    // The two goals move together, keeping the ratio they have now (5 writing days a week if either is unset).
+    const ratio = s.goals.daily > 0 && s.goals.weekly > 0 ? s.goals.weekly / s.goals.daily : 5;
+    goalIn.addEventListener('input', () => { weekIn.value = Math.max(0, Math.round((+goalIn.value || 0) * ratio)); });
+    weekIn.addEventListener('input', () => { goalIn.value = Math.max(0, Math.round((+weekIn.value || 0) / ratio)); });
     let close = () => {};
     const nav = (d) => h('button', { class: 'tb wk-nav', title: d < 0 ? 'Previous week' : 'Next week', disabled: d < 0 ? !s.hasEarlier : s.week.current, onclick: () => close('nav' + d) }, d < 0 ? '‹' : '›');
     const resetBtn = h('button', { class: 'tb wk-reset', title: 'Clear all recorded writing statistics (asks first)', onclick: () => close('reset') }, 'RESET STATISTICS…');

@@ -4,6 +4,12 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.16.5 — 21 October 2026
+
+### Improved
+
+- **The daily and weekly goals move together.** In the weekly view, changing one goal updates the other and keeps the ratio between them. For example, with 600 a day and 3,000 a week, typing 800 daily makes the weekly goal 4,000. If either goal isn't set, weekly is 5 times daily. Nothing is saved until you press Save goals.
+
 ## 0.16.4 — 21 October 2026
 
 ### Improved
