@@ -5,6 +5,7 @@
 import { PAGE, ELEMENT, lineText, lineX } from './format.js';
 import { paginate, linesOf } from './layout.js';
 import { TITLE_FIELDS_SPEC } from './titlepage.js';
+import { styleRuns } from './model.js';
 
 /**
  * Parse a page-range string ("1-3, 7, 10-") into a predicate over script page
@@ -35,7 +36,7 @@ export function hasTitlePage(tp) {
 /**
  * Build printable pages.
  * options: { titlePage: bool, highlights: bool, comments: bool, range: string }
- * Returns { pages: [{ kind, number, lines:[{col,row,text}], rects:[{col,row,w,color}], notes:[{col,row,w}] }], total, notes: [...] }
+ * Returns { pages: [{ kind, number, lines:[{col,row,text,st?}], rects:[{col,row,w,color}], notes:[{col,row,w}] }], total, notes: [...] }
  */
 export function buildPrintPages(doc, options = {}) {
   const opt = { titlePage: true, highlights: false, comments: false, range: '', ...options };
@@ -63,7 +64,15 @@ export function buildPrintPages(doc, options = {}) {
         const row = top + it.y + l - it.l0;
         const col = lineX(b.type, b.text, starts, l);
         const text = lineText(b.text, starts, l);
-        if (text) lines.push({ col, row, text });
+        // Text styles always print; a styled line goes out as runs (st: e.g. 'bu').
+        if (text) {
+          const ls = starts[l];
+          for (const r of styleRuns(b.marks, ls, ls + text.length)) {
+            const ln = { col: col + r.s - ls, row, text: text.slice(r.s - ls, r.e - ls) };
+            if (r.st) ln.st = r.st;
+            lines.push(ln);
+          }
+        }
         if (!b.marks.length || (!opt.highlights && !opt.comments)) continue;
         const ls = starts[l], le = ls + text.length;
         for (const m of b.marks) {

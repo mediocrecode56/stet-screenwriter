@@ -15,7 +15,7 @@ src/
     smart.js       autocomplete (scene prefixes, locations, times, cues, extensions)
     text.js        the word-count rule / word boundaries
     serialize.js   document <-> .stet JSON payload, validation, migrations
-    printmodel.js  printable pages (title page, ranges, highlights, notes)
+    printmodel.js  printable pages (title page, ranges, text styles, highlights, notes)
     pdf.js         PDF writer;  printhtml.js  HTML for the OS print dialog
     stats.js       writing-statistics ledger (pure);  plaintext.js  clipboard interchange
     streak.js      the writing streak: day rules, milestones, growth and unlocks

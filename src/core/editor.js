@@ -6,10 +6,10 @@
 // used by incremental pagination. Undo/redo replays those steps.
 
 import {
-  makeBlock, withText, withType, newId, UPPER_TYPES, cueName,
-  marksAfterInsert, marksAfterDelete, sliceMarks, concatMarks, setHighlight, removeCommentMarks,
+  makeBlock, withText, withType, UPPER_TYPES, cueName,
+  marksAfterInsert, marksAfterDelete, sliceMarks, concatMarks, setHighlight, removeCommentMarks, STYLES, setStyle, hasStyle,
 } from './model.js';
-import { blockWords, countWords, documentWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
+import { blockWords, documentWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
 import { mergeDirty } from './layout.js';
 
 export const NEXT_ON_ENTER = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'action', transition: 'scene', shot: 'action' };
@@ -67,6 +67,7 @@ export class Editor {
     this.loads = 0;        // increments on every document load
     this.onChange = null;  // (editor) => void
     this.autoCapitalize = true;
+    this.pending = null;   // { at, set: { k: on } }: styles toggled with no selection, for text typed at `at`
     this.now = () => Date.now();
   }
 
@@ -171,6 +172,7 @@ export class Editor {
     for (const b of this.blocks) this.words += blockWords(b);
     this.credits = [];
     this.fresh = null;
+    this.pending = null;
     this.retired = 0;
     this.loads++; // lets listeners tell a document load from an edit
     this.undoStack.length = 0;
@@ -262,6 +264,7 @@ export class Editor {
 
   setSel(a, f = a) {
     this.sel = { a: this.clampPos(a), f: this.clampPos(f) };
+    if (this.pending && cmp(this.pending.at, this.sel.f) !== 0) this.pending = null; // a toggled style lasts until the caret moves
     this.breakUndoGroup();
     this._emit();
   }
@@ -320,10 +323,12 @@ export class Editor {
     return p;
   }
 
-  _insertAt(p, str) {
+  _insertAt(p, str, styles = null) {
     const b = this.blocks[p.b];
     if (UPPER_TYPES.has(b.type)) str = str.toUpperCase();
-    this._replace(p.b, withText(b, b.text.slice(0, p.o) + str + b.text.slice(p.o), marksAfterInsert(b.marks, p.o, str.length)));
+    let marks = marksAfterInsert(b.marks, p.o, str.length);
+    if (styles) for (const [k, on] of Object.entries(styles)) marks = setStyle(marks, p.o, p.o + str.length, k, on);
+    this._replace(p.b, withText(b, b.text.slice(0, p.o) + str + b.text.slice(p.o), marks));
     const np = pos(p.b, p.o + str.length);
     this.sel = { a: np, f: np };
     return np;
@@ -353,7 +358,9 @@ export class Editor {
           return;
         }
       }
-      p = this._insertAt(p, str);
+      const pend = this._pendingAt(p);
+      p = this._insertAt(p, str, pend);
+      if (pend) this.pending = { at: p, set: pend };
       b = this.blocks[p.b];
       if (b.type === 'action' && boundary && p.o <= 12 && SCENE_PREFIX.test(b.text)) {
         this._replace(p.b, withType(b, 'scene'));
@@ -561,6 +568,60 @@ export class Editor {
     return true;
   }
 
+  /** Styles toggled at `p` with no selection and not yet typed, or null. */
+  _pendingAt(p) {
+    const q = this.pending;
+    return q && q.at.b === p.b && q.at.o === p.o && this.blocks[p.b] ? q.set : null;
+  }
+
+  /**
+   * Whether style `k` is in effect: across the whole selection, or for text
+   * typed at the caret (what the toolbar buttons show as pressed).
+   */
+  styleActive(k) {
+    if (!this.hasSelection()) {
+      const p = this.caret;
+      const pend = this._pendingAt(p);
+      if (pend && k in pend) return pend[k];
+      return this.blocks[p.b].marks.some((m) => m.k === k && m.s < p.o && m.e >= p.o);
+    }
+    const [s, e] = this.ordered();
+    let any = false;
+    for (let i = s.b; i <= e.b; i++) {
+      const b = this.blocks[i];
+      const a = i === s.b ? s.o : 0, z = i === e.b ? e.o : b.text.length;
+      if (z <= a) continue;
+      if (!hasStyle(b.marks, a, z, k)) return false;
+      any = true;
+    }
+    return any;
+  }
+
+  /**
+   * Toggle style `k` (one of STYLES) on the selection, as one undoable step —
+   * or, with no selection, for the text typed next at the caret.
+   */
+  toggleStyle(k) {
+    if (!STYLES.includes(k)) return false;
+    const on = !this.styleActive(k);
+    if (!this.hasSelection()) {
+      const p = this.caret;
+      this.pending = { at: p, set: { ...this._pendingAt(p), [k]: on } };
+      this._emit();
+      return true;
+    }
+    const [s, e] = this.ordered();
+    this.edit('mark', () => {
+      for (let i = s.b; i <= e.b; i++) {
+        const b = this.blocks[i];
+        const a = i === s.b ? s.o : 0, z = i === e.b ? e.o : b.text.length;
+        if (z <= a) continue;
+        this._replace(i, withText(b, b.text, setStyle(b.marks, a, z, k, on)));
+      }
+    }, { close: true });
+    return true;
+  }
+
   /** Attach comment `id` to the selection (or the whole current block). */
   attachComment(id) {
     let [s, e] = this.ordered();
@@ -638,7 +699,9 @@ export class Editor {
         const b = this.blocks[m.b];
         const replacement = replacements[k];
         const r = UPPER_TYPES.has(b.type) ? replacement.toUpperCase() : replacement;
-        const marks = marksAfterInsert(marksAfterDelete(b.marks, m.s, m.e), m.s, r.length);
+        let marks = marksAfterInsert(marksAfterDelete(b.marks, m.s, m.e), m.s, r.length);
+        // A replaced word keeps the styles it had throughout.
+        for (const k of STYLES) if (m.e > m.s && hasStyle(b.marks, m.s, m.e, k)) marks = setStyle(marks, m.s, m.s + r.length, k, true);
         this._replace(m.b, withText(b, b.text.slice(0, m.s) + r + b.text.slice(m.e), marks));
       }
       const first = matches[0];
@@ -707,4 +770,3 @@ export class Editor {
   }
 }
 
-export function newBlockId() { return newId(); }

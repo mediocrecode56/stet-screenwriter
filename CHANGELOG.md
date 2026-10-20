@@ -4,6 +4,25 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.10.0 — 20 October 2026
+
+Bold, italic, underline and strikethrough, one keystroke away.
+
+### New
+
+- **Text styles.** Select some text and press **Ctrl+B** for bold, **Ctrl+I** for italic, **Ctrl+U** for underline or **Ctrl+D** for strikethrough; press it again to turn it off. With nothing selected, the style applies to what you type next, and typing on at the end of a styled word keeps the style going. Styles combine freely, never change your words or your word count, and each change undoes in one step (Ctrl+Z).
+- **B, I, U and S buttons** on the toolbar, right after the highlight colours. They light up to show the styles at the cursor or across your selection, and clicking one keeps you typing.
+- **In the Format menu** too, with their shortcuts, and in the command palette (Ctrl+K) and the key list (F1).
+- **Printed as you see them.** Styled text keeps its look in the PDF, when printing and in the print preview, on exactly the same layout: Courier stays the same width in every style, so nothing moves on the page. Styles are saved in your screenplay; a replaced word keeps its styles.
+
+### Improved
+
+- **Tidier code.** Leftover functions, imports and styles nobody used any more are gone, and the two highlight commands share one implementation.
+
+### For the technically curious
+
+- Styles are marks like highlights (`b`, `i`, `u`, `s`), split into runs per line by `styleRuns()`. The PDF uses the standard Courier, Courier-Bold, Courier-Oblique and Courier-BoldOblique fonts, so it still embeds none; underline and strikethrough are drawn as rules. A style toggled with no selection waits at the caret and is forgotten if the caret moves away first. New: `test/styles.test.js`, `test/e2e/styles.e2e.js`, and `npm run quick` — every unit test plus the core real-app tests in under a minute.
+
 ## 0.9.0 — 20 October 2026
 
 A dinosaur with a much richer life and a little world around it, a writing streak that makes it grow, and simpler boxes at the top of the weekly view.

@@ -1,7 +1,8 @@
 // Minimal PDF 1.4 writer for screenplay pages.
 //
-// Uses the standard Type 1 font Courier (one of the 14 fonts every PDF reader
-// provides), so no font embedding is needed and metrics are exact: every glyph
+// Uses the standard Type 1 Courier family (among the 14 fonts every PDF reader
+// provides: regular, bold, oblique, bold oblique), so no font embedding is
+// needed and metrics are exact in every style: every glyph
 // is 600/1000 em wide, i.e. 7.2pt at 12pt = exactly 10 characters per inch.
 // Text is encoded as WinAnsi (cp1252); characters outside it become "?".
 
@@ -37,6 +38,10 @@ export function pdfString(text) {
 
 const n = (v) => (Math.round(v * 100) / 100).toString();
 
+const FONTS = ['Courier', 'Courier-Bold', 'Courier-Oblique', 'Courier-BoldOblique'];
+const fontOf = (st = '') => (st.includes('b') ? 1 : 0) + (st.includes('i') ? 2 : 0);
+const UNDER = -1.6, STRIKE = 3.2; // rule heights from the baseline, in pt
+
 function pageStream(page) {
   let s = '';
   for (const r of page.rects) {
@@ -51,14 +56,23 @@ function pageStream(page) {
     }
     s += '[] 0 d\n';
   }
-  s += '0 0 0 rg BT /F1 12 Tf\n';
-  let lx = 0, ly = 0;
+  s += '0 0 0 rg BT\n';
+  let lx = 0, ly = 0, font = -1;
+  const rules = [];
   for (const l of page.lines) {
     const x = l.col * PT_COL, y = PAGE_H - l.row * PT_ROW - BASELINE;
+    const f = fontOf(l.st);
+    if (f !== font) { s += `/F${f + 1} 12 Tf\n`; font = f; }
     s += `${n(x - lx)} ${n(y - ly)} Td (${pdfString(l.text)}) Tj\n`;
     lx = x; ly = y;
+    if (l.st && l.st.includes('u')) rules.push([x, y + UNDER, l.text.length]);
+    if (l.st && l.st.includes('s')) rules.push([x, y + STRIKE, l.text.length]);
   }
   s += 'ET\n';
+  if (rules.length) {
+    s += '0 0 0 RG 0.6 w\n';
+    for (const [x, y, w] of rules) s += `${n(x)} ${n(y)} m ${n(x + w * PT_COL)} ${n(y)} l S\n`;
+  }
   return s;
 }
 
@@ -71,7 +85,8 @@ export function buildPdf(pages, { title = '', author = '', creator = 'STET', def
   const add = (body) => { objs.push(body); return objs.length; };
   const catalogId = add(null);
   const pagesId = add(null);
-  const fontId = add('<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>');
+  const fontIds = FONTS.map((f) => add(`<< /Type /Font /Subtype /Type1 /BaseFont /${f} /Encoding /WinAnsiEncoding >>`));
+  const fonts = fontIds.map((id, i) => `/F${i + 1} ${id} 0 R`).join(' ');
   const kids = [];
   for (const p of pages) {
     let data = pageStream(p);
@@ -82,7 +97,7 @@ export function buildPdf(pages, { title = '', author = '', creator = 'STET', def
       filter = ' /Filter /FlateDecode';
     }
     const contentId = add(`<< /Length ${data.length}${filter} >>\nstream\n${data}\nendstream`);
-    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`));
+    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << ${fonts} >> >> /Contents ${contentId} 0 R >>`));
   }
   objs[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
   objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => k + ' 0 R').join(' ')}] /Count ${kids.length} >>`;

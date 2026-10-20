@@ -3,7 +3,7 @@
 // Serialization is deterministic (fixed key order, sorted comment ids, no
 // runtime ids), so save(load(save(doc))) is byte-identical to save(doc).
 
-import { TYPES, HIGHLIGHT_COLORS, makeBlock, defaultDocSettings, emptyTitlePage, uuid } from './model.js';
+import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, defaultDocSettings, emptyTitlePage, uuid } from './model.js';
 import { reviewToJSON, reviewFromJSON } from './revision.js';
 
 export const SCHEMA_VERSION = 1;
@@ -108,6 +108,7 @@ export function deserialize(json) {
         if (e <= s) continue;
         if (k === 'hl' && HIGHLIGHT_COLORS.includes(v)) marks.push({ s, e, k, v });
         else if (k === 'cm' && typeof v === 'string') marks.push({ s, e, k, v });
+        else if (STYLES.includes(k)) marks.push({ s, e, k, v: 1 });
       }
     }
     blocks.push(makeBlock(type, text, marks));

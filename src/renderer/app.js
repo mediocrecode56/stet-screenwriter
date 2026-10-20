@@ -2,7 +2,7 @@
 // the UI. Document logic lives in ../core, persistence in ./session.js.
 
 import { Editor, pos } from '../core/editor.js';
-import { makeBlock, TYPES, TYPE_LABEL, HIGHLIGHT_COLORS, newDocument, uuid } from '../core/model.js';
+import { makeBlock, TYPES, TYPE_LABEL, HIGHLIGHT_COLORS, STYLES, newDocument, uuid } from '../core/model.js';
 import { buildPrintPages } from '../core/printmodel.js';
 import { printHTML } from '../core/printhtml.js';
 import { View } from './view.js';
@@ -165,7 +165,8 @@ function renderStatus() {
     renderStatus._scene = n;
   }
   scene = renderStatus._scene;
-  const key = `${b.type}|${page}|${view.pages.length}|${scene}|${editor.words}`;
+  const styles = STYLES.map((k) => (editor.styleActive(k) ? k : '')).join('');
+  const key = `${b.type}|${page}|${view.pages.length}|${scene}|${editor.words}|${styles}`;
   if (key !== statusKey) {
     statusKey = key;
     $('st-el').textContent = TYPE_LABEL[b.type].toUpperCase();
@@ -173,6 +174,7 @@ function renderStatus() {
     $('st-scene').textContent = scene ? `SCENE ${scene}` : 'NO SCENE';
     $('st-words').textContent = `${editor.words.toLocaleString()} WORDS`;
     for (const btn of $('eltypes').children) btn.classList.toggle('on', btn.dataset.t === b.type);
+    for (const btn of $('stbar').children) btn.classList.toggle('on', styles.includes(btn.dataset.s));
   }
 }
 
@@ -289,7 +291,13 @@ window.addEventListener('focus', refreshTheme);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshTheme(); });
 systemDark.addEventListener('change', refreshTheme);
 
-// element & highlight bars
+// element, highlight and text style bars
+const STYLE_CMDS = [
+  { k: 'b', label: 'Bold', keys: 'Ctrl+B', glyph: 'B' },
+  { k: 'i', label: 'Italic', keys: 'Ctrl+I', glyph: 'I' },
+  { k: 'u', label: 'Underline', keys: 'Ctrl+U', glyph: 'U' },
+  { k: 's', label: 'Strikethrough', keys: 'Ctrl+D', glyph: 'S' },
+];
 for (const [i, t] of TYPES.entries()) {
   const short = { scene: 'SCENE', action: 'ACTION', character: 'CHARACTER', paren: 'PAREN', dialogue: 'DIALOGUE', transition: 'TRANS', shot: 'SHOT' }[t];
   const b = dlg.h('button', { class: 'tb', title: `${TYPE_LABEL[t]} (Ctrl+${i + 1})`, 'data-t': t }, short, dlg.h('sup', {}, String(i + 1)));
@@ -305,6 +313,11 @@ for (const [i, c] of HIGHLIGHT_COLORS.entries()) {
   const b = dlg.h('button', { class: 'tb', title: 'Remove highlight (Alt+0)' }, dlg.h('span', { class: 'sw none' }));
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('hl-none'); });
   $('hlbar').appendChild(b);
+}
+for (const s of STYLE_CMDS) {
+  const b = dlg.h('button', { class: 'tb st', title: `${s.label} (${s.keys})`, 'data-s': s.k }, dlg.h('span', { class: 's' + s.k }, s.glyph));
+  b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-' + s.k); });
+  $('stbar').appendChild(b);
 }
 const tbClick = (id, c) => $(id).addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run(c); });
 tbClick('btn-comment', 'note-add');
@@ -594,9 +607,16 @@ async function exportPdf(options = lastPrintOpts) {
 // ---- commands -----------------------------------------------------------------------------------
 
 const typeCmds = TYPES.map((t, i) => ({ id: 'type-' + t, cat: 'Element', label: TYPE_LABEL[t], keys: `Ctrl+${i + 1}`, run: () => { editor.setType(t); input.after(false); input.focus(); } }));
-const hlCmds = HIGHLIGHT_COLORS.map((c, i) => ({
-  id: 'hl-' + c, cat: 'Format', label: `Highlight ${c}`, keys: `Alt+${i + 1}`,
-  run: () => { if (!editor.hasSelection()) editor.setSel(pos(editor.caret.b, 0), pos(editor.caret.b, editor.block.text.length)); editor.highlight(c); input.after(false); input.focus(); },
+// A highlight with no selection covers the whole paragraph.
+function highlight(color) {
+  if (!editor.hasSelection()) editor.setSel(pos(editor.caret.b, 0), pos(editor.caret.b, editor.block.text.length));
+  editor.highlight(color); input.after(false); input.focus();
+}
+const hlCmds = HIGHLIGHT_COLORS.map((c, i) => ({ id: 'hl-' + c, cat: 'Format', label: `Highlight ${c}`, keys: `Alt+${i + 1}`, run: () => highlight(c) }));
+// With a selection a style toggles across it; without one it applies to what is typed next.
+const styleCmds = STYLE_CMDS.map((s) => ({
+  id: 'style-' + s.k, cat: 'Format', label: s.label, keys: s.keys,
+  run: () => { editor.toggleStyle(s.k); input.after(false); input.focus(); },
 }));
 
 cmd.register([
@@ -658,8 +678,9 @@ cmd.register([
   ...typeCmds,
   { id: 'type-cycle', cat: 'Element', label: 'Next Element Type', display: 'Tab', run: () => { editor.tab(false); input.after(); input.focus(); } },
 
+  ...styleCmds,
   ...hlCmds,
-  { id: 'hl-none', cat: 'Format', label: 'Remove Highlight', keys: 'Alt+0', run: () => { if (!editor.hasSelection()) editor.setSel(pos(editor.caret.b, 0), pos(editor.caret.b, editor.block.text.length)); editor.highlight(null); input.after(false); input.focus(); } },
+  { id: 'hl-none', cat: 'Format', label: 'Remove Highlight', keys: 'Alt+0', run: () => highlight(null) },
   { id: 'note-add', cat: 'Format', label: 'Add Note', keys: 'Ctrl+Alt+M', global: true, run: addNote },
   { id: 'note-next', cat: 'Format', label: 'Next Note', keys: 'F8', global: true, run: () => stepNote(1) },
   { id: 'note-prev', cat: 'Format', label: 'Previous Note', keys: 'Shift+F8', global: true, run: () => stepNote(-1) },
@@ -717,7 +738,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'File', items: () => ['new', 'open', 'recent', '-', 'save', 'save-as', 'rename', 'reveal', '-', 'backups', 'backup-now', 'recover', '-', 'print', 'export-pdf', '-', 'prefs'] },
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
-  { label: 'Format', items: [...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
+  { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
   { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', 'about'] },

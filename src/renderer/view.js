@@ -12,6 +12,7 @@ import { linesOf, paginate, pageOf, rowOf } from '../core/layout.js';
 import { lineIndexOf, lineEndOffset } from '../core/nav.js';
 import { cmp, pos } from '../core/editor.js';
 import { TITLE_FIELDS_SPEC } from '../core/titlepage.js';
+import { styleRuns } from '../core/model.js';
 
 const PX_COL = 9.6;   // 0.1in at 96dpi
 const PX_ROW = 16;    // 1/6in at 96dpi (Courier 12pt line)
@@ -28,6 +29,17 @@ function ver(block) {
 }
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** A line's text, its bold/italic/underline/strikethrough runs as spans. */
+function styledLine(b, ls, txt) {
+  if (!b.marks.length) return esc(txt);
+  let h = '';
+  for (const r of styleRuns(b.marks, ls, ls + txt.length)) {
+    const t = esc(txt.slice(r.s - ls, r.e - ls));
+    h += r.st ? `<span class="${[...r.st].map((k) => 's' + k).join(' ')}">${t}</span>` : t;
+  }
+  return h;
+}
 
 export const TITLE_FIELDS = TITLE_FIELDS_SPEC;
 
@@ -207,7 +219,7 @@ export class View {
         const y = (top + it.y + l - it.l0) * row;
         const x0 = lineX(b.type, b.text, starts, l);
         const txt = lineText(b.text, starts, l);
-        if (txt) h += `<div class="l" style="left:${x0 * this.col}px;top:${y}px">${esc(txt)}</div>`;
+        if (txt) h += `<div class="l" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt)}</div>`;
         if (!b.marks.length) continue;
         const ls = starts[l], le = ls + txt.length;
         for (const m of b.marks) {
@@ -215,7 +227,7 @@ export class View {
           if (z <= a) continue;
           const x = this.xAt(x0, a - ls), w = (z - a) * this.cw;
           if (m.k === 'hl') h += `<div class="mk hl-${m.v}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
-          else {
+          else if (m.k === 'cm') {
             h += `<div class="mk cm" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
             if (!ticks.has(m.v)) {
               ticks.add(m.v);

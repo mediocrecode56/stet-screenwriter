@@ -1001,8 +1001,6 @@ export const SPECIALS = ['skateboard', 'fireworks', 'rainDance'];
 // with asleep or lying: true).
 // env reactions are never chosen for a click: the environment picks them.
 
-const SITTING_STILL = new Set(['rest', 'writeAlong', 'readScript', 'coffeeBreak', 'stargaze', 'watchWriter', 'treeShade', 'doze', 'scratch', 'howl']);
-const MOVING = new Set(['walk', 'patrol', 'zoomies', 'ponder']);
 const DANCING = new Set(['dance', 'sing', 'celebrate', 'rainDance']);
 const QUIET = new Set(['writeAlong', 'readScript', 'stargaze', 'watchWriter', 'coffeeBreak', 'yoga', 'treeShade']);
 const sitOr = (d, sitting, standing) => (d.sitting() ? sitting : standing);

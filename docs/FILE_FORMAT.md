@@ -80,6 +80,9 @@ carries the screenplay structure; layout is derived from it.
 into `x`, `start < end`:
 
 - `["hl", color]` — highlight, color ∈ `blue | yellow | pink`
+- `["b", 1]` · `["i", 1]` · `["u", 1]` · `["s", 1]` — bold, italic, underline,
+  strikethrough (since 0.10.0). Styles combine freely and always print.
+  Older versions of STET open such files and simply leave the styles out.
 - `["cm", id]` — comment anchor; `id` keys into `comments`. One comment may
   anchor across several consecutive blocks.
 

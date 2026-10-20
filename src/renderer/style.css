@@ -120,7 +120,8 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 
 /* ---- element bar ----------------------------------------------------- */
 #elbar { height: 30px; flex: none; display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); background: var(--bar); padding: 0 6px; }
-#eltypes, #hlbar { display: flex; }
+#eltypes, #hlbar, #stbar { display: flex; }
+.tb.st { font: 13px/1 var(--script); padding: 0 7px; text-transform: none; letter-spacing: 0; }
 .tb { border: 0; background: none; padding: 0 8px; cursor: default; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2); transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .tb.pressed, .tb.on, .mb.pressed, .btn.pressed { transition: none; }
 /* Toolbar buttons sit inside the bar's rules: an active (filled) button never
@@ -192,6 +193,10 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .page .l { position: absolute; white-space: pre; line-height: 1; z-index: 2; }
 .page .pn { position: absolute; white-space: pre; line-height: 1; color: var(--ink); z-index: 2; }
 .page .mk { position: absolute; z-index: 1; }
+/* Text styles. Courier keeps every weight and slant on the same character grid. */
+.sb { font-weight: 700; } .si { font-style: italic; }
+.su { text-decoration-line: underline; } .ss { text-decoration-line: line-through; } .su.ss { text-decoration-line: underline line-through; }
+.su, .ss { text-decoration-thickness: max(1px, .06em); text-underline-offset: .12em; }
 .mk.hl-blue { background: var(--hl-blue); }
 .mk.hl-yellow { background: var(--hl-yellow); }
 .mk.hl-pink { background: var(--hl-pink); }
@@ -207,7 +212,6 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #caret.blink-b { animation: blink-b 1.06s steps(1) .5s infinite; }
 @keyframes blink-a { 50% { opacity: 0; } }
 @keyframes blink-b { 50% { opacity: 0; } }
-.pagebreak-label { position: absolute; font: 9px var(--ui); color: var(--ink-3); letter-spacing: .2em; }
 
 /* title page fields are real inputs laid over the page grid */
 .tp-f {
@@ -309,7 +313,6 @@ table.t th { color: var(--ink-3); text-transform: uppercase; letter-spacing: .1e
 table.t tr.pick { cursor: default; }
 table.t tr.pick:hover td { background: var(--rule); }
 table.t tr.on td { background: var(--inv-bg); color: var(--inv-fg); }
-td.nowrap { white-space: nowrap; }
 /* Open Recent: a fixed-layout table that never grows past the dialog (no horizontal scrolling).
    The name keeps priority; paths are shortened from the start (dialogs.js fitStart); the
    actions keep their own column. They show while the row is hovered, focused or selected,

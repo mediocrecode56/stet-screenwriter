@@ -4,7 +4,6 @@
 
 import * as nav from '../core/nav.js';
 import { pos, cmp } from '../core/editor.js';
-import { linesOf } from '../core/layout.js';
 import { wordAt } from '../core/text.js';
 import { toPlainText, parsePlainText } from '../core/plaintext.js';
 import { WheelZoom, stepZoom } from '../core/wheelzoom.js';
@@ -291,5 +290,3 @@ export class Input {
   }
 }
 
-/** Index of the visual line in block at offset (exported for tests/tools). */
-export function visualLine(block, o) { return nav.lineIndexOf(linesOf(block), o); }

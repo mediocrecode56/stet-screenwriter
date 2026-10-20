@@ -386,7 +386,7 @@ export async function previewDialog(doc, initial) {
       let s = '';
       for (const r of p.rects) s += `<div class="mk hl-${r.color}" style="left:${r.col * col}px;top:${r.row * row}px;width:${r.w * col}px;height:${row}px"></div>`;
       for (const u of p.notes) s += `<div class="mk" style="left:${u.col * col}px;top:${u.row * row}px;width:${u.w * col}px;height:${row}px;border-bottom:1px dashed #000"></div>`;
-      for (const l of p.lines) s += `<div class="l" style="left:${l.col * col}px;top:${l.row * row}px">${esc(l.text)}</div>`;
+      for (const l of p.lines) s += `<div class="l${l.st ? [...l.st].map((k) => ' s' + k).join('') : ''}" style="left:${l.col * col}px;top:${l.row * row}px">${esc(l.text)}</div>`;
       const cap = p.kind === 'title' ? 'title' : p.kind === 'notes' ? 'notes' : 'p.' + p.number;
       const sheet = h('div', { class: 'sheet', style: `width:${85 * col}px;height:${66 * row}px;font-size:${row}px`, html: s + `<div class="cap">${cap}</div>` });
       frag.appendChild(sheet);

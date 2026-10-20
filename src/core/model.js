@@ -4,6 +4,7 @@
 //
 // Block  = { id, type, text, marks }
 // Mark   = { s, e, k, v }   k: 'hl' (v = color) | 'cm' (v = comment id)
+//                           | a text style in STYLES (v = 1)
 
 export const TYPES = ['scene', 'action', 'character', 'paren', 'dialogue', 'transition', 'shot'];
 
@@ -18,8 +19,11 @@ export const TYPE_LABEL = {
 };
 
 export const UPPER_TYPES = new Set(['scene', 'character', 'transition', 'shot']);
-export const SPEECH_TYPES = new Set(['paren', 'dialogue']);
 export const HIGHLIGHT_COLORS = ['blue', 'yellow', 'pink'];
+
+/** Text styles, printed with the script: bold, italic, underline, strikethrough. */
+export const STYLES = ['b', 'i', 'u', 's'];
+const STYLE = new Set(STYLES);
 
 let idSeq = 0;
 const idPrefix = Math.random().toString(36).slice(2, 7);
@@ -79,12 +83,16 @@ export function newDocument(title = '') {
 
 // ---- marks -----------------------------------------------------------------
 
-/** Shift marks for an insertion of `len` chars at offset `at`. */
+/**
+ * Shift marks for an insertion of `len` chars at offset `at`. Text typed at the
+ * end of a styled run carries the style on, as in any word processor; highlights
+ * and notes stay where they were put.
+ */
 export function marksAfterInsert(marks, at, len) {
   if (!marks.length) return marks;
   return marks.map((m) => ({
     s: m.s >= at ? m.s + len : m.s,
-    e: m.e > at ? m.e + len : m.e,
+    e: m.e > at || (m.e === at && m.s < at && STYLE.has(m.k)) ? m.e + len : m.e,
     k: m.k,
     v: m.v,
   }));
@@ -148,6 +156,49 @@ export function setHighlight(marks, a, b, color) {
   }
   if (color) out.push({ s: a, e: b, k: 'hl', v: color });
   return normalizeMarks(out);
+}
+
+/** Turn style `k` on or off across [a, b). */
+export function setStyle(marks, a, b, k, on) {
+  const out = [];
+  for (const m of marks) {
+    if (m.k !== k || m.e <= a || m.s >= b) { out.push(m); continue; }
+    if (m.s < a) out.push({ s: m.s, e: a, k, v: 1 });
+    if (m.e > b) out.push({ s: b, e: m.e, k, v: 1 });
+  }
+  if (on && b > a) out.push({ s: a, e: b, k, v: 1 });
+  return normalizeMarks(out);
+}
+
+/** Whether style `k` covers all of [a, b) (b > a). */
+export function hasStyle(marks, a, b, k) {
+  let at = a;
+  for (const m of marks.filter((x) => x.k === k).sort((x, y) => x.s - y.s)) {
+    if (m.s > at) break;
+    if (m.e > at) at = m.e;
+    if (at >= b) return true;
+  }
+  return false;
+}
+
+/**
+ * Split [a, b) of a block into runs of constant style: [{ s, e, st }] where st
+ * is the set of styles in effect, as a string in STYLES order ('' = plain).
+ */
+export function styleRuns(marks, a, b) {
+  const cuts = new Set([a, b]);
+  const styled = marks.filter((m) => STYLE.has(m.k) && m.e > a && m.s < b);
+  if (!styled.length) return [{ s: a, e: b, st: '' }];
+  for (const m of styled) { if (m.s > a) cuts.add(m.s); if (m.e < b) cuts.add(m.e); }
+  const xs = [...cuts].sort((x, y) => x - y);
+  const out = [];
+  for (let i = 0; i < xs.length - 1; i++) {
+    const s = xs[i], e = xs[i + 1];
+    const st = STYLES.filter((k) => styled.some((m) => m.k === k && m.s <= s && m.e >= e)).join('');
+    const last = out[out.length - 1];
+    if (last && last.st === st) last.e = e; else out.push({ s, e, st });
+  }
+  return out;
 }
 
 export function removeCommentMarks(marks, commentId) {
