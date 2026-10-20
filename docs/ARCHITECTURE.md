@@ -18,6 +18,7 @@ src/
     printmodel.js  printable pages (title page, ranges, highlights, notes)
     pdf.js         PDF writer;  printhtml.js  HTML for the OS print dialog
     stats.js       writing-statistics ledger (pure);  plaintext.js  clipboard interchange
+    streak.js      the writing streak: day rules, milestones, growth and unlocks
     chart.js       the weekly chart's adaptive scale and number formatting
   main/        Electron main process: all disk I/O
     main.js        window, stet:// protocol, IPC handlers, print, close flow
@@ -30,6 +31,7 @@ src/
     view.js        virtualised page renderer, caret/selection overlays, hit testing, zoom
     input.js       keyboard, mouse, clipboard, IME
     session.js     save / autosave / recovery / backup orchestration
+    dino.js        the writing companion: behaviour engine and canvas;  dino-acts.js  its repertoire;  dino-art.js  its pixel art
     ui/            menus + palette (one command registry), dialogs, panels, find bar
   preload.cjs  whitelisted IPC bridge
 ```
@@ -165,6 +167,18 @@ undo is charged to the right day. The only reset is the confirmed one in the
 weekly view: it archives the ledger, clears it and records the reset; credits
 older than the reset are ignored afterwards.
 
+**The writing streak** (`core/streak.js`) is booked by the same `apply()`:
+the first positive credit on a calendar day books that day (once, however many
+documents or sessions), and a day whose words are all undone is unbooked
+again. It is stored in the ledger (`streak: { last, count, best, prev }`), so
+the window and the main process agree and it is saved, backed up and upgraded
+with everything else; statistics from before 0.9 get the streak their days
+already show. The current streak is `count` while `last` is today or
+yesterday, else 0. Growth is one pixel per milestone reached (1, 2, 4, 8, 16,
+32 days) and a special loop is unlocked per two; both are pure functions of
+the current streak, so nothing can be applied twice and a broken streak
+resets them. A Reset keeps the streak.
+
 ## Motion
 
 One set of easing curves and durations (CSS variables `--ease-out`,
@@ -182,28 +196,51 @@ off.
 
 ## Writing companion
 
-`src/renderer/dino.js` has two parts. `Critter` is the behaviour engine, pure
-and simulated in tests for hours at a time: pixel art as character grids,
-activities as generator functions yielding short steps (≤ 1.5 s), props with a
-little physics (ball, bone, leaf, butterfly, egg…), a drifting mood and a
-memory of recent activities and reactions that tilt weighted choices. Clicks
-pick a reaction by weight (category × agitation × mood × how recently it was
-used × cooldown), queue at most two, and run at the next step boundary; the
-interrupted activity then resumes. `bridged()` guarantees no posture jumps
+The pixel art (`dino-art.js`: frames, props, glyphs as character grids) and
+the repertoire (`dino-acts.js`: 62 activities and 96 reactions, generator
+functions yielding short steps of ≤ 1.5 s) are data for the engine in
+`dino.js`. `Critter` is the behaviour engine, pure and simulated in tests for
+hours at a time: props with a little physics, a drifting mood and a memory of
+recent activities and reactions that tilt weighted choices. A click captures
+`context()` — the activity, posture, whether it is on the move, what it
+carries or wears, what is near (a ball, a flower, a puddle, the palm), the
+rain, the time of day — and picks a reaction by weight (category × agitation ×
+mood × fit to that context × how recently it was used × cooldown); context
+reactions only exist where they fit. At most two queue, they run at the next
+step boundary, and the interrupted activity then resumes. The pointer is not
+tracked at all: only a click tells it where you are.
+
+**The environment.** Timed events (rain, wind, a bird, a tumbleweed, a
+shooting star) start only when it can take part (`canHost()`: on stage, not
+reacting, nothing queued, not in the middle of something absorbing), one at a
+time (`event`), a few minutes apart and each kind on its own cooldown.
+Things that grow (palm, flower, mushroom) are activities it starts itself.
+Each has a lifecycle — fading or growing in, its part for the dinosaur
+(`envDue`, chosen by `envReaction()` from the context at the start, run like a
+reaction), and a natural end (fading, withering, drying) with failsafes so
+nothing can rain for ever. Background things (a tree growing, a cloud drifting
+in) carry on while it does something else. Raindrops land on the ground, on
+the dinosaur, its leaf umbrella or the palm's fronds.
+
+**Growth.** `du`, the dinosaur's own pixel, is `u + g / 14`: exactly `g` CSS
+px taller (and proportionally wider). It is drawn cell by cell with whole
+device-pixel edges, so it stays crisp at any size; a milestone reached while
+writing plays `grow` at its next natural moment, a restored one is simply
+applied at start-up. `bridged()` guarantees no posture jumps
 (lying → standing always passes through sitting and crouching). Energy is an
 exponentially decaying count of words written, smoothed over ~20 s.
 
 Responsiveness is separate from pacing: a click is acknowledged in the same
 moment (`ack`: a blink and a one-pixel start drawn over the current frame),
 and a step that merely holds a pose (`isHold`) may end early so a due
-reaction, or a glance at a cursor that just came near or crossed sides
-(`notice`/`glance`), starts at once. Moves, jumps and lifts always run their
+reaction starts at once. Moves, jumps and lifts always run their
 full length. Destinations are centre-weighted (`spot()`); nothing walks off
 the strip.
 
 `Dino` draws it on one canvas laid over the bottom of the editor area: a strip
 up to 560 px wide centred on TODAY and kept inside `#scroller` (never over a
-side panel), plus a 24 px margin each side where props and visitors stay whole.
+side panel), plus a 24 px margin each side and 30 rows of headroom where props,
+clouds, fireworks and visitors stay whole.
 When the strip moves, the dinosaur keeps its place on screen; if the strip
 shrank out from under it, the critter walks back in (`comeBack`) and the
 canvas stretches to keep it whole meanwhile. Only the dinosaur's own hit box

@@ -250,6 +250,10 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #st-goal:hover { color: var(--ink); }
 .meter { width: 60px; height: 6px; border: 1px solid var(--ink-2); position: relative; display: inline-block; }
 .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); transition: width var(--dur-panel) var(--ease-out); }
+.streak { display: inline-flex; align-items: center; gap: 3px; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.streak .flame { fill: currentColor; width: 6px; height: 8px; flex: none; }
+.streak.none { color: var(--ink-3); }
+.streak:not(.lit):not(.none) .flame { opacity: .7; }
 /* writing companion above TODAY: only the dinosaur itself takes clicks */
 #dino { position: fixed; z-index: 30; pointer-events: none; }
 #dino canvas { display: block; image-rendering: pixelated; }
@@ -385,14 +389,11 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-notice { border: 1px solid var(--rule-strong); padding: 5px 10px; }
 .wk-flash { color: var(--ink-2); }
 .wk-head { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); }
-.wk-big { padding: 7px 10px 7px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wk-big { padding: 6px 10px 7px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .wk-big + .wk-big { border-left: 1px solid var(--rule); }
 .wk-n { font-size: 20px; line-height: 1.1; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .wk-n small { font-size: 11px; color: var(--ink-3); letter-spacing: .02em; }
-.wk-big .hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wk-meter { height: 3px; background: var(--rule); }
-.wk-meter i { display: block; height: 100%; background: var(--ink); transition: width var(--dur-panel) var(--ease-out); }
-.wk-meter.none { opacity: .4; }
+.wk-n .wk-none { letter-spacing: .06em; }
 .wk-nav { padding: 0 5px; line-height: 13px; font-size: 12px; }
 .wk-nav:disabled { opacity: .25; }
 .wk-chart { padding-top: 2px; }
@@ -415,8 +416,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; padding-top: 3px; margin-right: 52px; text-align: center; color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
 .wk-days .today { color: var(--ink); font-weight: 700; }
 .wk-days small { font-size: 10px; letter-spacing: 0; }
-.wk-facts { color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 2px 0; }
-.wk-facts span + span::before { content: '·'; color: var(--ink-3); padding: 0 8px; }
+.wk-facts { color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 2px 18px; }
 .wk-docs { display: flex; flex-direction: column; gap: 1px; }
 .wk-docs .wk-k { margin-bottom: 2px; }
 .wk-row { display: flex; gap: 12px; border-bottom: 1px dotted var(--rule); padding: 1px 0; }

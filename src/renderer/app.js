@@ -176,16 +176,32 @@ function renderStatus() {
   }
 }
 
-let goalState = { today: 0, goal: 0 };
+let goalState = { today: 0, goal: 0 }, streakShown = null;
+// A pixel flame for the writing streak (drawn in the text colour, crisp at any zoom).
+const FLAME = '<svg class="flame" viewBox="0 0 6 8" width="6" height="8" aria-hidden="true" shape-rendering="crispEdges">'
+  + [[2, 0], [2, 1], [3, 1], [1, 2], [2, 2], [3, 2], [1, 3], [2, 3], [3, 3], [4, 3], [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [0, 5], [1, 5], [3, 5], [4, 5], [5, 5], [0, 6], [1, 6], [4, 6], [5, 6], [1, 7], [2, 7], [3, 7], [4, 7]].map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1"/>`).join('') + '</svg>';
 function renderGoal() {
   const s = writing.summary(settings.goals);
   const today = s.today.words, goal = s.goals.daily;
   goalState = { today, goal };
   const pct = goal ? Math.min(100, (today / goal) * 100) : 0;
   const el = $('st-goal');
-  el.innerHTML = `TODAY ${today.toLocaleString()}${goal ? ' / ' + goal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`;
+  const k = s.writing;
+  const streakTip = k.days
+    ? `Writing streak: ${k.days} day${k.days === 1 ? '' : 's'} in a row${k.best > k.days ? ` (best ${k.best})` : ''}${k.today ? '' : ' — write a word today to keep it going'}.`
+      + ` The dinosaur has grown ${k.growth} px${k.next ? `; it grows again at ${k.next} days` : ', its full size'}.${k.unlocked ? ` Special routines unlocked: ${k.unlocked} of 3.` : ''}`
+    : 'Writing streak: none yet — write at least one new word a day to start one (the dinosaur grows at 1, 2, 4, 8, 16 and 32 days).';
+  el.innerHTML = `TODAY ${today.toLocaleString()}${goal ? ' / ' + goal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`
+    + `<span id="st-streak" class="streak${k.days ? '' : ' none'}${k.today ? ' lit' : ''}" title="${streakTip}">${FLAME}${k.days}</span>`;
   el.title = `Today: ${today.toLocaleString()} words written${goal ? (today >= goal ? ' — goal met' : ` — ${(goal - today).toLocaleString()} to go`) : ''}. This week: ${s.week.total.toLocaleString()}${s.goals.weekly ? ' of ' + s.goals.weekly.toLocaleString() : ''}. Click for your week.`;
+  // The dinosaur's size and special routines follow the streak: restored as they were at
+  // start-up, a milestone reached while writing shown with a little ceremony.
+  const key = `${k.growth}/${k.unlocked}`;
+  if (dino && key !== streakShown) { dino.setStreak({ growth: k.growth, unlocked: k.unlocked }, streakShown != null); streakShown = key; }
 }
+// The streak ends at midnight after a day without writing: check now and then, not only when writing.
+setInterval(() => { if (!document.hidden) renderGoal(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) renderGoal(); });
 
 function renderSaveState(s) {
   const el = $('st-save');
@@ -750,7 +766,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, openPath, save, exportPdf, checkRecovery, api, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, openPath, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 

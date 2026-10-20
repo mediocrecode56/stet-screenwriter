@@ -4,6 +4,34 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.9.0 — 20 October 2026
+
+A dinosaur with a much richer life and a little world around it, a writing streak that makes it grow, and simpler boxes at the top of the weekly view.
+
+### New
+
+- **A writing streak, beside TODAY.** A small flame and the number of days in a row you have written at least one new word. Today counts from your first word, a day that isn't over yet never breaks it, and a whole day without writing does. Opening, importing or pasting text never counts, and writing in several screenplays on the same day counts as one day. It's saved with your statistics, so it survives restarts and new versions (and even a statistics Reset). Hover it for your best streak and what's next.
+- **The dinosaur grows with your streak.** One pixel at 1, 2, 4, 8, 16 and 32 days in a row — six at most, with a proud stretch when it happens, and always crisp. Every second milestone (2, 8 and 32 days) unlocks a special routine it may take up now and then: a skateboard ride with an ollie, a few tiny fireworks, and a rain dance that ends in the shade of a palm tree it has just grown. If the streak ends, it goes back to its first size and the next streak starts again.
+- **Its own little world.** Now and then — never two things at once, and never too often — a rain cloud drifts over and rains on it, the wind gets up, a bird drops in (on its head, if it holds still), a tumbleweed rolls through, or a star falls at night. It may grow a palm tree and settle in its shade, shake it for a coconut, find a flower (and sneeze, or eat it), bounce on a mushroom, lie nose to nose with a snail, jump in the puddle the rain left, or chase fireflies. Each comes in, plays out and goes away gently: trees grow and wither, clouds and rainbows fade.
+- **Rain, its way.** What it does depends on what it was doing when the cloud came: it sleeps right through it, runs for the palm tree, makes a run for it (the cloud follows), opens its mouth to catch the drops, holds a leaf over its head, dances in it, or just sits it out looking damp.
+
+### Improved
+
+- **Clicks that make sense.** A click now gets a reaction that fits what the dinosaur was doing at that moment: it stops mid-stride, skips or trips while walking; guards (or almost shares) its bone; rings the typewriter's bell or holds up its page; scoots over when sitting; talks in its sleep, rolls over, or glares and goes back to sleep; hides behind the palm's very thin trunk; shoos a bird off its head. Plus many new ones anywhere — from a double take to a full show-off routine — so repeated clicks keep surprising you. It still notices a click in the same instant, and still never speeds anything up or cuts a movement short.
+- **More than twice as much to do.** 62 activities and 96 reactions (up from 28 and 33), all different — new poses (a tail wag, a scratch behind the ear, a howl, a cower, a run), short moments and longer stories, and moods that steer them: playful, curious, sleepy, grumpy, silly.
+- **The weekly view's top boxes are simpler.** Each shows just the day or week, the words written and the target — no percentages or extra notes — so you can read them at a glance, even in the hundreds of thousands. The details are still below.
+
+### Changed
+
+- **The dinosaur no longer reacts when the pointer passes over it.** Only clicks count, so it never distracts you while you move about the page.
+
+### For the technically curious
+
+- The companion is now three files: the pixel art (`dino-art.js`), the repertoire (`dino-acts.js`) and the engine (`dino.js`). A click is answered from a snapshot of what it is doing (`context()`); environmental events have a lifecycle and start only when it can take part, one at a time.
+- The streak lives in the statistics ledger (`core/streak.js`), booked by the same code in the window and the main process; statistics from 0.8 get the streak their days already show.
+- The end-to-end test driver no longer waits for ever on an app that closes mid-request (an occasional hang in long runs).
+- New tests: every behaviour played through from every posture, reactions that fit the context, the weather and the palm tree from start to finish, a few events an hour and never two at once, exactly one pixel per milestone; the streak's day rules, all milestones, restarts and Reset; and in the real app the streak from 0 to 32 days with the dinosaur measured pixel by pixel, several screenplays in a day, opened and pasted text, a restart, an update from 0.8, the weekly boxes in both themes, and a rain shower, a palm tree and a skateboard ride drawn whole.
+
 ## 0.8.0 — 20 October 2026
 
 A livelier, more attentive dinosaur with room to play, a weekly view that copes with big writing days, the same smooth slide for every panel, a fixed Open Recent, and a tidier header.

@@ -186,14 +186,12 @@ test('poking the dinosaur blends a reaction in without cutting its animation', a
   // Many quick pokes are absorbed: at most two queued.
   await app.eval(`for (let i = 0; i < 8; i++) document.querySelector('.dino-hit').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
   assert.ok(await app.eval('__stet.dino.c.queue.length') <= 2);
-  // Props are drawn, and the cursor nearby gets noticed without becoming a reaction.
+  // Props are drawn; the pointer passing over it is ignored.
   const props = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.queue = []; c.pending = 'fetch'; c.gen = null; await new Promise((r) => setTimeout(r, 2500)); return { kinds: c.props.map((p) => p.kind), activity: c.activity }; })()`);
   assert.equal(props.activity, 'fetch');
   assert.ok(props.kinds.includes('ball'), 'a ball rolled in');
-  const glance = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.pending = 'rest'; c.gen = null; c.props = []; await new Promise((r) => setTimeout(r, 3000)); const r = d.canvas.getBoundingClientRect(); c.face = 1; const x = r.left + c.x - 12, y = r.bottom - 5; window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); let turned = false; for (let i = 0; i < 40 && !turned; i++) { await new Promise((r) => setTimeout(r, 100)); window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); turned = c.face === -1; } return { turned, activity: c.activity, reaction: c.inReaction, frame: c.frame, near: c.cursorNear(performance.now()), A: c.attention, held: c.held.length, q: c.queue.length, x: c.x, cur: c.cursor, centre: c.center(), step: c.step && [c.step.f, c.step.t, c.step.dx] }; })()`);
-  assert.ok(glance.turned, 'it glanced at the cursor ' + JSON.stringify(glance));
-  assert.equal(glance.activity, 'rest');
-  assert.equal(glance.reaction, null);
+  const hover = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.pending = 'rest'; c.gen = null; c.props = []; c.queue = []; await new Promise((r) => setTimeout(r, 3000)); const r = d.hit.getBoundingClientRect(), h = c.history.length; c.cursor = null; for (let i = 0; i < 20; i++) { window.dispatchEvent(new MouseEvent('mousemove', { clientX: r.left - 20 + i * 4, clientY: r.top + 6 })); await new Promise((r) => setTimeout(r, 50)); } return { activity: c.activity, reaction: c.inReaction, q: c.queue.length, cur: c.cursor, chosen: c.history.length - h }; })()`);
+  assert.deepEqual(hover, { activity: 'rest', reaction: null, q: 0, cur: null, chosen: 0 }, 'the pointer passing over it changes nothing');
   // Its ink follows the theme.
   const ink = () => app.eval(`(() => { const d = __stet.dino; d.lastSig = ''; d.draw(); const c = d.canvas, x = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < x.length; i += 4) if (x[i] > 200) return [x[i - 3], x[i - 2], x[i - 1]].join(); return null; })()`);
   await app.eval(`__stet.cmd.run('theme-dark')`); await sleep(100);

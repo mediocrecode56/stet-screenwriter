@@ -1,4 +1,4 @@
-// 0.8 in the real app: the dinosaur's play area and responsiveness, the weekly
+// 0.8 in the real app: the dinosaur's play area and responsiveness (clicks, not hovering), the weekly
 // view with large numbers, one slide animation for every panel, Open Recent
 // with long paths, and the header (menus left, centred title, icon and version
 // bottom left) — alongside word counting, statistics and the Reset flow.
@@ -80,22 +80,28 @@ test('header: File/Edit/Element at the left edge, only the title, centred on the
   assert.equal(await app.eval(`document.getElementById('doctitle').textContent`), 'Second', 'updates when switching documents');
 });
 
-test('the dinosaur: wide play area, notices the cursor at once, acknowledges clicks at once, never gets in the way of a drag', async () => {
+test('the dinosaur: wide play area, ignores the pointer passing over it, acknowledges clicks at once, never gets in the way of a drag', async () => {
   const d = await app.eval(`(() => { const d = __stet.dino, c = d.c; return { strip: d.stripW, left: d.stripLeft, bottom: d.bottom, maxX: c.maxX }; })()`);
   assert.ok(d.strip >= 400, `strip ${d.strip}`);
-  // Put it in a resting pose and bring the cursor in from its other side.
-  await app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.props = []; c.inReaction = null; c.paused = null; c.held = []; c.pending = 'rest'; c.gen = null; })()`);
-  await sleep(2600);
-  const before = await app.eval(`(() => { const c = __stet.dino.c; c.face = 1; return { x: c.x, sitting: c.sitting(), activity: c.activity }; })()`);
+  // Put it in a resting pose, then sweep the pointer over it, around it, in and out.
+  await app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.props = []; c.inReaction = null; c.paused = null; c.held = []; c.envNext = Infinity; c.pending = 'rest'; c.gen = null; c.cursor = null; c.rng = () => 0.5; })()`);
+  await sleep(900);
+  const before = await app.eval(`(() => { const c = __stet.dino.c; return { x: c.x, activity: c.activity, history: c.history.length }; })()`);
   assert.equal(before.activity, 'rest');
-  await mouse('mouseMoved', d.left + before.x - 40, d.bottom - 10);
-  const t0 = Date.now();
-  let turned = false;
-  while (!turned && Date.now() - t0 < 1500) { await sleep(20); turned = await app.eval('__stet.dino.c.face === -1'); }
-  const took = Date.now() - t0;
-  assert.ok(turned, 'it turned towards the cursor');
-  assert.ok(took < 400, `promptly (${took} ms)`);
-  assert.equal(await app.eval('__stet.dino.c.activity'), 'rest', 'and carried on resting');
+  const box = await app.eval(`(() => { const r = document.querySelector('.dino-hit').getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; })()`);
+  for (let i = 0; i <= 8; i++) {
+    const x = box.l - 60 + (i / 8) * (box.r - box.l + 120), y = i % 2 ? (box.t + box.b) / 2 : box.t - 15;
+    await mouse('mouseMoved', x, y);
+    await sleep(25);
+  }
+  const after = await app.eval(`(() => { const c = __stet.dino.c; return { activity: c.activity, reaction: c.inReaction, queued: c.queue.length, cursor: c.cursor, history: c.history.length, ack: c.ack }; })()`);
+  assert.equal(after.activity, 'rest', 'still resting');
+  assert.equal(after.reaction, null, 'no reaction');
+  assert.equal(after.queued, 0);
+  assert.equal(after.history, before.history, 'nothing chosen');
+  assert.equal(after.cursor, null, 'it was never even told where the pointer is');
+  assert.equal(after.ack, null, 'no acknowledgement without a click');
+  await app.eval('__stet.dino.c.rng = Math.random');
   // A click on it: acknowledged in the same moment, the reaction follows shortly.
   const hit = await app.eval(`(() => { const r = document.querySelector('.dino-hit').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await app.eval(`__stet.dino.c.force = 'love'`);
@@ -184,7 +190,8 @@ test('every panel opens and closes with the same slide; Ctrl+F never delays typi
   assert.match(await app.eval(`document.getElementById('find-count').textContent`), /\/ 2$/, 'searched while it slid in');
   // Closing and reopening during the slide reverses smoothly, no jump.
   await app.key('Escape');
-  const mid = await app.eval(`new Promise((r) => setTimeout(() => r(parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop)), 50))`);
+  // (Sampled once the slide is under way: a busy machine may take a frame or two to start it.)
+  const mid = await app.eval(`new Promise((r) => { const t0 = performance.now(), m = () => parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop); const go = () => (m() < 0 || performance.now() - t0 > 400 ? r(m()) : setTimeout(go, 10)); setTimeout(go, 30); })`);
   await app.key('Ctrl+F');
   const back = await app.eval(`parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop)`);
   assert.ok(mid < 0 && back <= 0 && back >= mid - 2, `reverses from where it was (${mid} → ${back})`);

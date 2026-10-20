@@ -23,8 +23,11 @@
 //     days:  { 'YYYY-MM-DD': { w, docs: { [docId]: words } } },
 //     docs:  { [docId]: { w, title, path, first, last, from? } },
 //     resets: [{ at, total }],          — when the writer reset, and what was cleared
+//     streak: { last, count, best, prev } — the writing streak (see core/streak.js); kept through a reset
 //     migrated?: { from: 1, at } }
 // Invariant: total = Σ days[*].w = Σ docs[*].w, and days[k].w = Σ days[k].docs.
+
+import { emptyStreak, cleanStreak, streakFromDays, bookDay, unbookDay, currentStreak, growthFor, unlocksFor, nextMilestone } from './streak.js';
 
 export const STATS_VERSION = 2;
 const UNKNOWN_DOC = '(earlier)'; // per-document detail the old format had already dropped
@@ -53,7 +56,7 @@ export function weekStart(k) {
 }
 
 export function emptyStats(now = new Date()) {
-  return { version: STATS_VERSION, start: now.toISOString(), since: dayKey(now), total: 0, days: {}, docs: {}, resets: [] };
+  return { version: STATS_VERSION, start: now.toISOString(), since: dayKey(now), total: 0, days: {}, docs: {}, resets: [], streak: emptyStreak() };
 }
 
 export class FutureStatsError extends Error {
@@ -96,6 +99,7 @@ export function upgradeStats(raw, now = new Date()) {
     out.since = keys[0];
     out.start = parseDay(keys[0]).toISOString();
   }
+  out.streak = streakFromDays(out.days, dayKey(now));
   out.migrated = { from: 1, at: now.toISOString() };
   return { data: out, migrated: true };
 }
@@ -122,6 +126,8 @@ function repair(raw, now) {
       if (k > m.last) m.last = k;
     }
   }
+  // Statistics from before streaks existed: the streak their days already show.
+  out.streak = cleanStreak(raw.streak) || streakFromDays(out.days, dayKey(now));
   return out;
 }
 
@@ -155,6 +161,7 @@ export class StatsBook {
         m.w += n;
         this.data.total += n;
         net += n;
+        bookDay(this.data.streak, k);
       } else {
         const have = day ? day.docs[e.doc] || 0 : 0;
         const take = Math.min(-n, have);
@@ -162,7 +169,7 @@ export class StatsBook {
         day.docs[e.doc] = have - take;
         if (!day.docs[e.doc]) delete day.docs[e.doc];
         day.w -= take;
-        if (!day.w) delete this.data.days[k];
+        if (!day.w) { delete this.data.days[k]; unbookDay(this.data.streak, k); }
         const m = this.data.docs[e.doc];
         if (m) m.w = Math.max(0, m.w - take);
         this.data.total -= take;
@@ -231,10 +238,19 @@ export class StatsBook {
       week: { start, end: addDays(start, 6), offset: Math.min(0, weekOffset | 0), days, total, active, met, best, docs, current: start === weekStart(today) },
       hasEarlier: start > weekStart(this.data.since),
       streak,
+      writing: this.streak(today),
       total: this.data.total,
       since: this.data.since,
       documents: Object.keys(this.data.docs).length,
     };
+  }
+
+  /** The writing streak on day `today`, and what it has earned the dinosaur. */
+  streak(today = dayKey(this.now())) {
+    const s = this.data.streak || emptyStreak();
+    const days = currentStreak(s, today);
+    const growth = growthFor(days);
+    return { days, best: s.best, today: s.last === today, growth, unlocked: unlocksFor(growth), next: nextMilestone(days) };
   }
 
   title(id) {
@@ -254,11 +270,11 @@ export class StatsBook {
     return out;
   }
 
-  /** Clear all recorded writing (the confirmed Reset). Goals and screenplays are untouched. */
+  /** Clear all recorded writing (the confirmed Reset). Goals, screenplays and the writing streak are untouched. */
   reset() {
     const now = this.now();
     const resets = [...(this.data.resets || []), { at: now.toISOString(), total: this.data.total }];
-    this.data = { ...emptyStats(now), resets };
+    this.data = { ...emptyStats(now), resets, streak: this.data.streak || emptyStreak() };
     return this.data;
   }
 }

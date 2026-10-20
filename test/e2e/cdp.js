@@ -47,6 +47,8 @@ export class App {
       this.ws = new WebSocket(this.wsUrl);
       this.ws.onopen = resolve;
       this.ws.onerror = reject;
+      // The app going away answers nothing more: fail what is still waiting rather than hang.
+      this.ws.onclose = () => { for (const { rej } of this.pending.values()) rej(new Error('connection closed')); this.pending.clear(); };
       this.ws.onmessage = (m) => {
         const msg = JSON.parse(m.data);
         if (msg.id && this.pending.has(msg.id)) {
@@ -105,7 +107,7 @@ export class App {
   }
 
   async close() {
-    try { await this.eval('window.stet.invoke("app:close-ready")'); } catch { /* gone */ }
+    try { await Promise.race([this.eval('window.stet.invoke("app:close-ready")'), sleep(3000)]); } catch { /* gone */ }
     await Promise.race([new Promise((r) => this.child.once('exit', r)), sleep(5000)]);
     if (this.child.exitCode === null) this.kill();
   }

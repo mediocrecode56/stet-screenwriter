@@ -259,7 +259,7 @@ function confirmReset(s) {
   const body = h('div', { class: 'body', style: 'max-width:520px' },
     h('p', { class: 'wk-q' }, 'Reset all writing statistics?'),
     h('p', {}, `This clears every word recorded as written — each day and week, the totals for each screenplay, and the all-time total of ${s.total.toLocaleString()} words since ${fmtDate(s.since, true)}. Recording starts again from zero.`),
-    h('p', {}, h('b', {}, 'Not affected: '), 'your screenplays and their word counts, and your daily and weekly goals.'),
+    h('p', {}, h('b', {}, 'Not affected: '), 'your screenplays and their word counts, your daily and weekly goals, and your writing streak.'),
     h('p', { class: 'hint' }, 'A copy of the cleared statistics is kept in STET’s data folder, but STET will not show them again.'));
   return open({ title: 'RESET STATISTICS', body, cls: 'wk-confirm', buttons: [{ label: 'Cancel', value: false }, { label: 'Reset statistics', value: true, cls: 'danger' }] }).then((v) => v === true);
 }
@@ -269,39 +269,31 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 function fmtDate(k, year = false) { const [y, m, d] = k.split('-').map(Number); return `${d} ${MONTHS[m - 1]}${year ? ' ' + y : ''}`; }
 function weekLabel(w) { return `${fmtDate(w.start)} – ${fmtDate(w.end, true)}`; }
 
-function meter(value, goal) {
-  const pct = goal ? Math.min(100, (value / goal) * 100) : 0;
-  return h('div', { class: 'wk-meter' + (goal ? '' : ' none') }, h('i', { style: `width:${pct}%` }));
+/** The count and its target: the count large, the target small and quieter. */
+function figure(value, target, none) {
+  return h('div', { class: 'wk-n' }, value, target ? h('small', {}, ` / ${target}`) : h('small', { class: 'wk-none' }, none));
 }
 
-/** "of goal" in words a writer would use: 47 %, 100 %, 3.2× once well past it. */
-const ofGoal = (n, goal) => (n >= 2 * goal ? `${(Math.floor((n / goal) * 10) / 10).toLocaleString()}× the goal` : `${Math.floor((n / goal) * 100)}% of ${fmtWords(goal)}`);
-
+// The two boxes at the top show just three things: which day or week, the
+// words written, and the target. Everything else lives further down.
 function weekHeader(s, nav) {
   const w = s.week, wg = s.goals.weekly, dg = s.goals.daily;
-  const weekSub = wg ? (w.total >= wg ? `${ofGoal(w.total, wg)} · weekly goal reached` : `${ofGoal(w.total, wg)} · ${fmtWords(wg - w.total)} to go`) : 'no weekly goal';
-  const left = h('div', { class: 'wk-big' },
+  const left = h('div', { class: 'wk-big', title: wg ? `${w.total.toLocaleString()} of ${wg.toLocaleString()} words this week` : 'No weekly goal set' },
     h('div', { class: 'wk-k' }, nav(-1), h('span', {}, w.current ? 'THIS WEEK' : weekLabel(w).toUpperCase()), nav(1)),
-    h('div', { class: 'wk-n' }, fmtWords(w.total), wg ? h('small', {}, ` / ${fmtWords(wg)}`) : h('small', {}, ' words')),
-    meter(w.total, wg),
-    h('div', { class: 'hint' }, weekSub));
+    figure(fmtWords(w.total), wg && fmtWords(wg), 'no goal'));
   // Right: today in the current week; the daily average in a past one (same shape, so nothing jumps).
   let right;
   if (w.current) {
-    const t = s.today.words;
-    right = h('div', { class: 'wk-big wk-today' },
-      h('div', { class: 'wk-k' }, h('span', {}, 'TODAY')),
-      h('div', { class: 'wk-n' }, fmtWords(t), dg ? h('small', {}, ` / ${fmtWords(dg)}`) : h('small', {}, ' words')),
-      meter(t, dg),
-      h('div', { class: 'hint' }, dg ? (t >= dg ? `${ofGoal(t, dg)} · daily goal reached` : `${ofGoal(t, dg)} · ${fmtWords(dg - t)} to go`) : 'no daily goal'));
+    const t = s.today.words, i = w.days.findIndex((d) => d.today);
+    right = h('div', { class: 'wk-big wk-today', title: dg ? `${t.toLocaleString()} of ${dg.toLocaleString()} words today` : 'No daily goal set' },
+      h('div', { class: 'wk-k' }, h('span', {}, `TODAY · ${DOW[i]} ${+s.today.day.slice(8)}`)),
+      figure(fmtWords(t), dg && fmtWords(dg), 'no goal'));
   } else {
     const known = w.days.filter((d) => d.known && !d.future);
     const avg = known.length ? Math.round(w.total / known.length) : 0;
-    right = h('div', { class: 'wk-big' },
+    right = h('div', { class: 'wk-big', title: known.length ? `Average over ${known.length} recorded day${known.length === 1 ? '' : 's'}` : 'No record for this week' },
       h('div', { class: 'wk-k' }, h('span', {}, 'DAILY AVERAGE')),
-      h('div', { class: 'wk-n' }, known.length ? fmtWords(avg) : '—', dg && known.length ? h('small', {}, ` / ${fmtWords(dg)}`) : h('small', {}, ' words')),
-      meter(avg, dg),
-      h('div', { class: 'hint' }, known.length ? `over ${known.length} recorded day${known.length === 1 ? '' : 's'}` : 'no record for this week'));
+      figure(known.length ? fmtWords(avg) : '—', known.length && dg && fmtWords(dg), known.length ? 'no goal' : ''));
   }
   return h('div', { class: 'wk-head' }, left, right);
 }
@@ -347,7 +339,8 @@ function weekFacts(s) {
     `wrote on ${w.active} of ${elapsed} day${elapsed === 1 ? '' : 's'}`,
     dg ? `goal met ${w.met} ${w.met === 1 ? 'time' : 'times'}` : null,
     w.best ? `best ${DOW[w.days.findIndex((d) => d.day === w.best.day)]} ${fmtWords(w.best.words)}` : null,
-    w.current ? `streak ${s.streak} day${s.streak === 1 ? '' : 's'}` : null,
+    w.current ? `writing streak ${s.writing.days} day${s.writing.days === 1 ? '' : 's'}${s.writing.best > s.writing.days ? ` (best ${s.writing.best})` : ''}` : null,
+    w.current && dg && s.streak ? `goal streak ${s.streak}` : null,
   ].filter(Boolean);
   return h('div', { class: 'wk-facts' }, ...facts.map((f) => h('span', {}, f)));
 }
