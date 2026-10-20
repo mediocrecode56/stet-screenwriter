@@ -13,16 +13,16 @@ src/
     editor.js      editing engine: selection, transactions, undo/redo, smart Enter/Tab
     nav.js         caret movement over wrapped lines
     smart.js       autocomplete (scene prefixes, locations, times, cues, extensions)
-    text.js        word counting / word boundaries
+    text.js        the word-count rule / word boundaries
     serialize.js   document <-> .stet JSON payload, validation, migrations
     printmodel.js  printable pages (title page, ranges, highlights, notes)
     pdf.js         PDF writer;  printhtml.js  HTML for the OS print dialog
-    stats.js       writing-progress tracker;  plaintext.js  clipboard interchange
+    stats.js       writing-statistics ledger (pure);  plaintext.js  clipboard interchange
   main/        Electron main process: all disk I/O
     main.js        window, stet:// protocol, IPC handlers, print, close flow
     container.js   binary container (header, CRC-32, gzip)
     files.js       atomic writes, save queue, backups, retention, recovery
-    store.js       settings / statistics JSON stores
+    store.js       settings JSON store;  statsstore.js  the saved statistics (backups, upgrades, reset)
     pdf-worker.js  worker thread: JSON -> pages -> PDF bytes
   renderer/    sandboxed UI (no Node access)
     app.js         composition root, commands, document operations
@@ -133,15 +133,36 @@ The review is stored in the document (`doc.revision.review`) and serialised
 with it. `src/renderer/revision.js` is the panel. Accepting goes through
 `Editor.replaceRanges`, so it is ordinary, undoable editing.
 
-## Word counting and TODAY
+## Word counting and writing statistics
 
-`Editor.words` is kept incrementally per transaction (cached per immutable
-block). Edits that aren't the writer's own writing — paste, replace (including
-accepted suggestions), and undo/redo of those — add their *measured* word
-change to `Editor.wordShift`; the app drains it into `Tracker.update()` on every
-change, which moves the day's base and high-water mark together so the change
-never counts as progress and undoing it gives the allowance back. Document
-loads are recognised by `Editor.loads` and never counted.
+**The count.** `countWords()` in `core/text.js` is the one definition of a
+word (documented there; `test/helpers/wordref.js` is an independent reference
+implementation every test compares against). The editor's block array is the
+single source of the text; `Editor.words` is maintained per transaction from
+per-block counts cached by block identity (blocks are immutable). The app
+recounts the whole document every ~15 s while idle (`verifyWords()`, a few ms)
+as a safety net that would repair and report any drift.
+
+**Writing credits.** Statistics don't compare word counts (that's what made
+0.6's high-water mark stop counting after a deletion). Instead every committed
+transaction earns a *credit* (`Editor._earn`): words added by the writer's own
+editing count; paste and replace earn 0; deletions earn nothing negative except
+inside the "fresh" stretch just written (tracked as paragraph + offsets), so a
+fixed typo isn't counted twice. Each transaction stores its credit, undo emits
+exactly its negative and redo re-emits it — so Σ credits always equals the
+credit of the history currently in effect (`creditInEffect`, fuzz-tested over
+20 000 random edits). Loading a document clears history and earns nothing.
+
+**The ledger.** The app drains credits on every change and books them in a
+`StatsBook` (`core/stats.js`, pure) twice: in the window for an instant TODAY,
+and — sent within 250 ms in numbered batches, re-sent with the same id on
+failure, booked at most once — in the main process, whose `StatsStore` owns
+`<userData>/stats.json` (atomic writes, a daily `stats.bak.json`, damaged
+files kept aside, a newer format left untouched, 0.6's format upgraded with
+`stats-v1.json` kept). Credits carry the time the words were written, so an
+undo is charged to the right day. The only reset is the confirmed one in the
+weekly view: it archives the ledger, clears it and records the reset; credits
+older than the reset are ignored afterwards.
 
 ## Motion
 
@@ -154,12 +175,19 @@ interface motion off.
 
 ## Writing companion
 
-`src/renderer/dino.js`: pixel art as character grids, behaviours as generator
-functions yielding short steps (≤ ~1.5 s). Clicks queue a reaction that runs at
-the next step boundary (after getting up if needed), then the interrupted
-behaviour resumes. Energy is an exponentially decaying count of words written
-(fed by the same change tracking as TODAY), smoothed over ~20 s. One small
-canvas; redrawn only when its picture changes; no timers while hidden.
+`src/renderer/dino.js` has two parts. `Critter` is the behaviour engine, pure
+and simulated in tests for hours at a time: pixel art as character grids,
+activities as generator functions yielding short steps (≤ 1.5 s), props with a
+little physics (ball, bone, leaf, butterfly, egg…), a drifting mood and a
+memory of recent activities and reactions that tilt weighted choices. Clicks
+pick a reaction by weight (category × agitation × mood × how recently it was
+used × cooldown), queue at most two, and run at the next step boundary; the
+interrupted activity then resumes. `bridged()` guarantees no posture jumps
+(lying → standing always passes through sitting and crouching). A nearby
+cursor only alters the step about to start (a glance, a glyph), never adds or
+cuts one. Energy is an exponentially decaying count of words written, smoothed
+over ~20 s. `Dino` draws it on one small canvas, redrawn only when the picture
+changes, with no timers while the window is hidden.
 
 ## Native code
 

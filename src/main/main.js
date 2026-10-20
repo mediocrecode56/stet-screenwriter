@@ -8,6 +8,7 @@ import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { JsonStore } from './store.js';
+import { StatsStore } from './statsstore.js';
 import { effectiveTheme, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { ClaudeService } from './claude.js';
 import {
@@ -279,8 +280,14 @@ function registerIpc() {
   handle('review:start', (req) => { claude.start(req); return true; });
   handle('review:cancel', (id) => claude.cancel(id));
 
-  handle('stats:get', () => stats.get());
-  handle('stats:set', (data) => { stats.replace(data); return true; });
+  // Test driver only: close the window the way its X button does.
+  handle('e2e:close-window', () => { if (E2E && win) setImmediate(() => win && win.close()); return E2E; });
+  handle('stats:get', () => stats.state());
+  handle('stats:add', (batch) => stats.add(batch));
+  handle('stats:flush', () => stats.flush().then(() => true));
+  handle('stats:reset', async () => {
+    try { const r = await stats.reset(); return { ok: true, data: r.data }; } catch (e) { return { ok: false, error: e.message || String(e) }; }
+  });
 
   // The renderer decides the theme (manual choice or schedule); main just matches the window chrome.
   handle('theme:apply', (resolved) => {
@@ -368,7 +375,7 @@ app.whenReady().then(async () => {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
     goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], reviewConsent: false, showTitlePage: true, panels: { scenes: false, notes: false },
   });
-  stats = new JsonStore(path.join(ud, 'stats.json'), { days: {} });
+  stats = new StatsStore(ud);
   recovery = new Recovery(path.join(ud, 'recovery'));
   claude = new ClaudeService(ud, (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
   await fs.mkdir(recovery.dir, { recursive: true });

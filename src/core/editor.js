@@ -9,7 +9,7 @@ import {
   makeBlock, withText, withType, newId, UPPER_TYPES, cueName,
   marksAfterInsert, marksAfterDelete, sliceMarks, concatMarks, setHighlight, removeCommentMarks,
 } from './model.js';
-import { blockWords, countWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
+import { blockWords, countWords, documentWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
 import { mergeDirty } from './layout.js';
 
 export const NEXT_ON_ENTER = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'action', transition: 'scene', shot: 'action' };
@@ -23,8 +23,30 @@ const MERGE_WINDOW_MS = 1500;
 export const pos = (b, o) => ({ b, o });
 export const cmp = (p, q) => (p.b - q.b) || (p.o - q.o);
 
-// Transactions whose word changes are not the writer's own writing.
+// ---- writing activity ---------------------------------------------------------
+//
+// Every committed transaction earns a word credit, which feeds the writing
+// statistics (src/core/stats.js). The rule:
+//
+//  * Words the writer adds by their own editing (typing, Enter, completing a
+//    name…) are credited as they appear.
+//  * Pasting and replacing (Find & Replace, accepted suggestions) are not the
+//    writer's own writing: credit 0, whichever way the count moves.
+//  * Deleting words never takes away earlier writing — except deleting inside
+//    the stretch of text just written (a typo, a phrase rephrased on the
+//    spot), so fixing a typo doesn't count a word twice. That "fresh" stretch
+//    is tracked precisely (paragraph and offsets); it ends as soon as the
+//    writer writes somewhere else, pastes, undoes, or pauses for FRESH_MS.
+//    Deleting older text, anywhere, never reduces anything.
+//  * Undo takes back exactly the credit the undone transaction earned, and
+//    redo gives it back, so replaying history never counts anything twice.
+//  * Loading a document (open, restore, switch) earns nothing.
+//
+// Credits queue up in this.credits as { n, t } (t = when the credited edit was
+// first made, so an undo is charged to the day the words were written) and the
+// app drains them with takeCredits() after every change.
 const NOT_WRITING = new Set(['paste', 'replace']);
+const FRESH_MS = 10 * 60 * 1000;
 
 export class Editor {
   constructor(blocks) {
@@ -39,12 +61,10 @@ export class Editor {
     for (const b of this.blocks) this.words += blockWords(b);
     this.namesRev = -1;
     this._names = null;
-    // Net word change from edits that aren't the writer's own writing (paste,
-    // replace, accepted suggestions — and undo/redo of those), measured from the
-    // document itself. Writing statistics subtract it; the app drains it after
-    // every change.
-    this.wordShift = 0;
-    this.loads = 0;
+    this.credits = [];     // pending writing credits, see takeCredits()
+    this.fresh = null;     // { b, s, e, n, t }: the stretch just written (paragraph b, offsets s–e) and its n credited words
+    this.retired = 0;      // credit of transactions dropped off the end of the undo history
+    this.loads = 0;        // increments on every document load
     this.onChange = null;  // (editor) => void
     this.autoCapitalize = true;
     this.now = () => Date.now();
@@ -68,23 +88,28 @@ export class Editor {
   /** Run fn as one undoable transaction. */
   edit(kind, fn, opts = {}) {
     if (this.txn) { fn(); return; } // nested: join the outer transaction
-    const txn = { kind, steps: [], selBefore: this.sel, selAfter: null, time: this.now(), closed: !!opts.close };
-    const w0 = this.words;
+    const now = this.now();
+    const txn = { kind, steps: [], selBefore: this.sel, selAfter: null, time: now, at: now, closed: !!opts.close, mid: null, credit: 0 };
+    const w0 = this.words, nb0 = this.blocks.length;
+    const b0 = this.blocks[Math.min(txn.selBefore.a.b, txn.selBefore.f.b)];
+    const len0 = b0 ? b0.text.length : 0;
     this.txn = txn;
     try { fn(); } finally { this.txn = null; }
     if (!txn.steps.length) { this._emit(); return; }
-    if (NOT_WRITING.has(kind)) this.wordShift += this.words - w0;
+    txn.credit = this._earn(kind, w0, txn.mid ?? w0, txn, now, len0, nb0);
+    if (txn.credit) this.credits.push({ n: txn.credit, t: now });
     txn.selAfter = this.sel;
     this.redoStack.length = 0;
     const last = this.undoStack[this.undoStack.length - 1];
     if (kind === 'type' && last && last.kind === 'type' && !last.closed && this._mergeable(last, txn)) {
       last.steps[0].added = txn.steps[0].added;
+      last.credit += txn.credit;
       last.selAfter = txn.selAfter;
       last.time = txn.time;
       last.closed = txn.closed;
     } else {
       this.undoStack.push(txn);
-      if (this.undoStack.length > 2000) this.undoStack.splice(0, this.undoStack.length - 2000);
+      if (this.undoStack.length > 2000) for (const t of this.undoStack.splice(0, this.undoStack.length - 2000)) this.retired += t.credit || 0;
     }
     this.rev++;
     this._emit();
@@ -106,12 +131,11 @@ export class Editor {
   undo() {
     const t = this.undoStack.pop();
     if (!t) return false;
-    const w0 = this.words;
     for (let i = t.steps.length - 1; i >= 0; i--) {
       const s = t.steps[i];
       this._applyRaw(s.from, s.added.length, s.removed);
     }
-    if (NOT_WRITING.has(t.kind)) this.wordShift += this.words - w0;
+    this._replay(-(t.credit || 0), t.at);
     this.redoStack.push(t);
     this.sel = t.selBefore;
     this.rev++;
@@ -122,9 +146,8 @@ export class Editor {
   redo() {
     const t = this.redoStack.pop();
     if (!t) return false;
-    const w0 = this.words;
     for (const s of t.steps) this._applyRaw(s.from, s.removed.length, s.added);
-    if (NOT_WRITING.has(t.kind)) this.wordShift += this.words - w0;
+    this._replay(t.credit || 0, t.at);
     t.closed = true;
     this.undoStack.push(t);
     this.sel = t.selAfter;
@@ -146,14 +169,75 @@ export class Editor {
     this.blocks = blocks.length ? blocks : [makeBlock('action')];
     this.words = 0;
     for (const b of this.blocks) this.words += blockWords(b);
-    this.wordShift = 0;
-    this.loads = (this.loads || 0) + 1; // lets listeners tell a document load from an edit
+    this.credits = [];
+    this.fresh = null;
+    this.retired = 0;
+    this.loads++; // lets listeners tell a document load from an edit
     this.undoStack.length = 0;
     this.redoStack.length = 0;
     this.sel = { a: pos(0, 0), f: pos(0, 0) };
     this.dirty = { from: 0, to: this.blocks.length, delta: this.blocks.length - n, full: true };
     this.rev++;
     this._emit();
+  }
+
+  /**
+   * Credit earned by one transaction. w0 → wMid is its deletion phase (a
+   * replaced selection), wMid → words the rest; len0/nb0 are the edited
+   * paragraph's length and the paragraph count before it.
+   */
+  _earn(kind, w0, wMid, txn, now, len0, nb0) {
+    if (NOT_WRITING.has(kind)) { this.fresh = null; return 0; }
+    const sel = txn.selBefore;
+    const a = cmp(sel.a, sel.f) <= 0 ? sel.a : sel.f;
+    const caret = this.sel.f;
+    const single = this.blocks.length === nb0 && caret.b === a.b; // edit within one paragraph
+    const start = single ? Math.min(a.o, caret.o) : -1;
+    let f = this.fresh;
+    if (f && (!single || f.b !== a.b || now - f.t >= FRESH_MS)) f = this.fresh = null;
+    const inside = !!f && start >= f.s && start <= f.e;
+    let credit = 0;
+    for (const d of [wMid - w0, this.words - wMid]) {
+      if (d > 0) credit += d;
+      else if (d < 0 && inside) { const take = Math.min(-d, f.n); f.n -= take; credit -= take; }
+    }
+    if (f) {
+      // Keep the fresh stretch's offsets in step with the paragraph.
+      const d = this.blocks[a.b].text.length - len0;
+      if (start < f.s) { f.s = Math.max(start, f.s + d); f.e = Math.max(f.s, f.e + d); }
+      else if (start <= f.e) f.e = Math.max(f.s, f.e + d);
+      f.t = now;
+    }
+    if (credit > 0 && !inside) this.fresh = { b: caret.b, s: single ? start : caret.o, e: caret.o, n: credit, t: now };
+    else if (credit > 0) f.n += credit;
+    return credit;
+  }
+
+  _replay(n, at) {
+    this.fresh = null;
+    if (n) this.credits.push({ n, t: at });
+  }
+
+  /** Total credit currently in effect: every credit earned and not undone. */
+  get creditInEffect() { return this.retired + this.undoStack.reduce((n, t) => n + (t.credit || 0), 0); }
+
+  /** Check the running word count against a full recount; repairs (and reports) any drift. */
+  verifyWords() {
+    const n = documentWords(this.blocks);
+    if (n !== this.words) {
+      console.error(`word count drift: running ${this.words}, recount ${n}`);
+      this.words = n;
+      this.rev++;
+      this._emit();
+    }
+    return n;
+  }
+
+  /** Drain the pending writing credits ({ n, t } each). */
+  takeCredits() {
+    const c = this.credits;
+    this.credits = [];
+    return c;
   }
 
   takeDirty() { const d = this.dirty; this.dirty = null; return d; }
@@ -232,6 +316,7 @@ export class Editor {
     const [s, e] = this.ordered();
     const p = this._deleteRange(s, e);
     this.sel = { a: p, f: p };
+    if (this.txn && this.txn.mid === null) this.txn.mid = this.words; // end of a replace-selection's deletion phase
     return p;
   }
 

@@ -73,21 +73,21 @@ test('word count: typing, large and repeated pastes, undo/redo, delete-all, swit
   assert.equal(await today(), before + 2, 'opening a document adds nothing');
 });
 
-test('Ctrl+wheel zooms in exact 2% steps within the limits', async () => {
+test('Ctrl+wheel zooms in exact 5-point steps within the limits', async () => {
   await app.eval('__stet.view.setZoom(1)');
   const wheel = async (deltaY, n = 1) => {
     for (let i = 0; i < n; i++) await app.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 500, y: 300, deltaX: 0, deltaY, modifiers: 2 });
     await sleep(50);
     return app.eval('__stet.view.z');
   };
-  assert.equal(await wheel(-100), 1.02);
-  assert.equal(await wheel(-100, 4), 1.1);
+  assert.equal(await wheel(-100), 1.05);
+  assert.equal(await wheel(-100, 4), 1.25);
   assert.equal(await wheel(100, 5), 1);
   assert.equal(await app.eval('document.getElementById("zoom-val").textContent'), '100%');
-  assert.equal(await wheel(-600), 1.02, 'one oversized event is still one step');
-  await app.eval('__stet.view.setZoom(2.98)');
+  assert.equal(await wheel(-600), 1.05, 'one oversized event is still one step');
+  await app.eval('__stet.view.setZoom(2.97)');
   assert.equal(await wheel(-100, 3), 3, 'maximum kept');
-  await app.eval('__stet.view.setZoom(0.52)');
+  await app.eval('__stet.view.setZoom(0.53)');
   await sleep(500);
   assert.equal(await wheel(100, 3), 0.5, 'minimum kept');
   await app.eval('__stet.view.setZoom(1)');
@@ -155,35 +155,43 @@ test('the dinosaur sits above TODAY and livens up only with real writing', async
   assert.ok(Math.abs(geo.dLeft - geo.gLeft) <= 1);
   assert.ok(geo.h <= 40, 'small');
   await newDoc();
-  await app.eval('(() => { const d = __stet.dino; d.heat = 0; d.energy = 0; })()');
+  await app.eval('(() => { const d = __stet.dino.c; d.heat = 0; d.energy = 0; })()');
   await paste(Array.from({ length: 400 }, (_, i) => 'p' + i).join(' '));
-  assert.equal(await app.eval('__stet.dino.heat'), 0, 'pasting does not excite it');
+  assert.equal(await app.eval('__stet.dino.c.heat'), 0, 'pasting does not excite it');
   await app.eval(`(async () => { const { newDocument, makeBlock } = await import('../core/model.js'); const d = newDocument('Big'); d.blocks = [makeBlock('action', 'a b c d e f g h i j k l m n o p')]; __stet.session.load(d, null); })()`);
-  assert.equal(await app.eval('__stet.dino.heat'), 0, 'opening a document does not either');
+  assert.equal(await app.eval('__stet.dino.c.heat'), 0, 'opening a document does not either');
   await app.type('the quick brown fox jumps over the lazy dog again and again ');
-  assert.ok(await app.eval('__stet.dino.heat') >= 10, 'typing does');
-  const e1 = await app.eval('(() => { const d = __stet.dino; d.updateEnergy(30000); return d.energy; })()');
+  assert.ok(await app.eval('__stet.dino.c.heat') >= 10, 'typing does');
+  const e1 = await app.eval('(() => { const d = __stet.dino.c; d.updateEnergy(30000); return d.energy; })()');
   assert.ok(e1 > 0.2 && e1 < 1, `energy rose gradually (${e1})`);
-  const e2 = await app.eval('(() => { const d = __stet.dino; for (let i = 0; i < 60; i++) d.updateEnergy(10000); return d.energy; })()');
+  const e2 = await app.eval('(() => { const d = __stet.dino.c; for (let i = 0; i < 60; i++) d.updateEnergy(10000); return d.energy; })()');
   assert.ok(e2 < 0.1, `calms down after a while without writing (${e2})`);
 });
 
 test('poking the dinosaur blends a reaction in without cutting its animation', async () => {
-  const s0 = await app.eval(`(() => { const d = __stet.dino; return { step: d.step && d.step.f, end: d.step && d.step.end, gen: !!d.gen }; })()`);
+  const s0 = await app.eval(`(() => { const d = __stet.dino.c; d.force = 'startle'; return { step: d.step && d.step.f, end: d.step && d.step.end, gen: !!d.gen }; })()`);
   await app.eval(`document.querySelector('.dino-hit').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
-  const s1 = await app.eval(`(() => { const d = __stet.dino; return { step: d.step && d.step.f, end: d.step && d.step.end, queued: d.queue.length, focus: document.activeElement.id }; })()`);
+  const s1 = await app.eval(`(() => { const d = __stet.dino.c; return { step: d.step && d.step.f, end: d.step && d.step.end, queued: d.queue.length, focus: document.activeElement.id }; })()`);
   assert.equal(s1.queued, 1, 'queued');
   assert.equal(s1.step, s0.step, 'current step not interrupted');
   assert.equal(s1.end, s0.end);
   let saw = false;
-  for (let i = 0; i < 60 && !saw; i++) { await sleep(100); saw = await app.eval('__stet.dino.inReaction'); }
+  for (let i = 0; i < 60 && !saw; i++) { await sleep(100); saw = await app.eval('!!__stet.dino.c.inReaction'); }
   assert.ok(saw, 'reaction starts at the next step boundary');
   let back = false;
-  for (let i = 0; i < 100 && !back; i++) { await sleep(100); back = await app.eval('!__stet.dino.inReaction'); }
+  for (let i = 0; i < 100 && !back; i++) { await sleep(100); back = await app.eval('!__stet.dino.c.inReaction'); }
   assert.ok(back, 'then it carries on');
   // Many quick pokes are absorbed: at most two queued.
   await app.eval(`for (let i = 0; i < 8; i++) document.querySelector('.dino-hit').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
-  assert.ok(await app.eval('__stet.dino.queue.length') <= 2);
+  assert.ok(await app.eval('__stet.dino.c.queue.length') <= 2);
+  // Props are drawn, and the cursor nearby gets noticed without becoming a reaction.
+  const props = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.queue = []; c.pending = 'fetch'; c.gen = null; await new Promise((r) => setTimeout(r, 2500)); return { kinds: c.props.map((p) => p.kind), activity: c.activity }; })()`);
+  assert.equal(props.activity, 'fetch');
+  assert.ok(props.kinds.includes('ball'), 'a ball rolled in');
+  const glance = await app.eval(`(async () => { const d = __stet.dino, c = d.c; c.pending = 'rest'; c.gen = null; c.props = []; await new Promise((r) => setTimeout(r, 3000)); const r = d.canvas.getBoundingClientRect(); c.face = 1; const x = r.left + c.x - 12, y = r.bottom - 5; window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); let turned = false; for (let i = 0; i < 40 && !turned; i++) { await new Promise((r) => setTimeout(r, 100)); window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y })); turned = c.face === -1; } return { turned, activity: c.activity, reaction: c.inReaction }; })()`);
+  assert.ok(glance.turned, 'it glanced at the cursor');
+  assert.equal(glance.activity, 'rest');
+  assert.equal(glance.reaction, null);
   // Its ink follows the theme.
   const ink = () => app.eval(`(() => { const d = __stet.dino; d.lastSig = ''; d.draw(); const c = d.canvas, x = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < x.length; i += 4) if (x[i] > 200) return [x[i - 3], x[i - 2], x[i - 1]].join(); return null; })()`);
   await app.eval(`__stet.cmd.run('theme-dark')`); await sleep(100);

@@ -1,11 +1,33 @@
-// Writing progress. Progress is *net new words*, measured per document per
-// day as a high-water mark above the day's starting word count:
+// Writing statistics: a ledger of words actually written, across every
+// screenplay, kept for good.
 //
-//   written(doc, day) = max(0, peak - base)
+// What counts as writing is decided by the editor (see "writing activity" in
+// src/core/editor.js): it turns each edit into a credit of words the writer
+// added — never a document's existing words, never pastes, never undo/redo
+// replays. This module only books those credits:
 //
-// where base is the word count when the document was first touched that day
-// (plus anything pasted in), and peak the highest count reached. Undo/redo
-// churn, autosaves, formatting and re-typing deleted text never inflate it.
+//   entry { doc, n, t }   n words (negative: an undone or rephrased credit)
+//                         written in document `doc` at time t (ms)
+//
+// into per-day, per-document and all-time totals. The same pure code runs in
+// the main process (the authoritative copy, saved to <userData>/stats.json)
+// and in the window (an instant mirror for the status bar), so both always
+// agree. Nothing here ever resets on its own: only reset(), which the app
+// calls after the writer clicks Reset and confirms.
+//
+// Data (version 2):
+//   { version: 2,
+//     start: ISO time recording began (first run, migration or last reset),
+//     since: day key of `start`        — days before it have no data
+//     total: words written since start (all screenplays),
+//     days:  { 'YYYY-MM-DD': { w, docs: { [docId]: words } } },
+//     docs:  { [docId]: { w, title, path, first, last, from? } },
+//     resets: [{ at, total }],          — when the writer reset, and what was cleared
+//     migrated?: { from: 1, at } }
+// Invariant: total = Σ days[*].w = Σ docs[*].w, and days[k].w = Σ days[k].docs.
+
+export const STATS_VERSION = 2;
+const UNKNOWN_DOC = '(earlier)'; // per-document detail the old format had already dropped
 
 export function dayKey(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
@@ -26,119 +48,217 @@ export function addDays(k, n) {
 /** Monday of the week containing day k. */
 export function weekStart(k) {
   const d = parseDay(k);
-  const dow = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - dow);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return dayKey(d);
 }
 
-export class Tracker {
+export function emptyStats(now = new Date()) {
+  return { version: STATS_VERSION, start: now.toISOString(), since: dayKey(now), total: 0, days: {}, docs: {}, resets: [] };
+}
+
+export class FutureStatsError extends Error {
+  constructor(v) { super(`These statistics were saved by a newer version of STET (format ${v}).`); this.version = v; }
+}
+
+/**
+ * Bring stored data of any known format to the current one. Never loses
+ * recorded words: version-1 day totals and per-document detail are carried
+ * over as they were measured. Returns { data, migrated }.
+ * Throws FutureStatsError for a format newer than this build understands —
+ * the caller must then leave the file alone.
+ */
+export function upgradeStats(raw, now = new Date()) {
+  if (!raw || typeof raw !== 'object') return { data: emptyStats(now), migrated: false };
+  if (typeof raw.version === 'number' && raw.version > STATS_VERSION) throw new FutureStatsError(raw.version);
+  if (raw.version === STATS_VERSION) return { data: repair(raw, now), migrated: false };
+  // Version 1 (STET ≤ 0.6): { days: { k: { w, docs: { id: { base, peak } } } } }.
+  const out = emptyStats(now);
+  const keys = Object.keys(raw.days || {}).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  for (const k of keys) {
+    const d = raw.days[k] || {};
+    const docs = {};
+    let sum = 0;
+    for (const [id, e] of Object.entries(d.docs || {})) {
+      const n = Math.max(0, Math.round((e && e.peak) - (e && e.base)) || 0);
+      if (n) { docs[id] = n; sum += n; }
+    }
+    const w = Math.max(sum, Math.round(+d.w) || 0);
+    if (w > sum) docs[UNKNOWN_DOC] = (docs[UNKNOWN_DOC] || 0) + w - sum;
+    if (!w) continue;
+    out.days[k] = { w, docs };
+    for (const [id, n] of Object.entries(docs)) {
+      const m = out.docs[id] || (out.docs[id] = { w: 0, title: id === UNKNOWN_DOC ? 'Earlier screenplays' : '', path: null, first: k, last: k });
+      m.w += n; m.last = k;
+    }
+    out.total += w;
+  }
+  if (keys.length) {
+    out.since = keys[0];
+    out.start = parseDay(keys[0]).toISOString();
+  }
+  out.migrated = { from: 1, at: now.toISOString() };
+  return { data: out, migrated: true };
+}
+
+/** Make version-2 data internally consistent (recompute totals from the per-day detail). */
+function repair(raw, now) {
+  const out = { ...emptyStats(now), ...raw, days: {}, docs: {}, total: 0 };
+  if (!Array.isArray(out.resets)) out.resets = [];
+  if (typeof out.since !== 'string') out.since = dayKey(now);
+  if (typeof out.start !== 'string') out.start = parseDay(out.since).toISOString();
+  for (const [k, d] of Object.entries(raw.days || {})) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !d) continue;
+    const docs = {};
+    let w = 0;
+    for (const [id, n] of Object.entries(d.docs || {})) { const v = Math.max(0, Math.round(+n) || 0); if (v) { docs[id] = v; w += v; } }
+    if (!w) continue;
+    out.days[k] = { w, docs };
+    out.total += w;
+    for (const [id, n] of Object.entries(docs)) {
+      const prev = raw.docs && raw.docs[id];
+      const m = out.docs[id] || (out.docs[id] = { title: '', path: null, ...(prev || {}), w: 0, first: k, last: k });
+      m.w += n;
+      if (k < m.first) m.first = k;
+      if (k > m.last) m.last = k;
+    }
+  }
+  return out;
+}
+
+export class StatsBook {
   constructor(data, now = () => new Date()) {
-    this.data = data && data.days ? data : { days: {} };
     this.now = now;
-    this.changed = false;
+    this.data = upgradeStats(data, now()).data;
   }
 
-  _day(k) {
-    let d = this.data.days[k];
-    if (!d) { d = this.data.days[k] = { w: 0, docs: {} }; this.changed = true; }
-    return d;
-  }
-
-  /** Register the current word count of a document (on open or after reload). */
-  begin(docId, words) {
-    const day = this._day(dayKey(this.now()));
-    if (!day.docs[docId]) { day.docs[docId] = { base: words, peak: words }; this.changed = true; }
-  }
+  get startMs() { return Date.parse(this.data.start) || 0; }
 
   /**
-   * Record the current word count. `shift` = net words added (or removed) since
-   * the last call by changes that aren't writing — pasting, replacing, and
-   * undoing or redoing those. Both marks move with it, so it never counts as
-   * progress and undoing a paste gives the allowance back.
+   * Book credits. `meta` = { [docId]: { title, path, from } } refreshes the
+   * documents' names. Returns the net words actually booked (credits from
+   * before the last reset are ignored; a negative credit never takes a
+   * document's day below zero).
    */
-  update(docId, words, shift = 0) {
-    const day = this._day(dayKey(this.now()));
-    let e = day.docs[docId];
-    if (!e) e = day.docs[docId] = { base: words - shift, peak: words - shift };
-    else if (shift) { e.base += shift; e.peak += shift; }
-    if (words > e.peak) e.peak = words;
-    let w = 0;
-    for (const x of Object.values(day.docs)) w += Math.max(0, x.peak - x.base);
-    if (w !== day.w) { day.w = w; this.changed = true; }
-  }
-
-  /** Re-base a document (e.g. after restoring a backup) without changing today's total. */
-  rebase(docId, words) {
-    const day = this._day(dayKey(this.now()));
-    const e = day.docs[docId];
-    if (!e) return this.begin(docId, words);
-    const earned = Math.max(0, e.peak - e.base);
-    e.base = words - earned;
-    e.peak = words;
-    this.changed = true;
-  }
-
-  wordsOn(k) { return this.data.days[k] ? this.data.days[k].w : 0; }
-
-  summary(goals, days = 28) {
-    const today = dayKey(this.now());
-    const series = [];
-    for (let i = days - 1; i >= 0; i--) { const k = addDays(today, -i); series.push({ day: k, words: this.wordsOn(k) }); }
-    const ws = weekStart(today);
-    let week = 0;
-    for (let k = ws; k <= today; k = addDays(k, 1)) week += this.wordsOn(k);
-    const dayIndex = Math.round((parseDay(today) - parseDay(ws)) / 86400000); // 0 = Monday
-    const keys = Object.keys(this.data.days).sort();
-    const first = keys[0] || today;
-    const spanDays = Math.max(1, Math.min(30, Math.round((parseDay(today) - parseDay(first)) / 86400000) + 1));
-    let last30 = 0;
-    for (let i = 0; i < spanDays; i++) last30 += this.wordsOn(addDays(today, -i));
-    // Weekly average over up to 8 weeks that have data, current week included.
-    const weeks = [];
-    for (let i = 0; i < 8; i++) {
-      const s = addDays(ws, -7 * i);
-      if (s < weekStart(first)) break;
-      let t = 0;
-      for (let d = 0; d < 7; d++) t += this.wordsOn(addDays(s, d));
-      weeks.push(t);
-    }
-    const todayWords = this.wordsOn(today);
-    const goal = goals.daily || 0;
-    let streak = 0;
-    let k = todayWords >= goal && goal > 0 ? today : addDays(today, -1);
-    while (goal > 0 && this.wordsOn(k) >= goal) { streak++; k = addDays(k, -1); }
-    let best = 0, run = 0;
-    for (const key of keys) {
-      // walk calendar days between recorded keys
-      if (goal > 0 && this.wordsOn(key) >= goal) {
-        const prev = addDays(key, -1);
-        run = this.wordsOn(prev) >= goal ? run + 1 : 1;
-        best = Math.max(best, run);
+  apply(entries, meta = {}) {
+    let net = 0;
+    for (const e of entries || []) {
+      const n = Math.round(+e.n) || 0;
+      const t = +e.t || 0;
+      if (!n || !e.doc || t < this.startMs) continue;
+      const k = dayKey(new Date(t));
+      let day = this.data.days[k];
+      if (n > 0) {
+        if (!day) day = this.data.days[k] = { w: 0, docs: {} };
+        day.docs[e.doc] = (day.docs[e.doc] || 0) + n;
+        day.w += n;
+        const m = this._doc(e.doc, k);
+        m.w += n;
+        this.data.total += n;
+        net += n;
+      } else {
+        const have = day ? day.docs[e.doc] || 0 : 0;
+        const take = Math.min(-n, have);
+        if (!take) continue;
+        day.docs[e.doc] = have - take;
+        if (!day.docs[e.doc]) delete day.docs[e.doc];
+        day.w -= take;
+        if (!day.w) delete this.data.days[k];
+        const m = this.data.docs[e.doc];
+        if (m) m.w = Math.max(0, m.w - take);
+        this.data.total -= take;
+        net -= take;
       }
     }
-    const weekExpected = Math.round((goals.weekly || 0) * (dayIndex + 1) / 7);
+    for (const [id, info] of Object.entries(meta || {})) {
+      if (!info) continue;
+      const m = this.data.docs[id];
+      if (!m) continue;
+      if (info.title) m.title = String(info.title).slice(0, 200);
+      if (info.path !== undefined) m.path = info.path;
+      if (info.from && !m.from) m.from = info.from;
+    }
+    return net;
+  }
+
+  _doc(id, k) {
+    let m = this.data.docs[id];
+    if (!m) m = this.data.docs[id] = { w: 0, title: '', path: null, first: k, last: k };
+    if (k < m.first) m.first = k;
+    if (k > m.last) m.last = k;
+    return m;
+  }
+
+  wordsOn(k) { const d = this.data.days[k]; return d ? d.w : 0; }
+
+  /** Whether day k has data (on or after the day recording began, and not in the future). */
+  known(k, today = dayKey(this.now())) { return k >= this.data.since && k <= today; }
+
+  /**
+   * Everything the weekly view and the status bar show.
+   * weekOffset 0 = this week, -1 = last week, …
+   */
+  summary(goals = {}, weekOffset = 0) {
+    const today = dayKey(this.now());
+    const daily = Math.max(0, +goals.daily || 0), weekly = Math.max(0, +goals.weekly || 0);
+    const start = addDays(weekStart(today), 7 * Math.min(0, weekOffset | 0));
+    const days = [];
+    let total = 0, active = 0, met = 0, best = null;
+    for (let i = 0; i < 7; i++) {
+      const k = addDays(start, i);
+      const future = k > today;
+      const known = this.known(k, today);
+      const words = known ? this.wordsOn(k) : 0;
+      total += words;
+      if (words > 0) active++;
+      if (daily && words >= daily) met++;
+      if (known && words > 0 && (!best || words > best.words)) best = { day: k, words };
+      days.push({ day: k, words, known, future, today: k === today, metGoal: !!daily && words >= daily });
+    }
+    const byDoc = {};
+    for (const d of days) {
+      const rec = d.known && this.data.days[d.day];
+      if (rec) for (const [id, n] of Object.entries(rec.docs)) byDoc[id] = (byDoc[id] || 0) + n;
+    }
+    const docs = Object.entries(byDoc).map(([id, words]) => ({ id, words, title: this.title(id) })).sort((a, b) => b.words - a.words);
+    // Streak: consecutive days up to today reaching the daily goal (any writing when there is none);
+    // today only extends it once reached, so an unfinished today never breaks it.
+    const hit = (k) => (daily ? this.wordsOn(k) >= daily : this.wordsOn(k) > 0);
+    let streak = 0;
+    for (let k = hit(today) ? today : addDays(today, -1); k >= this.data.since && hit(k); k = addDays(k, -1)) streak++;
     return {
-      today: todayWords,
-      week,
-      dayIndex,
-      dailyGoal: goal,
-      weeklyGoal: goals.weekly || 0,
-      dailyAvg: Math.round(last30 / spanDays),
-      weeklyAvg: weeks.length ? Math.round(weeks.reduce((a, b) => a + b, 0) / weeks.length) : 0,
+      today: { day: today, words: this.wordsOn(today) },
+      goals: { daily, weekly },
+      week: { start, end: addDays(start, 6), offset: Math.min(0, weekOffset | 0), days, total, active, met, best, docs, current: start === weekStart(today) },
+      hasEarlier: start > weekStart(this.data.since),
       streak,
-      bestStreak: Math.max(best, streak),
-      todayDelta: todayWords - goal,
-      weekDelta: week - weekExpected,
-      weekExpected,
-      series,
+      total: this.data.total,
+      since: this.data.since,
+      documents: Object.keys(this.data.docs).length,
     };
   }
 
-  /** Drop per-document detail older than `keepDays` (totals are kept forever). */
-  compact(keepDays = 60) {
-    const cutoff = addDays(dayKey(this.now()), -keepDays);
-    for (const [k, d] of Object.entries(this.data.days)) {
-      if (k < cutoff && d.docs && Object.keys(d.docs).length) { d.docs = {}; this.changed = true; }
+  title(id) {
+    const m = this.data.docs[id];
+    if (m && m.title) return m.title;
+    if (m && m.path) return m.path.split(/[\\/]/).pop().replace(/\.stet$/i, '');
+    return 'Untitled screenplay';
+  }
+
+  /** All-time words per project — the folder a screenplay is saved in ('' = never saved). */
+  byProject() {
+    const out = {};
+    for (const m of Object.values(this.data.docs)) {
+      const dir = m.path ? m.path.replace(/[\\/][^\\/]*$/, '') : '';
+      out[dir] = (out[dir] || 0) + m.w;
     }
+    return out;
+  }
+
+  /** Clear all recorded writing (the confirmed Reset). Goals and screenplays are untouched. */
+  reset() {
+    const now = this.now();
+    const resets = [...(this.data.resets || []), { at: now.toISOString(), total: this.data.total }];
+    this.data = { ...emptyStats(now), resets };
+    return this.data;
   }
 }

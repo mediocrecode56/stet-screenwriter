@@ -28,7 +28,7 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
   const ov = overlay();
   return new Promise((resolve) => {
     const prevFocus = document.activeElement;
-    const btns = buttons.map((b) => h('button', { class: 'btn' + (b.primary ? ' primary' : ''), disabled: b.disabled, onclick: () => close(typeof b.value === 'function' ? b.value() : b.value) }, b.label));
+    const btns = buttons.map((b) => h('button', { class: 'btn' + (b.primary ? ' primary' : '') + (b.cls ? ' ' + b.cls : ''), disabled: b.disabled, onclick: () => close(typeof b.value === 'function' ? b.value() : b.value) }, b.label));
     const dlg = h('div', { class: 'dlg ' + cls, role: 'dialog' },
       title ? h('h2', {}, title, sub ? h('small', {}, sub) : null) : null,
       body,

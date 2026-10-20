@@ -1,6 +1,6 @@
 // Application dialogs. Each returns a promise and never blocks typing state.
 
-import { h, open, esc } from './dialog.js';
+import { h, open, esc, alertBox } from './dialog.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
 import { paginate } from '../../core/layout.js';
 import { parseTime, formatTime, toAmPm, fromAmPm, label as timeLabel } from '../../core/schedule.js';
@@ -195,43 +195,132 @@ export async function recoveryDialog(items) {
   return { action: v || 'later', item: chosen };
 }
 
-export function statsDialog(summary, words, onGoals) {
-  const s = summary;
-  const goalIn = h('input', { type: 'number', value: s.dailyGoal, min: 0, style: 'width:80px' });
-  const weekIn = h('input', { type: 'number', value: s.weeklyGoal, min: 0, style: 'width:80px' });
-  const ahead = (d) => (d >= 0 ? `${d.toLocaleString()} ahead` : `${(-d).toLocaleString()} behind`);
-  const todayLine = s.dailyGoal ? (s.todayDelta >= 0 ? `Daily goal met — ${s.todayDelta.toLocaleString()} over.` : `${(-s.todayDelta).toLocaleString()} words to today's goal.`) : 'No daily goal set.';
-  const weekLine = s.weeklyGoal ? `Week: ${s.week.toLocaleString()} of ${s.weeklyGoal.toLocaleString()} — ${ahead(s.weekDelta)} of pace (${s.weekExpected.toLocaleString()} expected by today).` : 'No weekly goal set.';
-  const body = h('div', { class: 'body', style: 'width:640px' },
-    h('div', { class: 'stats-grid' },
-      h('div', {}, h('span', {}, 'today'), h('b', {}, s.today.toLocaleString()), h('span', {}, `goal ${s.dailyGoal.toLocaleString()}`)),
-      h('div', {}, h('span', {}, 'this week'), h('b', {}, s.week.toLocaleString()), h('span', {}, `goal ${s.weeklyGoal.toLocaleString()}`)),
-      h('div', {}, h('span', {}, 'daily avg'), h('b', {}, s.dailyAvg.toLocaleString()), h('span', {}, `weekly avg ${s.weeklyAvg.toLocaleString()}`)),
-      h('div', {}, h('span', {}, 'streak'), h('b', {}, `${s.streak}d`), h('span', {}, `best ${s.bestStreak}d`)),
-    ),
-    h('div', { class: 'verdict' }, todayLine, h('br'), weekLine),
-    chart(s.series, s.dailyGoal),
-    h('div', { class: 'hint', style: 'margin:10px 0' }, `Script total: ${words.toLocaleString()} words. Progress counts net new words (high-water mark per day); undo, autosave, pasting and formatting are not counted as writing.`),
-    field('Daily goal', h('div', { class: 'inline' }, goalIn, h('span', {}, 'words'))),
-    field('Weekly goal', h('div', { class: 'inline' }, weekIn, h('span', {}, 'words'))),
-  );
-  return open({ title: 'WRITING', sub: 'last 28 days', body, buttons: [{ label: 'Close', value: null }, { label: 'Save goals', primary: true, value: () => onGoals({ daily: Math.max(0, +goalIn.value || 0), weekly: Math.max(0, +weekIn.value || 0) }) }] });
+/**
+ * The writing week: total and goal progress first, then a day-by-day chart
+ * with the numbers printed on it, then a few plain facts. Reset lives here
+ * (and only here), behind its own confirmation.
+ * `api` = { summary(offset), notice(), saveGoals(goals), reset() }.
+ */
+export async function statsDialog(api) {
+  let offset = 0, flash = '';
+  for (;;) {
+    const s = api.summary(offset);
+    const goalIn = h('input', { type: 'number', value: s.goals.daily, min: 0, step: 50, class: 'wk-in' });
+    const weekIn = h('input', { type: 'number', value: s.goals.weekly, min: 0, step: 250, class: 'wk-in' });
+    let close = () => {};
+    const nav = (d) => h('button', { class: 'tb wk-nav', title: d < 0 ? 'Previous week' : 'Next week', disabled: d < 0 ? !s.hasEarlier : s.week.current, onclick: () => close('nav' + d) }, d < 0 ? '‹' : '›');
+    const resetBtn = h('button', { class: 'tb wk-reset', title: 'Clear all recorded writing statistics (asks first)', onclick: () => close('reset') }, 'RESET STATISTICS…');
+    const notice = api.notice();
+    const body = h('div', { class: 'body wk' },
+      notice ? h('div', { class: 'wk-notice' }, notice) : null,
+      flash ? h('div', { class: 'wk-flash' }, flash) : null,
+      weekHeader(s, nav),
+      weekChart(s),
+      weekFacts(s),
+      weekDocs(s),
+      h('div', { class: 'wk-goals' },
+        h('span', { class: 'wk-k' }, 'GOALS'),
+        h('label', {}, 'daily ', goalIn), h('label', {}, 'weekly ', weekIn),
+        h('span', { class: 'grow' }),
+        h('span', { class: 'hint' }, `all-time ${s.total.toLocaleString()} words · since ${fmtDate(s.since, true)}`)),
+    );
+    flash = '';
+    const v = await open({
+      title: 'WRITING', sub: weekLabel(s.week), body, cls: 'wk-dlg', foot: resetBtn,
+      buttons: [{ label: 'Close', value: null }, { label: 'Save goals', primary: true, value: () => ({ goals: { daily: Math.max(0, Math.round(+goalIn.value) || 0), weekly: Math.max(0, Math.round(+weekIn.value) || 0) } }) }],
+      init: (_dlg, c) => { close = c; },
+    });
+    if (v === 'nav-1') { offset--; continue; }
+    if (v === 'nav1') { offset = Math.min(0, offset + 1); continue; }
+    if (v && v.goals) { await api.saveGoals(v.goals); flash = 'Goals saved.'; continue; }
+    if (v === 'reset') {
+      if (await confirmReset(s)) {
+        const r = await api.reset();
+        if (r.ok) { offset = 0; flash = 'Statistics reset. Recording starts again from now.'; }
+        else await alertBox('RESET FAILED', 'Nothing was cleared — your writing statistics are exactly as they were.', r.error);
+      }
+      continue;
+    }
+    return;
+  }
 }
 
-function chart(series, goal) {
-  const W = 620, H = 140, pad = 18;
-  const max = Math.max(goal || 0, ...series.map((d) => d.words), 1);
-  const bw = (W - pad) / series.length;
-  let svg = `<svg class="stats-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
-  series.forEach((d, i) => {
-    const bh = (d.words / max) * (H - pad - 4);
-    const cls = goal && d.words < goal ? 'bar under' : 'bar';
-    svg += `<rect class="${cls}" x="${pad + i * bw + 1}" y="${H - pad - bh}" width="${Math.max(1, bw - 3)}" height="${bh}"><title>${d.day}: ${d.words} words</title></rect>`;
-    if (i % 7 === 0 || i === series.length - 1) svg += `<text x="${pad + i * bw}" y="${H - 4}">${d.day.slice(5)}</text>`;
+/** Second, explicit step of Reset. Only the Reset button confirms; Cancel, Escape and clicking outside don't. */
+function confirmReset(s) {
+  const body = h('div', { class: 'body', style: 'max-width:520px' },
+    h('p', { class: 'wk-q' }, 'Reset all writing statistics?'),
+    h('p', {}, `This clears every word recorded as written — each day and week, the totals for each screenplay, and the all-time total of ${s.total.toLocaleString()} words since ${fmtDate(s.since, true)}. Recording starts again from zero.`),
+    h('p', {}, h('b', {}, 'Not affected: '), 'your screenplays and their word counts, and your daily and weekly goals.'),
+    h('p', { class: 'hint' }, 'A copy of the cleared statistics is kept in STET’s data folder, but STET will not show them again.'));
+  return open({ title: 'RESET STATISTICS', body, cls: 'wk-confirm', buttons: [{ label: 'Cancel', value: false }, { label: 'Reset statistics', value: true, cls: 'danger' }] }).then((v) => v === true);
+}
+
+const DOW = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDate(k, year = false) { const [y, m, d] = k.split('-').map(Number); return `${d} ${MONTHS[m - 1]}${year ? ' ' + y : ''}`; }
+function weekLabel(w) { return `${fmtDate(w.start)} – ${fmtDate(w.end, true)}`; }
+
+function meter(value, goal) {
+  const pct = goal ? Math.min(100, (value / goal) * 100) : 0;
+  return h('div', { class: 'wk-meter' + (goal ? '' : ' none') }, h('i', { style: `width:${pct}%` }));
+}
+
+function weekHeader(s, nav) {
+  const w = s.week, wg = s.goals.weekly, dg = s.goals.daily;
+  const weekSub = wg ? (w.total >= wg ? `weekly goal of ${wg.toLocaleString()} reached` : `${Math.floor((w.total / wg) * 100)}% of ${wg.toLocaleString()} · ${(wg - w.total).toLocaleString()} to go`) : 'no weekly goal';
+  const left = h('div', { class: 'wk-big' },
+    h('div', { class: 'wk-k' }, nav(-1), h('span', {}, w.current ? 'THIS WEEK' : weekLabel(w).toUpperCase()), nav(1)),
+    h('div', { class: 'wk-n' }, w.total.toLocaleString(), h('small', {}, ' words')),
+    meter(w.total, wg),
+    h('div', { class: 'hint' }, weekSub));
+  if (!w.current) return h('div', { class: 'wk-head' }, left);
+  const t = s.today.words;
+  const right = h('div', { class: 'wk-big wk-today' },
+    h('div', { class: 'wk-k' }, h('span', {}, 'TODAY')),
+    h('div', { class: 'wk-n' }, t.toLocaleString(), dg ? h('small', {}, ` / ${dg.toLocaleString()}`) : h('small', {}, ' words')),
+    meter(t, dg),
+    h('div', { class: 'hint' }, dg ? (t >= dg ? 'daily goal reached' : `${(dg - t).toLocaleString()} to go`) : 'no daily goal'));
+  return h('div', { class: 'wk-head' }, left, right);
+}
+
+function weekChart(s) {
+  const goal = s.goals.daily;
+  const top = Math.max(goal, ...s.week.days.map((d) => d.words), 1) * 1.1;
+  const plot = h('div', { class: 'wk-plot' });
+  if (goal) plot.append(h('div', { class: 'wk-goal', style: `bottom:${(goal / top) * 100}%` }, h('span', {}, `goal ${goal.toLocaleString()}`)));
+  s.week.days.forEach((d, i) => {
+    const state = d.future ? 'future' : !d.known ? 'na' : d.words === 0 ? 'zero' : goal && d.words >= goal ? 'met' : 'under';
+    const label = d.future ? '' : !d.known ? '—' : d.words.toLocaleString();
+    const tip = d.future ? 'still to come' : !d.known ? 'no record (before statistics began)' : `${d.words.toLocaleString()} words${goal ? (d.words >= goal ? ' · goal met' : ` · ${(goal - d.words).toLocaleString()} short of the goal`) : ''}`;
+    plot.append(h('div', { class: `wk-col ${state}${d.today ? ' today' : ''}`, title: `${DOW[i]} ${fmtDate(d.day)}: ${tip}` },
+      h('div', { class: 'wk-val' }, label),
+      h('div', { class: 'wk-bar', style: `height:${d.known && !d.future ? (d.words / top) * 100 : 0}%` })));
   });
-  if (goal) { const gy = H - pad - (goal / max) * (H - pad - 4); svg += `<line class="goal" x1="${pad}" x2="${W}" y1="${gy}" y2="${gy}"/><text x="0" y="${gy + 3}">goal</text>`; }
-  svg += '</svg>';
-  return h('div', { html: svg });
+  const days = h('div', { class: 'wk-days' }, ...s.week.days.map((d, i) => h('div', { class: d.today ? 'today' : '' }, DOW[i], h('small', {}, ' ' + d.day.slice(8).replace(/^0/, '')))));
+  return h('div', { class: 'wk-chart' }, plot, days);
+}
+
+function weekFacts(s) {
+  const w = s.week, dg = s.goals.daily;
+  const elapsed = w.days.filter((d) => !d.future && d.known).length;
+  const facts = [
+    `wrote on ${w.active} of ${elapsed} day${elapsed === 1 ? '' : 's'}`,
+    dg ? `daily goal met ${w.met} ${w.met === 1 ? 'time' : 'times'}` : null,
+    w.best ? `best day ${DOW[w.days.findIndex((d) => d.day === w.best.day)]} (${w.best.words.toLocaleString()})` : null,
+    w.current ? `streak ${s.streak} day${s.streak === 1 ? '' : 's'}` : null,
+  ].filter(Boolean);
+  return h('div', { class: 'wk-facts' }, facts.join('   ·   '));
+}
+
+function weekDocs(s) {
+  const docs = s.week.docs;
+  if (!docs.length) return null;
+  const shown = docs.slice(0, 4);
+  const rest = docs.slice(4).reduce((n, d) => n + d.words, 0);
+  return h('div', { class: 'wk-docs' },
+    h('div', { class: 'wk-k' }, 'BY SCREENPLAY'),
+    ...shown.map((d) => h('div', { class: 'wk-row' }, h('span', { class: 'wk-doc' }, d.title), h('span', {}, d.words.toLocaleString()))),
+    rest ? h('div', { class: 'wk-row' }, h('span', { class: 'wk-doc' }, `${docs.length - 4} more`), h('span', {}, rest.toLocaleString())) : null);
 }
 
 /**

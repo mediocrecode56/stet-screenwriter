@@ -200,19 +200,15 @@ test('autocomplete suggests prefixes, locations, times, names and extensions', (
   assert.deepEqual(suggest(c, 0, 7, []).items, ['V.O.)']);
 });
 
-test('countWords matches the regex definition on random and real-world text', async () => {
-  const { WORD_RE } = await import('../src/core/text.js');
-  const ref = (s) => (s.match(WORD_RE) || []).length;
-  const alphabet = ['a', 'Z', '7', ' ', '-', "'", '’', '—', '.', 'é', 'ñ', 'ж', '日', '😀', '𝐀', '\n', '\uD800', '\uDC00', '_', '(', '٣'];
+test('countWords agrees with the independent reference on random and real-world text', async () => {
+  const { referenceCount } = await import('./helpers/wordref.js');
+  const alphabet = ['a', 'Z', '7', ' ', '-', "'", '\u2019', '\u2014', '\u2013', '\u2026', '.', ',', '\u00e9', '\u00f1', '\u0436', '\u65e5', '\u30c6', '\u304b', '\uD83D\uDE00', '\uD835\uDC00', '\n', '\t', '\r', '\u00a0', '\u200b', '\uD800', '\uDC00', '_', '(', '\u0663', '\u0301', '\u3000', '\u30fc'];
   let seed = 42;
   const rnd = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; };
-  for (let k = 0; k < 4000; k++) {
+  for (let k = 0; k < 20000; k++) {
     let s = '';
-    const n = Math.floor(rnd() * 30);
+    const n = Math.floor(rnd() * 40);
     for (let i = 0; i < n; i++) s += alphabet[Math.floor(rnd() * alphabet.length)];
-    assert.equal(countWords(s), ref(s), JSON.stringify(s));
-  }
-  for (const s of ["don't stop", 'well-known  -- dash', 'a--b', 'a- b', "rock 'n' roll", 'café’s niño', 'Привет, мир', '日本語 テキスト', 'x-', '-x', "''a''"]) {
-    assert.equal(countWords(s), ref(s), s);
+    assert.equal(countWords(s), referenceCount(s), JSON.stringify(s));
   }
 });

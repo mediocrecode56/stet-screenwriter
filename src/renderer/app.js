@@ -3,7 +3,6 @@
 
 import { Editor, pos } from '../core/editor.js';
 import { makeBlock, TYPES, TYPE_LABEL, HIGHLIGHT_COLORS, newDocument, uuid } from '../core/model.js';
-import { Tracker } from '../core/stats.js';
 import { buildPrintPages } from '../core/printmodel.js';
 import { printHTML } from '../core/printhtml.js';
 import { View } from './view.js';
@@ -13,6 +12,7 @@ import { Autocomplete } from './ui/autocomplete.js';
 import { ScenePanel, NotesPanel } from './ui/panels.js';
 import { setPanel, isOpen } from './ui/motion.js';
 import { Dino } from './dino.js';
+import { WritingStats } from './writing.js';
 import { FindBar } from './ui/find.js';
 import * as cmd from './ui/commands.js';
 import * as dlg from './ui/dialog.js';
@@ -35,7 +35,8 @@ const placeholderDoc = newDocument();
 const view = new View({ scroller: $('scroller'), content: $('content'), editor, doc: placeholderDoc });
 const ac = new Autocomplete($('ac'), editor, view);
 const session = new Session({ editor, appVersion: info.version, onState: renderSaveState, onLoaded: onDocLoaded });
-const tracker = new Tracker(await api.invoke('stats:get'));
+// Writing statistics are recorded only for real use, never for probes or screenshots.
+const writing = new WritingStats(api, await api.invoke('stats:get'), { enabled: !info.perf && !info.shot && !info.sample });
 
 const input = new Input({
   textarea: $('input'), view, editor, autocomplete: ac,
@@ -104,10 +105,8 @@ function onDocLoaded(s) {
   view.activeComment = null;
   view.invalidate();
   view.scroller.scrollTop = 0;
-  tracker.begin(s.doc.meta.id, editor.words);
+  describeDoc();
   lastRev = editor.rev;
-  editor.wordShift = 0;
-  lastWords = editor.words;
   scenes.lastKey = ''; notes.lastKey = '';
   revision.reset();
   scenes.refresh(); notes.refresh(true);
@@ -120,20 +119,22 @@ function onDocLoaded(s) {
 
 // ---- statistics --------------------------------------------------------------------
 
-// Every change is recorded immediately (cheap), so a document switch, a paste
-// and its undo, or a quick close can never be attributed to the wrong state;
-// only redrawing and saving are deferred.
-let statsTimer = 0, statsSaveTimer = 0, lastWords = 0, lastLoads = 0, dino = null;
+// The editor turns every edit into word credits (see "writing activity" in
+// core/editor.js); they're drained and booked synchronously on every change,
+// so a document switch or a quick close can never attribute them to the wrong
+// screenplay. Only redrawing is deferred.
+let statsTimer = 0, verifyAt = 0, dino = null;
 function trackWords() {
   if (!session.doc) return;
-  if (editor.loads !== lastLoads) { lastLoads = editor.loads; lastWords = editor.words; editor.wordShift = 0; return; } // opened/restored: begin()/rebase() handle it
-  const shift = editor.wordShift;
-  editor.wordShift = 0;
-  const written = editor.words - lastWords - shift; // the writer's own net words in this change
-  lastWords = editor.words;
-  tracker.update(session.doc.meta.id, editor.words, shift);
-  if (written > 0 && dino) dino.wrote(written);
+  const credits = editor.takeCredits();
+  if (!credits.length) return;
+  const net = writing.record(session.doc.meta.id, credits);
+  if (net > 0 && dino) dino.wrote(net);
   scheduleStats();
+}
+function describeDoc() {
+  if (!session.doc) return;
+  writing.describe(session.doc.meta.id, { title: session.path ? session.name : session.doc.titlePage.title || '', path: session.path || null });
 }
 function scheduleStats() {
   if (statsTimer) return;
@@ -141,10 +142,9 @@ function scheduleStats() {
     statsTimer = 0;
     if (!session.doc) return;
     renderGoal();
-    if (tracker.changed) {
-      clearTimeout(statsSaveTimer);
-      statsSaveTimer = setTimeout(() => { tracker.changed = false; api.invoke('stats:set', tracker.data); }, 4000);
-    }
+    // Belt and braces: the running count is kept incrementally; now and then
+    // check it against a full recount (a few ms even for a feature script).
+    if (performance.now() > verifyAt) { verifyAt = performance.now() + 15000; editor.verifyWords(); }
   }, 300);
 }
 
@@ -177,12 +177,13 @@ function renderStatus() {
 
 let goalState = { today: 0, goal: 0 };
 function renderGoal() {
-  const s = tracker.summary(settings.goals, 7);
-  goalState = { today: s.today, goal: s.dailyGoal };
-  const pct = s.dailyGoal ? Math.min(100, (s.today / s.dailyGoal) * 100) : 0;
+  const s = writing.summary(settings.goals);
+  const today = s.today.words, goal = s.goals.daily;
+  goalState = { today, goal };
+  const pct = goal ? Math.min(100, (today / goal) * 100) : 0;
   const el = $('st-goal');
-  el.innerHTML = `TODAY ${s.today.toLocaleString()}${s.dailyGoal ? ' / ' + s.dailyGoal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`;
-  el.title = `Today: ${s.today} words (${s.todayDelta >= 0 ? 'goal met' : -s.todayDelta + ' to go'}). Week: ${s.week}/${s.weeklyGoal} (${s.weekDelta >= 0 ? s.weekDelta + ' ahead' : -s.weekDelta + ' behind'} of pace). Click for statistics.`;
+  el.innerHTML = `TODAY ${today.toLocaleString()}${goal ? ' / ' + goal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`;
+  el.title = `Today: ${today.toLocaleString()} words written${goal ? (today >= goal ? ' — goal met' : ` — ${(goal - today).toLocaleString()} to go`) : ''}. This week: ${s.week.total.toLocaleString()}${s.goals.weekly ? ' of ' + s.goals.weekly.toLocaleString() : ''}. Click for your week.`;
 }
 
 function renderSaveState(s) {
@@ -207,6 +208,7 @@ function renderTitle() {
   const name = session.path ? session.name : (session.doc && session.doc.titlePage.title) || 'Untitled';
   $('doctitle').textContent = session.path ? `${name}  —  ${session.path}` : `${name}  —  not saved`;
   document.title = `${session.dirty ? '• ' : ''}${name} — STET`;
+  describeDoc();
 }
 
 function renderZoom() { $('zoom-val').textContent = Math.round(view.z * 100) + '%'; }
@@ -381,7 +383,7 @@ async function saveAs() {
   const r = await session.saveTo(file, { force: true });
   if (!r.ok) { session.doc.meta.id = oldId; await dlg.alertBox('SAVE FAILED', 'The copy could not be saved.', r.error); return false; }
   api.invoke('recovery:clear', oldId);
-  tracker.begin(session.doc.meta.id, editor.words);
+  writing.describe(session.doc.meta.id, { title: session.name, path: session.path, from: oldId });
   renderTitle();
   return true;
 }
@@ -463,7 +465,6 @@ async function restoreFromBackups(ref, asNew = false) {
   r.doc.meta.id = session.doc.meta.id;
   const path = session.path;
   session.load(r.doc, path, { dirty: true });
-  tracker.rebase(r.doc.meta.id, editor.words);
 }
 
 async function checkRecovery(auto = true) {
@@ -656,7 +657,13 @@ cmd.register([
 
   { id: 'stats', cat: 'Tools', label: 'Writing Goals & Statistics…', keys: 'F9', global: true, run: async () => {
     trackWords();
-    await dialogs.statsDialog(tracker.summary(settings.goals), editor.words, async (goals) => { settings = await api.invoke('settings:set', { goals }); renderGoal(); });
+    await dialogs.statsDialog({
+      summary: (offset) => writing.summary(settings.goals, offset),
+      words: () => editor.words,
+      notice: () => writing.notice || (writing.readOnly ? 'Statistics are read-only in this version.' : null),
+      saveGoals: async (goals) => { settings = await api.invoke('settings:set', { goals }); renderGoal(); },
+      reset: async () => { const r = await writing.reset(); renderGoal(); return r; },
+    });
   } },
   { id: 'revise-panel', cat: 'Tools', label: () => (revision.visible ? 'Hide English Revision' : 'English Revision'), keys: 'Ctrl+Shift+R', global: true, run: () => revision.show() },
   { id: 'revise-run', cat: 'Tools', label: 'Review English with Claude…', run: () => { revision.show(true); revision.start(); } },
@@ -704,7 +711,8 @@ function isGlobalKey(e) {
 
 api.on('app:before-close', async () => {
   trackWords();
-  await api.invoke('stats:set', tracker.data);
+  await writing.flush();
+  await api.invoke('stats:flush');
   if (await releaseCurrent()) {
     if (!session.dirty) await session.clearRecovery();
     api.invoke('app:close-ready');
@@ -723,7 +731,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, tracker, cmd, revision, openPath, save, exportPdf, checkRecovery, api, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, openPath, save, exportPdf, checkRecovery, api, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 
@@ -753,6 +761,5 @@ if (info.sample) {
     if (target && (await api.invoke('doc:exists', target))) await openPath(target);
   }
 }
-tracker.compact();
 if (info.run) setTimeout(() => cmd.run(info.run), 300);
 

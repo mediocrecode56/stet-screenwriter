@@ -4,6 +4,35 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.7.0 — 20 October 2026
+
+Word counting and writing statistics rebuilt from the ground up, a clearer weekly progress view with a safe Reset, and a dinosaur with a lot more personality.
+
+### New
+
+- **Your writing is recorded across every screenplay, for good.** STET now keeps a running record of the words you actually write — per day, per week, per screenplay and in total — across all your projects, including new ones. It is kept in STET's data folder, separate from the program, so it survives closing STET, restarting the computer, replacing STET.exe and installing newer versions. Your statistics from 0.6 are carried over automatically.
+- **A clear weekly view (F9, or click TODAY).** This week's total and today's progress towards your goals are at the top. Below is a simple chart with every day's word count printed above its bar and a dashed line for your daily goal: solid bars are days you reached it, grey bars days you wrote less, and dotted ones days still to come. Days from before statistics began show "—" rather than a misleading zero. A short line sums up the week (days written, goal met, best day, streak), and a small list shows which screenplays the words went into. Use ‹ › to look at earlier weeks.
+- **Reset statistics, safely.** A small *Reset statistics…* button in the weekly view is the only way to clear your statistics. It never erases anything straight away: a confirmation says exactly what will be cleared (all recorded writing — not your screenplays, their word counts or your goals) and only the *Reset statistics* button confirms. Cancel, Escape or clicking outside leave everything as it was. If the reset can't be saved, nothing is cleared and STET tells you. A copy of the cleared statistics is kept in STET's data folder.
+- **The dinosaur has a life of its own.** It now plays with things: it chases and kicks a ball, digs up a bone and chews it (or buries it for later, or turns up a disappointing pebble), watches a leaf drift down and tries to catch it, chases butterflies, balances a ball on its nose, and walks off the edge of the bar to peek back in. While you're writing it sometimes sits down at a tiny typewriter and types along. It has moods that drift through the day (playful, curious, sleepy, grumpy, silly), stargazes late at night, celebrates when you reach your daily goal, and every so often something rare and strange happens.
+- **The dinosaur notices you.** Move the pointer near it and it may glance your way or show a little heart — without interrupting what it's doing.
+
+### Improved
+
+- **Clicking the dinosaur is full of surprises.** There are now more than 30 reactions, from a quiet blink or a wave to a backflip, fainting, playing dead, putting on a party hat, bringing you a bone or bowing. Which one you get is random but weighted, it avoids repeating itself, and it sometimes reacts after a beat, sometimes notices a moment later — and sometimes carries on as if nothing happened. Click a lot in a row and it gets dizzy, annoyed, or storms off. Reactions still wait for the end of its current move, and it always gets up properly instead of jumping between poses.
+- **Ctrl + mouse wheel zooms in steps of 5 percentage points** (100 → 105 → 110 %), instead of 2. Everything else about wheel zoom is unchanged.
+
+### Fixed
+
+- **TODAY stopped counting after you deleted text.** In 0.6, TODAY only counted words once the screenplay grew past its largest size that day, so after cutting a passage, nothing you typed counted until you had made up the difference. Now every word you write counts the moment you write it, whatever you deleted before. Deleting never takes away writing you've already done; only fixing words you have just typed (a typo, a phrase you rephrase on the spot) is netted out, so a corrected word isn't counted twice.
+- **Statistics could be lost or overwritten.** They used to be saved every few seconds as a whole by the window, and a crash in between lost the latest words. Words now reach the saved copy within a quarter of a second, the file is backed up daily, and a damaged file is set aside and the backup used instead of silently starting from zero.
+- **Opening, switching and reopening never count as writing.** Opening a 10,000-word screenplay adds nothing, nor does switching between screenplays, restoring a backup or undoing and redoing.
+- **One clear rule for what a word is.** For example, *don't*, *well-known*, *3.5* and *(V.O.)* are one word each; *wait—what* is two; a lone "—" or "…" isn't a word. Tabs, several spaces, line breaks and non-breaking spaces all just separate words, and Chinese and Japanese characters count one word each. The status bar total is checked against a full recount in the background, so it can't drift.
+
+### For the technically curious
+
+- The editor now gives every edit a word *credit* (typing earns words, paste and replace earn none, undo returns exactly what the edit earned, redo gives it back). A ledger books those credits per day and per screenplay, in the window for an instant TODAY and in the main process for the saved copy (`%APPDATA%\STET\stats.json`, format version 2), in numbered batches that are never booked twice.
+- New tests: the word rule checked against a separate reference implementation on 20,000 random strings, a 20,000-edit fuzz of the count and the credits, the statistics ledger and its file (restarts, upgrade from 0.6, damaged files, failed reset, a year of heavy use), the dinosaur simulated for hours at a time, and end-to-end tests in the real app including a restart, a crash and the whole Reset flow.
+
 ## 0.6.1 — 19 October 2026
 
 ### Fixed

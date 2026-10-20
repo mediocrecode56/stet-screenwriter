@@ -351,19 +351,54 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-list { flex: 1; }
 
 /* statistics */
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--rule); margin-bottom: 12px; }
-.stats-grid > div { padding: 8px 10px; border-right: 1px solid var(--rule); }
-.stats-grid > div:last-child { border-right: 0; }
-.stats-grid b { display: block; font-size: 20px; font-weight: 400; letter-spacing: 0; margin-top: 2px; }
-.stats-grid span { color: var(--ink-3); text-transform: uppercase; letter-spacing: .12em; font-size: 9px; }
-.stats-chart { width: 100%; height: 140px; display: block; }
-.stats-chart .bar { fill: var(--ink); }
-.stats-chart .bar.under { fill: var(--ink-3); }
-.stats-chart .goal { stroke: var(--ink); stroke-dasharray: 3 3; }
-.stats-chart text { fill: var(--ink-3); font: 9px var(--ui); }
-.verdict { padding: 6px 10px; border: 1px solid var(--rule-strong); margin: 8px 0 12px; }
 
 /* print preview */
+/* Writing week (F9). Monochrome like the rest: solid ink = goal met, grey = written, dotted = still to come. */
+.wk-dlg { width: 640px; }
+.wk { display: flex; flex-direction: column; gap: 14px; }
+.wk-k { color: var(--ink-3); text-transform: uppercase; letter-spacing: .14em; font-size: 9px; display: flex; align-items: center; gap: 6px; }
+.wk-notice { border: 1px solid var(--rule-strong); padding: 6px 10px; }
+.wk-flash { color: var(--ink-2); }
+.wk-head { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); }
+.wk-big { padding: 10px 12px 9px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.wk-big + .wk-big { border-left: 1px solid var(--rule); }
+.wk-n { font-size: 26px; line-height: 1.1; letter-spacing: 0; }
+.wk-n small { font-size: 11px; color: var(--ink-3); letter-spacing: .04em; }
+.wk-meter { height: 4px; background: var(--rule); }
+.wk-meter i { display: block; height: 100%; background: var(--ink); transition: width var(--dur-panel) var(--ease-out); }
+.wk-meter.none { opacity: .4; }
+.wk-nav { padding: 0 5px; line-height: 13px; font-size: 12px; }
+.wk-nav:disabled { opacity: .25; }
+.wk-chart { padding: 0 2px; }
+.wk-plot { position: relative; height: 150px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; border-bottom: 1px solid var(--rule-strong); padding-top: 16px; }
+.wk-col { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; min-width: 0; z-index: 1; }
+.wk-val { text-align: center; font-size: 11px; padding-bottom: 3px; white-space: nowrap; color: var(--ink); }
+.wk-bar { background: var(--ink-3); min-height: 0; }
+.wk-col.met .wk-bar { background: var(--ink); }
+.wk-col.zero .wk-val { color: var(--ink-3); }
+.wk-col.na .wk-val { color: var(--ink-3); }
+.wk-col.future::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-bottom: 1px dotted var(--ink-3); }
+.wk-col.today .wk-val { font-weight: 700; }
+.wk-goal { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--ink-2); z-index: 2; pointer-events: none; }
+.wk-goal span { position: absolute; right: 0; bottom: 1px; font-size: 9px; color: var(--ink-3); background: var(--page); padding-left: 4px; letter-spacing: .06em; }
+.wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; padding-top: 4px; text-align: center; color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
+.wk-days .today { color: var(--ink); font-weight: 700; }
+.wk-days small { font-size: 10px; letter-spacing: 0; }
+.wk-facts { color: var(--ink-2); }
+.wk-docs { display: flex; flex-direction: column; gap: 2px; }
+.wk-docs .wk-k { margin-bottom: 2px; }
+.wk-row { display: flex; gap: 12px; border-bottom: 1px dotted var(--rule); padding: 1px 0; }
+.wk-row .wk-doc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-goals { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--rule); padding-top: 10px; flex-wrap: wrap; }
+.wk-goals label { color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.wk-in { width: 76px; border: 1px solid var(--rule); padding: 2px 5px; outline: none; }
+.wk-in:focus { border-color: var(--rule-strong); }
+.wk-goals .grow { flex: 1; }
+.wk-reset { color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
+.wk-reset:hover { color: var(--ink); }
+.wk-q { font-size: 13px; margin-top: 0; }
+.btn.danger { border-color: var(--rule-strong); font-weight: 700; }
+.btn.danger:hover { background: var(--inv-bg); color: var(--inv-fg); }
 .preview { width: min(980px, 94vw); }
 .preview .body { display: flex; gap: 14px; }
 .preview .opts { width: 230px; flex: none; }

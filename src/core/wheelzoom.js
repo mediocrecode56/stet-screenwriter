@@ -1,4 +1,4 @@
-// Ctrl+wheel zoom in fixed 2-percentage-point steps.
+// Ctrl+wheel zoom in fixed 5-percentage-point steps.
 //
 // Wheel hardware reports very different deltas: a classic notch is ~100 px,
 // high-resolution wheels and trackpad pinches send many small deltas, and
@@ -7,7 +7,7 @@
 // 300 px event can never jump; less than a step is carried over), and leftover
 // travel is dropped after a pause or a change of direction.
 
-export const ZOOM_STEP = 0.02;
+export const ZOOM_STEP = 0.05;
 export const ZOOM_MIN = 0.5;
 export const ZOOM_MAX = 3;
 const STEP_PX = 50;
@@ -32,7 +32,7 @@ export class WheelZoom {
   }
 }
 
-/** Next zoom level `steps` away, on the 2% grid, within the limits. */
+/** Next zoom level `steps` away, exactly 5 points on, within the limits. */
 export function stepZoom(z, steps) {
   const next = Math.round((z + steps * ZOOM_STEP) * 100) / 100;
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));

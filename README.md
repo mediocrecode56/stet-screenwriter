@@ -50,8 +50,8 @@ is still nothing extra to install.
 
 | command | what it does |
 |---|---|
-| `npm test` | 89 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, statistics, theme schedule, word counting and TODAY progress (paste/undo/replace/switch/reopen, plus a random-editing fuzz), wheel-zoom steps, English-revision persistence, the companion's pixel art and behaviour scripts |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change), caret/selection/click alignment with rendered glyphs at several display scales and zooms, the English revision against a local mock of the API and a fake Claude Code CLI (request shape, CLI flags, signed-out errors, progress indicator, hover highlighting, decisions, edits during a review, rate limits, server errors, cancellation, persistence across restarts), word counting with real pastes and undo, 2 % wheel-zoom steps, Open Recent dismiss/trash, the writing companion, animation easing and toolbar spacing. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm test` | 107 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, theme schedule, the word-count rule against an independent reference implementation, word counting under typing / large pastes / replacing / deleting / undo / redo / reopening with a 20 000-edit fuzz, writing statistics (accumulation across documents and projects, restarts, upgrade from the 0.6 format, damaged files, double-send protection, consistency of per-document / per-project / weekly / all-time totals, Reset and a failed Reset, a year of heavy use), wheel-zoom steps, English-revision persistence, and the companion simulated over hours of use (every activity and reaction, seamless posture changes, click variety and escalation, cursor glances, props cleaned up) |
+| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change), caret/selection/click alignment with rendered glyphs at several display scales and zooms, the English revision against a local mock of the API and a fake Claude Code CLI (request shape, CLI flags, signed-out errors, progress indicator, hover highlighting, decisions, edits during a review, rate limits, server errors, cancellation, persistence across restarts), word counting and writing statistics in the real app (every editing route, switching and reopening documents, a restart, a crash, the upgrade from 0.6, the weekly view and the Reset confirmation), 5-point wheel-zoom steps, Open Recent dismiss/trash, the writing companion, animation easing and toolbar spacing. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
@@ -72,11 +72,11 @@ Results and test conditions: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 | Ctrl+Alt+M · F8 · Shift+F8 | add note · next · previous |
 | Ctrl+F · Ctrl+H · F3 | find · replace · next |
 | Alt+↑/↓ · Ctrl+G · PgUp/PgDn | previous/next scene · go to page · page |
-| Ctrl+wheel · Ctrl+= / − / 0 | zoom (the wheel moves in exact 2 % steps) |
+| Ctrl+wheel · Ctrl+= / − / 0 | zoom (the wheel moves in exact 5-point steps) |
 | LIGHT · DARK · AUTO (bottom right) · Ctrl+Shift+L | theme; AUTO follows a schedule — right-click it to set the dark and light start times (AM/PM). Picking LIGHT or DARK turns the schedule off |
 | Ctrl+K | command palette — every command, searchable |
 | Ctrl+P · Ctrl+Shift+E | print preview · export PDF |
-| F9 | writing goals & statistics |
+| F9 | your writing week: progress, goals, statistics |
 | F1 | all shortcuts |
 
 ## English revision (Claude)
@@ -121,13 +121,54 @@ script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
   retries on rate limits; cancel at any time; failed sections can be retried.
 - Live check: `node bench/revision-live.js` (uses your Claude sign-in, or a key if set).
 
+## Word count and writing statistics
+
+**The word count** in the status bar is the screenplay's body (title page not
+included), always exact, updated with every keystroke, paste, deletion, undo
+and redo. A word is a run of characters between separators that contains a
+letter or digit; separators are any whitespace, the em dash, the en dash and
+"…". So *don't*, *well-known*, *3.5* and *(V.O.)* are one word each, *wait—what*
+is two, and a lone "—" or "…" is none. Chinese and Japanese characters count one
+word each.
+
+**Writing statistics** record the words you actually write, across every
+screenplay and project, for good:
+
+- Typing counts as you go. Pasting, Find & Replace and accepted suggestions
+  don't. Opening, switching or reopening a screenplay never counts its existing
+  words, and undo/redo can never count anything twice.
+- Deleting text never takes away writing you've already done — only fixing the
+  words you have just typed (a typo, a phrase rephrased on the spot) is netted
+  out, so a corrected word isn't counted twice.
+- Statistics live in STET's data folder (`%APPDATA%\STET\stats.json`), apart
+  from the program, so replacing STET.exe or installing a newer version keeps
+  them. A daily backup is kept beside it; a damaged file is set aside and the
+  backup used, never silently reset. Statistics from STET 0.6 are carried over.
+- **F9** (or click TODAY) shows your week: the total and today's progress at
+  the top, a chart with every day's number printed on it, the goal line, and a
+  few plain facts (days written, goal met, best day, streak). ‹ › browse earlier
+  weeks. Days before statistics began show "—", not zero.
+- **Reset statistics…** in that view is the only way to clear them. It asks
+  first, says exactly what will be cleared (all recorded writing; not your
+  screenplays, word counts or goals), and only the Reset button confirms —
+  Cancel, Escape or clicking outside change nothing. A copy of what was
+  cleared is kept in the data folder.
+
 ## Writing companion
 
-A tiny 8-bit dinosaur lives just above TODAY. It walks about, looks around,
-stretches, rests, naps and occasionally does something silly. Its energy comes
-from the words you actually type (not pastes, not opening files, not the clock)
-and changes gradually; idle, it calms down and dozes. Click it for a reaction —
-reactions join at its next natural moment instead of cutting off what it's
+A tiny 8-bit dinosaur lives just above TODAY, with a life of its own. It walks
+about, naps, stretches, chases a ball, digs up bones (and sometimes a
+disappointing pebble), watches leaves fall, chases butterflies, balances things
+on its nose, and — while you're writing — sometimes types along on a tiny
+typewriter. Now and then something rarer happens. Its mood drifts over the
+day, and it remembers what it did recently, so it doesn't repeat itself.
+
+Its energy comes from the words you actually write (not pastes, not opening
+files, not the clock) and changes gradually; idle, it calms down and dozes.
+Move the pointer near it and it may glance your way. Click it and it reacts —
+anything from a blink to something ridiculous, sometimes after a beat,
+occasionally not at all, and with mounting indignation if you keep clicking.
+Reactions join at its next natural moment instead of cutting off what it's
 doing. *View → Hide Writing Companion* turns it off. It redraws a tiny canvas a
 few times a second at most, and not at all while the window is hidden.
 
@@ -174,5 +215,5 @@ Bin after a confirmation (never a permanent delete). Missing files are marked.
   files are not associated with STET in Explorer (drag a file onto the window
   or use Open).
 - Spell-checking is off (it would fight the custom renderer).
-- Writing statistics count net new words per day (high-water mark); heavy
-  rewriting that keeps the word count flat is not credited.
+- Writing statistics can't tell retyping from new writing: if you delete an old
+  passage and type it again from memory, the retyped words count as written.
