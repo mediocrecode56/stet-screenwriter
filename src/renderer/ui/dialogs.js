@@ -205,8 +205,9 @@ export async function recoveryDialog(items) {
 }
 
 /**
- * The writing week: total and goal progress first, then a day-by-day chart
- * with the numbers printed on it, then a few plain facts. Reset lives here
+ * The writing week, laid out symmetrically: two equal boxes (the week, today),
+ * a full-width day-by-day chart with the numbers on the bars and the daily
+ * goal as a dashed line, the screenplays written in, and the goals. Reset lives here
  * (and only here), behind its own confirmation.
  * `api` = { summary(offset), notice(), saveGoals(goals), reset() }.
  */
@@ -226,11 +227,8 @@ export async function statsDialog(api) {
       weekHeader(s, nav),
       weekChart(s),
       weekDocs(s),
-      h('div', { class: 'wk-goals' },
-        h('span', { class: 'wk-k' }, 'GOALS'),
-        h('label', {}, 'daily ', goalIn), h('label', {}, 'weekly ', weekIn),
-        h('span', { class: 'grow' }),
-        h('span', { class: 'hint', title: `Every word recorded since ${fmtDate(s.since, true)}` }, `all-time ${fmtWords(s.total)} · since ${fmtDate(s.since, true)}`)),
+      h('div', { class: 'wk-goals', title: `All-time: ${s.total.toLocaleString()} words since ${fmtDate(s.since, true)}` },
+        h('label', {}, h('span', { class: 'wk-k' }, 'DAILY GOAL'), goalIn), h('label', {}, h('span', { class: 'wk-k' }, 'WEEKLY GOAL'), weekIn)),
     );
     flash = '';
     const v = await open({
@@ -304,20 +302,10 @@ const BAR_H = 104, BAND = 16;
 
 function weekChart(s) {
   const goal = s.goals.daily;
-  const { top, px, over } = weekScale(s.week.days, goal, BAR_H);
+  const { px, over } = weekScale(s.week.days, goal, BAR_H);
   const plot = h('div', { class: 'wk-plot', style: `height:${BAR_H + BAND}px` });
-  const axis = h('div', { class: 'wk-axis', style: `height:${BAR_H + BAND}px` });
-  // Gridlines at half and full scale, labelled in the gutter on the right.
-  const goalY = goal ? px(goal) : -99;
-  for (const v of [top / 2, top]) {
-    const y = px(v);
-    plot.append(h('div', { class: 'wk-grid', style: `bottom:${y}px` }));
-    if (Math.abs(y - goalY) >= 12) axis.append(h('span', { class: 'wk-tick', style: `bottom:${y - 5}px` }, fmtWords(v, true)));
-  }
-  if (goal) {
-    plot.append(h('div', { class: 'wk-goal', style: `bottom:${goalY}px` }));
-    axis.append(h('span', { class: 'wk-tick wk-goal-t', style: `bottom:${goalY - 5}px`, title: `Daily goal: ${goal.toLocaleString()} words` }, 'goal ' + fmtWords(goal, true)));
-  }
+  // The daily goal: a dashed line across the whole chart (its figure is in the box above).
+  if (goal) plot.append(h('div', { class: 'wk-goal', style: `bottom:${px(goal)}px`, title: `Daily goal: ${goal.toLocaleString()} words` }));
   s.week.days.forEach((d, i) => {
     const state = d.future ? 'future' : !d.known ? 'na' : d.words === 0 ? 'zero' : goal && d.words >= goal ? 'met' : 'under';
     const label = d.future ? '' : !d.known ? '—' : fmtWords(d.words);
@@ -328,7 +316,7 @@ function weekChart(s) {
       h('div', { class: 'wk-bar', style: `height:${bh}px` })));
   });
   const days = h('div', { class: 'wk-days' }, ...s.week.days.map((d, i) => h('div', { class: d.today ? 'today' : '' }, DOW[i], h('small', {}, ' ' + d.day.slice(8).replace(/^0/, '')))));
-  return h('div', { class: 'wk-chart' }, h('div', { class: 'wk-frame' }, plot, axis), days);
+  return h('div', { class: 'wk-chart' }, plot, days);
 }
 
 function weekDocs(s) {

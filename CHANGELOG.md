@@ -4,6 +4,15 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.16.4 — 21 October 2026
+
+### Improved
+
+- **A simpler, even weekly view.**
+  - **The boxes:** the two at the top are the same size, with their contents centred. The week arrows sit on both sides of THIS WEEK.
+  - **The chart:** it fills the width, and each day's name sits right under its bar. The scale down the right-hand side is gone. The daily goal is the dashed line (its number is in the box above).
+  - **The goals:** daily and weekly sit centred in two equal halves. Hover them to see the all-time total.
+
 ## 0.16.3 — 21 October 2026
 
 ### Improved

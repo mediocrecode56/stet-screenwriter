@@ -147,7 +147,7 @@ test('weekly view with thousands of words a day: readable, proportional, compact
     const dlg = document.querySelector('#overlay .dlg'), body = dlg.querySelector('.body');
     const cols = [...dlg.querySelectorAll('.wk-col')].map((c) => { const val = c.querySelector('.wk-val'), r = val.getBoundingClientRect(), cr = c.getBoundingClientRect(); return { text: val.textContent, l: r.left, r: r.right, bar: c.querySelector('.wk-bar').getBoundingClientRect().height, over: c.classList.contains('over'), colL: cr.left, colR: cr.right, clipped: val.scrollWidth > val.clientWidth + 1 }; });
     const plot = dlg.querySelector('.wk-plot').getBoundingClientRect();
-    return { cols, h: dlg.getBoundingClientRect().height, w: dlg.getBoundingClientRect().width, scroll: [body.scrollWidth - body.clientWidth, body.scrollHeight - body.clientHeight], ticks: [...dlg.querySelectorAll('.wk-tick')].map((t) => t.textContent), head: [...dlg.querySelectorAll('.wk-n')].map((n) => n.textContent), plotTop: plot.top };
+    return { cols, h: dlg.getBoundingClientRect().height, w: dlg.getBoundingClientRect().width, scroll: [body.scrollWidth - body.clientWidth, body.scrollHeight - body.clientHeight], goalLine: !!dlg.querySelector('.wk-goal'), centred: (() => { const b = dlg.querySelector('.body').getBoundingClientRect(), p = dlg.querySelector('.wk-plot').getBoundingClientRect(); return Math.abs((p.left - b.left) - (b.right - p.right)) <= 1; })(), head: [...dlg.querySelectorAll('.wk-n')].map((n) => n.textContent), plotTop: plot.top };
   })()`);
   const total = LAST.reduce((a, b) => a + b, 0);
   const fmt = (n) => app.eval(`(${n}).toLocaleString()`); // as the app formats numbers
@@ -163,7 +163,8 @@ test('weekly view with thousands of words a day: readable, proportional, compact
   assert.equal(thu.over, true, '131,830 drawn as a broken bar');
   const [mon, tue, , , fri] = v.cols;
   assert.ok(Math.abs(mon.bar / fri.bar - 18450 / 9420) < 0.1 && Math.abs(fri.bar / tue.bar - 9420 / 2240) < 0.3, 'bars in proportion');
-  assert.ok(v.ticks.some((t) => /goal/.test(t)), 'goal marked on the scale');
+  assert.ok(v.goalLine, 'the goal drawn as a line across the chart');
+  assert.ok(v.centred, 'the chart is centred: the same margin on both sides');
   await app.key('Escape');
   await sleep(200);
   // Reset still asks first, and Cancel leaves everything as it was.
