@@ -1,7 +1,15 @@
 // Minimal modal dialogs. One at a time; Esc cancels, Enter triggers the primary button.
+// A dialog drops into place as it fades in and fades out as it closes (ui/motion.js);
+// one dialog replaced by the next (a confirmation, a week browsed) just swaps, without
+// a second entrance. Closing never waits for the animation: the result, focus and
+// keyboard are back at once.
+
+import { arrive, leave, reducedMotion, DUR_FAST, EASE_IN_OUT } from './motion.js';
 
 const overlay = () => document.getElementById('overlay');
 let active = null;
+let leaving = null; // cancels the fade-out of the dialog that just closed
+let restoreTo = null; // where focus goes back to when a chain of dialogs ends
 
 export function h(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
@@ -26,8 +34,10 @@ export const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 export function open({ title, sub = '', body, buttons = [{ label: 'Close', value: null }], cls = '', foot = null, init = null }) {
   if (active) active.close(null);
   const ov = overlay();
+  const swap = !!leaving;
+  if (leaving) { leaving(); leaving = null; }
   return new Promise((resolve) => {
-    const prevFocus = document.activeElement;
+    const prevFocus = swap ? restoreTo : document.activeElement;
     const btns = buttons.map((b) => h('button', { class: 'btn' + (b.primary ? ' primary' : '') + (b.cls ? ' ' + b.cls : ''), disabled: b.disabled, onclick: () => close(typeof b.value === 'function' ? b.value() : b.value) }, b.label));
     const dlg = h('div', { class: 'dlg ' + cls, role: 'dialog' },
       title ? h('h2', {}, title, sub ? h('small', {}, sub) : null) : null,
@@ -35,6 +45,7 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
       h('div', { class: 'foot' }, h('span', { class: 'grow' }, foot || ''), ...btns));
     ov.replaceChildren(dlg);
     ov.hidden = false;
+    if (!swap) arrive(dlg);
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
       else if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
@@ -48,9 +59,11 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
     function close(v) {
       ov.removeEventListener('keydown', onKey, true);
       ov.removeEventListener('mousedown', onDown);
-      ov.hidden = true;
-      ov.replaceChildren();
       active = null;
+      dlg.inert = true;
+      if (!reducedMotion()) dlg.animate([{ transform: 'none' }, { transform: 'translateY(-4px)' }], { duration: DUR_FAST, easing: EASE_IN_OUT, fill: 'forwards' });
+      leaving = leave(ov, () => { leaving = null; ov.hidden = true; ov.replaceChildren(); }, { dist: 0 });
+      restoreTo = prevFocus;
       if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
       resolve(v);
     }

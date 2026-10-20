@@ -1,4 +1,4 @@
-// 0.6 refinements in the real app: word counting and TODAY, Ctrl+wheel zoom,
+// 0.6–0.7 refinements in the real app: word counting and TODAY, Ctrl+wheel zoom,
 // Open Recent actions, the writing companion, animation consistency and the
 // toolbar spacing.
 import { test, before, after } from 'node:test';
@@ -148,12 +148,15 @@ test('Open Recent: dismiss hides an entry, trash moves the file to the bin after
   await fs.access(files[0]);
 });
 
-test('the dinosaur sits above TODAY and livens up only with real writing', async () => {
-  const geo = await app.eval(`(() => { const d = document.getElementById('dino').getBoundingClientRect(), g = document.getElementById('st-goal').getBoundingClientRect(); return { hidden: document.getElementById('dino').hidden, dBottom: d.bottom, gTop: g.top, dLeft: d.left, gLeft: g.left, h: d.height, w: d.width }; })()`);
+test('the dinosaur lives on a wide stretch of desk above TODAY and livens up only with real writing', async () => {
+  const geo = await app.eval(`(() => { const d = document.getElementById('dino').getBoundingClientRect(), g = document.getElementById('st-goal').getBoundingClientRect(), s = document.getElementById('scroller').getBoundingClientRect(); return { hidden: document.getElementById('dino').hidden, d: [d.left, d.right, d.top, d.bottom], g: [g.left, g.right, g.top], s: [s.left, s.right], strip: __stet.dino.stripW, pe: getComputedStyle(document.getElementById('dino')).pointerEvents }; })()`);
   assert.equal(geo.hidden, false);
-  assert.ok(Math.abs(geo.dBottom - geo.gTop) <= 1, 'directly above TODAY');
-  assert.ok(Math.abs(geo.dLeft - geo.gLeft) <= 1);
-  assert.ok(geo.h <= 40, 'small');
+  assert.ok(Math.abs(geo.d[3] - geo.g[2]) <= 1, 'standing on the status bar');
+  assert.ok(geo.strip >= 400, `a generous play area (${geo.strip} px)`);
+  assert.ok(geo.d[0] <= (geo.g[0] + geo.g[1]) / 2 && geo.d[1] >= (geo.g[0] + geo.g[1]) / 2, 'around TODAY');
+  assert.ok(geo.d[0] >= geo.s[0] - 0.5 && geo.d[1] <= geo.s[1] + 0.5, 'within the editor area, never over a panel');
+  assert.ok(geo.d[3] - geo.d[2] <= 60, 'takes no room: an overlay just above the status bar');
+  assert.equal(geo.pe, 'none', 'only the dinosaur itself takes clicks');
   await newDoc();
   await app.eval('(() => { const d = __stet.dino.c; d.heat = 0; d.energy = 0; })()');
   await paste(Array.from({ length: 400 }, (_, i) => 'p' + i).join(' '));
@@ -169,12 +172,11 @@ test('the dinosaur sits above TODAY and livens up only with real writing', async
 });
 
 test('poking the dinosaur blends a reaction in without cutting its animation', async () => {
-  const s0 = await app.eval(`(() => { const d = __stet.dino.c; d.force = 'startle'; return { step: d.step && d.step.f, end: d.step && d.step.end, gen: !!d.gen }; })()`);
-  await app.eval(`document.querySelector('.dino-hit').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
-  const s1 = await app.eval(`(() => { const d = __stet.dino.c; return { step: d.step && d.step.f, end: d.step && d.step.end, queued: d.queue.length, focus: document.activeElement.id }; })()`);
+  // Acknowledged at once (in the same moment as the click); a move in progress always finishes.
+  const s1 = await app.eval(`(() => { const d = __stet.dino.c; d.force = 'startle'; const s = d.step, moving = !!(s && (s.dx || s.jump || s.lift)), end = s && s.end; document.querySelector('.dino-hit').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return { ack: d.acking(performance.now()), queued: d.queue.length, moving, same: d.step === s && (!moving || d.step.end === end), focus: document.activeElement.id }; })()`);
+  assert.equal(s1.ack, 2, 'a blink and a start, right away');
   assert.equal(s1.queued, 1, 'queued');
-  assert.equal(s1.step, s0.step, 'current step not interrupted');
-  assert.equal(s1.end, s0.end);
+  assert.ok(s1.same, 'the step in progress is not cut');
   let saw = false;
   for (let i = 0; i < 60 && !saw; i++) { await sleep(100); saw = await app.eval('!!__stet.dino.c.inReaction'); }
   assert.ok(saw, 'reaction starts at the next step boundary');

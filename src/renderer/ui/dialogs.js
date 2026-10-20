@@ -4,8 +4,17 @@ import { h, open, esc, alertBox } from './dialog.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
 import { paginate } from '../../core/layout.js';
 import { parseTime, formatTime, toAmPm, fromAmPm, label as timeLabel } from '../../core/schedule.js';
+import { fmtWords, weekScale } from '../../core/chart.js';
 
 const api = window.stet;
+/** When a project was last opened, short enough for its column: today 10:23 · Oct 20, 10:23 · Oct 20, 2025. */
+function fmtWhen(t) {
+  const d = new Date(t), now = new Date();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return 'today ' + time;
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + time;
+  return d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+}
 const fmtTime = (t) => new Date(t).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const fmtSize = (b) => (b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB');
 
@@ -222,7 +231,7 @@ export async function statsDialog(api) {
         h('span', { class: 'wk-k' }, 'GOALS'),
         h('label', {}, 'daily ', goalIn), h('label', {}, 'weekly ', weekIn),
         h('span', { class: 'grow' }),
-        h('span', { class: 'hint' }, `all-time ${s.total.toLocaleString()} words · since ${fmtDate(s.since, true)}`)),
+        h('span', { class: 'hint', title: `Every word recorded since ${fmtDate(s.since, true)}` }, `all-time ${fmtWords(s.total)} · since ${fmtDate(s.since, true)}`)),
     );
     flash = '';
     const v = await open({
@@ -265,39 +274,70 @@ function meter(value, goal) {
   return h('div', { class: 'wk-meter' + (goal ? '' : ' none') }, h('i', { style: `width:${pct}%` }));
 }
 
+/** "of goal" in words a writer would use: 47 %, 100 %, 3.2× once well past it. */
+const ofGoal = (n, goal) => (n >= 2 * goal ? `${(Math.floor((n / goal) * 10) / 10).toLocaleString()}× the goal` : `${Math.floor((n / goal) * 100)}% of ${fmtWords(goal)}`);
+
 function weekHeader(s, nav) {
   const w = s.week, wg = s.goals.weekly, dg = s.goals.daily;
-  const weekSub = wg ? (w.total >= wg ? `weekly goal of ${wg.toLocaleString()} reached` : `${Math.floor((w.total / wg) * 100)}% of ${wg.toLocaleString()} · ${(wg - w.total).toLocaleString()} to go`) : 'no weekly goal';
+  const weekSub = wg ? (w.total >= wg ? `${ofGoal(w.total, wg)} · weekly goal reached` : `${ofGoal(w.total, wg)} · ${fmtWords(wg - w.total)} to go`) : 'no weekly goal';
   const left = h('div', { class: 'wk-big' },
     h('div', { class: 'wk-k' }, nav(-1), h('span', {}, w.current ? 'THIS WEEK' : weekLabel(w).toUpperCase()), nav(1)),
-    h('div', { class: 'wk-n' }, w.total.toLocaleString(), h('small', {}, ' words')),
+    h('div', { class: 'wk-n' }, fmtWords(w.total), wg ? h('small', {}, ` / ${fmtWords(wg)}`) : h('small', {}, ' words')),
     meter(w.total, wg),
     h('div', { class: 'hint' }, weekSub));
-  if (!w.current) return h('div', { class: 'wk-head' }, left);
-  const t = s.today.words;
-  const right = h('div', { class: 'wk-big wk-today' },
-    h('div', { class: 'wk-k' }, h('span', {}, 'TODAY')),
-    h('div', { class: 'wk-n' }, t.toLocaleString(), dg ? h('small', {}, ` / ${dg.toLocaleString()}`) : h('small', {}, ' words')),
-    meter(t, dg),
-    h('div', { class: 'hint' }, dg ? (t >= dg ? 'daily goal reached' : `${(dg - t).toLocaleString()} to go`) : 'no daily goal'));
+  // Right: today in the current week; the daily average in a past one (same shape, so nothing jumps).
+  let right;
+  if (w.current) {
+    const t = s.today.words;
+    right = h('div', { class: 'wk-big wk-today' },
+      h('div', { class: 'wk-k' }, h('span', {}, 'TODAY')),
+      h('div', { class: 'wk-n' }, fmtWords(t), dg ? h('small', {}, ` / ${fmtWords(dg)}`) : h('small', {}, ' words')),
+      meter(t, dg),
+      h('div', { class: 'hint' }, dg ? (t >= dg ? `${ofGoal(t, dg)} · daily goal reached` : `${ofGoal(t, dg)} · ${fmtWords(dg - t)} to go`) : 'no daily goal'));
+  } else {
+    const known = w.days.filter((d) => d.known && !d.future);
+    const avg = known.length ? Math.round(w.total / known.length) : 0;
+    right = h('div', { class: 'wk-big' },
+      h('div', { class: 'wk-k' }, h('span', {}, 'DAILY AVERAGE')),
+      h('div', { class: 'wk-n' }, known.length ? fmtWords(avg) : '—', dg && known.length ? h('small', {}, ` / ${fmtWords(dg)}`) : h('small', {}, ' words')),
+      meter(avg, dg),
+      h('div', { class: 'hint' }, known.length ? `over ${known.length} recorded day${known.length === 1 ? '' : 's'}` : 'no record for this week'));
+  }
   return h('div', { class: 'wk-head' }, left, right);
 }
 
+// Chart geometry (px). Bars are sized in pixels, not percentages, so a label
+// can never squeeze a bar: every bar has the full BAR_H to scale against and
+// its number sits in the band above it.
+const BAR_H = 104, BAND = 16;
+
 function weekChart(s) {
   const goal = s.goals.daily;
-  const top = Math.max(goal, ...s.week.days.map((d) => d.words), 1) * 1.1;
-  const plot = h('div', { class: 'wk-plot' });
-  if (goal) plot.append(h('div', { class: 'wk-goal', style: `bottom:${(goal / top) * 100}%` }, h('span', {}, `goal ${goal.toLocaleString()}`)));
+  const { top, px, over } = weekScale(s.week.days, goal, BAR_H);
+  const plot = h('div', { class: 'wk-plot', style: `height:${BAR_H + BAND}px` });
+  const axis = h('div', { class: 'wk-axis', style: `height:${BAR_H + BAND}px` });
+  // Gridlines at half and full scale, labelled in the gutter on the right.
+  const goalY = goal ? px(goal) : -99;
+  for (const v of [top / 2, top]) {
+    const y = px(v);
+    plot.append(h('div', { class: 'wk-grid', style: `bottom:${y}px` }));
+    if (Math.abs(y - goalY) >= 12) axis.append(h('span', { class: 'wk-tick', style: `bottom:${y - 5}px` }, fmtWords(v, true)));
+  }
+  if (goal) {
+    plot.append(h('div', { class: 'wk-goal', style: `bottom:${goalY}px` }));
+    axis.append(h('span', { class: 'wk-tick wk-goal-t', style: `bottom:${goalY - 5}px`, title: `Daily goal: ${goal.toLocaleString()} words` }, 'goal ' + fmtWords(goal, true)));
+  }
   s.week.days.forEach((d, i) => {
     const state = d.future ? 'future' : !d.known ? 'na' : d.words === 0 ? 'zero' : goal && d.words >= goal ? 'met' : 'under';
-    const label = d.future ? '' : !d.known ? '—' : d.words.toLocaleString();
-    const tip = d.future ? 'still to come' : !d.known ? 'no record (before statistics began)' : `${d.words.toLocaleString()} words${goal ? (d.words >= goal ? ' · goal met' : ` · ${(goal - d.words).toLocaleString()} short of the goal`) : ''}`;
-    plot.append(h('div', { class: `wk-col ${state}${d.today ? ' today' : ''}`, title: `${DOW[i]} ${fmtDate(d.day)}: ${tip}` },
-      h('div', { class: 'wk-val' }, label),
-      h('div', { class: 'wk-bar', style: `height:${d.known && !d.future ? (d.words / top) * 100 : 0}%` })));
+    const label = d.future ? '' : !d.known ? '—' : fmtWords(d.words);
+    const tip = d.future ? 'still to come' : !d.known ? 'no record (before statistics began)' : `${d.words.toLocaleString()} words${goal ? (d.words >= goal ? ` · goal met${d.words >= 2 * goal ? ` ${(Math.floor((d.words / goal) * 10) / 10).toLocaleString()}× over` : ''}` : ` · ${(goal - d.words).toLocaleString()} short of the goal`) : ''}`;
+    const bh = d.known && !d.future ? px(d.words) : 0;
+    plot.append(h('div', { class: `wk-col ${state}${d.today ? ' today' : ''}${d.known && !d.future && over(d.words) ? ' over' : ''}`, title: `${DOW[i]} ${fmtDate(d.day)}: ${tip}` },
+      h('div', { class: 'wk-val', style: `bottom:${bh + 2}px` }, label),
+      h('div', { class: 'wk-bar', style: `height:${bh}px` })));
   });
   const days = h('div', { class: 'wk-days' }, ...s.week.days.map((d, i) => h('div', { class: d.today ? 'today' : '' }, DOW[i], h('small', {}, ' ' + d.day.slice(8).replace(/^0/, '')))));
-  return h('div', { class: 'wk-chart' }, plot, days);
+  return h('div', { class: 'wk-chart' }, h('div', { class: 'wk-frame' }, plot, axis), days);
 }
 
 function weekFacts(s) {
@@ -305,22 +345,22 @@ function weekFacts(s) {
   const elapsed = w.days.filter((d) => !d.future && d.known).length;
   const facts = [
     `wrote on ${w.active} of ${elapsed} day${elapsed === 1 ? '' : 's'}`,
-    dg ? `daily goal met ${w.met} ${w.met === 1 ? 'time' : 'times'}` : null,
-    w.best ? `best day ${DOW[w.days.findIndex((d) => d.day === w.best.day)]} (${w.best.words.toLocaleString()})` : null,
+    dg ? `goal met ${w.met} ${w.met === 1 ? 'time' : 'times'}` : null,
+    w.best ? `best ${DOW[w.days.findIndex((d) => d.day === w.best.day)]} ${fmtWords(w.best.words)}` : null,
     w.current ? `streak ${s.streak} day${s.streak === 1 ? '' : 's'}` : null,
   ].filter(Boolean);
-  return h('div', { class: 'wk-facts' }, facts.join('   ·   '));
+  return h('div', { class: 'wk-facts' }, ...facts.map((f) => h('span', {}, f)));
 }
 
 function weekDocs(s) {
   const docs = s.week.docs;
   if (!docs.length) return null;
-  const shown = docs.slice(0, 4);
-  const rest = docs.slice(4).reduce((n, d) => n + d.words, 0);
+  const shown = docs.slice(0, 3);
+  const rest = docs.slice(3).reduce((n, d) => n + d.words, 0);
   return h('div', { class: 'wk-docs' },
     h('div', { class: 'wk-k' }, 'BY SCREENPLAY'),
-    ...shown.map((d) => h('div', { class: 'wk-row' }, h('span', { class: 'wk-doc' }, d.title), h('span', {}, d.words.toLocaleString()))),
-    rest ? h('div', { class: 'wk-row' }, h('span', { class: 'wk-doc' }, `${docs.length - 4} more`), h('span', {}, rest.toLocaleString())) : null);
+    ...shown.map((d) => h('div', { class: 'wk-row', title: d.title }, h('span', { class: 'wk-doc' }, d.title), h('span', { class: 'wk-num' }, fmtWords(d.words)))),
+    rest ? h('div', { class: 'wk-row' }, h('span', { class: 'wk-doc' }, `${docs.length - 3} more`), h('span', { class: 'wk-num' }, fmtWords(rest))) : null);
 }
 
 /**
@@ -419,9 +459,13 @@ export async function shortcutsDialog(cmds) {
 }
 
 /**
- * Open Recent. Each row has two hover actions, kept visually apart:
+ * Open Recent. Each row has two actions, shown while the row is hovered,
+ * focused or selected, and kept visually apart:
  *  × (dismiss): removes the entry from this list only; the file is untouched.
  *  bin icon (trash): after a confirmation, moves the file to the Recycle Bin.
+ * The table has a fixed layout that never grows past the dialog: the name
+ * keeps priority, a long path is shortened from its start ("…\Drafts\Film.stet",
+ * the full path in its tooltip), and the actions always keep their column.
  * `api` = { list, dismiss, trash, confirm, alert, currentPath }.
  */
 export async function recentDialog(api) {
@@ -429,13 +473,13 @@ export async function recentDialog(api) {
   let chosen = null, openBtn = null, inSub = false, done;
   const result = new Promise((r) => { done = r; });
   const tbody = h('tbody');
-  const body = h('div', { class: 'body recent', style: 'width:740px' });
+  const body = h('div', { class: 'body recent' });
   // Only one modal exists at a time: a confirmation replaces this dialog, which reopens afterwards.
   const sub = async (fn) => { inSub = true; try { await fn(); } finally { inSub = false; show(); } };
   const render = () => {
     tbody.replaceChildren(...recent.map((r) => {
-      const dismiss = h('button', { class: 'ra ra-dismiss', title: 'Remove from this list (the file is kept)', 'aria-label': `Remove ${r.name} from the recent list` }, '×');
-      const trash = h('button', { class: 'ra ra-trash', title: 'Move the file to the Recycle Bin…', 'aria-label': `Move ${r.name} to the Recycle Bin`, html: TRASH_SVG });
+      const dismiss = h('button', { class: 'ra ra-dismiss', title: 'Remove from Recent (the file is kept)', 'aria-label': `Remove ${r.name} from Recent`, html: DISMISS_SVG });
+      const trash = h('button', { class: 'ra ra-trash', title: 'Move to Recycle Bin…', 'aria-label': `Move ${r.name} to the Recycle Bin`, html: TRASH_SVG });
       dismiss.addEventListener('click', async (e) => {
         e.stopPropagation();
         recent = withExists(recent, (await api.dismiss(r.path)).recent);
@@ -454,23 +498,54 @@ export async function recentDialog(api) {
         });
       });
       const tr = h('tr', { class: 'pick recent-row' + (r.path === chosen ? ' on' : '') + (r.exists ? '' : ' missing') },
-        h('td', { class: 'nowrap' }, r.name), h('td', { class: 'hint' }, r.exists ? r.path : 'missing · ' + r.path), h('td', { class: 'nowrap' }, fmtTime(r.opened)),
+        h('td', { class: 'rc-name', title: r.name }, r.name),
+        h('td', { class: 'hint rc-path', title: r.path, 'data-path': r.path }),
+        h('td', { class: 'rc-time', title: r.exists ? fmtTime(r.opened) : 'The file is no longer there' }, r.exists ? fmtWhen(r.opened) : 'missing'),
         h('td', { class: 'ra-cell' }, dismiss, trash));
       tr.addEventListener('click', () => { chosen = r.exists ? r.path : null; render(); });
       tr.addEventListener('dblclick', () => { if (r.exists) { chosen = r.path; if (openBtn) openBtn.click(); } });
       return tr;
     }));
-    body.replaceChildren(recent.length ? h('table', { class: 't' }, tbody) : h('div', { class: 'empty' }, 'No recent documents.'),
+    const table = h('table', { class: 't recent-t' },
+      h('colgroup', {}, h('col', { class: 'c-name' }), h('col', {}), h('col', { class: 'c-time' }), h('col', { class: 'c-act' })), tbody);
+    body.replaceChildren(recent.length ? table : h('div', { class: 'empty' }, 'No recent documents.'),
       h('p', { class: 'hint', style: 'margin:10px 0 0' }, '× removes an entry from this list only. The bin icon moves the file itself to the Recycle Bin.'));
     if (openBtn) openBtn.disabled = !chosen;
+    fitPaths();
   };
+  // Paths are shortened to their cells' width once laid out, and again if the dialog changes size.
+  const fitPaths = () => requestAnimationFrame(() => { for (const td of body.querySelectorAll('.rc-path')) fitStart(td, td.dataset.path); });
+  const ro = new ResizeObserver(fitPaths);
+  ro.observe(body);
   const show = () => {
     render();
-    open({ title: 'RECENT', body, buttons: [{ label: 'Cancel', value: null }, { label: 'Open', value: () => chosen, primary: true, disabled: !chosen }], init: (_d, _c, btns) => { openBtn = btns[1]; } })
-      .then((v) => { if (!inSub) done(v); });
+    open({ title: 'RECENT', body, cls: 'recent-dlg', buttons: [{ label: 'Cancel', value: null }, { label: 'Open', value: () => chosen, primary: true, disabled: !chosen }], init: (_d, _c, btns) => { openBtn = btns[1]; } })
+      .then((v) => { if (!inSub) { ro.disconnect(); done(v); } });
   };
   show();
   return result;
 }
 const withExists = (old, list) => (list || []).map((r) => ({ ...r, exists: (old.find((o) => o.path === r.path) || { exists: true }).exists }));
+/**
+ * Show as much of the end of `text` as fits in `el`, with "…" in front:
+ * for a path, the file name and the folders nearest it are the useful part.
+ * Starts the shown part at a folder boundary when one is close.
+ */
+export function fitStart(el, text) {
+  el.textContent = text;
+  const avail = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0) - (parseFloat(getComputedStyle(el).paddingRight) || 0);
+  if (avail <= 0 || el.scrollWidth <= el.clientWidth) return;
+  const g = (fitStart.ctx ||= document.createElement('canvas').getContext('2d'));
+  const cs = getComputedStyle(el);
+  g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const ls = parseFloat(cs.letterSpacing) || 0;
+  const width = (t) => g.measureText(t).width + ls * t.length;
+  let lo = 0, hi = text.length; // smallest cut that fits
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (width('…' + text.slice(mid)) <= avail - 1) hi = mid; else lo = mid + 1; }
+  let cut = lo;
+  const sep = text.slice(cut).search(/[\\/]/);
+  if (sep > 0 && sep <= 8 && cut + sep < text.length - 1) cut += sep;
+  el.textContent = '…' + text.slice(cut);
+}
+const DISMISS_SVG = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
 const TRASH_SVG = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true"><path d="M1 3h9M4 3V1.5h3V3M2.2 3l.6 8h5.4l.6-8M4.5 5v4.5M6.5 5v4.5" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';

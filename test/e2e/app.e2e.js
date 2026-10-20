@@ -107,7 +107,9 @@ test('find bar counts matches', async () => {
   await sleep(250);
   assert.match(await app.eval('document.getElementById("find-count").textContent'), /\/ 4$/);
   await app.key('Escape');
-  assert.equal(await app.eval('document.getElementById("findbar").hidden'), true);
+  assert.equal(await app.eval('document.getElementById("findbar").dataset.open'), '0', 'closing at once');
+  await sleep(300);
+  assert.equal(await app.eval('document.getElementById("findbar").hidden'), true, 'gone after sliding away');
 });
 
 test('zoom and theme', async () => {

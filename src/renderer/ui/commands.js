@@ -1,6 +1,7 @@
 // Command registry: one definition drives the menu bar, the command palette
 // and keyboard shortcuts, so every function is discoverable in the same place.
 
+import { arrive, leave, DUR_FAST } from './motion.js';
 import { h, open } from './dialog.js';
 
 const commands = new Map();
@@ -82,7 +83,8 @@ export function buildMenubar(host, menus) {
 }
 
 function showMenu(btn, items) {
-  closeMenu();
+  const switching = !!openMenu; // moving along the menu bar: the next menu is simply there
+  closeMenu(false);
   const el = h('div', { class: 'menu' });
   for (const it of typeof items === 'function' ? items() : items) {
     if (it === '-') { el.appendChild(h('div', { class: 'msep' })); continue; }
@@ -100,11 +102,13 @@ function showMenu(btn, items) {
   el.style.top = r.bottom + 'px';
   btn.classList.add('open');
   openMenu = { btn, el };
+  if (!switching) arrive(el, { dist: 3, dur: DUR_FAST });
 }
 
-export function closeMenu() {
+export function closeMenu(animated = true) {
   if (!openMenu) return;
-  openMenu.el.remove();
+  const el = openMenu.el;
+  if (animated) leave(el, () => el.remove(), { dist: 2 }); else el.remove();
   openMenu.btn.classList.remove('open');
   openMenu = null;
 }

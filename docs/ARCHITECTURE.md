@@ -18,6 +18,7 @@ src/
     printmodel.js  printable pages (title page, ranges, highlights, notes)
     pdf.js         PDF writer;  printhtml.js  HTML for the OS print dialog
     stats.js       writing-statistics ledger (pure);  plaintext.js  clipboard interchange
+    chart.js       the weekly chart's adaptive scale and number formatting
   main/        Electron main process: all disk I/O
     main.js        window, stet:// protocol, IPC handlers, print, close flow
     container.js   binary container (header, CRC-32, gzip)
@@ -168,10 +169,16 @@ older than the reset are ignored afterwards.
 
 One set of easing curves and durations (CSS variables `--ease-out`,
 `--ease-in-out`, `--dur-fast`, `--dur-panel`, mirrored in `ui/motion.js`).
-Nothing overshoots. Side panels slide by animating their outer margin (Web
-Animations API), so the page glides and panel text never re-wraps; a toggle
-mid-way reverses from the current position. `prefers-reduced-motion` turns
-interface motion off.
+Nothing overshoots. Every surface that opens uses the same few functions in
+`ui/motion.js`: docked panels (scenes, notes, English revision, and the find
+bar from under the toolbar) slide by animating their outer margin (Web
+Animations API), so the page glides and panel text never re-wraps, and a
+toggle mid-way reverses from the current position; floating surfaces (dialogs,
+menus) drop a few pixels into place as they fade in and fade out as they
+close. Motion never holds anything up: focus, typing and the command's effect
+are immediate, a closing dialog stops taking input at once, and a dialog that
+replaces another just swaps. `prefers-reduced-motion` turns interface motion
+off.
 
 ## Writing companion
 
@@ -183,11 +190,26 @@ memory of recent activities and reactions that tilt weighted choices. Clicks
 pick a reaction by weight (category × agitation × mood × how recently it was
 used × cooldown), queue at most two, and run at the next step boundary; the
 interrupted activity then resumes. `bridged()` guarantees no posture jumps
-(lying → standing always passes through sitting and crouching). A nearby
-cursor only alters the step about to start (a glance, a glyph), never adds or
-cuts one. Energy is an exponentially decaying count of words written, smoothed
-over ~20 s. `Dino` draws it on one small canvas, redrawn only when the picture
-changes, with no timers while the window is hidden.
+(lying → standing always passes through sitting and crouching). Energy is an
+exponentially decaying count of words written, smoothed over ~20 s.
+
+Responsiveness is separate from pacing: a click is acknowledged in the same
+moment (`ack`: a blink and a one-pixel start drawn over the current frame),
+and a step that merely holds a pose (`isHold`) may end early so a due
+reaction, or a glance at a cursor that just came near or crossed sides
+(`notice`/`glance`), starts at once. Moves, jumps and lifts always run their
+full length. Destinations are centre-weighted (`spot()`); nothing walks off
+the strip.
+
+`Dino` draws it on one canvas laid over the bottom of the editor area: a strip
+up to 560 px wide centred on TODAY and kept inside `#scroller` (never over a
+side panel), plus a 24 px margin each side where props and visitors stay whole.
+When the strip moves, the dinosaur keeps its place on screen; if the strip
+shrank out from under it, the critter walks back in (`comeBack`) and the
+canvas stretches to keep it whole meanwhile. Only the dinosaur's own hit box
+takes clicks, and not while a drag that started elsewhere is in progress.
+Redrawn only when the picture changes, with no timers while the window is
+hidden.
 
 ## Native code
 

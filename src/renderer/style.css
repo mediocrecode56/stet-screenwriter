@@ -81,16 +81,23 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 
 /* ---- top bar --------------------------------------------------------- */
 #top {
-  height: 30px; display: flex; align-items: stretch; background: var(--bar);
+  position: relative; height: 30px; display: flex; align-items: stretch; background: var(--bar);
   border-bottom: 1px solid var(--rule); -webkit-app-region: drag; flex: none;
 }
-#brand { padding: 0 12px; display: flex; align-items: center; font-weight: 700; letter-spacing: .28em; }
-#mark { margin-right: 8px; display: block; }
-#ver { font-weight: 400; letter-spacing: .04em; color: var(--ink-3); margin-left: 6px; }
-#menubar { display: flex; -webkit-app-region: no-drag; }
+/* File, Edit, Element… start at the window's left edge. */
+#menubar { display: flex; flex: none; -webkit-app-region: no-drag; }
 .mb { border: 0; background: none; padding: 0 10px; cursor: default; text-transform: uppercase; letter-spacing: .12em; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .mb:hover, .mb.open { background: var(--inv-bg); color: var(--inv-fg); }
-#docname { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-2); min-width: 0; }
+/* The screenplay's title alone, centred on the window itself (not on the space
+   left between the menus and the window controls). It may use the same room on
+   either side — app.js sets --title-side from wherever the menus end — and
+   shortens with an ellipsis rather than ever reaching them. */
+#docname {
+  position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+  max-width: max(0px, calc(100% - 2 * var(--title-side, 50%)));
+  display: flex; align-items: center; gap: 8px; color: var(--ink-2); min-width: 0;
+}
+#top.narrow #docname { left: var(--title-left); right: var(--title-right); transform: none; max-width: none; justify-content: center; }
 #doctitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-app-region: no-drag; cursor: default; }
 #docdot { width: 7px; height: 7px; border: 1px solid var(--ink-2); flex: none; }
 #docdot.dirty { background: var(--ink); border-color: var(--ink); }
@@ -101,7 +108,7 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 /* ---- dropdown menus -------------------------------------------------- */
 .menu {
   position: fixed; z-index: 50; min-width: 250px; background: var(--page); border: 1px solid var(--rule-strong);
-  padding: 3px 0; box-shadow: 4px 4px 0 var(--rule); animation: fade-in var(--dur-fast) var(--ease-out);
+  padding: 3px 0; box-shadow: 4px 4px 0 var(--rule);
 }
 @keyframes fade-in { from { opacity: 0; } }
 .mi { display: flex; justify-content: space-between; gap: 24px; padding: 3px 12px; white-space: nowrap; cursor: default; }
@@ -138,7 +145,9 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 .sw.none { background: linear-gradient(to top right, transparent 45%, var(--ink) 45% 55%, transparent 55%); }
 
 /* ---- find bar -------------------------------------------------------- */
-#findbar { flex: none; display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--rule); background: var(--bar); }
+/* The find bar slides out from under the toolbar (motion.js setPanel, side top). */
+#elbar { position: relative; z-index: 2; }
+#findbar { position: relative; z-index: 1; flex: none; display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--rule); background: var(--bar); }
 #findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 220px; outline: none; user-select: text; }
 #findbar input:focus { border-color: var(--rule-strong); }
 .chk { display: flex; align-items: center; gap: 3px; color: var(--ink-2); }
@@ -228,8 +237,12 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #status { height: 24px; flex: none; display: flex; align-items: stretch; border-top: 1px solid var(--rule); background: var(--bar); color: var(--ink-2); padding: 0 4px; }
 .st { display: flex; align-items: center; padding: 0 8px; white-space: nowrap; }
 .st + .st { box-shadow: -1px 0 0 var(--rule); }
+/* Application icon and version: bottom left, small and quiet. Click for the changelog. */
+#brand { gap: 6px; padding: 0 9px 0 6px; color: var(--ink-3); font-size: 10px; letter-spacing: .04em; cursor: default; }
+#brand:hover { color: var(--ink-2); }
+#mark { display: block; flex: none; opacity: .85; }
 #st-goal { cursor: default; gap: 6px; }
-#st-el { min-width: 15ch; }
+#st-el { min-width: 17ch; } /* fits SCENE HEADING and PARENTHETICAL, so nothing after it shifts */
 #st-page { min-width: 14ch; }
 #st-scene { min-width: 11ch; }
 #st-words { min-width: 13ch; }
@@ -241,6 +254,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #dino { position: fixed; z-index: 30; pointer-events: none; }
 #dino canvas { display: block; image-rendering: pixelated; }
 .dino-hit { position: absolute; pointer-events: auto; cursor: default; }
+#dino.pass .dino-hit { pointer-events: none; }
 #st-save.err { background: var(--inv-bg); color: var(--inv-fg); }
 .zoom, .seg { gap: 0; padding: 0 !important; }
 .seg .tb { padding: 0 7px; font-size: 10px; }
@@ -256,7 +270,6 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 
 /* ---- modal dialogs --------------------------------------------------- */
 #overlay { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 9vh; animation: fade var(--dur-fast) var(--ease-out); }
-#overlay .dlg { animation: fade-in var(--dur-fast) var(--ease-out); }
 :root[data-theme="dark"] #overlay { background: rgba(0, 0, 0, .6); }
 @keyframes fade { from { background-color: transparent; } }
 .dlg { background: var(--page); border: 1px solid var(--rule-strong); min-width: 420px; max-width: min(860px, 92vw); max-height: 82vh; display: flex; flex-direction: column; box-shadow: 6px 6px 0 var(--rule); user-select: text; }
@@ -293,12 +306,24 @@ table.t tr.pick { cursor: default; }
 table.t tr.pick:hover td { background: var(--rule); }
 table.t tr.on td { background: var(--inv-bg); color: var(--inv-fg); }
 td.nowrap { white-space: nowrap; }
-/* Open Recent row actions: shown when the row is hovered or focused; dismiss and trash kept apart */
-.ra-cell { width: 64px; text-align: right; white-space: nowrap; padding-right: 2px !important; }
+/* Open Recent: a fixed-layout table that never grows past the dialog (no horizontal scrolling).
+   The name keeps priority; paths are shortened from the start (dialogs.js fitStart); the
+   actions keep their own column. They show while the row is hovered, focused or selected,
+   dismiss and trash kept apart. */
+.recent-dlg { width: min(760px, 92vw); }
+.dlg .body.recent { overflow-x: hidden; }
+table.recent-t { table-layout: fixed; width: 100%; }
+.recent-t col.c-name { width: 34%; }
+.recent-t col.c-time { width: 136px; }
+.recent-t col.c-act { width: 62px; }
+.recent-t td { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.recent-t td.rc-name { padding-right: 12px; }
+.recent-t td.ra-cell { overflow: visible; }
+.ra-cell { width: 62px; text-align: right; white-space: nowrap; padding-right: 2px !important; }
 .ra { border: 1px solid transparent; background: none; color: var(--ink-3); width: 20px; height: 18px; padding: 0; cursor: default; opacity: 0; vertical-align: middle; line-height: 1; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
 .ra svg { display: block; margin: auto; }
 .ra-trash { margin-left: 14px; }
-tr:hover .ra, .ra:focus-visible { opacity: 1; }
+tr:hover .ra, tr.on .ra, tr:focus-within .ra, .ra:focus-visible { opacity: 1; }
 .ra:hover, .ra:focus-visible { color: var(--ink); border-color: var(--rule-strong); outline: none; }
 table.t tr.on .ra { color: var(--inv-fg); }
 table.t tr.missing td:first-child { text-decoration: line-through; color: var(--ink-3); }
@@ -350,48 +375,56 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-foot { display: flex; align-items: center; border-top: 1px solid var(--rule); padding: 4px 6px; min-height: 28px; }
 .rv-list { flex: 1; }
 
-/* statistics */
-
-/* print preview */
-/* Writing week (F9). Monochrome like the rest: solid ink = goal met, grey = written, dotted = still to come. */
-.wk-dlg { width: 640px; }
-.wk { display: flex; flex-direction: column; gap: 14px; }
+/* Writing week (F9). Monochrome: solid ink = goal met, grey = written, dotted = still to come.
+   Compact: numbers first, one chart, a line of facts. The chart's scale adapts
+   to the week (dialogs.js weekScale) and bars are sized in pixels, so labels
+   never squeeze them. */
+.wk-dlg { width: 560px; }
+.dlg .body.wk { display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 12px; }
 .wk-k { color: var(--ink-3); text-transform: uppercase; letter-spacing: .14em; font-size: 9px; display: flex; align-items: center; gap: 6px; }
-.wk-notice { border: 1px solid var(--rule-strong); padding: 6px 10px; }
+.wk-notice { border: 1px solid var(--rule-strong); padding: 5px 10px; }
 .wk-flash { color: var(--ink-2); }
 .wk-head { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); }
-.wk-big { padding: 10px 12px 9px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.wk-big { padding: 7px 10px 7px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .wk-big + .wk-big { border-left: 1px solid var(--rule); }
-.wk-n { font-size: 26px; line-height: 1.1; letter-spacing: 0; }
-.wk-n small { font-size: 11px; color: var(--ink-3); letter-spacing: .04em; }
-.wk-meter { height: 4px; background: var(--rule); }
+.wk-n { font-size: 20px; line-height: 1.1; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.wk-n small { font-size: 11px; color: var(--ink-3); letter-spacing: .02em; }
+.wk-big .hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-meter { height: 3px; background: var(--rule); }
 .wk-meter i { display: block; height: 100%; background: var(--ink); transition: width var(--dur-panel) var(--ease-out); }
 .wk-meter.none { opacity: .4; }
 .wk-nav { padding: 0 5px; line-height: 13px; font-size: 12px; }
 .wk-nav:disabled { opacity: .25; }
-.wk-chart { padding: 0 2px; }
-.wk-plot { position: relative; height: 150px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; border-bottom: 1px solid var(--rule-strong); padding-top: 16px; }
-.wk-col { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; min-width: 0; z-index: 1; }
-.wk-val { text-align: center; font-size: 11px; padding-bottom: 3px; white-space: nowrap; color: var(--ink); }
-.wk-bar { background: var(--ink-3); min-height: 0; }
-.wk-col.met .wk-bar { background: var(--ink); }
-.wk-col.zero .wk-val { color: var(--ink-3); }
-.wk-col.na .wk-val { color: var(--ink-3); }
-.wk-col.future::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-bottom: 1px dotted var(--ink-3); }
-.wk-col.today .wk-val { font-weight: 700; }
+.wk-chart { padding-top: 2px; }
+.wk-frame { display: flex; }
+.wk-plot { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; border-bottom: 1px solid var(--rule-strong); }
+.wk-axis { position: relative; width: 52px; flex: none; border-left: 1px solid var(--rule); }
+.wk-tick { position: absolute; left: 5px; font-size: 9px; line-height: 10px; color: var(--ink-3); white-space: nowrap; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.wk-goal-t { color: var(--ink-2); }
+.wk-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--rule); opacity: .6; pointer-events: none; }
 .wk-goal { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--ink-2); z-index: 2; pointer-events: none; }
-.wk-goal span { position: absolute; right: 0; bottom: 1px; font-size: 9px; color: var(--ink-3); background: var(--page); padding-left: 4px; letter-spacing: .06em; }
-.wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; padding-top: 4px; text-align: center; color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
+.wk-col { position: relative; min-width: 0; z-index: 1; }
+.wk-val { position: absolute; left: 50%; transform: translateX(-50%); padding: 0 2px; text-shadow: 0 0 2px var(--page), 0 0 2px var(--page), 0 0 3px var(--page); text-align: center; font-size: 11px; line-height: 13px; white-space: nowrap; color: var(--ink); font-variant-numeric: tabular-nums; z-index: 3; }
+.wk-bar { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: min(100%, 34px); background: var(--ink-3); }
+.wk-col.met .wk-bar { background: var(--ink); }
+/* A day far above the rest: drawn to the top of the scale with a break in the bar. */
+.wk-col.over .wk-bar::after { content: ''; position: absolute; left: -3px; right: -3px; top: 18px; height: 4px; background: var(--page); transform: skewY(-14deg); }
+.wk-col.zero .wk-val, .wk-col.na .wk-val { color: var(--ink-3); }
+.wk-col.future::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); width: min(100%, 34px); bottom: 0; height: 2px; border-bottom: 1px dotted var(--ink-3); }
+.wk-col.today .wk-val { font-weight: 700; }
+.wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; padding-top: 3px; margin-right: 52px; text-align: center; color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
 .wk-days .today { color: var(--ink); font-weight: 700; }
 .wk-days small { font-size: 10px; letter-spacing: 0; }
-.wk-facts { color: var(--ink-2); }
-.wk-docs { display: flex; flex-direction: column; gap: 2px; }
+.wk-facts { color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 2px 0; }
+.wk-facts span + span::before { content: '·'; color: var(--ink-3); padding: 0 8px; }
+.wk-docs { display: flex; flex-direction: column; gap: 1px; }
 .wk-docs .wk-k { margin-bottom: 2px; }
 .wk-row { display: flex; gap: 12px; border-bottom: 1px dotted var(--rule); padding: 1px 0; }
 .wk-row .wk-doc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wk-goals { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--rule); padding-top: 10px; flex-wrap: wrap; }
+.wk-num { flex: none; font-variant-numeric: tabular-nums; }
+.wk-goals { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--rule); padding-top: 8px; flex-wrap: wrap; }
 .wk-goals label { color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
-.wk-in { width: 76px; border: 1px solid var(--rule); padding: 2px 5px; outline: none; }
+.wk-in { width: 72px; border: 1px solid var(--rule); padding: 1px 5px; outline: none; }
 .wk-in:focus { border-color: var(--rule-strong); }
 .wk-goals .grow { flex: 1; }
 .wk-reset { color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }

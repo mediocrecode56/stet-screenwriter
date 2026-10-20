@@ -33,7 +33,9 @@ function run(c, ms, { from = 0, dt = 100, each } = {}) {
         const a = postureOf(prev.f), b = postureOf(s.f);
         if (a === 'lie') assert.ok(b !== 'stand', `no jump from lying (${prev.f}) straight to ${s.f} [${c.activity}/${c.inReaction}]`);
         if (a === 'sit' && b === 'stand') assert.ok(['crouch', 'sniff'].includes(s.f) || s.f === 'stand' && prev.f === 'crouch', `sit (${prev.f}) → ${s.f} without getting up [${c.activity}/${c.inReaction}]`);
-        if (!prev.free) assert.ok(prev.x1 >= -0.01 && prev.x1 <= c.maxX + 0.01, `stays on the strip: ${prev.x1} [${c.activity}]`);
+        if (!c.resized) assert.ok(prev.x1 >= -0.01 && prev.x1 <= c.maxX + 0.01, `stays on the strip: ${prev.x1} [${c.activity}]`);
+        // Responsiveness never speeds anything up: moves, jumps and lifts always run their full length.
+        if (prev.dx || prev.jump || prev.lift) assert.ok(Math.abs(prev.end - prev.start - prev.t) < 1e-6, `${prev.f} ran its full ${prev.t} ms`);
       }
       assert.ok(FRAMES[s.f], `frame ${s.f}`);
       assert.ok(s.t > 0 && s.t <= 1500, `step ${s.f} ${s.t} ms is short enough to blend a reaction in`);
@@ -43,7 +45,7 @@ function run(c, ms, { from = 0, dt = 100, each } = {}) {
     }
     assert.ok(c.queue.length <= 2, 'at most two reactions queued');
     assert.ok(c.props.length <= 5, `props bounded (${c.props.map((p) => p.kind)})`);
-    assert.ok(c.x > -W * 1.25 - 6 && c.x < c.stripW + 6, 'never wanders far off');
+    if (!c.resized) assert.ok(c.x > -W * 1.25 - 6 && c.x < c.stripW + 6, 'never wanders far off');
   }
   return { steps, now };
 }
@@ -226,4 +228,96 @@ test('props are cleaned up after themselves', () => {
   run(c, 30000);
   run(c, 120000, { from: 30000, each: () => { c.pending = c.pending || 'look'; } });
   assert.ok(c.props.length <= 1, `left over: ${c.props.map((p) => p.kind)}`);
+});
+
+/** Dimensions in the app: a 560 px strip at 1.25 px per sprite pixel, 24 px margins, 24 rows of headroom. */
+function wide(seed) { return make(seed, { width: () => 560, margin: () => 24 }); }
+
+test('a generous play area: it prefers the middle, rarely goes to the ends, and it and its props always stay in view', () => {
+  const c = wide(404);
+  const rng = seeded(5);
+  let writingUntil = 0, nextBurst = 0, outer = 0, middle = 0, n = 0;
+  run(c, 3 * 3600 * 1000, {
+    dt: 150,
+    each: (now) => {
+      if (now > nextBurst) { writingUntil = now + 15 * 60000; nextBurst = writingUntil + rng() * 30 * 60000; }
+      if (now < writingUntil && rng() < 0.03) c.wrote(1, now);
+      if (rng() < 0.0006) c.poke(now);
+      const f = c.x / c.maxX;
+      n++;
+      if (f < 0.08 || f > 0.92) outer++;
+      if (f > 0.25 && f < 0.75) middle++;
+      for (const p of c.props) {
+        if (p.carried || p.balance) continue;
+        const w = PROPS[p.kind][0][0].length * c.u, h = PROPS[p.kind][0].length;
+        assert.ok(p.x >= -c.margin - 0.5 && p.x + w <= c.stripW + c.margin + 0.5, `${p.kind} stays in view (x=${p.x.toFixed(1)})`);
+        assert.ok(p.y + h <= H + 24, `${p.kind} stays below the top (y=${p.y.toFixed(1)})`);
+      }
+      assert.ok(c.onstage(), `the dinosaur never leaves the play area [${c.activity}/${c.inReaction}]`);
+    },
+  });
+  assert.ok(outer / n < 0.12, `rarely at the ends (${(100 * outer / n).toFixed(1)} %)`);
+  assert.ok(middle / n > 0.45, `mostly in the middle stretch (${(100 * middle / n).toFixed(1)} %)`);
+  assert.ok(outer > 0, 'but it does go there now and then');
+});
+
+test('clicks are acknowledged on the spot; a held pose gives way at once, a move always finishes first', () => {
+  const c = wide(12);
+  c.pending = 'rest';
+  run(c, 4000, { dt: 10 });
+  assert.equal(c.sitting(), true);
+  const held = c.step;
+  c.force = 'love';
+  c.poke(4005);
+  assert.equal(c.acking(4005), 2, 'a blink and a little start, right away');
+  c.queue[0].at = 4005; // no thoughtful pause this time
+  let started = null;
+  run(c, 400, { from: 4005, dt: 10, each: (now) => { if (started == null && c.inReaction === 'love') started = now; } });
+  assert.ok(started != null && started - 4005 <= 70, `the reaction began ${started - 4005} ms after the click`);
+  assert.ok(held.end - held.start >= 50, 'the held pose was shown, just held shorter');
+  // While walking, the stride in progress finishes first.
+  const w = wide(13);
+  w.pending = 'walk'; w.x = 20;
+  run(w, 2000, { dt: 10 });
+  while (!w.step.dx) run(w, 10, { from: w.now + 10, dt: 10 });
+  const stride = w.step, end = stride.end;
+  w.force = 'spin';
+  w.poke(w.now);
+  assert.equal(w.step, stride);
+  assert.equal(w.step.end, end, 'the stride is not cut short');
+  assert.equal(w.acking(w.now), 2, 'but the click is acknowledged at once');
+});
+
+test('the cursor is noticed at once: a held pose turns towards it, a move finishes first, and nothing else changes', () => {
+  const c = wide(21);
+  c.pending = 'rest';
+  run(c, 4000, { dt: 10 });
+  c.face = 1;
+  const gen = c.gen;
+  let turnedAt = null;
+  c.cursorAt(c.center() - 50, 8, 4000);
+  run(c, 600, { from: 4000, dt: 10, each: (now) => { c.cursorAt(c.center() - 50, 8, now); if (turnedAt == null && c.face === -1) turnedAt = now; } });
+  assert.ok(turnedAt != null && turnedAt - 4000 <= 140, `turned towards the cursor after ${turnedAt - 4000} ms`);
+  assert.equal(c.gen, gen, 'still the same rest, not restarted');
+  assert.equal(c.activity, 'rest');
+  assert.equal(c.inReaction, null, 'a glance, not a reaction');
+  // Crossing to the other side gets another glance; staying put does not keep it turning.
+  let turns = 0, last = c.face;
+  run(c, 3000, { from: 4600, dt: 10, each: (now) => { c.cursorAt(c.center() + 50, 8, now); if (c.face !== last) { turns++; last = c.face; } } });
+  assert.equal(turns, 1, 'turned back once');
+});
+
+test('when the play area shrinks under it, it walks back in — no jump, nothing cut', () => {
+  let width = 560;
+  const c = make(77, { width: () => width, margin: () => 24 });
+  c.pending = 'rest';
+  c.x = 520;
+  run(c, 3000, { dt: 20 });
+  width = 300; c.resized = true;
+  assert.equal(c.onstage(), false);
+  let prevX = c.x, maxJump = 0;
+  run(c, 20000, { from: 3000, dt: 20, each: () => { maxJump = Math.max(maxJump, Math.abs(c.x - prevX)); prevX = c.x; } });
+  assert.ok(c.onstage(), 'back in');
+  assert.ok(maxJump < 4, `moves smoothly (largest move between frames ${maxJump.toFixed(2)} px)`);
+  assert.equal(c.inReaction, null);
 });

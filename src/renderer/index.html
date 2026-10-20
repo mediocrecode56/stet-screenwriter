@@ -8,9 +8,9 @@
 </head>
 <body>
 <header id="top">
-  <div id="brand"><img id="mark" src="mark.svg" width="14" height="14" alt="">STET<span id="ver"></span></div>
   <nav id="menubar"></nav>
-  <div id="docname" title="Document"><span id="docdot"></span><span id="doctitle">untitled</span></div>
+  <div id="docname"><span id="docdot"></span><span id="doctitle" title="Double-click to rename">Untitled</span></div>
+  <div class="grow"></div>
   <div id="drag"></div>
 </header>
 <div id="elbar">
@@ -26,7 +26,7 @@
     <button id="btn-notes" class="tb" title="Comments (Ctrl+Shift+\)">NOTES</button>
   </div>
 </div>
-<div id="findbar" hidden>
+<div id="findbar" data-side="top" hidden>
   <input id="find-q" placeholder="find" spellcheck="false">
   <input id="find-r" placeholder="replace with" spellcheck="false">
   <label class="chk"><input type="checkbox" id="find-case">Aa</label>
@@ -53,6 +53,7 @@
   </aside>
 </main>
 <footer id="status">
+  <span id="brand" class="st"><img id="mark" src="mark.svg" width="11" height="11" alt=""><span id="ver"></span></span>
   <span id="st-el" class="st"></span>
   <span id="st-page" class="st"></span>
   <span id="st-scene" class="st"></span>

@@ -300,3 +300,47 @@ test('date helpers', () => {
   assert.equal(addDays('2026-12-31', 1), '2027-01-01');
   assert.equal(dayKey(new Date(2026, 0, 5)), '2026-01-05');
 });
+
+// ---- the weekly chart's scale and numbers ----
+import { fmtWords, niceTop, weekScale } from '../src/core/chart.js';
+
+test('week chart: the scale adapts to the data, bars stay proportional, an outlier gets a broken bar', () => {
+  const day = (words, o = {}) => ({ words, known: true, future: false, ...o });
+  const L = (n) => n.toLocaleString();
+  // Round tops just above the highest day or the goal.
+  assert.deepEqual([90, 100, 101, 640, 980, 1240, 7830, 12210, 131830].map(niceTop), [100, 100, 200, 1000, 1000, 2000, 10000, 20000, 200000]);
+  // Small, ordinary, large and very large weeks.
+  for (const [words, goal, top] of [
+    [[0, 12, 0, 230, 40, 0, 0], 500, 500],
+    [[640, 720, 655, 690, 702, 610, 980], 600, 1000],
+    [[0, 1240, 0, 7830, 420, 12210, 960], 500, 20000],
+    [[3100, 4200, 2900, 5100, 4800, 3900, 4400], 1000, 10000],
+  ]) {
+    const s = weekScale(words.map((w) => day(w)), goal, 104);
+    assert.equal(s.top, top, `top for ${words}`);
+    for (const w of words) {
+      assert.ok(s.px(w) <= 104, 'never taller than the plot');
+      if (w > 0) assert.ok(s.px(w) >= 2, 'any words show a sliver');
+      if (w > 0) assert.ok(Math.abs(s.px(w) - (w / top) * 104) <= 1, `${w} drawn in proportion`);
+      assert.equal(s.over(w), false, 'no break in an ordinary week');
+    }
+    assert.ok(s.px(goal) <= 104, 'the goal line is on the chart');
+  }
+  // One day dwarfs the rest: scale by the others, break that bar.
+  const huge = weekScale([18450, 2240, 0, 131830, 9420, 0, 60].map((w) => day(w)), 1000, 104);
+  assert.equal(huge.top, 25000);
+  assert.equal(huge.over(131830), true);
+  assert.equal(huge.px(131830), 104);
+  assert.ok(huge.px(18450) > 3 * huge.px(9420) / 2 && huge.px(9420) > 3 * huge.px(2240), 'the other days still compare');
+  // Days with no record and days to come don't count towards the scale.
+  const partial = weekScale([day(800), day(0, { known: false }), day(0, { future: true })], 0, 104);
+  assert.equal(partial.top, 1000);
+  // Numbers: exact everywhere, abbreviated only on the axis or from a million.
+  assert.equal(fmtWords(612), '612');
+  assert.equal(fmtWords(12210), L(12210));
+  assert.equal(fmtWords(131830), L(131830));
+  assert.equal(fmtWords(2500000), L(2.5) + 'M');
+  assert.equal(fmtWords(12500, true), L(12.5) + 'k');
+  assert.equal(fmtWords(200000, true), '200k');
+  assert.equal(fmtWords(500, true), '500');
+});

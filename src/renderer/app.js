@@ -27,6 +27,7 @@ const $ = (id) => document.getElementById(id);
 const info = await api.invoke('app:info');
 let settings = await api.invoke('settings:get');
 $('ver').textContent = `${info.version} β`;
+$('brand').title = `STET ${info.version} β — click for the changelog`;
 
 // ---- core objects -------------------------------------------------------------
 
@@ -206,7 +207,8 @@ function renderSaveState(s) {
 
 function renderTitle() {
   const name = session.path ? session.name : (session.doc && session.doc.titlePage.title) || 'Untitled';
-  $('doctitle').textContent = session.path ? `${name}  —  ${session.path}` : `${name}  —  not saved`;
+  $('doctitle').textContent = name;
+  fitTitle();
   document.title = `${session.dirty ? '• ' : ''}${name} — STET`;
   describeDoc();
 }
@@ -303,6 +305,23 @@ tbClick('zoom-val', 'zoom-reset');
 $('st-goal').addEventListener('click', () => cmd.run('stats'));
 $('st-save').addEventListener('click', () => { if (session.status === 'conflict' || session.status === 'error') cmd.run('save'); });
 $('doctitle').addEventListener('dblclick', () => cmd.run('rename'));
+$('brand').addEventListener('click', () => cmd.run('changelog'));
+// The title is centred on the window; it gets equal room on both sides, up to wherever the menus
+// (or the window controls) begin; a long title is shortened with an ellipsis. Only in a window so
+// narrow that hardly any centred room is left does it use the space between them instead.
+function fitTitle() {
+  const menus = $('menubar').getBoundingClientRect().right, controls = $('drag').offsetWidth;
+  const top = $('top');
+  top.style.setProperty('--title-side', Math.max(menus, controls) + 16 + 'px');
+  top.style.setProperty('--title-left', menus + 16 + 'px');
+  top.style.setProperty('--title-right', controls + 16 + 'px');
+  const need = $('doctitle').scrollWidth + 15; // + the saved/unsaved square
+  const centred = window.innerWidth - 2 * (Math.max(menus, controls) + 16);
+  top.classList.toggle('narrow', centred < 160 && need > centred);
+}
+new ResizeObserver(fitTitle).observe($('menubar'));
+window.addEventListener('resize', fitTitle);
+fitTitle();
 
 // Immediate pressed state for every control, independent of what the command does.
 document.addEventListener('pointerdown', (e) => {
@@ -742,7 +761,7 @@ if (settings.zoom && settings.zoom !== 1) view.setZoom(settings.zoom);
 renderZoom();
 if (settings.panels?.scenes) showPanel('scenes', true);
 // The writing companion above TODAY: fed by trackWords() and the TODAY numbers.
-dino = new Dino({ anchor: $('st-goal'), getProgress: () => goalState });
+dino = new Dino({ anchor: $('st-goal'), area: $('scroller'), getProgress: () => goalState });
 dino.setEnabled(settings.companion !== false);
 if (settings.panels?.notes) showPanel('notes', true);
 

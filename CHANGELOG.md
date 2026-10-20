@@ -4,6 +4,34 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.8.0 — 20 October 2026
+
+A livelier, more attentive dinosaur with room to play, a weekly view that copes with big writing days, the same smooth slide for every panel, a fixed Open Recent, and a tidier header.
+
+### New
+
+- **The dinosaur has room to play.** It now roams a much wider stretch of the desk above the status bar instead of a strip the width of TODAY — without taking any space from the editor, which works underneath it exactly as before. It mostly keeps to the middle, strolls out towards the ends now and then, and never disappears off an edge: balls, butterflies, leaves and the occasional visitor stay whole all the way. If a panel opens or the window gets smaller, it simply walks back into view.
+- **It notices you.** Bring the pointer near and it turns to look at you straight away (sometimes with a little heart or question mark). Click it and it reacts in the same instant with a blink and a little start, then carries on into its reaction — the same wide, unpredictable range as before, from a nod to fainting dramatically. Nothing it does is sped up or cut short for this: only a pose it is simply holding gives way early.
+
+### Improved
+
+- **The weekly view (F9) handles big numbers.** Days of several thousand words — or a hundred thousand — are shown exactly, with separators, and never overlap. The chart's scale now follows your week, with round numbers and the goal marked at the side. If one day is far above the rest, its bar is drawn with a break so the other days stay readable. The window is also smaller and tidier, and shows how far past your goal you went (for example "3.2× the goal"). For past weeks, the second box shows your daily average.
+- **Every panel slides the same way.** Find & Replace (Ctrl+F) now slides out from under the toolbar just as the Scenes, Notes and Revise panels slide in from the side, with the same speed and easing. Dialogs and menus drop softly into place and fade away when closed. You can type in the search field the moment you press Ctrl+F, and toggling a panel mid-slide reverses smoothly. With *reduce motion* turned on in Windows, nothing moves.
+- **A cleaner header.** File, Edit and Element now start at the very left. The centre shows only the screenplay's title, centred on the window and shortened with "…" if it is very long. The STET icon and version moved to the bottom-left corner, a little smaller (click them for this changelog).
+- **The dinosaur's sneakier side.** Instead of walking off the edge of the bar, it now creeps along with its head down and pops up with a "boo!", and when it runs off in a huff it sulks at the far end with its back to you before peeking round.
+
+### Fixed
+
+- **Open Recent: the move-to-bin and remove icons were out of sight.** A long file path made the list wider than the window, pushing both icons off to the right behind a sideways scrollbar. The list now always fits: long paths are shortened from the start ("…\Second Draft\Night Ferry.stet", with the full path on hover), names keep priority, and the icons — *Remove from Recent* and *Move to Recycle Bin* — appear on whichever row you hover, at any window size.
+- **The dinosaur no longer catches a text selection** dragged across it.
+- **The status bar no longer shifts** by a few pixels when the cursor moves into a scene heading.
+
+### For the technically curious
+
+- One set of motion helpers (`ui/motion.js`: `setPanel` for docked panels on any side, `arrive`/`leave` for dialogs and menus) now drives every surface that opens.
+- The weekly chart sizes its bars in pixels against a round-number scale (`core/chart.js`), so a label can never squeeze a bar.
+- New tests: the dinosaur on a wide strip for hours (always in view, mostly in the middle, every move at full length, clicks and the cursor answered within a frame or two, walking back in after a resize), the chart's scale and number formatting, and end-to-end tests in the real app for the header, the dinosaur, the weekly view with very large numbers, panel motion (including reduced motion) and Open Recent with long paths at two window widths.
+
 ## 0.7.0 — 20 October 2026
 
 Word counting and writing statistics rebuilt from the ground up, a clearer weekly progress view with a safe Reset, and a dinosaur with a lot more personality.

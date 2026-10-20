@@ -1,7 +1,10 @@
 // Find & replace bar. Searching is debounced and only reruns when the query,
-// options or document revision change.
+// options or document revision change. It slides in from under the toolbar like
+// the side panels do from their edges (ui/motion.js); the field has focus at
+// once, so typing never waits for the animation.
 
 import { pos, cmp } from '../../core/editor.js';
+import { setPanel, isOpen } from './motion.js';
 
 export class FindBar {
   constructor({ editor, view, jump, focusEditor }) {
@@ -28,10 +31,10 @@ export class FindBar {
     });
   }
 
-  get open() { return !this.bar.hidden; }
+  get open() { return isOpen(this.bar); }
 
   show(replace = false) {
-    this.bar.hidden = false;
+    setPanel(this.bar, true);
     const sel = this.ed.hasSelection() ? this.ed.selectedText() : '';
     if (sel && !sel.includes('\n') && sel.length < 80) this.q.value = sel;
     (replace && this.q.value ? this.r : this.q).focus();
@@ -40,7 +43,7 @@ export class FindBar {
   }
 
   close() {
-    this.bar.hidden = true;
+    setPanel(this.bar, false);
     this.view.find = null;
     this.view.schedule();
     this.focusEditor();

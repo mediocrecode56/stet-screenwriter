@@ -50,8 +50,8 @@ is still nothing extra to install.
 
 | command | what it does |
 |---|---|
-| `npm test` | 107 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, theme schedule, the word-count rule against an independent reference implementation, word counting under typing / large pastes / replacing / deleting / undo / redo / reopening with a 20 000-edit fuzz, writing statistics (accumulation across documents and projects, restarts, upgrade from the 0.6 format, damaged files, double-send protection, consistency of per-document / per-project / weekly / all-time totals, Reset and a failed Reset, a year of heavy use), wheel-zoom steps, English-revision persistence, and the companion simulated over hours of use (every activity and reaction, seamless posture changes, click variety and escalation, cursor glances, props cleaned up) |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change), caret/selection/click alignment with rendered glyphs at several display scales and zooms, the English revision against a local mock of the API and a fake Claude Code CLI (request shape, CLI flags, signed-out errors, progress indicator, hover highlighting, decisions, edits during a review, rate limits, server errors, cancellation, persistence across restarts), word counting and writing statistics in the real app (every editing route, switching and reopening documents, a restart, a crash, the upgrade from 0.6, the weekly view and the Reset confirmation), 5-point wheel-zoom steps, Open Recent dismiss/trash, the writing companion, animation easing and toolbar spacing. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm test` | 112 unit/integration tests: formatting, pagination (incl. randomised incremental-vs-full), editing, undo, serialization round-trips, container corruption, atomic writes, save ordering, external-change detection, backups & retention, recovery, a kill-mid-save crash test, PDF structure, page ranges, theme schedule, the word-count rule against an independent reference implementation, word counting under typing / large pastes / replacing / deleting / undo / redo / reopening with a 20 000-edit fuzz, writing statistics (accumulation across documents and projects, restarts, upgrade from the 0.6 format, damaged files, double-send protection, consistency of per-document / per-project / weekly / all-time totals, Reset and a failed Reset, a year of heavy use), wheel-zoom steps, English-revision persistence, the weekly chart's adaptive scale and number formatting, and the companion simulated over hours of use (every activity and reaction, seamless posture changes, click variety and escalation, clicks and the cursor noticed at once without cutting a move short, staying in view on a wide play area and preferring its middle, walking back in when the area shrinks, props cleaned up) |
+| `npm run e2e` | drives the real app over the DevTools protocol with real key events: element flow, shortcuts, autocomplete, capitalisation, highlights, notes, find, zoom, themes, save/autosave/reopen, backups, PDF export, **recovery after a forced kill**, theme toggle and schedule (incl. a time-zone change), caret/selection/click alignment with rendered glyphs at several display scales and zooms, the English revision against a local mock of the API and a fake Claude Code CLI (request shape, CLI flags, signed-out errors, progress indicator, hover highlighting, decisions, edits during a review, rate limits, server errors, cancellation, persistence across restarts), word counting and writing statistics in the real app (every editing route, switching and reopening documents, a restart, a crash, the upgrade from 0.6, the weekly view and the Reset confirmation), 5-point wheel-zoom steps, Open Recent dismiss/trash (also with long names and paths at two window widths: icons visible on hover, no horizontal scrolling), the writing companion (play area, hover and click response, drags passing through it), the weekly view with tens of thousands of words a day, the same slide for every panel (Ctrl+F included, and with reduced motion), the header layout, animation easing and toolbar spacing. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
@@ -144,10 +144,13 @@ screenplay and project, for good:
   from the program, so replacing STET.exe or installing a newer version keeps
   them. A daily backup is kept beside it; a damaged file is set aside and the
   backup used, never silently reset. Statistics from STET 0.6 are carried over.
-- **F9** (or click TODAY) shows your week: the total and today's progress at
-  the top, a chart with every day's number printed on it, the goal line, and a
-  few plain facts (days written, goal met, best day, streak). ‹ › browse earlier
-  weeks. Days before statistics began show "—", not zero.
+- **F9** (or click TODAY) shows your week: the total and today's progress
+  against your goals at the top, a chart with every day's exact number printed
+  on it and the goal line, and a few plain facts (days written, goal met, best
+  day, streak). The chart's scale follows the week, from a few dozen words to
+  tens of thousands a day; a day far above the rest is drawn with a break in
+  its bar so the other days stay readable. ‹ › browse earlier weeks. Days
+  before statistics began show "—", not zero.
 - **Reset statistics…** in that view is the only way to clear them. It asks
   first, says exactly what will be cleared (all recorded writing; not your
   screenplays, word counts or goals), and only the Reset button confirms —
@@ -156,7 +159,9 @@ screenplay and project, for good:
 
 ## Writing companion
 
-A tiny 8-bit dinosaur lives just above TODAY, with a life of its own. It walks
+A tiny 8-bit dinosaur lives on the edge of the desk above TODAY, with a life of
+its own and a generous stretch of desk to roam (it takes up no room: the
+editor and everything else work underneath it as before). It walks
 about, naps, stretches, chases a ball, digs up bones (and sometimes a
 disappointing pebble), watches leaves fall, chases butterflies, balances things
 on its nose, and — while you're writing — sometimes types along on a tiny
@@ -165,18 +170,22 @@ day, and it remembers what it did recently, so it doesn't repeat itself.
 
 Its energy comes from the words you actually write (not pastes, not opening
 files, not the clock) and changes gradually; idle, it calms down and dozes.
-Move the pointer near it and it may glance your way. Click it and it reacts —
-anything from a blink to something ridiculous, sometimes after a beat,
-occasionally not at all, and with mounting indignation if you keep clicking.
-Reactions join at its next natural moment instead of cutting off what it's
-doing. *View → Hide Writing Companion* turns it off. It redraws a tiny canvas a
+Move the pointer near it and it turns to look at you straight away. Click it
+and it notices at once (a blink and a little start), then reacts — anything
+from a nod to something ridiculous, sometimes after a beat, sometimes with a
+shrug, and with mounting indignation if you keep clicking. A pose it is just
+holding gives way immediately; a step, jump or stride in progress always
+finishes first, so nothing is cut off or sped up. It mostly keeps to the
+middle of its patch and never wanders out of sight. *View → Hide Writing Companion* turns it off. It redraws a tiny canvas a
 few times a second at most, and not at all while the window is hidden.
 
 ## Open Recent
 
 *File → Open Recent…* (Ctrl+Shift+O). Hover a project for two actions: **×**
-removes it from the list only; the **bin icon** moves the file to the Recycle
-Bin after a confirmation (never a permanent delete). Missing files are marked.
+(*Remove from Recent*) removes it from the list only; the **bin icon** (*Move
+to Recycle Bin*) moves the file to the Recycle Bin after a confirmation (never a
+permanent delete). Long paths are shortened from the start ("…\Drafts\Film.stet",
+full path on hover), so the list never scrolls sideways. Missing files are marked.
 
 ## Your work is safe because
 
