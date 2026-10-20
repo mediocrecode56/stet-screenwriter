@@ -212,6 +212,8 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #caret.blink-b { animation: blink-b 1.06s steps(1) .5s infinite; }
 @keyframes blink-a { 50% { opacity: 0; } }
 @keyframes blink-b { 50% { opacity: 0; } }
+/* Dormant (the dinosaur deep asleep, the app long in the background): nothing animates. */
+:root.dormant *, :root.dormant *::before, :root.dormant *::after { animation-play-state: paused !important; }
 
 /* title page fields are real inputs laid over the page grid */
 .tp-f {

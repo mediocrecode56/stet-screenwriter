@@ -116,17 +116,22 @@ page.
 `src/core/revision.js` (pure, unit-tested) builds review sections, the system
 prompt and the structured-output schema; validates every returned finding
 against the snapshot it was made from (element exists, original text is really
-there, minimal word-aligned span, no overlaps); and later revalidates findings
+there as whole words (`findWhole`), minimal word-aligned span, no overlaps); and later revalidates findings
 against the live document. Blocks are immutable, so identity tells whether an
 element changed, and undo/redo of an accepted suggestion is recognised because
 undo restores the exact block objects. `src/main/claude.js` calls the API with
 the Anthropic SDK in the main process (key via safeStorage, streaming, adaptive
 thinking, `fallbacks: "default"`, AbortController cancellation). With no key it
-runs the Claude Code CLI instead (`claude -p --output-format json --json-schema …
---tools "" --setting-sources "" --strict-mcp-config --no-session-persistence`),
-found on PATH, in `~/.local/bin`, or inside the Claude desktop app's folder;
-the prompt goes over stdin, cancelling kills the process, and its result is
-validated exactly like an API response.
+runs the Claude Code CLI instead (`src/main/claude-code.js`, no Electron, unit-tested:
+`claude -p --output-format json --json-schema … --tools "" --setting-sources ""
+--strict-mcp-config --no-session-persistence`), found on PATH, in `~/.local/bin`, or
+in the Claude desktop app's own folders (`%LOCALAPPDATA%\Claude-Data\*\claude-code`,
+the older `%APPDATA%\Claude\claude-code` and its MSIX `Packages\Claude_*\LocalCache`
+copy; the newest version wins). `claude auth status` checks the sign-in first (only
+`loggedIn` is read); the prompt goes over stdin, the process is spawned without a
+shell, cancelling kills it, and its result is validated exactly like an API response.
+Which one is used is `provider` in `claude-connection.json` (auto / cli / api, set
+in the Claude Connection dialog); a failure is reported, never answered by switching.
 Since 0.6 a suggestion never changes or resolves by itself: `locate()`
 recomputes only its position — unchanged element, exact diff against the
 element version last seen, same text with the same context, a distinctive
@@ -195,6 +200,24 @@ replaces another just swaps. `prefers-reduced-motion` turns interface motion
 off.
 
 ## Writing companion
+
+**The face.** Every frame's head is one of the `HEAD` drawings, unchanged:
+frames that lower, lay down or turn over the head build it with `headOver()`,
+which draws the head in front of the body from its outline on, so the body never
+fills the mouth or cuts the jaw. `FACE` records where each frame's head is, and
+`spriteEdges()` gives the drawing code pixel edges by sprite index (so a mirrored
+or upside-down drawing has the same shape) with the head's rows and columns at one
+whole device-px size; the fractional part of a grown or odd-scaled cell goes to the
+body, tail and legs. Tests check every frame and rasterise faces at every size.
+
+**Dormant.** In a deep sleep with the window still in the background and nothing
+else going on (`Critter.dormant`), the sleep loop yields one still `lie` step of
+`TIMING.dormantTick` (60 s) instead of breaths, `tickDelay()` ticks only when
+something is due (a tuft, at most once a minute), and `Dino.onDormant` lets the
+app rest: `:root.dormant` pauses every CSS animation, the goal poll stops and the
+theme poll slows to a minute. Autosave, backups and saving are untouched. Focus
+ends the still step at once (a breath on the next tick), clears the class, restarts
+the polls and refreshes the goal and theme; the deep wake-up follows as before.
 
 The pixel art (`dino-art.js`: frames, props, glyphs as character grids) and
 the repertoire (`dino-acts.js`: 79 activities and 102 reactions, generator

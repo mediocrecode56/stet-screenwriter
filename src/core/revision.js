@@ -5,7 +5,7 @@
 //  2. SYSTEM_PROMPT /
 //     FINDINGS_SCHEMA    instructions + structured-output schema for Claude
 //  3. validateFindings() check every answer against the snapshot it was made
-//                        from: element exists, `original` is really there,
+//                        from: element exists, `original` is really there (as whole words),
 //                        minimal span, no overlaps
 //  4. revalidate()       after edits: keep, relocate or mark findings outdated
 //  5. planApply()        turn accepted findings into conflict-free replacements
@@ -196,8 +196,8 @@ export function validateFindings(chunk, raw, blockRefs) {
       typeof r.original === 'string' && r.original.length > 0 && typeof r.replacement === 'string' &&
       typeof r.explanation === 'string' && r.replacement !== r.original;
     if (!ok) { rejected++; continue; }
-    const at = el.text.indexOf(r.original);
-    if (at === -1) { rejected++; continue; }
+    const at = findWhole(el.text, r.original);
+    if (at === -1) { rejected++; continue; } // not in the element, or only inside longer words
     const m = minimalEdit(el.text, at, at + r.original.length, r.replacement);
     if (m.e - m.s === 0 && m.rep === '') { rejected++; continue; }
     out.push({
@@ -212,6 +212,19 @@ export function validateFindings(chunk, raw, blockRefs) {
     });
   }
   return { findings: resolveOverlaps(out), rejected };
+}
+
+/**
+ * Where `needle` stands in `text` as whole words: not the inside of a longer word
+ * ("creatur" is not in "creature"). The first such place, or -1.
+ */
+export function findWhole(text, needle) {
+  const isW = (c) => !!c && /[\p{L}\p{N}_]/u.test(c);
+  const wl = isW(needle[0]), wr = isW(needle[needle.length - 1]);
+  for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + 1)) {
+    if ((!wl || !isW(text[i - 1])) && (!wr || !isW(text[i + needle.length]))) return i;
+  }
+  return -1;
 }
 
 const RANK = { high: 3, medium: 2, low: 1 };

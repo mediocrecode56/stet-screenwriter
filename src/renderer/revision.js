@@ -73,7 +73,7 @@ export class Revision {
     if (this.run && !this.run.finished) return;
     let status = await api.invoke('claude:key-status');
     if (status.source === 'none') {
-      const ok = await keyDialog('The English revision needs Claude. Claude Code was not found on this computer.');
+      const ok = await keyDialog(status.provider === 'api' ? 'The English revision is set to use an API key, and none is set up.' : 'The English revision needs Claude. Claude Code was not found on this computer.');
       if (!ok) return;
       status = await api.invoke('claude:key-status');
     }
@@ -444,39 +444,65 @@ function elapsed(t0) {
 
 // ---- dialogs -------------------------------------------------------------------------------
 
+const CONNECTIONS = [
+  ['auto', 'Automatic: an API key if one is set, otherwise your Claude sign-in'],
+  ['cli', 'Claude sign-in (Claude Code), no API key'],
+  ['api', 'API key (billed to an Anthropic API account)'],
+];
+
+/** What a status means for the next review, in a sentence. */
+function connectionText(st) {
+  const via = st.source === 'saved' ? `a saved API key (${st.hint}), encrypted by the operating system`
+    : st.source === 'env' ? 'the ANTHROPIC_API_KEY environment variable'
+    : st.source === 'claude-code' ? `${st.cli} on your existing Claude sign-in — no key needed` : null;
+  if (via) return `Reviews use ${via}.`;
+  if (st.provider === 'cli') return 'Claude Code was not found. Install the Claude desktop app (or Claude Code) and sign in; STET then finds it by itself.' + (st.key ? ' Or choose the API key below.' : '');
+  if (st.provider === 'api') return 'No API key is set up yet: paste one below (console.anthropic.com).' + (st.cli ? ` Or choose your Claude sign-in (${st.cli} was found).` : '');
+  return 'Claude Code was not found. Install the Claude desktop app or Claude Code and sign in — STET then uses that sign-in automatically. Or paste an Anthropic API key (console.anthropic.com).';
+}
+
 export async function keyDialog(lead = '') {
-  const st = await api.invoke('claude:key-status');
+  let st = await api.invoke('claude:key-status');
   const input = dlg.h('input', { type: 'password', placeholder: 'sk-ant-…', spellcheck: false, autocomplete: 'off' });
   const msg = dlg.h('div', { class: 'hint' });
-  const where = st.source === 'saved' ? `Using a saved API key (${st.hint}), encrypted by the operating system. Remove it to use your Claude sign-in instead.`
-    : st.source === 'env' ? 'Using the ANTHROPIC_API_KEY environment variable.'
-    : st.source === 'claude-code' ? `Ready — no key needed. Reviews run through ${st.cli} on your existing Claude sign-in. Add an API key only if you'd rather bill an Anthropic API account.`
-    : 'Claude Code was not found. Install the Claude desktop app or Claude Code and sign in — STET then uses that sign-in automatically. Or paste an Anthropic API key (console.anthropic.com).';
-  let closeFn;
+  const where = dlg.h('p', { class: st.source === 'none' ? '' : 'hint' }, connectionText(st));
+  const choice = dlg.h('select', {
+    onchange: async () => {
+      await api.invoke('claude:provider-set', choice.value);
+      st = await api.invoke('claude:key-status');
+      where.textContent = connectionText(st);
+      where.className = st.source === 'none' ? '' : 'hint';
+    },
+  }, ...CONNECTIONS.map(([v, label]) => dlg.h('option', { value: v, selected: st.provider === v }, label)));
   const v = await dlg.open({
-    title: 'CLAUDE CONNECTION', sub: st.source === 'claude-code' ? 'claude code · your claude sign-in' : 'api key stored encrypted · never in your scripts',
-    body: dlg.h('div', { class: 'body', style: 'max-width:540px' },
+    title: 'CLAUDE CONNECTION', sub: 'your choice is kept · a key is stored encrypted, never in your scripts',
+    body: dlg.h('div', { class: 'body', style: 'max-width:560px' },
       lead ? dlg.h('p', {}, lead) : null,
-      dlg.h('p', { class: st.source === 'none' ? '' : 'hint' }, where),
+      dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'Connect through'), choice),
+      where,
       dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key (optional)'), input),
-      dlg.h('p', { class: 'hint' }, 'A key stays in this app\'s main process and is only sent to the Anthropic API when you start a review.'), msg),
+      dlg.h('p', { class: 'hint' }, 'A key stays in this app\'s main process and is only sent to the Anthropic API when you start a review. STET never switches between your sign-in and a key by itself: if the chosen one fails, the review says so.'), msg),
     buttons: [
-      ...(st.source === 'saved' ? [{ label: 'Remove key', value: 'clear' }] : []),
-      { label: 'Cancel', value: null },
-      { label: st.source === 'claude-code' ? 'OK' : 'Save & test', value: 'save', primary: true },
+      ...(st.key === 'saved' ? [{ label: 'Remove key', value: 'clear' }] : []),
+      { label: 'Check', value: 'check' },
+      { label: 'Close', value: null },
+      { label: 'Save', value: 'save', primary: true },
     ],
-    init: (_d, close) => { closeFn = close; },
   });
-  void closeFn;
-  if (v === 'clear') { await api.invoke('claude:key-clear'); return false; }
-  if (v !== 'save') return st.source !== 'none';
-  if (!input.value.trim()) return st.source !== 'none';
-  const r = await api.invoke('claude:key-set', input.value);
-  input.value = '';
-  if (!r.ok) { await dlg.alertBox('KEY NOT SAVED', r.error); return false; }
-  const t = await api.invoke('claude:key-test');
-  if (!t.ok) { await dlg.alertBox('KEY SAVED, BUT THE TEST FAILED', t.message); return true; }
-  return true;
+  if (v === 'clear') { await api.invoke('claude:key-clear'); return (await api.invoke('claude:key-status')).source !== 'none'; }
+  if (v === 'save' && input.value.trim()) {
+    const r = await api.invoke('claude:key-set', input.value);
+    input.value = '';
+    if (!r.ok) { await dlg.alertBox('KEY NOT SAVED', r.error); return false; }
+    st = await api.invoke('claude:key-status');
+  }
+  if (v === 'check' || (v === 'save' && st.key === 'saved' && st.source === 'saved')) {
+    if (st.source === 'none') { await dlg.alertBox('NOT SET UP', connectionText(st)); return false; }
+    const t = await api.invoke('claude:key-test');
+    if (!t.ok) { await dlg.alertBox(st.source === 'claude-code' ? 'CLAUDE CODE CHECK FAILED' : 'KEY TEST FAILED', t.message); return st.source !== 'none'; }
+    if (v === 'check') await dlg.alertBox('READY', st.source === 'claude-code' ? `${st.cli} is signed in. Reviews use your Claude plan.` : 'The API key works.');
+  }
+  return (await api.invoke('claude:key-status')).source !== 'none';
 }
 
 export async function dictionaryDialog(rev) {

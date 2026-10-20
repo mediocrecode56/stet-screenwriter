@@ -86,44 +86,10 @@ const LEGS = {
 // Sitting: the legs folded under, a thigh and a foot on the ground.
 const SIT_BOTTOM = ['..###########.....', '.#####...#####....'];
 const BLANK = '..................';
-// Lying on its front, chin on the ground.
-const LIE = [
-  BLANK, BLANK, BLANK, BLANK, BLANK, BLANK,
-  '...........######.',
-  '..........##o#####',
-  '..........########',
-  '..........####....',
-  '........######....',
-  '#.....##########..',
-  '################..',
-  '..#############...',
-];
-// On its back, feet in the air: the standing dinosaur upside down, its head turned to the side.
-const FALLEN = [
-  BLANK, BLANK, BLANK, BLANK,
-  '....###..###......',
-  '....##...##.......',
-  '...########.......',
-  '..##########......',
-  '.############.....',
-  '###...##########..',
-  '##.....#########..',
-  '#.......##########',
-  '#........###o#####',
-  '...........######.',
-];
-// Lying on its front with the head raised, looking up at the sky.
-const LIE_UP = [
-  BLANK, BLANK, BLANK, BLANK,
-  '............#####.',
-  '...........##o###.',
-  '..........#######.',
-  '..........#####...',
-  '..........####....',
-  '..........####....',
-  '.........#####....',
-  ...LIE.slice(11),
-];
+// The face is always one of the HEAD drawings above, whole and unchanged: frames that
+// lower, lay down or turn over the head place it with headOver(), which draws the head
+// in front of the body, so nothing behind it shows through (the mouth stays open, the
+// jaw whole). FACE below says where each frame's head is; a test checks every frame.
 // Tall and long: head pushed up and forward, arms up, legs straight.
 const STRETCH = [
   '.............#####',
@@ -144,16 +110,42 @@ const STRETCH = [
 
 function compose(head, body, legs) { return [...HEAD[head], ...body, ...legs]; }
 function sit(head) { return [BLANK, BLANK, ...HEAD[head], ...BODY.slice(0, 5), ...SIT_BOTTOM].slice(0, H); }
-/** `head` drawn over `base` with its top at row `top` (sniffing, digging, bowing, cowering). */
-function headOver(base, head, top) {
+/**
+ * `head` drawn over `base` with its top at row `top` (sniffing, digging, bowing,
+ * cowering, lying; `upsideDown` on its back). The head is in front: from its outline
+ * on, each row is the head's own, so the body never fills its mouth or changes its shape.
+ */
+function headOver(base, head, top, upsideDown = false) {
+  const rows = upsideDown ? [...HEAD[head]].reverse() : HEAD[head];
   return base.map((row, r) => {
-    const h = HEAD[head][r - top];
+    const h = rows[r - top];
     if (!h) return row;
-    let out = '';
-    for (let i = 0; i < W; i++) out += h[i] !== '.' ? h[i] : row[i];
-    return out;
+    const from = h.search(/[^.]/);
+    return row.slice(0, from) + h.slice(from);
   });
 }
+// Lying on its front, chin on the ground: neck and body low, the head as when standing.
+const LIE = headOver([
+  BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, BLANK,
+  '........##........',
+  '#.....##########..',
+  '################..',
+  '..#############...',
+], 'open', 6);
+// On its back, feet in the air: the standing dinosaur upside down, head and all.
+const FALLEN = headOver([BLANK, BLANK, BLANK, BLANK, ...LEGS.stand.slice().reverse(), ...BODY.slice().reverse(), BLANK], 'open', 9, true);
+// Lying on its front with the head raised, looking up at the sky.
+const LIE_UP = [
+  BLANK, BLANK, BLANK, BLANK,
+  '............#####.',
+  '...........##o###.',
+  '..........#######.',
+  '..........#####...',
+  '..........####....',
+  '..........####....',
+  '.........#####....',
+  ...LIE.slice(11),
+];
 const STAND_BASE = [BLANK, BLANK, BLANK, BLANK, BLANK, ...BODY, ...LEGS.stand];
 const CROUCH_BASE = [BLANK, BLANK, BLANK, BLANK, BLANK, BLANK, ...BODY, LEGS.tuck[0]];
 const withRow = (rows, i, row) => rows.map((r, k) => (k === i ? row : r));
@@ -198,7 +190,7 @@ export const FRAMES = {
   sitScratch1: withRow(sit('blink'), 10, '###...########.##.'),
   sitScratch2: withRow(withRow(sit('blink'), 9, '##.....##########.'), 10, '###...########....'),
   lie: LIE,
-  lieBreath: withRow(LIE, 10, '.......#######....'),
+  lieBreath: withRow(LIE, 10, '.......#########..'), // the back rises; the jaw stays as it is
   lieUp: LIE_UP,
   lieUpBlink: LIE_UP.map((r) => r.replace('o', '#')),
   lieUpHowl: withRow(withRow(LIE_UP, 6, '..........#####...'), 7, '..........###.....'),
@@ -226,6 +218,51 @@ export const HEAD_TOP = at([
   ['sit sitBlink sitBreath sitChew sitTap1 sitTap2 sitScratch1 sitScratch2', [14, 2]], ['sitUp sitHowl', [15, 2]],
   ['lie lieBreath', [14, 6]], ['lieUp lieUpBlink lieUpHowl lieUpTail', [15, 4]],
 ]);
+
+/**
+ * Where each frame's head is: its top row, its left column (its HEAD drawing's columns
+ * from there on) and whether it is upside down. The drawing code keeps these rows and
+ * columns at one even pixel size, so the face never changes shape (turning round,
+ * turning over, growing); a test checks that every frame's head is a HEAD drawing.
+ */
+export const FACE = Object.fromEntries(Object.keys(FRAMES).map((f) => [f,
+  f === 'fallen' ? { top: 9, left: 10, upsideDown: true } : { top: HEAD_TOP[f][1], left: f === 'stretch' ? 11 : 10, upsideDown: false }]));
+export const HEADS = HEAD;
+
+/**
+ * Pixel edges for drawing a frame `cell` device px per sprite pixel: `cols` (W+1) and
+ * `rows` (H+1) running sums from the left and the top of the sprite, by sprite pixel,
+ * never by screen position, so a mirrored or upside-down drawing has exactly the same
+ * shape. A cell that isn't a whole number of device px (growing with the streak, odd
+ * display scales) makes some pixels a device px bigger than others: the head's rows and
+ * columns all get the same whole size, and the difference goes to the body, tail and legs.
+ */
+const edgeCache = new Map();
+export function spriteEdges(frame, cell) {
+  const key = frame + '|' + cell;
+  let e = edgeCache.get(key);
+  if (!e) {
+    const f = FACE[frame] || FACE.stand;
+    e = { cols: edges(W, cell, (i) => i >= f.left), rows: edges(H, cell, (r) => r >= f.top && r < f.top + 5) };
+    if (edgeCache.size > 400) edgeCache.clear();
+    edgeCache.set(key, e);
+  }
+  return e;
+}
+function edges(n, cell, inHead) {
+  const total = Math.round(n * cell), k = Math.max(1, Math.round(cell));
+  const head = [...Array(n).keys()].filter(inHead), rest = n - head.length;
+  const left = total - k * head.length; // device px for everything else
+  const base = rest ? Math.floor(left / rest) : 0, extra = rest ? left - base * rest : 0;
+  const out = [0];
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    let size = k;
+    if (!inHead(i)) { size = base + (Math.floor(((j + 1) * extra) / rest) - Math.floor((j * extra) / rest)); j++; } // the extra px spread evenly
+    out.push(out[i] + Math.max(0, size));
+  }
+  return out;
+}
 
 /** A rainbow: two dotted arcs, w×h. */
 function rainbow(w, h) {

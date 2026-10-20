@@ -203,7 +203,14 @@ function renderGoal() {
   if (dino && key !== streakShown) { dino.setStreak({ growth: k.growth, unlocked: k.unlocked }, streakShown != null); streakShown = key; }
 }
 // The streak ends at midnight after a day without writing: check now and then, not only when writing.
-setInterval(() => { if (!document.hidden) renderGoal(); }, 60000);
+// The theme schedule is checked on a short poll too (refreshTheme). While the dinosaur is dormant (deep
+// asleep, the app long in the background) both rest: no goal check, the theme once a minute.
+let goalPoll = 0, themePoll = 0;
+function polls(resting = false) {
+  clearInterval(goalPoll); clearInterval(themePoll);
+  goalPoll = resting ? 0 : setInterval(() => { if (!document.hidden) renderGoal(); }, 60000);
+  themePoll = setInterval(refreshTheme, resting ? 60000 : 15000);
+}
 document.addEventListener('visibilitychange', () => { if (!document.hidden) renderGoal(); });
 
 function renderSaveState(s) {
@@ -286,9 +293,9 @@ async function editSchedule() {
   api.invoke('settings:set', { schedule: v });
 }
 
-// Re-check on a short poll and whenever the window regains attention, so
+// Re-check on a short poll (polls()) and whenever the window regains attention, so
 // sleep/wake, clock changes and time-zone changes take effect promptly.
-setInterval(refreshTheme, 15000);
+polls();
 window.addEventListener('focus', refreshTheme);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshTheme(); });
 systemDark.addEventListener('change', refreshTheme);
@@ -801,6 +808,13 @@ renderZoom();
 if (settings.panels?.scenes) showPanel('scenes', true);
 // The writing companion above TODAY: fed by trackWords() and the TODAY numbers.
 dino = new Dino({ anchor: $('st-goal'), area: $('scroller'), getProgress: () => goalState });
+// Dormant (deep asleep, the app long in the background): the app rests with it. CSS animations
+// pause and the polls slow down; focus brings everything back at once (Dino tells us first).
+dino.onDormant = (on) => {
+  document.documentElement.classList.toggle('dormant', on);
+  polls(on);
+  if (!on) { renderGoal(); refreshTheme(); }
+};
 dino.setEnabled(settings.companion !== false);
 if (settings.panels?.notes) showPanel('notes', true);
 

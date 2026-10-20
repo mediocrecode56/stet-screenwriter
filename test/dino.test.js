@@ -9,6 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Critter, _test } from '../src/renderer/dino.js';
+import { FACE, HEADS, spriteEdges } from '../src/renderer/dino-art.js';
 
 const { FRAMES, PROPS, GLYPHS, W, H, ACTIVITIES, REACTIONS, SPECIALS, GET_UP, BASELINE_0_8, EVENTS, postureOf } = _test;
 const GROW_FULL = { cactus: 2, grass: 2, palm: 3 };
@@ -46,7 +47,7 @@ function run(c, ms, { from = 0, dt = 100, each } = {}) {
         if (prev.dx || prev.jump || prev.lift) assert.ok(Math.abs(prev.end - prev.start - prev.t) < 1e-6, `${prev.f} ran its full ${prev.t} ms`);
       }
       assert.ok(FRAMES[s.f], `frame ${s.f}`);
-      assert.ok(s.t > 0 && s.t <= 1500, `step ${s.f} ${s.t} ms is short enough to blend a reaction in [${c.activity}/${c.inReaction}]`);
+      assert.ok(s.t > 0 && (s.t <= 1500 || (s.dormant && s.f === 'lie')), `step ${s.f} ${s.t} ms is short enough to blend a reaction in [${c.activity}/${c.inReaction}]`); // (lying still while dormant: focus ends it)
       if (s.fx) assert.ok(GLYPHS[s.fx], `glyph ${s.fx}`);
       steps.push({ ...s, activity: c.activity, reaction: c.inReaction });
       prev = s;
@@ -81,6 +82,82 @@ test('every frame and prop is a full grid of known pixels', () => {
     for (const rows of frames) {
       assert.ok(rows.every((r) => r.length === frames[0][0].length && /^[#.o]+$/.test(r)), `${name}: every frame the same width`);
       assert.ok(rows.join('').includes('#'), name);
+    }
+  }
+});
+
+/** The head window of a frame (rows top-down as the head is drawn), from each row's head outline on. */
+function headOf(name) {
+  const { top, left, upsideDown } = FACE[name];
+  const rows = FRAMES[name].slice(top, top + 5).map((r) => r.slice(left).padEnd(18 - 10, '.'));
+  return upsideDown ? rows.reverse() : rows;
+}
+const closedEyes = (rows) => rows.map((r) => r.replace('o', '#'));
+
+test('the face: every frame has one of its head drawings, whole — nothing of the body shows through it', () => {
+  const heads = Object.entries(HEADS).map(([k, rows]) => [k, rows.map((r) => r.slice(10))]);
+  for (const name of Object.keys(FRAMES)) {
+    const got = headOf(name);
+    // Each row from the head's own outline on must be exactly that head (the eye open or shut).
+    const match = heads.find(([, h]) => h.every((r, i) => {
+      const from = r.search(/[^.]/);
+      return closedEyes([got[i].slice(from)])[0] === closedEyes([r.slice(from)])[0] && (!got[i].includes('o') || got[i].indexOf('o') === r.indexOf('o'));
+    }));
+    assert.ok(match, `${name}: the head is a HEAD drawing: ${got.join(' ')}`);
+    // An eye, open or shut, exactly where the head has it; and the open mouth stays open.
+    const eyeRow = FACE[name].upsideDown ? 3 : 1;
+    assert.ok(/#/.test(got[eyeRow]), name);
+    if (match[0] === 'roar' || match[0] === 'howl') assert.ok(got[3].endsWith('...'), `${name}: the mouth is open`);
+  }
+  // The frames whose heads used to be cut or filled in: now whole.
+  for (const name of ['sniff', 'creep1', 'chomp', 'gnaw', 'lie', 'lieBreath', 'fallen']) assert.ok(headOf(name).join('').length === 40, name);
+  assert.equal(headOf('chomp')[3], '###.....', 'chomp: jaws apart');
+  assert.equal(headOf('sniff')[3], '####....', 'sniffing: mouth line kept');
+  assert.equal(headOf('lie')[4], '######..', 'lying: the jaw whole');
+});
+
+test('the face keeps its exact shape on screen: either way round, upside down, at every size the streak gives it', () => {
+  // Rasterise as Dino.draw does and compare the head's pixels.
+  const raster = (name, cell, mirror, upsideDown) => {
+    const e = spriteEdges(name, cell), sw = e.cols[W], sh = e.rows[H];
+    const px = Array.from({ length: sh }, () => Array(sw).fill(0));
+    FRAMES[name].forEach((row, r) => {
+      const y0 = upsideDown ? sh - e.rows[r + 1] : e.rows[r], y1 = y0 + e.rows[r + 1] - e.rows[r];
+      for (let i = 0; i < W; i++) {
+        if (row[i] !== '#') continue;
+        const x0 = mirror ? sw - e.cols[i + 1] : e.cols[i], x1 = x0 + e.cols[i + 1] - e.cols[i];
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) px[y][x] = 1;
+      }
+    });
+    // The head's box, read back in sprite orientation.
+    const { top, left } = FACE[name];
+    const out = [];
+    for (let y = e.rows[top]; y < e.rows[top + 5]; y++) {
+      let line = '';
+      for (let x = e.cols[left]; x < sw; x++) line += px[upsideDown ? sh - 1 - y : y][mirror ? sw - 1 - x : x] ? '#' : '.';
+      out.push(line);
+    }
+    return { out, total: [sw, sh] };
+  };
+  for (const unit of [1, 2, 3]) {
+    for (let g = 0; g <= 6; g++) {
+      for (const dpr of [1, 1.25, 1.5]) {
+        const cell = unit + (g * dpr) / H;
+        const k = Math.max(1, Math.round(cell));
+        for (const name of ['stand', 'sit', 'sniff', 'lie', 'stretch', 'chomp']) {
+          const a = raster(name, cell, false, false);
+          assert.deepEqual(a.total, [Math.round(W * cell), Math.round(H * cell)], 'its size still grows a device px at a time');
+          assert.deepEqual(raster(name, cell, true, false).out, a.out, `${name} @${cell.toFixed(3)}: the same face facing left`);
+          assert.deepEqual(raster(name, cell, false, true).out, a.out, `${name} @${cell.toFixed(3)}: the same face upside down`);
+          const e = spriteEdges(name, cell);
+          for (let i = FACE[name].left; i < W; i++) assert.equal(e.cols[i + 1] - e.cols[i], k, 'head columns all the same size');
+          for (let r = FACE[name].top; r < FACE[name].top + 5; r++) assert.equal(e.rows[r + 1] - e.rows[r], k, 'head rows all the same size');
+          for (let i = 0; i < W; i++) assert.ok(Math.abs(e.cols[i + 1] - e.cols[i] - cell) < 1.5, 'the rest within a device px or so of the true size');
+        }
+        // The same head drawing gives the same pixels in every frame that has it.
+        assert.deepEqual(raster('sniff', cell, true, false).out, raster('stand', cell, false, false).out, 'sniffing: the standing face');
+        assert.deepEqual(raster('lie', cell, false, false).out, raster('stand', cell, false, false).out, 'lying: the standing face');
+      }
     }
   }
 });
@@ -942,9 +1019,9 @@ test('a long while in the background: it settles into a deep sleep, sleeps on qu
       assert.ok(c.asleep() && c.deep, `sleeps on [${c.activity}/${c.frame}]`);
       assert.equal(c.event, null, 'nothing happens around it');
       ticks++;
-      now += Math.max(16, Math.min(c.deep ? (moving ? 250 : 1500) : moving ? 90 : 250, c.nextEvent() - now)); // as Dino.tick schedules
+      now += c.tickDelay(now, moving); // as Dino.tick schedules
     }
-    assert.ok(ticks < 40 * 60, `${ticks} ticks in 40 minutes (under one a second)`);
+    assert.ok(ticks < 40 * 2 + 30, `${ticks} ticks in 40 minutes (dormant: a couple a minute)`);
     assert.ok(c.tufts().length >= 3, 'the grass grew meanwhile');
     const grass = c.tufts().length, x = c.x;
     // Back for a moment and away again before it wakes: it sleeps on (no wake left over for later).
@@ -1063,4 +1140,38 @@ test('two longer everyday routines (making its bed, lining up pebbles) and two r
     assert.equal(grown, 3, 'a flower came up and opened');
     assert.ok(!p.props.some((q) => q.kind === 'seed' && q.carried), 'the seed went in the ground');
   }
+});
+
+test('dormant: deep asleep in the background, it lies still and needs hardly a tick; focus brings it back at once', () => {
+  const c = world(231);
+  run(c, 30000, { dt: 100 });
+  c.setFocus(false, c.now);
+  until(c, () => c.deep && c.asleep(), 25 * MINUTE, 'a deep sleep');
+  // As Dino.tick schedules: it turns dormant once the last z has drifted away.
+  const asleepAt = c.now;
+  let now = c.now, ticks = 0, frames = new Set(), dormantAt = null;
+  const grassBefore = c.tufts().length;
+  const end = now + 60 * MINUTE;
+  while (now < end) {
+    const moving = c.advance(now);
+    ticks++;
+    if (c.dormant) { dormantAt ??= now; frames.add(c.frame); assert.equal(c.effects.length, 0, 'no z\'s'); }
+    now += c.tickDelay(now, moving);
+  }
+  assert.ok(dormantAt != null && dormantAt - asleepAt < 20000, 'dormant within moments of the deep sleep');
+  assert.deepEqual([...frames], ['lie'], 'lying quite still');
+  assert.ok(ticks <= 60 * 2 + 20, `${ticks} ticks in an hour`);
+  if (process.env.STET_REPORT) console.log(`dormant: ${ticks} ticks in an hour`);
+  assert.ok(c.tufts().length > grassBefore || c.tufts().length === c.T.tuftsMax, 'the grass still came up on time');
+  // A tuft due in the middle of a still spell: the tick comes then, not at the end of it.
+  c.tuftNext = c.now + 5000;
+  assert.ok(c.tickDelay(c.now, false) <= 5000);
+  c.tuftNext = null;
+  // Back: no longer dormant there and then, breathing again on the next tick, and the gentle wake-up follows.
+  const t = c.now + 100;
+  c.setFocus(true, t);
+  assert.equal(c.dormant, false);
+  c.advance(t);
+  assert.ok(c.step.t <= 1500 && !c.step.dormant, 'a breath at once');
+  until(c, () => c.inReaction === 'deepWake', 5000, 'wakes');
 });

@@ -53,7 +53,7 @@
 // A writing streak makes it grow a pixel at each milestone (1, 2, 4, 8, 16 and
 // 32 days in a row) and unlocks a special routine at every second one.
 
-import { W, H, FRAMES, PROPS, GLYPHS, ALPHA, MOUTH, HEAD_TOP, GET_UP, postureOf } from './dino-art.js';
+import { W, H, FRAMES, PROPS, GLYPHS, ALPHA, MOUTH, HEAD_TOP, GET_UP, postureOf, spriteEdges } from './dino-art.js';
 import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, BASELINE_0_8 } from './dino-acts.js';
 
 const MIN = 60000;
@@ -81,6 +81,7 @@ export const TIMING = {
   tuftsMax: 5,
   tuftGrow: 45000,              // per stage of a tuft's growth
   grazeAfter: [8000, 45000],    // back and writing again: a while before it starts on the grass
+  dormantTick: 60000,           // dormant (see Critter.dormant): at most this long between ticks
 };
 // Things that float or fly about: only a few at a time, so the scene never gets busy.
 const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug']);
@@ -501,8 +502,15 @@ export class Critter {
     this.tuftNext = null;
     this.backAt = now;
     this.grazeAt = now + this.rnd(...this.T.grazeAfter);
+    if (this.step && this.step.dormant) this.step.end = now; // lying still: it breathes again straight away
     if (this.deep) this.envDue = { name: 'deepWake', at: now + this.rnd(1200, 3500) };
   }
+  /**
+   * Dormant: deep asleep, still in the background, nothing else going on. The dinosaur lies
+   * still (no breaths, no z's) and the app rests with it (Dino.onDormant): a tick only
+   * when something is due (a tuft of grass), at most every T.dormantTick. Focus ends it at once.
+   */
+  get dormant() { return this.deep && !this.focused && this.asleep() && !this.inReaction && !this.envDue && !this.queue.length; }
   /** Long enough in the background for a deep sleep. */
   deepDue(now = this.now) { return !this.focused && this.blurAt != null && now - this.blurAt >= this.T.deepSleep; }
   /** Straight into a deep sleep where it is (only ever while nobody can see). */
@@ -1245,7 +1253,17 @@ export class Critter {
     if (this.envDue) t = Math.min(t, this.envDue.at);
     if (this.ack && this.ack.t0 + 160 > this.now) t = Math.min(t, this.ack.t0 + 160);
     if (this.envNext != null) t = Math.min(t, this.envNext);
+    if (!this.focused && this.tuftNext != null) t = Math.min(t, this.tuftNext);
     return t;
+  }
+
+  /**
+   * How long until the next tick: about 11 a second while anything moves, 4 when still, in a
+   * deep sleep only for each slow breath, and dormant only when something is due.
+   */
+  tickDelay(now, moving) {
+    const most = this.dormant && !moving ? this.T.dormantTick : this.deep ? (moving ? 250 : 1500) : moving ? 90 : 250;
+    return Math.max(16, Math.min(most, this.nextEvent() - now));
   }
 }
 
@@ -1283,6 +1301,8 @@ export class Dino {
     this.timer = 0;
     this.lastSig = '';
     this.enabled = true;
+    this.dormantShown = false; // last told to onDormant
+    this.onDormant = null;     // (on) => the app rests with a dormant dinosaur (app.js)
 
     // Only a click on the dinosaur itself does anything; the pointer passing over it doesn't.
     this.hit.addEventListener('mousedown', (e) => {
@@ -1296,7 +1316,7 @@ export class Dino {
     window.addEventListener('pointerup', () => this.root.classList.remove('pass'), true);
     window.addEventListener('blur', () => this.root.classList.remove('pass'));
     // In the background (another application has the focus) its little world carries on more quietly.
-    const focus = () => { this.c.setFocus(document.hasFocus(), performance.now()); this.schedule(0); };
+    const focus = () => { this.c.setFocus(document.hasFocus(), performance.now()); this.dormancy(); this.schedule(0); };
     window.addEventListener('focus', focus);
     window.addEventListener('blur', focus);
     this.c.focused = document.hasFocus();
@@ -1317,6 +1337,7 @@ export class Dino {
     this.enabled = on;
     this.root.hidden = !on;
     if (on) { this.place(); this.schedule(0); } else clearTimeout(this.timer);
+    this.dormancy();
   }
 
   /** Words the writer just wrote (net, own writing only). */
@@ -1410,9 +1431,17 @@ export class Dino {
     const moving = this.c.advance(now);
     if (this.wide && this.c.onstage()) this.place(); // back inside: the canvas can shrink again
     this.draw(now);
-    // While anything moves, ~11 frames a second, and always on time for the next step, so every stride is shown;
-    // in a deep sleep, only when the next breath is due (and a drifting z at a sleepy 4 frames a second).
-    this.schedule(Math.max(16, Math.min(this.c.deep ? (moving ? 250 : 1500) : moving ? 90 : 250, this.c.nextEvent() - now)));
+    this.dormancy();
+    // Always on time for the next step, so every stride is shown (Critter.tickDelay).
+    this.schedule(this.c.tickDelay(now, moving));
+  }
+
+  /** Tell the app when the dinosaur turns dormant or stops being so (it rests with it). */
+  dormancy() {
+    const on = this.enabled && this.c.dormant;
+    if (on === this.dormantShown) return;
+    this.dormantShown = on;
+    if (this.onDormant) this.onDormant(on);
   }
 
   draw(now = performance.now()) {
@@ -1436,10 +1465,10 @@ export class Dino {
     g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#000';
     const ground = ch;
     // A pixel grid at `cell` device px per pixel, with whole-pixel edges (crisp at any size).
-    const grid = (rows, x, bottomY, cell, mirror = false, flip = false) => {
+    const grid = (rows, x, bottomY, cell, mirror = false) => {
       const h = rows.length, w = rows[0].length;
       for (let r = 0; r < h; r++) {
-        const row = rows[flip ? h - 1 - r : r];
+        const row = rows[r];
         const y0 = bottomY - Math.round((h - r) * cell), y1 = bottomY - Math.round((h - r - 1) * cell);
         for (let i = 0; i < w; i++) {
           if (row[i] !== '#') continue;
@@ -1465,27 +1494,32 @@ export class Dino {
     // The scenery, then loose props behind the dinosaur.
     for (const kind of BACKDROP) for (const q of c.props) if (q.kind === kind) drawProp(q);
     for (const q of c.props) if (!BACKDROP.includes(q.kind)) drawProp(q);
-    // The dinosaur.
-    let rows = FRAMES[c.frame] || FRAMES.stand;
+    // The dinosaur, pixel by pixel on edges that keep its face the same shape at any size, either way round.
+    const frame = FRAMES[c.frame] ? c.frame : 'stand';
+    let rows = FRAMES[frame];
     if (ack) rows = rows.map((r) => r.replace('o', '#')); // a blink: noticed!
-    grid(rows, px, ground - py, cs, c.face < 0, c.flip);
-    const top = ground - py - Math.round(H * cs);
-    const at = (col) => px + Math.round((c.face > 0 ? col : W - 1 - col) * cs);
+    const e = spriteEdges(frame, cs), sw = e.cols[W], sh = e.rows[H];
+    const top = ground - py - sh;
+    const colX = (i) => px + (c.face > 0 ? e.cols[i] : sw - e.cols[i + 1]); // left edge of sprite column i on screen
+    for (let r = 0; r < H; r++) {
+      const y0 = c.flip ? ground - py - e.rows[r + 1] : top + e.rows[r], hgt = e.rows[r + 1] - e.rows[r];
+      for (let i = 0; i < W; i++) if (rows[r][i] === '#') g.fillRect(colX(i), y0, e.cols[i + 1] - e.cols[i], hgt);
+    }
     // Carried props, held in the mouth: just past the snout, centred on the mouth row.
     for (const q of c.props) {
       if (!q.carried || (q.kind === 'firefly' && !q.on)) continue;
-      const [col, row] = MOUTH[c.frame] || MOUTH.stand;
+      const [col, row] = MOUTH[frame] || MOUTH.stand;
       const art = PROPS[q.kind][q.frame] || PROPS[q.kind][0], aw = art[0].length;
-      const x = c.face > 0 ? px + Math.round((col + 1) * cs) : px + Math.round((W - 1 - col) * cs) - aw * p;
-      grid(art, x, top + Math.round((row + 1) * cs) + Math.ceil(art.length / 2) * p, p, c.face < 0);
+      const x = c.face > 0 ? px + e.cols[col + 1] : colX(col) - aw * p;
+      grid(art, x, top + e.rows[row + 1] + Math.ceil(art.length / 2) * p, p, c.face < 0);
     }
     // Something on its head.
-    if (c.hat && HEAD_TOP[c.frame] && !c.flip) {
-      const [col, row] = HEAD_TOP[c.frame];
+    if (c.hat && HEAD_TOP[frame] && !c.flip) {
+      const [col, row] = HEAD_TOP[frame];
       const k = c.hat.kind;
       const art = k === 'butterfly' ? PROPS.butterfly[Math.floor(now / 400) % 2] : k === 'bird' ? PROPS.bird[0] : PROPS[k][0];
       const lift = (k === 'leaf' ? -p : 0) + (c.step?.hatUp ? 2 * p : 0);
-      grid(art, at(col) - Math.floor(art[0].length / 2) * p, top + Math.round(row * cs) - lift, p, k === 'bird' && c.face < 0);
+      grid(art, colX(col) - Math.floor(art[0].length / 2) * p, top + e.rows[row] - lift, p, k === 'bird' && c.face < 0);
     }
     for (const q of c.particles) g.fillRect(snap(q.x), ground - (Math.round(q.y) + 1) * p, p, p);
     // Rain, wind and sparks.
@@ -1511,7 +1545,7 @@ export class Dino {
       for (let r = 0; r < 5; r++) for (let i = 0; i < 3; i++) if (gl[r][i] === '#') g.fillRect(gx + i * p, gy + r * p, p, p);
     }
     // Click target follows the dinosaur, with a pixel or two to spare.
-    Object.assign(this.hit.style, { left: px / dpr - 2 + 'px', top: top / dpr - 2 + 'px', width: Math.round(W * cs) / dpr + 4 + 'px', height: Math.round(H * cs) / dpr + 2 + 'px' });
+    Object.assign(this.hit.style, { left: px / dpr - 2 + 'px', top: top / dpr - 2 + 'px', width: sw / dpr + 4 + 'px', height: sh / dpr + 2 + 'px' });
   }
 
   /** Props about to vanish blink for their last 1.2 s (scenery fades or withers instead). */

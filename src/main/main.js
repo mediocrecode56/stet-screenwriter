@@ -277,6 +277,7 @@ function registerIpc() {
   handle('claude:key-set', (key) => claude.setKey(key));
   handle('claude:key-clear', () => claude.clearKey());
   handle('claude:key-test', () => claude.testKey());
+  handle('claude:provider-set', (p) => claude.setProvider(p));
   handle('review:start', (req) => { claude.start(req); return true; });
   handle('review:cancel', (id) => claude.cancel(id));
 

@@ -4,6 +4,46 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.15.0 — 20 October 2026
+
+The English review works again with no API key, through your Claude sign-in, and you can now choose how STET connects. The dinosaur's face stays itself in every pose. And while it sleeps deeply, STET rests too.
+
+### Fixed
+
+- **The review without an API key works again.** Newer versions of the Claude desktop app keep their copy of Claude Code in a different folder, so STET couldn't find it and asked for an API key. STET now looks in every place the app has used and takes the newest copy.
+- **The dinosaur's face stays the same in every pose.**
+  - **Lowered or lying down:** when it sniffed, chomped, crept, gnawed, lay down or rolled onto its back, its body showed through its head. Its open jaws looked shut, the mouth line disappeared, and when lying down its chin was cut short. Now its head is always drawn whole, in front of its body.
+  - **As it grows:** the bigger it grows with your streak, the more its face changed shape when it turned round or rolled over. Its face now keeps exactly the same pixels whichever way it faces, upside down and at any size.
+- **No more false matches in reviews.** A suggestion has to quote whole words from your script. Before, Claude quoting part of a word, such as "creatur" from "creature", could still get through.
+
+### New
+
+- **Choose how STET connects to Claude.** Under *Tools → Claude Connection…*, *Connect through* has three choices:
+  - **Automatic** (the default): an API key if you have set one up, otherwise your Claude sign-in.
+  - **Claude sign-in:** never an API key.
+  - **API key:** never Claude Code.
+
+  STET never switches on its own: if the one you chose isn't available, the review tells you what to do and mentions the other one if it's set up. *Check* tests the connection.
+- **Signed out? You'll know right away.** STET checks your Claude sign-in before a review starts. If you're signed out, you get one clear message instead of every section of the review failing.
+- **STET rests while the dinosaur sleeps.** When it's deep asleep and you're working in another program, it lies still, nothing animates and STET's background checks slow down, so the app uses almost nothing. Click back into STET and everything is there at once: the dinosaur breathes again straight away, then wakes up slowly as before. Saving and backups carry on as normal.
+
+### For the technically curious
+
+- **Finding Claude Code:** the copy the Claude app keeps is now found in `%LOCALAPPDATA%\Claude-Data\<install>\claude-code\<version>\<build>\claude.exe`, as well as the older `%APPDATA%\Claude\claude-code` and the MSIX `Packages\Claude_*\LocalCache` copies, and `~/Library/Application Support` on macOS. The newest version wins.
+- **Claude Code code:** it now lives in `src/main/claude-code.js`, without Electron, so it can be unit-tested. `claude auth status` checks the sign-in, and only `loggedIn` is read from it.
+- **The choice of connection** is saved in `claude-connection.json` in the app's settings folder, never in a script.
+- **Faces:**
+  - `headOver()` draws the head opaque from its outline on. The lying and on-its-back frames are built with it.
+  - `FACE` records where each frame's head is.
+  - `spriteEdges()` gives pixel edges by sprite index, with the head at one whole device-pixel size.
+- **Dormant:** `Critter.dormant`, `Critter.tickDelay()`, `TIMING.dormantTick` (60 s), `Dino.onDormant` and `:root.dormant`.
+  - **Ticks:** in a live run, 112 ticks and 47 redraws per 20 s in the background before the deep sleep, and none at all while dormant. Simulated over an hour dormant: 73 ticks, against about 2,400 before.
+  - **Coming back:** the next breath came 14 ms after the window got the focus back.
+- **Tests:** seven new unit tests (163 in all) and two new end-to-end tests:
+  - unit: every frame's head; faces rasterised at every size, mirrored and upside down; the dormant state; whole-word quotes; finding Claude Code in the app's folder layouts; the sign-in check; a review section through a fake CLI;
+  - end to end: the sign-in checked before anything is sent; the connection choice kept and never switched.
+- **Live checks:** `bench/dormant-live.js` checks the dormant state in the running app. A live review through the real Claude Code with no key (`bench/revision-live.js`) took 27 s and found 6 problems.
+
 ## 0.14.0 — 20 October 2026
 
 Your streak now has two rest days a week. The dinosaur notices when you're in another program: grass grows around it, it eventually falls fast asleep, and when you're back and writing it eats the grass. It also has four new routines.

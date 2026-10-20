@@ -10,7 +10,7 @@ const INVOKE = new Set([
   'stats:get', 'stats:add', 'stats:flush', 'stats:reset', 'e2e:close-window',
   'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'shell:reveal', 'app:pending-open',
   'recent:list', 'recent:dismiss', 'recent:trash',
-  'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'review:start', 'review:cancel',
+  'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel',
 ]);
 const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done']);
 

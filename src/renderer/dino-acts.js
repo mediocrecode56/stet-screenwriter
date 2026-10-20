@@ -53,8 +53,10 @@ export const ACTIVITIES = {
       yield { f: 'lieBreath', t: 600 };
     }
     // Long in the background: it sleeps on, slow breaths and the odd z, until the writer is back (deepWake).
+    // Dormant (nothing else going on), it lies quite still, and the app rests too, until the focus comes back.
     if (d.deepDue()) d.deep = true;
     while (d.deep) {
+      if (d.dormant) { yield { f: 'lie', t: d.T.dormantTick, dormant: true }; continue; }
       yield { f: 'lie', t: 1500, fx: d.chance(0.1) ? 'z' : null };
       yield { f: 'lieBreath', t: 1500 };
     }

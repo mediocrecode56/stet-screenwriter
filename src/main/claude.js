@@ -1,22 +1,35 @@
-// Claude API access for the English revision tool. Runs only in the main
+// Claude access for the English revision tool. Runs only in the main
 // process: the API key is stored encrypted with the OS keychain/DPAPI
 // (Electron safeStorage) and never crosses into the renderer or a .stet file.
+//
+// Two ways to reach Claude, chosen under Tools → Claude Connection… (stored in
+// claude-connection.json, never in a script):
+//   'auto'  an API key if one is set (saved, else ANTHROPIC_API_KEY), otherwise
+//           Claude Code on the user's own Claude sign-in (the default)
+//   'cli'   always Claude Code, never a key
+//   'api'   always an API key, never Claude Code
+// A review never switches between them by itself: when the chosen way fails,
+// the error says what to do, and mentions the other way when it is set up.
 
 import Anthropic from '@anthropic-ai/sdk';
 import { safeStorage } from 'electron';
-import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { atomicWrite } from './files.js';
+import { findClaudeCode, signedIn, reviewChunkCli, NO_CLI } from './claude-code.js';
 import { MODEL, SYSTEM_PROMPT, FINDINGS_SCHEMA } from '../core/revision.js';
 
 const CONCURRENCY = 3;
 const NO_KEY = 'Claude is not set up. Install Claude (the desktop app or Claude Code) and sign in, or add an Anthropic API key under Tools → Claude Connection….';
+const NO_API_KEY = 'No Anthropic API key is set up. Add one under Tools → Claude Connection….';
+const USE_KEY = ' Or choose the API key under Tools → Claude Connection….';
+const PROVIDERS = ['auto', 'cli', 'api'];
 
 export class ClaudeService {
   constructor(userData, send) {
     this.keyFile = path.join(userData, 'claude-key.bin');
+    this.prefFile = path.join(userData, 'claude-connection.json');
     this.send = send; // (channel, payload) -> renderer
     this.runs = new Map(); // reviewId -> AbortController
   }
@@ -28,14 +41,33 @@ export class ClaudeService {
     } catch { return null; }
   }
 
-  /** Which way a review will reach Claude: a saved key, ANTHROPIC_API_KEY, or the Claude Code sign-in. */
+  async provider() {
+    try { const p = JSON.parse(await fs.readFile(this.prefFile, 'utf8')).provider; return PROVIDERS.includes(p) ? p : 'auto'; } catch { return 'auto'; }
+  }
+
+  async setProvider(p) {
+    if (!PROVIDERS.includes(p)) return { ok: false, error: 'Unknown connection.' };
+    await atomicWrite(this.prefFile, JSON.stringify({ provider: p }), { verify: null });
+    return { ok: true };
+  }
+
+  /**
+   * Which way a review will reach Claude (`source`: 'saved' key, 'env' key,
+   * 'claude-code' or 'none') for the chosen `provider`, and what else is set up.
+   */
   async keyStatus() {
+    const provider = await this.provider();
     const saved = await this.savedKey();
-    const cli = saved || process.env.ANTHROPIC_API_KEY ? null : await findClaudeCode();
+    const key = saved ? 'saved' : process.env.ANTHROPIC_API_KEY ? 'env' : null;
+    const cli = await findClaudeCode();
+    const source = provider === 'cli' ? (cli ? 'claude-code' : 'none')
+      : provider === 'api' ? key || 'none'
+      : key || (cli ? 'claude-code' : 'none');
     return {
-      source: saved ? 'saved' : process.env.ANTHROPIC_API_KEY ? 'env' : cli ? 'claude-code' : 'none',
+      provider, source,
       hint: saved ? saved.slice(0, 10) + '…' + saved.slice(-4) : null,
-      cli: cli ? cli.label : null,
+      key, // an API key that is set up, used or not
+      cli: cli ? cli.label : null, // Claude Code that was found, used or not
       canStore: safeStorage.isEncryptionAvailable(),
     };
   }
@@ -61,7 +93,7 @@ export class ClaudeService {
   }
 
   async testKey() {
-    if ((await this.keyStatus()).source === 'claude-code') return { ok: true }; // sign-in is checked by the first review
+    if ((await this.keyStatus()).source === 'claude-code') return signedIn(await findClaudeCode());
     try {
       const c = await this.client();
       await c.models.retrieve(MODEL);
@@ -78,22 +110,29 @@ export class ClaudeService {
     try {
       const status = await this.keyStatus();
       if (status.source === 'claude-code') {
-        // No API key: run the Claude Code CLI on the user's existing sign-in.
+        // Claude Code on the user's existing sign-in, checked first (a fraction of a second), so a
+        // signed-out CLI is one clear message instead of every section failing.
         const cli = await findClaudeCode();
+        const alt = status.key ? USE_KEY : '';
+        const auth = await signedIn(cli);
+        if (!auth.ok) throw Object.assign(new Error(auth.message + (auth.code === 'auth' ? alt : '')), { code: auth.code });
         const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-review-'));
         const spFile = path.join(dir, 'system.txt');
         await fs.writeFile(spFile, systemText);
         cleanup = () => fs.rm(dir, { recursive: true, force: true }).catch(() => {});
-        review = (chunk) => reviewChunkCli(cli, dir, spFile, chunk, ac.signal);
+        review = (chunk) => reviewChunkCli(cli, dir, spFile, chunk, ac.signal, alt);
       } else if (status.source === 'none') {
-        throw Object.assign(new Error('no credentials'), { code: 'no_key' });
+        const message = status.provider === 'cli' ? NO_CLI + (status.key ? USE_KEY : '')
+          : status.provider === 'api' ? NO_API_KEY + (status.cli ? ' Or choose your Claude sign-in there.' : '')
+          : NO_KEY;
+        throw Object.assign(new Error(message), { code: 'no_key' });
       } else {
         const client = await this.client();
         const system = [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }];
         review = (chunk) => this.reviewChunk(client, system, chunk, ac.signal);
       }
     } catch (e) {
-      this.send('review:done', { reviewId, error: e.code === 'no_key' ? { code: 'no_key', message: NO_KEY } : describeError(e) });
+      this.send('review:done', { reviewId, error: ['no_key', 'auth', 'cli'].includes(e.code) ? { code: e.code, message: e.message } : describeError(e) });
       this.runs.delete(reviewId);
       return;
     }
@@ -154,107 +193,4 @@ function describeError(e) {
   if (e instanceof Anthropic.APIError) return { code: 'api', message: `Claude API error ${e.status ?? ''}: ${e.message}` };
   if (/api.?key|credential|authentication/i.test(e?.message || '')) return { code: 'no_key', message: NO_KEY };
   return { code: 'unknown', message: e?.message || String(e) };
-}
-
-// ---- Claude Code CLI (no API key) ---------------------------------------------------------
-// When no API key is configured, reviews run through the Claude Code CLI in print mode on
-// the user's existing Claude sign-in. Tools, MCP servers, settings files, skills and session
-// history are all switched off, and it runs in an empty temporary folder: it only reads the
-// prompt on stdin and answers in the findings schema.
-
-async function exists(p) { try { return (await fs.stat(p)).isFile(); } catch { return false; } }
-const verKey = (v) => v.split('.').map((n) => String(parseInt(n, 10) || 0).padStart(6, '0')).join('.');
-
-/** Newest claude.exe under a `claude-code/<version>/<build>/` folder (desktop app installs). */
-async function newestBundled(root) {
-  let versions;
-  try { versions = (await fs.readdir(root)).filter((v) => /^\d+\.\d+\.\d+/.test(v)).sort((a, b) => verKey(b).localeCompare(verKey(a))); } catch { return null; }
-  for (const v of versions) {
-    let builds = [];
-    try { builds = await fs.readdir(path.join(root, v)); } catch { /* skip */ }
-    for (const b of builds) { const p = path.join(root, v, b, 'claude.exe'); if (await exists(p)) return { path: p, label: `Claude Code ${v} (from the Claude app)` }; }
-  }
-  return null;
-}
-
-/** Locate the Claude Code CLI. Returns { path, label, node? } or null. */
-export async function findClaudeCode() {
-  const forced = process.env.STET_CLAUDE_CODE; // tests: a fake CLI script, or "none"
-  if (forced) return forced === 'none' ? null : { path: forced, label: 'Claude Code (test)', node: /\.m?js$/.test(forced) };
-  const win = process.platform === 'win32';
-  const exe = win ? 'claude.exe' : 'claude';
-  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-    if (dir && await exists(path.join(dir, exe))) return { path: path.join(dir, exe), label: 'Claude Code' };
-  }
-  const home = os.homedir();
-  for (const p of [path.join(home, '.local', 'bin', exe), path.join(home, '.claude', 'local', exe)]) if (await exists(p)) return { path: p, label: 'Claude Code' };
-  if (win) {
-    // The Claude desktop app keeps its own copy of Claude Code: in a packaged (MSIX) folder
-    // when installed from the Store/winget, or under %APPDATA%\Claude otherwise.
-    const roots = [];
-    if (process.env.APPDATA) roots.push(path.join(process.env.APPDATA, 'Claude', 'claude-code'));
-    const pkgs = path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Packages');
-    try { for (const d of await fs.readdir(pkgs)) if (/^Claude_/i.test(d)) roots.push(path.join(pkgs, d, 'LocalCache', 'Roaming', 'Claude', 'claude-code')); } catch { /* none */ }
-    for (const r of roots) { const found = await newestBundled(r); if (found) return found; }
-  }
-  return null;
-}
-
-function runCli(cli, args, { cwd, input, signal, timeoutMs = 10 * 60 * 1000 }) {
-  return new Promise((resolve, reject) => {
-    const env = { ...process.env };
-    delete env.ANTHROPIC_API_KEY; // never relevant here; the CLI uses its own sign-in
-    const [cmd, argv] = cli.node ? [process.execPath, [cli.path, ...args]] : [cli.path, args];
-    if (cli.node) env.ELECTRON_RUN_AS_NODE = '1';
-    let child;
-    try { child = spawn(cmd, argv, { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { reject(e); return; }
-    let out = '', err = '', killedBy = null;
-    const kill = (why) => { if (killedBy) return; killedBy = why; try { child.kill(); } catch { /* gone */ } };
-    const onAbort = () => kill('cancelled');
-    signal?.addEventListener('abort', onAbort, { once: true });
-    if (signal?.aborted) onAbort();
-    const timer = setTimeout(() => kill('timeout'), timeoutMs);
-    child.stdout.setEncoding('utf8').on('data', (d) => { out += d; });
-    child.stderr.setEncoding('utf8').on('data', (d) => { err += d; });
-    child.stdin.on('error', () => {});
-    child.stdin.end(input ?? '');
-    child.on('error', (e) => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); reject(e); });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      resolve({ code, out, err, killedBy });
-    });
-  });
-}
-
-export async function reviewChunkCli(cli, cwd, systemFile, chunk, signal) {
-  const args = [
-    '-p', '--output-format', 'json',
-    '--model', MODEL, '--effort', 'high',
-    '--system-prompt-file', systemFile,
-    '--json-schema', JSON.stringify(FINDINGS_SCHEMA),
-    '--tools', '', '--strict-mcp-config', '--setting-sources', '',
-    '--disable-slash-commands', '--no-session-persistence',
-  ];
-  let r;
-  try { r = await runCli(cli, args, { cwd, input: chunk.prompt, signal }); } catch (e) {
-    return { ok: false, error: { code: 'cli', message: `Could not start Claude Code: ${e.message}` } };
-  }
-  if (r.killedBy === 'cancelled') return { ok: false, error: { code: 'cancelled', message: 'Cancelled.' } };
-  if (r.killedBy === 'timeout') return { ok: false, error: { code: 'network', message: 'Claude Code did not answer within 10 minutes.' } };
-  let res = null;
-  try { res = JSON.parse(r.out.trim().split('\n').filter(Boolean).pop() || ''); } catch { /* not JSON */ }
-  if (!res || res.type !== 'result') return { ok: false, error: describeCliText(r.err || r.out || `Claude Code exited with code ${r.code}.`) };
-  if (res.is_error || res.subtype !== 'success') return { ok: false, error: describeCliText(String(res.result || res.subtype || 'Claude Code reported an error.'), res.api_error_status) };
-  const parsed = res.structured_output ?? (() => { try { return JSON.parse(res.result); } catch { return null; } })();
-  if (!parsed || !Array.isArray(parsed.findings)) return { ok: false, error: { code: 'bad_output', message: 'The response had no findings list.' } };
-  const u = res.usage || {};
-  return { ok: true, findings: parsed.findings, usage: { input: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), output: u.output_tokens || 0 } };
-}
-
-function describeCliText(text, status) {
-  const t = String(text).trim().slice(0, 400);
-  if (/not logged in|\/login|please log in|sign in|authenticat|oauth|credential/i.test(t) || status === 401) return { code: 'auth', message: 'Claude Code is not signed in. Open Claude (or run `claude` in a terminal), sign in, then try again.' };
-  if (/usage limit|rate.?limit|limit reached|overloaded/i.test(t) || status === 429 || status === 529) return { code: 'rate_limit', message: 'Claude usage limit reached for now. Try the failed sections again later. (' + t + ')' };
-  return { code: 'cli', message: 'Claude Code: ' + t };
 }

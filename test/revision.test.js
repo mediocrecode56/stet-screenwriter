@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChunks, chunkPrompt, validateFindings, minimalEdit, locate, locateAll, planApply, afterApply, FINDINGS_SCHEMA, REVIEWABLE } from '../src/core/revision.js';
+import { buildChunks, chunkPrompt, validateFindings, findWhole, minimalEdit, locate, locateAll, planApply, afterApply, FINDINGS_SCHEMA, REVIEWABLE } from '../src/core/revision.js';
 import { Editor, pos } from '../src/core/editor.js';
 import { makeBlock } from '../src/core/model.js';
 import { generateScript } from './fixtures.js';
@@ -56,6 +56,25 @@ test('validation keeps only findings that match the snapshot', () => {
   assert.equal(f.original, 'enter in');           // minimal span…
   assert.equal(f.replacement, 'enters');          // …and minimal replacement
   assert.equal(blocks[1].text.slice(f.s, f.e), 'enter in');
+});
+
+test('a finding must quote whole words of its element, never the inside of a longer word', () => {
+  assert.equal(findWhole('A creature appears.', 'creatur'), -1);
+  assert.equal(findWhole('A creature appears.', 'creature'), 2);
+  assert.equal(findWhole('the theme, then the', 'the'), 0);
+  assert.equal(findWhole('theme of the day', 'the'), 9, 'skips a match inside "theme"');
+  assert.equal(findWhole('He said, "go".', ', "go"'), 7, 'punctuation at the edges needs no word boundary');
+  const blocks = script();
+  const [c] = buildChunks(blocks);
+  const { findings, rejected } = validateFindings(c, [
+    { element: 'e1', category: 'grammar', original: 'nter in', replacement: 'nters', explanation: '', confidence: 'high' },
+    { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enter in', explanation: '', confidence: 'high' }, // unchanged
+    { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enters', explanation: '', confidence: 'high' },
+    { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enters', explanation: '', confidence: 'high' }, // the same again
+  ], refs(blocks));
+  assert.equal(rejected, 2);
+  assert.equal(findings.length, 1, 'a repeat of the same finding is kept once');
+  assert.equal(findings[0].original, 'enter in');
 });
 
 test('minimalEdit trims shared words but keeps whole words', () => {

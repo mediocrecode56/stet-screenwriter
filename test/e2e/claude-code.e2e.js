@@ -95,3 +95,51 @@ test('unreadable CLI output is reported, not trusted', async () => {
   assert.equal(await app.eval('__stet.revision.findings.length'), 0);
   assert.match(await app.eval('[...__stet.revision.run.failed.values()][0].message'), /Claude Code: panic/);
 });
+
+test('signed out: one clear message before anything is sent', async () => {
+  await app.close();
+  await fs.rm(log, { force: true });
+  app = await launch('auth-out'); await consent();
+  await loadScript();
+  await app.eval('__stet.revision.start()'); await waitDone();
+  assert.match(await app.eval('__stet.revision.run.fatal.message'), /not signed in/);
+  assert.equal((await calls()).length, 0, 'no review was started');
+});
+
+test('the connection is the writer\'s choice, kept, and never switched behind their back', async () => {
+  await app.close();
+  await fs.rm(log, { force: true });
+  const env = (key) => ({ STET_CLAUDE_CODE: FAKE, FAKE_CC_LOG: log, FAKE_CC_MODE: '', ANTHROPIC_API_KEY: key, STET_ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' });
+  app = await App.launch({ userData: path.join(tmp, 'ud2'), env: env('sk-ant-test-0000000000000000000000') }); await consent();
+  const status = () => app.eval(`window.stet.invoke('claude:key-status')`);
+  let st = await status();
+  assert.equal(st.provider, 'auto');
+  assert.equal(st.source, 'env', 'automatic: a key that is set up comes first');
+  assert.ok(st.cli, 'Claude Code found as well');
+  // Claude sign-in chosen: the review goes through Claude Code although a key is set, and the key is not passed on.
+  await app.eval(`window.stet.invoke('claude:provider-set', 'cli')`);
+  st = await status();
+  assert.equal(st.source, 'claude-code');
+  await loadScript();
+  await app.eval('__stet.revision.start()'); await waitDone();
+  assert.equal(await app.eval('__stet.revision.findings.length'), 3);
+  const [c] = await calls();
+  assert.equal(c.apiKey, null, 'the API key never reaches the CLI');
+  // Kept across a restart; API key chosen with no key: an actionable error that offers the sign-in, and no CLI call.
+  await app.eval(`window.stet.invoke('claude:provider-set', 'api')`);
+  await app.close();
+  await fs.rm(log, { force: true });
+  app = await App.launch({ userData: path.join(tmp, 'ud2'), env: env('') }); await consent();
+  st = await status();
+  assert.equal(st.provider, 'api');
+  assert.equal(st.source, 'none');
+  await loadScript();
+  await app.eval('void __stet.revision.start()'); // (it waits on the dialog)
+  await sleep(500);
+  assert.ok(await app.eval(`!!document.querySelector('#overlay')`), 'the connection dialog opens instead of a review');
+  assert.match(await app.eval(`document.querySelector('#overlay').textContent`), /set to use an API key.*Claude sign-in/s);
+  await app.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await sleep(300);
+  assert.equal((await calls()).length, 0, 'it did not fall back to Claude Code by itself');
+  assert.equal(await app.eval('__stet.revision.run'), null, 'no review started');
+});
