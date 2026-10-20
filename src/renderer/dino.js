@@ -67,8 +67,6 @@ const DANCING = new Set(['dance', 'sing', 'celebrate', 'rainDance', 'boogie']);
 const CALM = new Set(['rest', 'look', 'sleep', 'stargaze', 'watchWriter', 'readScript', 'coffeeBreak', 'writeAlong', 'treeShade', 'doze', 'scratch', 'wag', 'yoga', 'daydream']);
 // Things that grow and wither: frames from sprout to full, and how long each stage takes.
 const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800], cactus: [2, 1400], grass: [2, 900] };
-// Plants that come up on their own (the 'sprout' event), for it to notice and perhaps visit.
-const WILD = ['cactus', 'grass', 'palm'];
 // The large plants: they last a good while, and their time stands still while the window is in the background.
 const LARGE = new Set(['cactus', 'palm']);
 // While the window is in the background (another application has the focus) small tufts of grass creep

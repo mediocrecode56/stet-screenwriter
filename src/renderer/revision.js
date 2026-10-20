@@ -465,7 +465,6 @@ function connectionText(st) {
 export async function keyDialog(lead = '') {
   let st = await api.invoke('claude:key-status');
   const input = dlg.h('input', { type: 'password', placeholder: 'sk-ant-…', spellcheck: false, autocomplete: 'off' });
-  const msg = dlg.h('div', { class: 'hint' });
   const where = dlg.h('p', { class: st.source === 'none' ? '' : 'hint' }, connectionText(st));
   const choice = dlg.h('select', {
     onchange: async () => {
@@ -482,7 +481,7 @@ export async function keyDialog(lead = '') {
       dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'Connect through'), choice),
       where,
       dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key (optional)'), input),
-      dlg.h('p', { class: 'hint' }, 'A key stays in this app\'s main process and is only sent to the Anthropic API when you start a review. STET never switches between your sign-in and a key by itself: if the chosen one fails, the review says so.'), msg),
+      dlg.h('p', { class: 'hint' }, 'A key stays in this app\'s main process and is only sent to the Anthropic API when you start a review. STET never switches between your sign-in and a key by itself: if the chosen one fails, the review says so.')),
     buttons: [
       ...(st.key === 'saved' ? [{ label: 'Remove key', value: 'clear' }] : []),
       { label: 'Check', value: 'check' },

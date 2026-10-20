@@ -4,6 +4,25 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.15.4 — 21 October 2026
+
+### Improved
+
+- **Just a soft highlight on the suggestion you're looking at.** The passage you point at or click no longer has a box with a hard line around it, or its underline. It's marked by the soft light grey alone, so the text reads cleanly. The other suggestions keep their underlines, so you can still tell which kind each one is.
+- **Tidier code:** a little leftover code was removed. Nothing you use has changed.
+
+### For the technically curious
+
+- **The marks:** `.revr.hov` and `.revr.cur` have no box-shadow or bottom border, and slightly rounded corners. The glide test now checks this too.
+- **The cleanup:**
+  - removed `WILD` in `dino.js`, which nothing read (sprouts are picked by weight in `sprout()`);
+  - removed an empty message element left in the Claude Connection dialog;
+  - moved the note on faces in `dino-art.js` next to `headOver()`, which it describes.
+- **The checks behind the cleanup:**
+  - a scan of `src/` for unused imports, declarations and exports: the rest were false positives, such as names used through a namespace or a spread;
+  - a scan for CSS classes the renderer never uses: there are none.
+- **Tests:** 163 of 163 unit tests, the 23 quick end-to-end tests, and all 13 review and Claude Code end-to-end tests pass.
+
 ## 0.15.3 — 21 October 2026
 
 ### Improved

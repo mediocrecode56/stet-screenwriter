@@ -317,4 +317,6 @@ test('clicking a suggestion always glides its passage to the middle of the scree
   const bg = await app.eval(`getComputedStyle(document.querySelector('.revr.cur')).backgroundColor`);
   const [r, g, b] = bg.match(/[\d.]+/g).map(Number);
   assert.ok(r === g && g === b, `the selected suggestion's shade is a grey (${bg})`);
+  const edge = await app.eval(`(() => { const st = getComputedStyle(document.querySelector('.revr.cur')); return { shadow: st.boxShadow, border: st.borderBottomWidth }; })()`);
+  assert.deepEqual(edge, { shadow: 'none', border: '0px' }, 'just the soft highlight: no outline, no underline');
 });

@@ -86,10 +86,6 @@ const LEGS = {
 // Sitting: the legs folded under, a thigh and a foot on the ground.
 const SIT_BOTTOM = ['..###########.....', '.#####...#####....'];
 const BLANK = '..................';
-// The face is always one of the HEAD drawings above, whole and unchanged: frames that
-// lower, lay down or turn over the head place it with headOver(), which draws the head
-// in front of the body, so nothing behind it shows through (the mouth stays open, the
-// jaw whole). FACE below says where each frame's head is; a test checks every frame.
 // Tall and long: head pushed up and forward, arms up, legs straight.
 const STRETCH = [
   '.............#####',
@@ -110,6 +106,9 @@ const STRETCH = [
 
 function compose(head, body, legs) { return [...HEAD[head], ...body, ...legs]; }
 function sit(head) { return [BLANK, BLANK, ...HEAD[head], ...BODY.slice(0, 5), ...SIT_BOTTOM].slice(0, H); }
+// The face is always one of the HEAD drawings, whole and unchanged: frames that lower, lay
+// down or turn over the head place it with headOver(), so nothing of the body shows through
+// it (the mouth stays open, the jaw whole). FACE says where each frame's head is; a test checks every frame.
 /**
  * `head` drawn over `base` with its top at row `top` (sniffing, digging, bowing,
  * cowering, lying; `upsideDown` on its back). The head is in front: from its outline
