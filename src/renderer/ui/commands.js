@@ -2,6 +2,8 @@
 // and keyboard shortcuts, so every function is discoverable in the same place.
 
 import { arrive, leave, DUR_FAST } from './motion.js';
+
+const SUB_GRACE = 110; // ms a flyout waits before closing, so the pointer can cross a neighbouring row to reach it
 import { h, open } from './dialog.js';
 
 const commands = new Map();
@@ -94,7 +96,7 @@ function showMenu(btn, items) {
     const label = typeof c.label === 'function' ? c.label() : c.label;
     const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') + (c.sub ? ' has-sub' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
     row.addEventListener('mouseup', () => { closeMenu(); if (c.run) setTimeout(() => (c.id ? run(c.id) : c.run()), 0); });
-    if (c.sub && !disabled) quickSub(el, row, c.sub()); else row.addEventListener('mouseenter', () => hideSub(el, 110));
+    if (c.sub && !disabled) quickSub(el, row, c.sub()); else row.addEventListener('mouseenter', () => hideSub(el, SUB_GRACE));
     el.appendChild(row);
   }
   document.body.appendChild(el);
@@ -103,7 +105,7 @@ function showMenu(btn, items) {
   el.style.top = r.bottom + 'px';
   btn.classList.add('open');
   openMenu = { btn, el };
-  if (!switching) arrive(el, { dist: 2, dur: 120, scale: 0.98 });
+  if (!switching) arrive(el, { dist: 2, dur: DUR_FAST, scale: 0.98 });
 }
 
 // A quick flyout beside a menu row (Open Recent): its items load as the menu opens and show
@@ -131,8 +133,9 @@ function showSub(menu, row, items) {
   // row; on the left instead if it would leave the window.
   const m = menu.getBoundingClientRect();
   sub.style.left = (m.right + sub.offsetWidth > window.innerWidth ? -sub.offsetWidth : m.width - 1) + 'px';
-  sub.style.top = Math.min(row.offsetTop - 5, window.innerHeight - m.top - sub.offsetHeight) + 'px';
-  arrive(sub, { dist: 0, dur: 100 });
+  const inset = sub.clientTop + parseFloat(getComputedStyle(sub).paddingTop); // its first row level with this one
+  sub.style.top = Math.min(row.offsetTop - inset, window.innerHeight - m.top - sub.offsetHeight) + 'px';
+  arrive(sub, { dist: 0, dur: DUR_FAST });
 }
 
 // Hidden after a short grace, so the pointer can cross a neighbouring row on its way into the flyout.

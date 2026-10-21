@@ -4,6 +4,34 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.18.2 — 21 October 2026
+
+### Improved
+
+- **The native square look, rebuilt properly.** 0.18.1 only switched the rounded corners off. This version removes everything that was added for them:
+  - Menu items reach the menu's edges again, with no inset.
+  - The separator lines run the full width of the menu.
+  - Dialogs no longer clip their contents.
+  - There are no leftover radius rules or soft-shadow values anywhere in the code.
+- **One hover style everywhere.** The readable grey highlight now works the same way in every menu, the menu bar, the toolbar, buttons, the scene list, Open Recent, the review list and word suggestions while typing. It appears at once and fades out at the app's usual speed. Word suggestions used a full inverted bar before.
+- **Unchanged:** the animations from 0.18.0 work as before, at the app's usual speed.
+
+### For the technically curious
+
+- **Hover styles:**
+  - one rule makes every hover tint appear at once;
+  - each element fades out with its own `--dur-fast` transition;
+  - two tokens, `--hover` and `--hover-on`, replace the mix of `--rule`, inverted colours and one-off `120ms` values.
+- **The recent list's position:** it is now worked out from the menu's own border and padding, instead of a hard-coded offset. The grace period before it closes is a named constant (`SUB_GRACE`).
+- **Reopening the last screenplay:**
+  - **The old way:** a separate `lastOpen` setting was written in five places, and cleared whenever an untitled screenplay appeared. That is why STET sometimes opened on a blank page.
+  - **The new way:** the setting is gone. The last screenplay is simply the newest entry in Open Recent, which the main process keeps in order on every open, save and rename.
+  - **Startup:** STET opens the first entry it can read, skipping any that can't be read without an error (`openPath(file, { quiet })`, which now returns whether the screenplay opened).
+- **Unused code removed:** an unused `fade-in` animation.
+- **Tests:**
+  - The File-menu flyout test no longer depends on how many screenplays earlier tests saved.
+  - `recent.e2e.js`, `app.e2e.js` and the header, File menu and Open Recent layout tests pass.
+
 ## 0.18.1 — 21 October 2026
 
 ### Fixed

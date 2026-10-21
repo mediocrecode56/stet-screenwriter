@@ -237,13 +237,12 @@ test('File menu: hovering Open Recent shows the recent screenplays, compact, lon
   await sleep(150);
   await app.eval(`document.querySelector('.menu .mi.has-sub').dispatchEvent(new MouseEvent('mouseenter'))`);
   await sleep(50);
-  const v = await app.eval(`(() => { const s = document.querySelector('.msub'); if (!s) return null; const r = s.getBoundingClientRect(), t = [...s.querySelectorAll('.mi-t')]; return { n: t.length, names: t.map((x) => x.textContent), clipped: t[0].scrollWidth > t[0].clientWidth, width: r.width, inside: r.right <= innerWidth && r.left >= 0 }; })()`);
+  const v = await app.eval(`(() => { const s = document.querySelector('.msub'); if (!s) return null; const r = s.getBoundingClientRect(), t = [...s.querySelectorAll('.mi-t')], long = t.find((x) => x.textContent.startsWith('The Extraordinarily')); return { names: t.map((x) => x.textContent), clipped: long.scrollWidth > long.clientWidth, width: r.width, inside: r.right <= innerWidth && r.left >= 0 }; })()`);
   assert.ok(v, 'the flyout appears');
-  assert.equal(v.n, 2);
-  assert.equal(v.names[1], 'Night Ferry');
+  assert.ok(v.names.includes('Night Ferry'), v.names.join(', '));
   assert.ok(v.clipped && v.width <= 260, 'a long title ends in … and the list stays narrow (' + v.width + 'px)');
   assert.ok(v.inside, 'within the window');
-  await app.eval(`document.querySelectorAll('.msub .mi')[1].dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))`);
+  await app.eval(`[...document.querySelectorAll('.msub .mi')].find((m) => m.textContent === 'Night Ferry').dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))`);
   await sleep(400);
   assert.equal(await app.eval('document.querySelectorAll(".menu").length'), 0, 'the menu closes');
   assert.ok(await app.eval(`document.getElementById('doctitle').textContent.includes('Night Ferry') || !!document.querySelector('#overlay .dlg')`), 'the screenplay is opened (or its error shown)');

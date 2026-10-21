@@ -63,7 +63,6 @@ export class Session {
 
   newUntitled(title = '') {
     this.load(newDocument(title), null);
-    api.invoke('settings:set', { lastOpen: null });
   }
 
   /** Mark a non-editor change (title page, settings, comment text). */
@@ -158,7 +157,6 @@ export class Session {
     if (prev !== path) { this.savedRev = -1; if (prev) api.invoke('doc:forget', prev); }
     const r = await this.writeFile({ force });
     if (r.ok) {
-      api.invoke('settings:set', { lastOpen: path });
       if (prev !== path) this.lastBackupRev = -1;
     } else if (prev !== path && !r.conflict) {
       this.path = prev;

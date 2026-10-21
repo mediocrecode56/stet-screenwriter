@@ -397,7 +397,6 @@ function renameInPlace() {
     const r = await api.invoke('doc:rename', { path: session.path, name, backupDir: session.doc.settings.backup.dir });
     if (!r.ok) { renderTitle(); return dlg.alertBox('RENAME FAILED', r.error); }
     session.path = r.path;
-    api.invoke('settings:set', { lastOpen: r.path });
     renderTitle(); session.emit();
   };
   const onKey = (e) => {
@@ -512,13 +511,15 @@ async function saveAs() {
   return true;
 }
 
-async function openPath(file) {
-  if (!(await releaseCurrent())) return;
+/** Opens a screenplay; true once it is open. `quiet`: a file that can't be read is skipped without a word. */
+async function openPath(file, { quiet = false } = {}) {
+  if (!(await releaseCurrent())) return false;
   const r = await Session.readFile(file);
   if (!r.ok) {
+    if (quiet) return false;
     const v = await dlg.choose('CANNOT OPEN', `${file}\n\n${r.error}`, [{ label: 'Close', value: null }, { label: 'Look for backups…', value: 'backups', primary: true }]);
     if (v === 'backups') await restoreFromBackups({ path: file, id: '', dir: null }, true);
-    return;
+    return false;
   }
   if (r.migratedFrom) {
     // Keep the pre-migration original before anything rewrites it.
@@ -535,16 +536,15 @@ async function openPath(file) {
       if (rec.ok) {
         await api.invoke('backup:create', { path: file, id: r.doc.meta.id, dir: r.doc.settings.backup.dir, json: r.raw });
         session.load(rec.doc, file, { dirty: true });
-        api.invoke('settings:set', { lastOpen: file });
-        return;
+        return true;
       }
     } else if (v === 'discard') {
       await api.invoke('recovery:clear', pending.id);
     }
   }
   session.load(r.doc, file);
-  api.invoke('settings:set', { lastOpen: file });
   if (r.warnings.length) dlg.alertBox('OPENED WITH WARNINGS', 'The document was opened, but some parts needed repair:', [...new Set(r.warnings)].join('\n'));
+  return true;
 }
 
 async function newDoc() {
@@ -554,7 +554,7 @@ async function newDoc() {
   if (!cfg) return;
   const doc = newDocument(cfg.name === 'Untitled Screenplay' ? '' : cfg.name.toUpperCase());
   doc.settings.backup = cfg.backup;
-  if (cfg.untitled) { session.load(doc, null); api.invoke('settings:set', { lastOpen: null }); return; }
+  if (cfg.untitled) { session.load(doc, null); return; }
   const file = await api.invoke('path:join', cfg.dir, cfg.name + '.stet');
   if (await api.invoke('doc:exists', file)) {
     await dlg.alertBox('FILE EXISTS', `${file} already exists. Pick another name, or open it with Ctrl+O.`);
@@ -887,7 +887,7 @@ dino.onDormant = (on) => {
 dino.setEnabled(settings.companion !== false);
 if (settings.panels?.notes) showPanel('notes', true);
 
-session.load(newDocument(), null); // (not newUntitled: that would forget the screenplay to reopen)
+session.newUntitled();
 renderGoal();
 input.focus();
 
@@ -897,14 +897,11 @@ if (info.sample) {
 } else if (!info.perf && !info.shot) {
   const recovered = await checkRecovery(true);
   if (!recovered) {
+    // A file STET was launched with, or else the last screenplay worked on: the newest entry in
+    // Open Recent that can still be opened.
     const pending = await api.invoke('app:pending-open');
-    // The screenplay open last time, or else the most recent one still on disk.
-    let target = pending || settings.lastOpen;
-    if (!target || !(await api.invoke('doc:exists', target))) {
-      target = null;
-      for (const r of settings.recent || []) if ((await Session.readFile(r.path)).ok) { target = r.path; break; } // (quietly skips any that can't be read)
-    }
-    if (target) await openPath(target);
+    if (pending) await openPath(pending);
+    else for (const r of settings.recent || []) if (await openPath(r.path, { quiet: true })) break;
   }
 }
 if (info.run) setTimeout(() => cmd.run(info.run), 300);
