@@ -8,7 +8,7 @@ STET is in beta, so version numbers stay below 1.0. Every version is saved as it
 
 ### Fixed
 
-- **Words typed by the performance probe are removed from your writing statistics.** Earlier versions counted the probe's typing as your writing: 1,526 words today. That met your daily goal and started a streak you hadn't earned. When this version starts, it removes every word recorded under the probe's document and rebuilds your streak from your own writing. A copy of the statistics as they were is kept first, as  in STET's data folder.
+- **Words typed by the performance probe are removed from your writing statistics.** Earlier versions counted the probe's typing as your writing: 1,526 words today. That met your daily goal and started a streak you hadn't earned. When this version starts, it removes every word recorded under the probe's document and rebuilds your streak from your own writing. A copy of the statistics as they were is kept first, as `stats-before-probe-cleanup-….json` in STET's data folder.
 - **The probe can never count toward your goals again.** Three separate checks now stop it:
   - the editor doesn't pass on the probe's typing;
   - the window refuses words for a probe document;
