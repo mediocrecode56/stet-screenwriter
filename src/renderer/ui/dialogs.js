@@ -423,7 +423,7 @@ export async function shortcutsDialog(cmds) {
   const extra = [
     ['Write', 'Next element / convert empty element', 'Enter'], ['Write', 'Line break inside element', 'Shift+Enter'],
     ['Write', 'Cycle element type', 'Tab / Shift+Tab'], ['Write', 'Start parenthetical in dialogue', '('],
-    ['Write', 'Accept suggestion', 'Enter / Tab'], ['Move', 'Word / paragraph', 'Ctrl+Arrows'], ['Move', 'Page', 'PageUp / PageDown'],
+    ['Move', 'Word / paragraph', 'Ctrl+Arrows'], ['Move', 'Page', 'PageUp / PageDown'],
     ['View', 'Zoom', 'Ctrl+Mouse wheel'],
   ].map(([a, b, c]) => h('tr', {}, h('td', {}, a), h('td', {}, b), h('td', {}, c)));
   return open({ title: 'KEYS', body: h('div', { class: 'body', style: 'width:640px' }, h('table', { class: 't' }, h('tbody', {}, ...extra, ...rows))), buttons: [{ label: 'Close', value: null, primary: true }] });

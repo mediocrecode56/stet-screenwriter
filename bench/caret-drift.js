@@ -31,7 +31,7 @@ if (process.argv[1] && process.argv[1].endsWith('caret-drift.js')) {
       await app.eval(`__stet.view.setZoom(${z})`);
       await app.eval(`__stet.editor.setSel(__stet.editor.caret); __stet.editor.selectAll(); __stet.editor.backspace(); __stet.editor.setType('action'); __stet.input.after()`);
       for (const n of [8, 30, 58]) {
-        await app.eval(`(() => { const ed = __stet.editor; ed.selectAll(); ed.backspace(); for (const ch of ${JSON.stringify('INT. COFFEE SHOP - NIGHT AND THE RAIN KEEPS FALLING ON THE ROOF'.slice(0, 58))}.slice(0, ${n})) ed.insertText(ch); __stet.input.after(true); })()`);
+        await app.eval(`(() => { const ed = __stet.editor; ed.selectAll(); ed.backspace(); for (const ch of ${JSON.stringify('INT. COFFEE SHOP - NIGHT AND THE RAIN KEEPS FALLING ON THE ROOF'.slice(0, 58))}.slice(0, ${n})) ed.insertText(ch); __stet.input.after(); })()`);
         await new Promise((r) => setTimeout(r, 60));
         const m = await measureDrift(app);
         res.push({ dpr, zoom: z, ...m });

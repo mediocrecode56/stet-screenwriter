@@ -10,7 +10,7 @@ import { App, sleep } from './cdp.js';
 let tmp, app;
 const styles = () => app.eval(`__stet.editor.block.marks.filter((m) => 'bius'.includes(m.k)).map((m) => m.k + m.s + '-' + m.e).sort()`);
 const pressed = () => app.eval(`[...document.querySelectorAll('#stbar .tb')].filter((b) => b.classList.contains('on')).map((b) => b.dataset.s).join('')`);
-const select = (a, f) => app.eval(`(() => { const { editor } = __stet; editor.setSel({ b: editor.caret.b, o: ${a} }, { b: editor.caret.b, o: ${f} }); __stet.input.after(false); })()`);
+const select = (a, f) => app.eval(`(() => { const { editor } = __stet; editor.setSel({ b: editor.caret.b, o: ${a} }, { b: editor.caret.b, o: ${f} }); __stet.input.after(); })()`);
 
 before(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-styles-'));

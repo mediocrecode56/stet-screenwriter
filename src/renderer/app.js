@@ -8,7 +8,6 @@ import { printHTML } from '../core/printhtml.js';
 import { View } from './view.js';
 import { Input } from './input.js';
 import { Session } from './session.js';
-import { Autocomplete } from './ui/autocomplete.js';
 import { ScenePanel, NotesPanel } from './ui/panels.js';
 import { setPanel, isOpen } from './ui/motion.js';
 import { Dino } from './dino.js';
@@ -34,19 +33,17 @@ $('brand').title = `STET ${info.version} β — click for the changelog`;
 const editor = new Editor([makeBlock('scene')]);
 const placeholderDoc = newDocument();
 const view = new View({ scroller: $('scroller'), content: $('content'), editor, doc: placeholderDoc });
-const ac = new Autocomplete($('ac'), editor, view);
 const session = new Session({ editor, appVersion: info.version, onState: renderSaveState, onLoaded: onDocLoaded });
 // Writing statistics are recorded only for real use, never for probes or screenshots.
 const writing = new WritingStats(api, await api.invoke('stats:get'), { enabled: !info.perf && !info.shot && !info.sample });
 
 const input = new Input({
-  textarea: $('input'), view, editor, autocomplete: ac,
+  textarea: $('input'), view, editor,
   onCommandKey: (e) => cmd.handleKey(e),
   onCommentClick: (id) => openNote(id, true),
 });
 input.onEscape = () => { if (!find.open) return false; find.close(); return true; };
 input.onZoom = () => { renderZoom(); persistZoom(); };
-ac.onAccepted = () => input.after(false);
 
 const jump = (p, center = false, end = null, glide = false) => {
   editor.setSel(p, end || p);
@@ -682,17 +679,17 @@ async function exportPdf(options = lastPrintOpts) {
 
 // ---- commands -----------------------------------------------------------------------------------
 
-const typeCmds = TYPES.map((t, i) => ({ id: 'type-' + t, cat: 'Element', label: TYPE_LABEL[t], keys: `Ctrl+${i + 1}`, run: () => { editor.setType(t); input.after(false); input.focus(); } }));
+const typeCmds = TYPES.map((t, i) => ({ id: 'type-' + t, cat: 'Element', label: TYPE_LABEL[t], keys: `Ctrl+${i + 1}`, run: () => { editor.setType(t); input.after(); input.focus(); } }));
 // A highlight with no selection covers the whole paragraph.
 function highlight(color) {
   if (!editor.hasSelection()) editor.setSel(pos(editor.caret.b, 0), pos(editor.caret.b, editor.block.text.length));
-  editor.highlight(color); input.after(false); input.focus();
+  editor.highlight(color); input.after(); input.focus();
 }
 const hlCmds = HIGHLIGHT_COLORS.map((c, i) => ({ id: 'hl-' + c, cat: 'Format', label: `Highlight ${c}`, keys: `Alt+${i + 1}`, run: () => highlight(c) }));
 // With a selection a style toggles across it; without one it applies to what is typed next.
 const styleCmds = STYLE_CMDS.map((s) => ({
   id: 'style-' + s.k, cat: 'Format', label: s.label, keys: s.keys,
-  run: () => { editor.toggleStyle(s.k); input.after(false); input.focus(); },
+  run: () => { editor.toggleStyle(s.k); input.after(); input.focus(); },
 }));
 
 // The File menu's hover list of recent screenplays: one click opens one; the full Open Recent

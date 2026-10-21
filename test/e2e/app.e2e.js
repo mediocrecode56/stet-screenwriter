@@ -66,13 +66,11 @@ test('Ctrl+number changes element type; undo/redo via keyboard', async () => {
   await app.key('Ctrl+Z');
 });
 
-test('character autocomplete accepts with Enter', async () => {
+test('a character cue, then dialogue after Enter (no suggestion popup)', async () => {
   await app.key('End');
   await app.key('Enter');
   await app.key('Tab');
-  await app.type('ma');
-  assert.equal(await app.eval('!document.getElementById("ac").hidden'), true);
-  await app.key('Enter');
+  await app.type('MARA');
   assert.equal(await app.eval('__stet.editor.block.text'), 'MARA');
   await app.key('Enter');
   await app.type('Mara looks at Teo.');

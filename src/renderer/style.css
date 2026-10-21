@@ -201,7 +201,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #content { position: relative; margin: 0 auto; }
 /* Script text is laid out on a character grid: nothing from the interface
    typography (letter-spacing, kerning, ligatures) may change glyph advances. */
-.page, .tp-f, #input, #ac, .sheet, .metric-probe {
+.page, .tp-f, #input, .sheet, .metric-probe {
   letter-spacing: 0; word-spacing: 0; font-kerning: none; font-variant-ligatures: none;
   font-feature-settings: "kern" 0, "liga" 0, "calt" 0; text-rendering: optimizeSpeed;
 }
@@ -254,10 +254,6 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 }
 #input.composing { opacity: 1; width: auto; min-width: 40px; box-shadow: 0 0 0 1px var(--ink-3); }
 
-/* autocomplete */
-#ac { position: fixed; z-index: 40; background: var(--page); border: 1px solid var(--rule-strong); min-width: 160px; font-family: var(--script); box-shadow: 3px 3px 0 var(--rule); }
-#ac .it { padding: 2px 8px; white-space: pre; cursor: default; }
-#ac .it.on { background: var(--hover-on); color: var(--ink); }
 
 /* ---- status bar ------------------------------------------------------ */
 #status { height: 24px; flex: none; display: flex; align-items: stretch; border-top: 1px solid var(--rule); background: var(--bar); color: var(--ink-2); padding: 0 4px; }

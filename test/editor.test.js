@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { Editor, pos } from '../src/core/editor.js';
 import { makeBlock } from '../src/core/model.js';
 import { countWords } from '../src/core/text.js';
-import { suggest } from '../src/core/smart.js';
 
 const types = (ed) => ed.blocks.map((b) => b.type);
 const texts = (ed) => ed.blocks.map((b) => b.text);
@@ -183,21 +182,6 @@ test('first appearance of a character name is capitalized once', () => {
   ed2.setSel(pos(1, 0));
   typeStr(ed2, 'you will see ');
   assert.equal(ed2.blocks[1].text, 'you will see ', 'lowercase words are never touched');
-});
-
-test('autocomplete suggests prefixes, locations, times, names and extensions', () => {
-  const blocks = [makeBlock('scene', 'INT. COFFEE SHOP - DAY'), makeBlock('scene', 'I')];
-  assert.equal(suggest(blocks, 1, 1), null, 'no INT./EXT. prompt while typing the prefix');
-  blocks[1] = makeBlock('scene', '1. ITNRO');
-  assert.equal(suggest(blocks, 1, 8), null, 'free-form headings get no prompt');
-  blocks[1] = makeBlock('scene', 'EXT. CO');
-  assert.deepEqual(suggest(blocks, 1, 7).items, ['COFFEE SHOP']);
-  blocks[1] = makeBlock('scene', 'EXT. COFFEE SHOP - N');
-  assert.deepEqual(suggest(blocks, 1, 20).items, ['NIGHT']);
-  const c = [makeBlock('character', 'MA')];
-  assert.deepEqual(suggest(c, 0, 2, ['MARA', 'TEO']).items, ['MARA']);
-  c[0] = makeBlock('character', 'MARA (V');
-  assert.deepEqual(suggest(c, 0, 7, []).items, ['V.O.)']);
 });
 
 test('countWords agrees with the independent reference on random and real-world text', async () => {

@@ -9,11 +9,10 @@ import { toPlainText, parsePlainText } from '../core/plaintext.js';
 import { WheelZoom, stepZoom } from '../core/wheelzoom.js';
 
 export class Input {
-  constructor({ textarea, view, editor, autocomplete, onCommandKey, onCommentClick }) {
+  constructor({ textarea, view, editor, onCommandKey, onCommentClick }) {
     this.ta = textarea;
     this.view = view;
     this.ed = editor;
-    this.ac = autocomplete;
     this.onCommandKey = onCommandKey;
     this.onCommentClick = onCommentClick;
     this.goalCol = null;
@@ -35,7 +34,7 @@ export class Input {
     ta.addEventListener('cut', (e) => this.copy(e, true));
     ta.addEventListener('paste', (e) => this.paste(e));
     ta.addEventListener('focus', () => { view.focused = true; view.schedule(); });
-    ta.addEventListener('blur', () => { view.focused = false; view.schedule(); this.ac.hide(); });
+    ta.addEventListener('blur', () => { view.focused = false; view.schedule(); });
 
     const sc = view.scroller;
     sc.addEventListener('mousedown', (e) => this.mousedown(e));
@@ -75,16 +74,15 @@ export class Input {
   typed(text) {
     this.goalCol = null;
     this.ed.insertText(text);
-    this.after(true);
+    this.after();
   }
 
-  /** Common post-edit work: reveal caret, refresh autocomplete. */
-  after(edited = false) {
+  /** Common post-edit work: lay out, repaint and reveal the caret. */
+  after() {
     this.view.relayout();
     this.view.frame();
     this.view.revealCaret();
     this.placeTextarea();
-    if (edited) this.ac.update(); else this.ac.hide();
   }
 
   // ---- keyboard --------------------------------------------------------------------
@@ -94,13 +92,6 @@ export class Input {
     const ed = this.ed;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key;
-
-    if (this.ac.visible) {
-      if (k === 'ArrowDown') { this.ac.move(1); e.preventDefault(); return; }
-      if (k === 'ArrowUp') { this.ac.move(-1); e.preventDefault(); return; }
-      if ((k === 'Enter' || k === 'Tab') && !e.shiftKey && !mod) { this.ac.accept(); this.after(false); e.preventDefault(); return; }
-      if (k === 'Escape') { this.ac.hide(true); e.preventDefault(); return; }
-    }
 
     // Commands (save, element types, find, ...) first.
     if (this.onCommandKey(e)) { e.preventDefault(); return; }
@@ -137,15 +128,15 @@ export class Input {
       }
       case 'PageUp':
       case 'PageDown': move = this.pageMove(k === 'PageUp' ? -1 : 1); keepGoal = true; break;
-      case 'Backspace': ed.backspace(word); this.goalCol = null; this.after(true); e.preventDefault(); return;
-      case 'Delete': ed.deleteForward(word); this.goalCol = null; this.after(true); e.preventDefault(); return;
+      case 'Backspace': ed.backspace(word); this.goalCol = null; this.after(); e.preventDefault(); return;
+      case 'Delete': ed.deleteForward(word); this.goalCol = null; this.after(); e.preventDefault(); return;
       case 'Enter':
         if (mod) return;
         if (ext) ed.softBreak(); else ed.enter();
-        this.goalCol = null; this.after(true); e.preventDefault(); return;
+        this.goalCol = null; this.after(); e.preventDefault(); return;
       case 'Tab':
         if (mod) return;
-        ed.tab(ext); this.after(false); e.preventDefault(); return;
+        ed.tab(ext); this.after(); e.preventDefault(); return;
       case 'Escape':
         if (this.onEscape && this.onEscape()) { e.preventDefault(); return; }
         if (ed.hasSelection()) { ed.setSel(ed.caret); this.after(); }
@@ -160,7 +151,7 @@ export class Input {
     if (!keepGoal) this.goalCol = null;
     if (move) {
       ed.setSel(ext ? ed.sel.a : move, move);
-      this.after(false);
+      this.after();
     }
   }
 
@@ -211,7 +202,7 @@ export class Input {
     this.lastMouse = e;
     clearInterval(this.autoScroll);
     this.autoScroll = setInterval(() => this.edgeScroll(), 30);
-    this.after(false);
+    this.after();
   }
 
   mousemove(e) {
@@ -266,7 +257,7 @@ export class Input {
     e.clipboardData.setData('text/plain', text);
     try { e.clipboardData.setData('application/x-stet-fragment', JSON.stringify(frag)); } catch { /* custom formats unsupported */ }
     this.lastCopy = { text, frag };
-    if (cut) { ed.backspace(); this.after(true); }
+    if (cut) { ed.backspace(); this.after(); }
   }
 
   paste(e) {
@@ -286,7 +277,7 @@ export class Input {
       if (frag.length === 1 && !/\n\s*\n/.test(norm)) frag[0].type = this.ed.block.type;
     }
     this.ed.paste(frag);
-    this.after(true);
+    this.after();
   }
 }
 

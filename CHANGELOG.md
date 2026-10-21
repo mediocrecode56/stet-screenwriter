@@ -4,6 +4,28 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.18.3 — 21 October 2026
+
+### Removed
+
+- **The autocomplete popup is gone for good.** It used to pop up under the cursor on scene headings, character names and transitions, offering things like INT./EXT., locations already used, names, (V.O.) and CUT TO:.
+  - **Now:** nothing pops up while you write. Enter, Tab, the arrow keys and Escape always do their normal job, with no list taking them over.
+  - **Unchanged:** names are still capitalised the first time they appear in action, as before.
+  - **Keyboard Shortcuts:** the "Accept suggestion" entry is gone.
+
+### For the technically curious
+
+- **Code removed:**
+  - the popup (`ui/autocomplete.js`), and the module that worked out what to suggest (`core/smart.js`);
+  - the editor's `complete()` step;
+  - the popup's element in the page, and its styles;
+  - its key handling in the editor input.
+- **`Input.after()` simplified:** it no longer takes the flag that only refreshed the popup. Every call is updated, including in the benchmarks and tests.
+- **Tests:**
+  - the unit test of the suggestions is removed;
+  - the end-to-end test that accepted a name from the popup now types the name itself and checks that Enter moves on to dialogue;
+  - all 166 unit tests pass, and so do the app and styles end-to-end tests.
+
 ## 0.18.2 — 21 October 2026
 
 ### Improved

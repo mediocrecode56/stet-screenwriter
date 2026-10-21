@@ -542,15 +542,6 @@ export class Editor {
     }, { close: true });
   }
 
-  /** Replace [from, caret) of the current block with `text` (autocomplete). */
-  complete(from, text) {
-    const p = this.caret;
-    this.edit('complete', () => {
-      this._deleteRange(pos(p.b, from), p);
-      this._insertAt(pos(p.b, from), text);
-    }, { close: true });
-  }
-
   // ---- marks -------------------------------------------------------------------
 
   /** Apply (or with null, clear) a highlight across the selection. */

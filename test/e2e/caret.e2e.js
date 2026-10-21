@@ -40,7 +40,7 @@ for (const dpr of [1, 1.5]) {
   test(`caret, selection and clicks align with glyphs at display scale ${dpr}`, async () => {
     const app = await App.launch({ userData: path.join(tmp, 'ud' + dpr), args: [`--force-device-scale-factor=${dpr}`] });
     try {
-      await app.eval(`(() => { const ed = __stet.editor; ed.setType('action'); for (const ch of ${JSON.stringify(LINE)}) ed.insertText(ch); __stet.input.after(true); })()`);
+      await app.eval(`(() => { const ed = __stet.editor; ed.setType('action'); for (const ch of ${JSON.stringify(LINE)}) ed.insertText(ch); __stet.input.after(); })()`);
       for (const z of [1, 1.25, 0.8]) {
         await app.eval(`__stet.view.setZoom(${z})`);
         const m = await probe(app);

@@ -60,7 +60,7 @@ export async function runPerfProbe({ editor, view, input, session, api, report }
     const en = [];
     for (let k = 0; k < 40; k++) {
       const t0 = performance.now();
-      editor.enter(); input.after(true);
+      editor.enter(); input.after();
       en.push(performance.now() - t0);
       await nextFrame();
     }
