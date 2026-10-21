@@ -90,8 +90,7 @@ function scheduleFields(sched) {
   const hint = h('div', { class: 'hint' });
   const upd = () => {
     const d = dark.value(), l = light.value();
-    hint.textContent = d === l ? 'Both times are the same: the schedule would stay light. Pick different times.'
-      : `Dark from ${timeLabel(d)} until ${timeLabel(l)}${parseTime(d) > parseTime(l) ? ' the next morning' : ''}; light the rest of the day. Uses this computer's clock and time zone. Picking LIGHT or DARK by hand turns the schedule off.`;
+    hint.textContent = d === l ? 'Both times are the same: the schedule would stay light. Pick different times.' : '';
   };
   for (const x of [...dark.els, ...light.els]) x.addEventListener('change', upd);
   upd();
@@ -195,8 +194,7 @@ export async function recoveryDialog(items) {
   }));
   const body = h('div', { class: 'body' },
     h('p', {}, 'STET did not close cleanly. These documents have changes that were not saved to their files:'),
-    h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'document'), h('th', {}, 'file'), h('th', {}, 'last change'))), tbody),
-    h('p', { class: 'hint' }, 'Restore opens the recovered text. Nothing is overwritten until it is saved.'));
+    h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'document'), h('th', {}, 'file'), h('th', {}, 'last change'))), tbody));
   const v = await open({
     title: 'RECOVER WORK', body,
     buttons: [{ label: 'Discard', value: 'discard' }, { label: 'Later', value: 'later' }, { label: 'Restore', value: 'restore', primary: true }],
@@ -379,7 +377,7 @@ export async function previewDialog(doc, initial) {
   range.addEventListener('input', render);
   const body = h('div', { class: 'body' },
     h('div', { class: 'opts' },
-      h('div', { class: 'field' }, h('label', {}, 'Pages'), range, h('div', { class: 'hint' }, 'e.g. 1-5, 9, 12-  · title page is not numbered')),
+      h('div', { class: 'field' }, h('label', {}, 'Pages'), range),
       h('label', { class: 'chk' }, tp, 'title page'),
       h('label', { class: 'chk' }, hl, 'highlights'),
       h('label', { class: 'chk' }, cm, 'notes (marked + listed at end)'),
@@ -482,8 +480,7 @@ export async function recentDialog(api) {
     }));
     const table = h('table', { class: 't recent-t' },
       h('colgroup', {}, h('col', { class: 'c-name' }), h('col', {}), h('col', { class: 'c-time' }), h('col', { class: 'c-act' })), tbody);
-    body.replaceChildren(recent.length ? table : h('div', { class: 'empty' }, 'No recent documents.'),
-      h('p', { class: 'hint', style: 'margin:10px 0 0' }, 'The folder shows the file in its folder. × removes an entry from this list only. The bin icon moves the file itself to the Recycle Bin.'));
+    body.replaceChildren(recent.length ? table : h('div', { class: 'empty' }, 'No recent documents.'));
     if (openBtn) openBtn.disabled = !chosen;
   };
   const show = () => {

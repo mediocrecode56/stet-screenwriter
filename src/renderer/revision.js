@@ -265,7 +265,7 @@ export class Revision {
   async addToDictionary(id, word) {
     const f = this.byId(id);
     if (!f || f.decision) return;
-    const v = word ?? await dlg.prompt('ADD TO DICTIONARY', 'Word or phrase', (f.original.trim() || f.shownOriginal.trim()), 'Saved for every screenplay. Claude will not flag it again.');
+    const v = word ?? await dlg.prompt('ADD TO DICTIONARY', 'Word or phrase', (f.original.trim() || f.shownOriginal.trim()));
     if (!v || !v.trim()) return;
     const dict = [...(this.getSettings().dictionary || [])];
     if (!dict.some((d) => normalize(d) === normalize(v))) dict.push(v.trim());
@@ -480,8 +480,7 @@ export async function keyDialog(lead = '') {
       lead ? dlg.h('p', {}, lead) : null,
       dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'Connect through'), choice),
       where,
-      dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key (optional)'), input),
-      dlg.h('p', { class: 'hint' }, 'A key stays in this app\'s main process and is only sent to the Anthropic API when you start a review. STET never switches between your sign-in and a key by itself: if the chosen one fails, the review says so.')),
+      dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key (optional)'), input)),
     buttons: [
       ...(st.key === 'saved' ? [{ label: 'Remove key', value: 'clear' }] : []),
       { label: 'Check', value: 'check' },

@@ -4,6 +4,20 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.19.3 — 21 October 2026
+
+### Changed
+
+- **No more explanatory notes in windows.** Open Recent is now just the list and its buttons; each icon still names itself when you point at it. The same kind of note is gone from:
+  - the recovery window;
+  - the performance results;
+  - the print page range;
+  - Add to Dictionary;
+  - the theme schedule (which still warns you if both times are the same);
+  - the Claude connection window.
+
+  Notes that warn or ask for consent stay: what a Claude review sends and what it costs, that a new review replaces your current suggestions, and that resetting statistics keeps a copy.
+
 ## 0.19.2 — 21 October 2026
 
 ### Fixed

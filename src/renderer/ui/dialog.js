@@ -90,11 +90,11 @@ export function choose(title, message, choices) {
   return open({ title, body: h('div', { class: 'body' }, h('p', {}, message)), buttons: choices });
 }
 
-export function prompt(title, label, value = '', hint = '') {
+export function prompt(title, label, value = '') {
   const input = h('input', { type: 'text', value });
   return open({
     title,
-    body: h('div', { class: 'body' }, h('div', { class: 'field' }, h('label', {}, label), input), hint ? h('div', { class: 'hint' }, hint) : null),
+    body: h('div', { class: 'body' }, h('div', { class: 'field' }, h('label', {}, label), input)),
     buttons: [{ label: 'Cancel', value: null }, { label: 'OK', value: () => input.value, primary: true }],
     init: () => setTimeout(() => input.select(), 0),
   });
