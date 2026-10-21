@@ -45,33 +45,39 @@ is still nothing extra to install.
 
 ### Releases and the installer
 
-Releases are built on GitHub, not on a PC. Pushing a version tag runs
-`.github/workflows/release.yml` on a Windows runner:
+Releases are built on GitHub, not on a PC, by `.github/workflows/release.yml`
+on a Windows runner. To publish a version, first make sure `package.json` has
+the new version, `CHANGELOG.md` has a section for it and its tag `vX.Y.Z`
+exists. Then either push the tag:
 
 ```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The tag must match `package.json` and `CHANGELOG.md` must have a section for that
-version. The workflow runs the unit tests, builds the tag with
-`scripts/build-exe.js`, wraps the result in an installer with Inno Setup
-(`scripts/installer/STET.iss`) and publishes a GitHub Release with that
-version's changelog section and two files:
+or, without git, open the repository on GitHub → **Actions** → **Release** →
+**Run workflow** (leave the box empty for the version in `package.json`).
 
-- `STET-Setup.exe`: the installer. Per user, no administrator needed; Start menu
+The workflow runs the unit tests, builds the tag with `scripts/build-exe.js`,
+and publishes a GitHub Release with that version's changelog section and two
+files:
+
+- `STET-Windows.zip`: the single-file `STET.exe` described above. Unzip and
+  double-click; nothing to install.
+- `STET-Setup.exe`: an installer made with Inno Setup
+  (`scripts/installer/STET.iss`). Per user, no administrator needed; Start menu
   and optional desktop shortcut, `.stet` files open in STET, uninstall from
   Settings > Apps, a newer installer updates in place. It never touches
   screenplays or `%APPDATA%\STET`.
-- `STET-Portable.exe`: the single-file program described above.
 
 The files keep the same names in every release, so
-`https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Setup.exe`
-always downloads the newest installer (the README's download link).
+`https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Windows.zip`
+always downloads the newest version (the README's download link). Running the
+workflow again for a version that already has a release replaces its files.
 
 The programs are not code-signed, so Windows SmartScreen warns on first run
-("Windows protected your PC" → *More info* → *Run anyway*). Signing the installer
-and STET.exe in the workflow would remove that warning.
+("Windows protected your PC" → *More info* → *Run anyway*). Signing them in the
+workflow would remove that warning.
 
 ### Tests and measurements
 

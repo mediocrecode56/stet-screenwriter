@@ -4,24 +4,28 @@ A calm, simple place to write your screenplay.
 
 ![STET with a screenplay open](docs/images/writing.png)
 
-### [Download STET for Windows](https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Setup.exe)
+### [Download STET for Windows](https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Windows.zip)
 
-Free. For Windows 10 and 11.
+Free. For Windows 10 and 11. Nothing to install.
 
-## Install
+## Get started
 
-1. Download **STET-Setup.exe** with the link above.
-2. Open it. Windows may say *"Windows protected your PC"* because STET is a new
-   app it doesn't know yet. Click **More info**, then **Run anyway**.
-3. Click **Install**. STET opens when it's done.
+1. Download **STET-Windows.zip** with the link above.
+2. Open the zip and drag **STET.exe** to your Desktop, or any folder you like.
+3. Double-click **STET.exe**. The very first start takes a few seconds; after
+   that it opens straight away.
 
-STET is now in your Start menu, and on your desktop if you chose that. Your
-screenplays open with a double-click.
+Windows may say *"Windows protected your PC"* because STET is a new app it
+doesn't know yet. Click **More info**, then **Run anyway**. You only need to do
+this once.
 
-**Updating:** download the newest STET-Setup.exe and open it. Your screenplays
-and settings stay just as they are.
+**Updating:** download the newest zip and put its STET.exe in place of the old
+one. Your screenplays and settings stay just as they are.
 
-**Removing:** Settings → Apps → STET → Uninstall. Your screenplays stay.
+**Prefer a regular install?** Download the
+[installer](https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Setup.exe)
+instead. It adds STET to your Start menu, lets you open screenplays with a
+double-click, and can be removed from Settings → Apps.
 
 ## What it's like
 

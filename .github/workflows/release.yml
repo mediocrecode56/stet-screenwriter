@@ -1,17 +1,28 @@
-# Build the Windows app for a version tag and publish it as a GitHub Release.
+# Build the Windows app for a version and publish it as a GitHub Release.
 #
-# Triggered by pushing a tag vX.Y.Z (e.g. `git tag v0.19.5 && git push origin v0.19.5`).
-# Produces a release named after the tag, with that version's CHANGELOG.md section
-# as its notes and two downloads, named the same in every release so
-# releases/latest/download/STET-Setup.exe always gets the newest one:
-#   STET-Setup.exe      the installer (scripts/installer/STET.iss)
-#   STET-Portable.exe   the single-file program, nothing to install
+# Two ways to start it:
+#   - push a tag vX.Y.Z (e.g. `git tag v0.19.5 && git push origin v0.19.5`);
+#   - on GitHub: Actions → Release → Run workflow. Leave the box empty to release
+#     the version in package.json (its tag vX.Y.Z must already exist).
+#
+# Produces a release named after the version, with its CHANGELOG.md section as the
+# notes and two downloads, named the same in every release so
+# releases/latest/download/<name> always gets the newest one:
+#   STET-Windows.zip   STET.exe, the portable single-file program: unzip and double-click
+#   STET-Setup.exe     the installer (scripts/installer/STET.iss)
+# Running it again for a version that already has a release replaces its files.
 
 name: Release
 
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to release, e.g. v0.19.4 (empty: the version in package.json)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -22,8 +33,6 @@ jobs:
     defaults:
       run:
         shell: pwsh
-    env:
-      TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,20 +44,27 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Which version
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } elseif ($env:INPUT_TAG) { $env:INPUT_TAG.Trim() } else { "v$version" }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Not a version tag: $tag" }
+          if ($tag -ne "v$version") { throw "Tag $tag does not match package.json version $version" }
+          git rev-parse --verify --quiet "refs/tags/$tag" | Out-Null
+          if ($LASTEXITCODE) { throw "There is no tag $tag yet" }
+          "TAG=$tag" >> $env:GITHUB_ENV
+
       - run: npm ci
 
       - run: npm test
-
-      - name: Check the tag matches package.json
-        run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match package.json version $version" }
 
       - name: Release notes from CHANGELOG.md
         shell: bash # a plain byte redirect, so the notes stay UTF-8
         run: |
           {
-            echo '**To install STET, download STET-Setup.exe below and open it.**'
+            echo '**To get STET, download STET-Windows.zip below, unzip it and double-click STET.exe.**'
             echo
             node scripts/release-notes.js "$TAG"
           } > release-notes.md
@@ -59,12 +75,12 @@ jobs:
           STET_EXE_DIR: ${{ runner.temp }}\stet-exe
         run: node scripts/build-exe.js $env:TAG
 
-      - name: Check the single-file STET.exe
+      - name: Check STET.exe and zip it
         run: |
           $exe = Join-Path $env:RUNNER_TEMP 'stet-exe\STET.exe'
           $built = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
           if ("v$built" -ne $env:TAG) { throw "STET.exe reports version $built, expected $env:TAG (is $env:TAG the newest tag?)" }
-          Copy-Item $exe STET-Portable.exe
+          Compress-Archive -LiteralPath $exe -DestinationPath STET-Windows.zip -CompressionLevel Optimal
 
       - name: Build the installer
         run: |
@@ -78,4 +94,12 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create $env:TAG --verify-tag --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Setup.exe STET-Portable.exe
+        run: |
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release edit $env:TAG --notes-file release-notes.md
+            gh release upload $env:TAG STET-Windows.zip STET-Setup.exe --clobber
+          } else {
+            gh release create $env:TAG --verify-tag --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe
+          }
+          if ($LASTEXITCODE) { throw "Publishing the release failed ($LASTEXITCODE)" }
