@@ -1,0 +1,69 @@
+# Build the Windows app for a version tag and publish it as a GitHub Release.
+#
+# Triggered by pushing a tag vX.Y.Z (e.g. `git tag v0.19.5 && git push origin v0.19.5`).
+# Produces a release named after the tag, with that version's CHANGELOG.md section
+# as its notes and two downloads:
+#   STET.exe                       the single-file program (nothing to install)
+#   STET-vX.Y.Z-win32-x64.zip      the same version as a plain folder
+
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # build-exe.js builds from the tag via a git worktree
+          fetch-tags: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Check the tag matches package.json
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match package.json version $version" }
+
+      - name: Release notes from CHANGELOG.md
+        shell: bash # a plain byte redirect, so the notes stay UTF-8
+        run: node scripts/release-notes.js "$TAG" > release-notes.md
+
+      # Called with node rather than `npm run exe --`: PowerShell's npm shim drops the `--`.
+      - name: Build STET.exe
+        env:
+          STET_EXE_DIR: ${{ runner.temp }}\stet-exe
+        run: node scripts/build-exe.js $env:TAG
+
+      - name: Check and package the build
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'stet-exe\STET.exe'
+          $built = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
+          if ("v$built" -ne $env:TAG) { throw "STET.exe reports version $built, expected $env:TAG (is $env:TAG the newest tag?)" }
+          Copy-Item $exe STET.exe
+          $folder = "dist\STET-$env:TAG-win32-x64"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $folder), "$PWD\STET-$env:TAG-win32-x64.zip", [IO.Compression.CompressionLevel]::Optimal, $true)
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create $env:TAG --verify-tag --title $env:TAG --notes-file release-notes.md STET.exe "STET-$env:TAG-win32-x64.zip"

@@ -6,6 +6,14 @@ formatting and about never losing your work.
 
 Version 0.6.1 β.
 
+## Download
+
+Windows: download **STET.exe** from the
+[latest release](https://github.com/mediocrecode56/stet-screenwriter/releases/latest)
+and double-click it. It is a single file with nothing to install. Every release
+also has a zip of the same version as a plain folder, and its notes say what
+changed.
+
 ## Run it
 
 Requirements: **Node.js 20+** (tested with 24.18) and npm. Nothing else — no

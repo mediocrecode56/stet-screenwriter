@@ -97,9 +97,13 @@ async function updateMainExe(tag, rebuilt) {
   const version = tag.replace(/^v/, '');
   const build = path.join(DIST, `STET-${tag}-win32-x64`);
   if (!fs.existsSync(path.join(build, 'STET.exe'))) throw new Error(`the newest version (${tag}) has no successful build in dist/`);
-  const docs = ps("[Environment]::GetFolderPath('MyDocuments')");
-  if (!docs) throw new Error('could not find the Documents folder');
-  const destDir = path.join(docs, 'STET');
+  // STET_EXE_DIR (set by the release workflow) puts it elsewhere; otherwise Documents\STET.
+  let destDir = process.env.STET_EXE_DIR;
+  if (!destDir) {
+    const docs = ps("[Environment]::GetFolderPath('MyDocuments')");
+    if (!docs) throw new Error('could not find the Documents folder');
+    destDir = path.join(docs, 'STET');
+  }
   fs.mkdirSync(destDir, { recursive: true });
   const dest = path.join(destDir, 'STET.exe');
   const current = fs.existsSync(dest) ? ps(`(Get-Item -LiteralPath '${dest.replace(/'/g, "''")}').VersionInfo.ProductVersion`) : '';
