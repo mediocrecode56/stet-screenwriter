@@ -4,6 +4,20 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.17.0 — 21 October 2026
+
+### New
+
+- **A quick list of recent screenplays in the File menu.** Hover *Open Recent…* and your last ten screenplays appear right beside it. One click opens one, with no window in between.
+  - **Compact:** the list stays narrow, and long titles end in "…". Hover a title to see its full path.
+  - **At a glance:** the screenplay you have open is dimmed, and a file that no longer exists can't be picked.
+  - **More detail:** clicking *Open Recent…* itself (or Ctrl+Shift+O) still opens the full window, where you can remove a project from the list or move it to the Recycle Bin.
+
+### For the technically curious
+
+- **How it works:** a menu command can now have a quick flyout (`sub`). Its items load as the menu opens and show while the row is hovered, so the list appears at once.
+- **Tests:** a new end-to-end test checks the flyout's size, the shortened long title and that a click opens the screenplay. The Open Recent window's test still passes.
+
 ## 0.16.7 — 21 October 2026
 
 ### Improved

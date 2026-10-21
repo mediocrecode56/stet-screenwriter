@@ -653,10 +653,20 @@ const styleCmds = STYLE_CMDS.map((s) => ({
   run: () => { editor.toggleStyle(s.k); input.after(false); input.focus(); },
 }));
 
+// The File menu's hover list of recent screenplays: one click opens one; the full Open Recent
+// window (dismiss, move to bin, details) is still the row itself.
+async function quickRecent() {
+  const list = await api.invoke('recent:list');
+  return list.slice(0, 10).map((r) => ({
+    label: r.name, title: r.exists ? r.path : r.path + ' (not found)', disabled: !r.exists, current: r.path === session.path,
+    run: () => { if (r.path !== session.path) openPath(r.path); },
+  }));
+}
+
 cmd.register([
   { id: 'new', cat: 'File', label: 'New Screenplay…', keys: 'Ctrl+N', global: true, run: newDoc },
   { id: 'open', cat: 'File', label: 'Open…', keys: 'Ctrl+O', global: true, run: async () => { const f = await api.invoke('doc:open-dialog'); if (f) openPath(f); } },
-  { id: 'recent', cat: 'File', label: 'Open Recent…', keys: 'Ctrl+Shift+O', global: true, run: async () => {
+  { id: 'recent', cat: 'File', label: 'Open Recent…', keys: 'Ctrl+Shift+O', global: true, sub: quickRecent, run: async () => {
     const f = await dialogs.recentDialog({
       list: () => api.invoke('recent:list'),
       dismiss: (p) => api.invoke('recent:dismiss', p),

@@ -119,6 +119,12 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 .mi:hover .k, .mi.active .k { color: inherit; opacity: .7; }
 .mi.disabled { color: var(--ink-3); pointer-events: none; }
 .msep { height: 1px; background: var(--rule); margin: 3px 0; }
+/* A menu row with a quick flyout (Open Recent), and the flyout: short, long titles end in "…". */
+.mi.has-sub .k::after { content: '›'; margin-left: 10px; }
+.msub { position: absolute; min-width: 160px; max-width: 260px; }
+.msub .mi-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.msub .mi.cur { color: var(--ink-3); }
+.msub .mi.cur:hover { color: var(--inv-fg); }
 
 /* ---- element bar ----------------------------------------------------- */
 #elbar { height: 30px; flex: none; display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); background: var(--bar); padding: 0 6px; }

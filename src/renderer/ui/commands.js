@@ -92,8 +92,9 @@ function showMenu(btn, items) {
     if (!c) continue;
     const disabled = c.enabled && !c.enabled();
     const label = typeof c.label === 'function' ? c.label() : c.label;
-    const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
+    const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') + (c.sub ? ' has-sub' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
     row.addEventListener('mouseup', () => { closeMenu(); if (c.run) setTimeout(() => (c.id ? run(c.id) : c.run()), 0); });
+    if (c.sub && !disabled) quickSub(el, row, c.sub()); else row.addEventListener('mouseenter', () => hideSub(el));
     el.appendChild(row);
   }
   document.body.appendChild(el);
@@ -104,6 +105,33 @@ function showMenu(btn, items) {
   openMenu = { btn, el };
   if (!switching) arrive(el, { dist: 3, dur: DUR_FAST });
 }
+
+// A quick flyout beside a menu row (Open Recent): its items load as the menu opens and show
+// while the row is hovered. Clicking the row itself still runs its command.
+function quickSub(menu, row, load) {
+  let items = null;
+  load.then((list) => { items = list; if (row.matches(':hover')) showSub(menu, row, items); }, () => {});
+  row.addEventListener('mouseenter', () => { if (items) showSub(menu, row, items); });
+}
+
+function showSub(menu, row, items) {
+  hideSub(menu);
+  if (!items.length) return;
+  const sub = h('div', { class: 'menu msub' });
+  for (const it of items) {
+    const r = h('div', { class: 'mi' + (it.disabled ? ' disabled' : '') + (it.current ? ' cur' : ''), title: it.title || '' }, h('span', { class: 'mi-t' }, it.label));
+    r.addEventListener('mouseup', (e) => { e.stopPropagation(); closeMenu(); setTimeout(it.run, 0); });
+    sub.appendChild(r);
+  }
+  menu.appendChild(sub);
+  // Inside the menu (so a click in it is a click in the menu), placed beside it level with the
+  // row; on the left instead if it would leave the window.
+  const m = menu.getBoundingClientRect();
+  sub.style.left = (m.right + sub.offsetWidth > window.innerWidth ? -sub.offsetWidth : m.width - 1) + 'px';
+  sub.style.top = Math.min(row.offsetTop - 4, window.innerHeight - m.top - sub.offsetHeight) + 'px';
+}
+
+function hideSub(menu) { const s = menu.querySelector('.msub'); if (s) s.remove(); }
 
 export function closeMenu(animated = true) {
   if (!openMenu) return;

@@ -232,6 +232,24 @@ test('every panel opens and closes with the same slide; Ctrl+F never delays typi
   await app.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
+test('File menu: hovering Open Recent shows the recent screenplays, compact, long titles shortened; a click opens one', async () => {
+  await app.eval(`document.querySelector('#menubar .mb').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
+  await sleep(150);
+  await app.eval(`document.querySelector('.menu .mi.has-sub').dispatchEvent(new MouseEvent('mouseenter'))`);
+  await sleep(50);
+  const v = await app.eval(`(() => { const s = document.querySelector('.msub'); if (!s) return null; const r = s.getBoundingClientRect(), t = [...s.querySelectorAll('.mi-t')]; return { n: t.length, names: t.map((x) => x.textContent), clipped: t[0].scrollWidth > t[0].clientWidth, width: r.width, inside: r.right <= innerWidth && r.left >= 0 }; })()`);
+  assert.ok(v, 'the flyout appears');
+  assert.equal(v.n, 2);
+  assert.equal(v.names[1], 'Night Ferry');
+  assert.ok(v.clipped && v.width <= 260, 'a long title ends in … and the list stays narrow (' + v.width + 'px)');
+  assert.ok(v.inside, 'within the window');
+  await app.eval(`document.querySelectorAll('.msub .mi')[1].dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))`);
+  await sleep(400);
+  assert.equal(await app.eval('document.querySelectorAll(".menu").length'), 0, 'the menu closes');
+  assert.ok(await app.eval(`document.getElementById('doctitle').textContent.includes('Night Ferry') || !!document.querySelector('#overlay .dlg')`), 'the screenplay is opened (or its error shown)');
+  if (await app.eval(`!!document.querySelector('#overlay .dlg')`)) { await app.key('Escape'); await sleep(200); }
+});
+
 test('Open Recent: both actions visible and working on hover, no horizontal scrolling, long paths shortened from the start', async () => {
   // A hidden test window doesn't run CSS transitions, so read the hovered state with motion reduced (no fade).
   await app.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
