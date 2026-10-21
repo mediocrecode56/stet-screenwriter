@@ -13,6 +13,8 @@
 ;                   in the same folder, keeping the earlier shortcut choice;
 ;   same version    offers to open STET instead (or reinstall it, to repair);
 ;   newer version   stops: it never downgrades.
+; STET's own updater (src/main/update.js) runs it with /SILENT /relaunch=1: a progress
+; window only, then STET opens again.
 ; Screenplays and STET's settings and statistics (%APPDATA%\STET) are never touched,
 ; not by installing, updating or uninstalling.
 
@@ -80,6 +82,8 @@ Root: HKA; Subkey: "Software\Classes\STET.Screenplay\shell\open\command"; ValueT
 
 [Run]
 Filename: "{app}\STET.exe"; Description: "Open STET"; Flags: nowait postinstall skipifsilent
+; An update started from inside STET runs silently with /relaunch=1: STET opens again afterwards.
+Filename: "{app}\STET.exe"; Flags: nowait; Check: RelaunchRequested
 
 [Code]
 const
@@ -88,6 +92,11 @@ const
 var
   InstalledVersion: String; // '' when STET isn't installed
   Updating: Boolean;        // an older version is installed
+
+function RelaunchRequested(): Boolean;
+begin
+  Result := ExpandConstant('{param:relaunch|0}') = '1';
+end;
 
 // The next number of a dotted version string, consuming it.
 function NextPart(var S: String): Integer;

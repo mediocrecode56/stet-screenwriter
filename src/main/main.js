@@ -5,6 +5,8 @@ import { app, BrowserWindow, ipcMain, dialog, protocol, net, nativeTheme, shell,
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { JsonStore } from './store.js';
@@ -15,6 +17,7 @@ import {
   SaveQueue, Recovery, readDocument, isValidDocument, atomicWrite, cleanTemps,
   backupDirFor, createBackup, listBackups, pruneBackups, docBase,
 } from './files.js';
+import { Updater, installKind, cleanupPortable, UpdateError, REPO_URL, RELEASES_URL } from './update.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
@@ -37,7 +40,7 @@ if (!PERF && !SHOT && !E2E && !app.requestSingleInstanceLock()) app.quit();
 let win = null;
 let allowClose = false;
 let closeAsked = 0;
-let settings, stats, recovery, claude;
+let settings, stats, recovery, claude, updater;
 const queue = new SaveQueue();
 
 const defaultDir = () => path.join(app.getPath('documents'), 'STET');
@@ -142,7 +145,35 @@ function registerIpc() {
   handle('app:info', () => ({
     version: pkg.version, platform: process.platform, perf: PERF, shot: !!SHOT, sample: SAMPLE, e2e: E2E, run: RUN,
     defaultDir: defaultDir(), userData: app.getPath('userData'), electron: process.versions.electron,
+    // A packaged STET checks for updates when it starts (unless turned off in Preferences); tests point it at a mock.
+    updateCheck: (app.isPackaged || !!process.env.STET_UPDATE_URL) && !PERF && !SHOT && !SAMPLE,
   }));
+  handle('app:open-url', (which) => shell.openExternal(which === 'releases' ? RELEASES_URL : REPO_URL));
+
+  handle('update:check', () => updater.check());
+  handle('update:download', async () => {
+    let last = 0;
+    const progress = (received, total) => {
+      const now = Date.now();
+      if (received < total && now - last < 100) return;
+      last = now;
+      if (win && !win.isDestroyed()) win.webContents.send('update:progress', { received, total });
+    };
+    try { await updater.download(progress); return { ok: true }; } catch (e) {
+      return { ok: false, cancelled: !!e.cancelled, error: e instanceof UpdateError ? e.message : 'The update could not be downloaded. Try again.' };
+    }
+  });
+  handle('update:cancel', () => updater.cancel());
+  // The window has already saved everything (as when closing); STET quits once the new version is in place.
+  handle('update:install', async () => {
+    try {
+      await updater.apply({ spawn, relaunch: (exe) => { if (!E2E) app.relaunch({ execPath: exe, args: [] }); } });
+    } catch (e) {
+      return { ok: false, error: e instanceof UpdateError ? e.message : 'The update could not be installed.' };
+    }
+    if (!E2E) { allowClose = true; setTimeout(() => app.quit(), 50); }
+    return { ok: true };
+  });
   handle('app:changelog', () => fs.readFile(path.join(ROOT, 'CHANGELOG.md'), 'utf8').catch(() => ''));
   handle('app:close-ready', () => { allowClose = true; setImmediate(() => win && win.close()); });
   handle('app:close-cancel', () => { closeAsked = 0; });
@@ -396,10 +427,16 @@ app.whenReady().then(async () => {
   settings = new JsonStore(path.join(ud, 'settings.json'), {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
     goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], reviewConsent: false, showTitlePage: true, panels: { scenes: false, notes: false },
+    updateCheck: true, updateNotified: null,
   });
   stats = new StatsStore(ud);
   recovery = new Recovery(path.join(ud, 'recovery'));
   claude = new ClaudeService(ud, (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
+  // E2E tests can stand in a portable STET.exe (STET_UPDATE_TARGET) to run the whole update short of quitting.
+  const kind = E2E && process.env.STET_UPDATE_TARGET ? { kind: 'portable', target: process.env.STET_UPDATE_TARGET }
+    : installKind({ platform: process.platform, packaged: app.isPackaged, execPath: process.execPath, env: process.env, exists: existsSync });
+  updater = new Updater({ current: pkg.version, fetch: (url, opts) => net.fetch(url, opts), kind, dir: path.join(app.getPath('temp'), 'STET-update'), url: process.env.STET_UPDATE_URL || undefined });
+  if (kind.kind === 'portable') cleanupPortable(kind.target);
   await fs.mkdir(recovery.dir, { recursive: true });
 
   protocol.handle('stet', (req) => {

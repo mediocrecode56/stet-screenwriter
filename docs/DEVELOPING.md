@@ -81,6 +81,29 @@ always gets the newest:
   it offers to open STET or reinstall it; with a newer version it stops, so it
   never downgrades.
 
+**In-app updates** (`src/main/update.js`, interface in `src/renderer/ui/update.js`).
+A packaged STET asks the GitHub API for the latest release a few seconds after it
+starts (Preferences can turn this off; Help → Check for Updates asks on demand).
+If it is newer, an UPDATE button appears in the status bar, and the update window
+opens once per new version with that release's notes. *Update now* downloads the
+file for this copy in the background, checking it against the size and SHA-256
+GitHub publishes. *Restart now* saves everything as when closing, then:
+
+- installed copy (`unins000.exe` beside the program): runs the new
+  `STET-Setup.exe /SILENT /relaunch=1`, which shows only a progress window,
+  updates in place and opens STET again;
+- portable copy (the launcher passes its own path as `STET_PORTABLE_EXE`):
+  unpacks the new `STET.exe` beside it as `STET.exe.new`, swaps it in by renaming
+  (the previous one stays as `STET.exe.old` until the next start) and relaunches it;
+- anything else (running from source, a `dist` folder) only offers the download
+  page.
+
+Nothing changes on disk unless the download checked out. `STET_UPDATE_URL`
+points the check at another address (the tests use a local stand-in for GitHub);
+with `--e2e`, `STET_UPDATE_TARGET` stands in a portable STET.exe and quitting is
+skipped. The check needs the repository to be public: GitHub answers 404 for a
+private one, which STET reports as "No published version of STET was found."
+
 **User data is never touched.** Settings, writing statistics, recovery copies
 and the Claude connection live in `%APPDATA%\STET` (Electron's `userData` for
 the app name STET); screenplays live wherever they were saved (by default

@@ -16,6 +16,7 @@ import { FindBar } from './ui/find.js';
 import * as cmd from './ui/commands.js';
 import * as dlg from './ui/dialog.js';
 import * as dialogs from './ui/dialogs.js';
+import { initUpdates } from './ui/update.js';
 import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
@@ -821,6 +822,8 @@ cmd.register([
 
   { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog(cmd.all()) },
   { id: 'changelog', cat: 'Help', label: 'Changelog', run: async () => dialogs.changelogDialog(await api.invoke('app:changelog'), info.version) },
+  { id: 'check-updates', cat: 'Help', label: 'Check for Updates…', run: () => updates.check(true) },
+  { id: 'github', cat: 'Help', label: 'STET on GitHub', run: () => api.invoke('app:open-url', 'repo') },
   { id: 'about', cat: 'Help', label: 'About STET', run: () => dlg.alertBox('STET ' + info.version + ' β', 'A fast, minimal, dependable screenwriting instrument. Built on Electron ' + info.electron + '.', `Settings & recovery: ${info.userData}`) },
 ]);
 
@@ -831,7 +834,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
   { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
-  { label: 'Help', items: ['keys', 'changelog', 'about'] },
+  { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', 'github', '-', 'about'] },
 ]);
 
 // Global shortcuts when focus is outside the editor (title page fields, notes, panels).
@@ -855,16 +858,24 @@ function isGlobalKey(e) {
 
 // ---- lifecycle ------------------------------------------------------------------------------------
 
-api.on('app:before-close', async () => {
+// Everything STET does before it closes: statistics written, the screenplay saved (or a
+// never-saved one asked about). false if the person cancelled.
+async function prepareQuit() {
   trackWords();
   await writing.flush();
   await api.invoke('stats:flush');
-  if (await releaseCurrent()) {
-    if (!session.dirty) await session.clearRecovery();
-    api.invoke('app:close-ready');
-  } else {
-    api.invoke('app:close-cancel');
-  }
+  if (!(await releaseCurrent())) return false;
+  if (!session.dirty) await session.clearRecovery();
+  return true;
+}
+api.on('app:before-close', async () => {
+  api.invoke((await prepareQuit()) ? 'app:close-ready' : 'app:close-cancel');
+});
+
+const updates = initUpdates({
+  api, button: $('st-update'), prepareQuit,
+  getSettings: () => settings,
+  saveSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
 });
 api.on('app:open-file', (file) => openPath(file));
 api.on('perf:start', () => runPerfProbe({ editor, view, input, session, writing, api, report: true }));
@@ -917,4 +928,5 @@ if (info.sample) {
   }
 }
 if (info.run) setTimeout(() => cmd.run(info.run), 300);
+if (info.updateCheck && settings.updateCheck !== false) setTimeout(() => updates.check(false), 3000);
 

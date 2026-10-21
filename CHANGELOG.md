@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.20.0 · 21 Oct 2026
+
+- STET checks for a new version when it starts. If there is one, UPDATE appears in the status bar.
+- Update now downloads it in the background. Restart now saves your work and opens the new version.
+- Works for the installed STET and for the portable STET.exe.
+- Help menu: Check for Updates, and STET on GitHub.
+- The check on start can be turned off in Preferences.
+
 ## 0.19.4 · 21 Oct 2026
 
 - The explanatory notes in windows are back, except in Open Recent.

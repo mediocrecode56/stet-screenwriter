@@ -120,6 +120,7 @@ export async function preferencesDialog(settings, doc) {
   const delay = h('input', { type: 'number', min: 300, max: 60000, step: 100, value: settings.autosaveDelayMs, style: 'width:90px' });
   const daily = h('input', { type: 'number', min: 0, max: 100000, value: settings.goals.daily, style: 'width:90px' });
   const weekly = h('input', { type: 'number', min: 0, max: 700000, value: settings.goals.weekly, style: 'width:90px' });
+  const upd = h('input', { type: 'checkbox', checked: settings.updateCheck !== false });
   const cap = h('input', { type: 'checkbox', checked: doc.settings.autoCapitalize });
   const dbl = h('input', { type: 'checkbox', checked: doc.settings.sceneSpacing === 2 });
   const bkOn = h('input', { type: 'checkbox', checked: doc.settings.backup.enabled });
@@ -133,6 +134,7 @@ export async function preferencesDialog(settings, doc) {
     field('Autosave', h('div', { class: 'inline' }, h('label', { class: 'chk' }, auto, 'on'), h('span', {}, 'after'), delay, h('span', {}, 'ms idle'))),
     field('Daily goal', h('div', { class: 'inline' }, daily, h('span', {}, 'words'))),
     field('Weekly goal', h('div', { class: 'inline' }, weekly, h('span', {}, 'words'))),
+    field('Updates', h('label', { class: 'chk' }, upd, 'check for a new version when STET starts')),
     h('div', { class: 'hint', style: 'margin:12px 0 6px' }, 'THIS SCREENPLAY'),
     field('Character names', h('label', { class: 'chk' }, cap, 'capitalize on first appearance in action')),
     field('Scene headings', h('label', { class: 'chk' }, dbl, 'two blank lines before')),
@@ -148,6 +150,7 @@ export async function preferencesDialog(settings, doc) {
       autosave: auto.checked,
       autosaveDelayMs: Math.max(300, Math.min(60000, +delay.value || 1200)),
       goals: { daily: Math.max(0, +daily.value || 0), weekly: Math.max(0, +weekly.value || 0) },
+      updateCheck: upd.checked,
     },
     doc: {
       autoCapitalize: cap.checked,
@@ -395,8 +398,8 @@ export async function previewDialog(doc, initial) {
 }
 
 // Renders the changelog's small Markdown subset: headings, paragraphs, lists
-// (one nesting level), **bold**, *italics* and `code`.
-export async function changelogDialog(md, version) {
+// (one nesting level), **bold**, *italics* and `code`. Also used for release notes.
+export function mdToHtml(md) {
   const inline = (t) => esc(t)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
@@ -415,7 +418,11 @@ export async function changelogDialog(md, version) {
     else html += `<p>${inline(line)}</p>`;
   }
   setList(0);
-  return open({ title: 'CHANGELOG', sub: 'v' + version, body: h('div', { class: 'body md', style: 'width:680px', html }), buttons: [{ label: 'Close', value: null, primary: true }] });
+  return html;
+}
+
+export async function changelogDialog(md, version) {
+  return open({ title: 'CHANGELOG', sub: 'v' + version, body: h('div', { class: 'body md', style: 'width:680px', html: mdToHtml(md) }), buttons: [{ label: 'Close', value: null, primary: true }] });
 }
 
 export async function shortcutsDialog(cmds) {

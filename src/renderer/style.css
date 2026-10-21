@@ -499,3 +499,18 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .pf-n { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pf-t td:first-child, .pf-t th:first-child { width: 100%; }
 .pf-t td + td, .pf-t th + th { padding-left: 14px; }
+
+/* updates: the status bar button, and the update window */
+#st-update { background: var(--inv-bg); color: var(--inv-fg); }
+#st-update:hover { background: var(--inv-bg); opacity: .85; }
+#st-update[hidden] { display: none; }
+.upd { width: 460px; }
+.upd p { margin: 0 0 8px; }
+.upd p.hint { color: var(--ink-3); margin: 8px 0 0; }
+.upd-notes { max-height: 240px; overflow: auto; border: 1px solid var(--rule); padding: 6px 10px; margin: 0 0 8px; }
+.upd-stage { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.upd-amt { color: var(--ink-3); }
+.upd-bar { height: 2px; background: var(--rule); position: relative; overflow: hidden; }
+.upd-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--ink); }
+.upd-bar.indet i { width: 34%; animation: rv-sweep 1.5s var(--ease-in-out) infinite; will-change: transform; }
+@media (prefers-reduced-motion: reduce) { .upd-bar.indet i { width: 100%; animation: rv-pulse 2s linear infinite; } }

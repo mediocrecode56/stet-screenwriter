@@ -47,6 +47,8 @@ static class Launcher
                 }
             }
             var psi = new ProcessStartInfo(exe, JoinArgs(args)) { UseShellExecute = false, WorkingDirectory = Environment.CurrentDirectory };
+            // Where this STET.exe is, so the app can update it in place (src/main/update.js).
+            psi.EnvironmentVariables["STET_PORTABLE_EXE"] = Assembly.GetExecutingAssembly().Location;
             Process.Start(psi);
             CleanOld(baseDir, dir);
             return 0;

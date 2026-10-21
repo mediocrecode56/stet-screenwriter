@@ -19,14 +19,17 @@ Windows may say *"Windows protected your PC"* because STET is a new app it
 doesn't know yet. Click **More info**, then **Run anyway**. You only need to do
 this once.
 
-**Updating:** download the newest zip and put its STET.exe in place of the old
-one. Your screenplays, settings and writing statistics stay just as they are.
+**Updating:** STET checks for a new version when it opens. When there is one,
+**UPDATE** appears at the bottom right: click it, then **Update now**. STET
+downloads it while you keep writing and asks to restart when it's ready. Your
+screenplays, settings and writing statistics stay just as they are. You can also
+check any time under **Help → Check for Updates**.
 
 **Prefer a regular install?** Download the
 [installer](https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Setup.exe)
 instead. It adds STET to your Start menu, lets you open screenplays with a
-double-click, and can be removed from Settings → Apps. To update, run the newest
-installer: it finds your copy of STET and updates it in place.
+double-click, and can be removed from Settings → Apps. It updates the same way,
+from inside STET.
 
 ## What it's like
 
