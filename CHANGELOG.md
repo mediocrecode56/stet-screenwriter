@@ -2,6 +2,11 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.20.2 · 21 Oct 2026
+
+- The dinosaur now doodles in the sand. It keeps the drawing for a while, or scuffs it out.
+- The dinosaur's habits are better balanced. Everyday things happen more often, gags less often. It digs when it has energy, dozes when it hasn't, and reads your page when you stop for a bit.
+
 ## 0.20.1 · 21 Oct 2026
 
 - Deleting a character's name could leave the next page with a blank line too many at the top, until the page was redrawn. Fixed.

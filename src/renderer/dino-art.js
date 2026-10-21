@@ -324,6 +324,8 @@ export const PROPS = {
   firefly: [['#']],
   page: [['####', '#..#', '####']],
   mug: [['###.', '#.##', '#.#.', '###.']],
+  // A squiggle scratched into the sand, a stroke at a time.
+  doodle: [['.......', '#......'], ['.#.....', '#.#....'], ['.#...#.', '#.#.#..'], ['.#...#.', '#.#.#.#']],
   mound: [['......', '......', '..##..'], ['......', '.####.', '######'], ['..##..', '.####.', '######']],
   tumbleweed: [
     ['..###..', '.#.#.#.', '#.###.#', '##.#.##', '#.###.#', '.#.#.#.', '..###..'],
@@ -361,7 +363,7 @@ export const PROPS = {
   worm: [['.....', '.....', '#####'], ['..#..', '..#..', '#####'], ['.##..', '..#..', '#####']],
 };
 // Drawn lighter: water, light and things far off.
-export const ALPHA = { puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8 };
+export const ALPHA = { doodle: 0.55, puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8 };
 
 // 3×5 pixel glyphs for little effects above the head.
 export const GLYPHS = {

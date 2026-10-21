@@ -677,6 +677,34 @@ export const ACTIVITIES = {
     if (d.has(p)) d.expire(p, 12000);
     yield { f: 'stand', t: 300 };
   },
+  *doodle(d) {
+    // Draws in the sand with a claw: a stroke at a time, a step back to look,
+    // and then it either likes it, adds a flourish, or scuffs it out and walks off.
+    if (d.chance(0.4)) yield* d.walkTo(d.spot(), 0.9);
+    yield* d.getTo('stand');
+    const x = d.front(7, 0);
+    let art;
+    yield { f: 'sniff', t: 500, do: (c) => { art = c.spawn('doodle', { x, frame: 0 }); } };
+    for (let i = 1; i < 4; i++) {
+      for (let k = 0; k < 3; k++) yield { f: k % 2 ? 'oneLeg' : 'kick', t: 170, do: k === 1 ? (c) => c.dirt(1) : undefined };
+      yield { f: 'sniff', t: d.rnd(300, 500), do: () => { art.frame = i; } };
+      if (i === 2 && d.chance(0.4)) yield { f: 'up', t: d.rnd(500, 800), fx: '?' }; // what comes next?
+    }
+    const face = d.face;
+    yield* d.walkTo(d.clampX(d.x - 3 * face), 0.6); // a step back to see it
+    yield { f: 'up', t: d.rnd(700, 1100), face };
+    const end = d.pick({ like: 3, flourish: 1.5, scuff: 1.5 });
+    if (end === 'scuff') {
+      yield { f: 'stand', t: 400, fx: 'dots' };
+      for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'stand' : 'kick', t: 160, do: k === 3 ? (c) => { c.remove(art); c.dirt(3); } : undefined };
+      yield { f: 'stand', t: 400, face: -d.face };
+    } else {
+      if (end === 'flourish') { yield { f: 'kick', t: 200, do: (c) => c.dirt(1) }; yield { f: 'armsUp', t: 500, fx: 'star' }; }
+      else yield { f: 'wag', t: 400, fx: 'heart' };
+      d.expire(art, 25000);
+      yield { f: 'stand', t: 400 };
+    }
+  },
   *sandcastle(d) {
     // Builds a little mound of earth, admires it — and then…
     if (d.chance(0.5)) yield* d.walkTo(d.spot(), 1);
@@ -2140,9 +2168,9 @@ export const CATEGORY = {
 // Moods drift every several minutes and tilt the odds.
 export const MOODS = {
   content: { act: {}, react: {} },
-  playful: { act: { tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
-  curious: { act: { sniffTrail: 2, explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
-  sleepy: { act: { groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
+  playful: { act: { doodle: 1.3, tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
+  curious: { act: { doodle: 1.6, sniffTrail: 2, explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
+  sleepy: { act: { doodle: 0.6, groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
   grumpy: { act: { roar: 2.5, look: 1.3, dance: 0.3, rest: 1.2, scratch: 1.5, wag: 0.3, sing: 0.4 }, react: { normal: 1.2, none: 1.6, big: 0.8 } },
   silly: { act: { tightrope: 2, trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 2.5, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
 };

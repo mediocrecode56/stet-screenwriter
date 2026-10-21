@@ -349,11 +349,11 @@ export class Critter {
       stretch: 0.5 + 0.8 * (1 - e),
       wag: 0.3 + 0.5 * e,
       scratch: 0.45,
-      doze: e < 0.4 ? 0.6 : 0.1,
+      doze: 0.05 + 0.8 * (1 - e) * (1 - e),              // nods off more the calmer things are
       ponder: 0.3,
       sunbathe: !night && e < 0.6 ? 0.3 : 0,
       watchWriter: writing ? 0.8 : 0.12,
-      readScript: 0.3,
+      readScript: idle > 20 && idle < 600 ? 0.6 : 0.15,  // reads over your page when you stop for a bit
       coffeeBreak: 0.2 + (morning ? 0.4 : 0),
       howl: late ? 0.3 : 0,
       sing: 0.12 + 0.3 * e,
@@ -367,13 +367,13 @@ export class Critter {
       somersault: 0.06 + 0.3 * e,
       headstand: 0.06 + 0.2 * e,
       dance: e > 0.45 ? 2 * e * e : 0,
-      roar: 0.2 + 0.5 * e,
-      trip: 0.15 + 0.5 * e,
-      moonwalk: e > 0.35 ? 0.6 * e : 0,
-      chaseTail: 0.1 + 0.6 * e,
-      sneeze: 0.25,
-      fetch: free ? 0.25 + 1.3 * e : 0,
-      dig: free ? 0.3 + 0.3 * (1 - e) : 0,
+      roar: 0.1 + 0.25 * e,
+      trip: 0.08 + 0.25 * e,                             // gags stay occasional
+      moonwalk: e > 0.35 ? 0.35 * e : 0,
+      chaseTail: 0.08 + 0.35 * e,
+      sneeze: 0.15,
+      fetch: free ? 0.1 + 1.2 * e : 0,
+      dig: free ? 0.25 + 0.25 * e : 0,                  // digging takes some energy
       leaf: free ? 0.15 + 0.4 * (1 - e) : 0,
       butterfly: free && calmSky ? 0.3 : 0,
       inspect: this.restingProp() ? 1.4 : 0,
@@ -382,12 +382,13 @@ export class Critter {
       pebbleToss: free ? 0.18 : 0,
       sandcastle: free ? 0.18 : 0,
       bubbles: free && calmSky ? 0.12 + 0.2 * e : 0,
-      hiccups: 0.12,
-      flamingo: 0.15,
+      hiccups: 0.08,
+      flamingo: 0.1,
       peekaboo: 0.12 + 0.2 * e,
       shadowbox: 0.08 + 0.35 * e,
-      groom: 0.3 + 0.3 * (1 - e),                         // everyday habits
+      groom: 0.4 + 0.3 * (1 - e),                         // everyday habits
       sniffTrail: 0.25 + 0.25 * e,
+      doodle: free ? 0.5 + 0.3 * e : 0,                  // draws in the sand
       patrol: 0.2 + 0.3 * e,
       explore: roomOut ? 0.1 + 0.1 * e : 0,
       cornerBite: this.cornerOf() && this.zone(0) > 120 && now - this.lastCorner > 40 * MIN ? 0.004 * Math.min(4, (now - this.lastCorner) / (60 * MIN)) : 0, // very rare

@@ -398,6 +398,21 @@ test('rare surprises are rare but do happen', () => {
   }
 });
 
+test('doodling: a squiggle drawn a stroke at a time, then kept a while or scuffed out, and gone in the end', () => {
+  for (let seed = 0; seed < 8; seed++) {
+    const c = wide(seed * 13 + 3);
+    c.envNext = Infinity;
+    c.pending = 'doodle';
+    const frames = new Set();
+    const look = () => { const p = c.find('doodle'); if (p && c.activity === 'doodle') frames.add(p.frame); inView(c); };
+    until(c, () => c.activity === 'doodle', 60000, 'starts doodling', look);
+    until(c, () => c.activity !== 'doodle', 60000, 'finishes', look);
+    assert.ok(frames.size >= 3, `drawn in strokes (${[...frames]})`);
+    run(c, 60000, { from: c.now + 50, each: () => { c.pending = c.pending || 'look'; } });
+    assert.ok(!c.find('doodle'), 'gone afterwards');
+  }
+});
+
 test('props are cleaned up after themselves', () => {
   const c = make(31);
   c.envNext = Infinity;
@@ -599,7 +614,7 @@ test('each streak milestone makes it exactly one pixel taller, crisply, and it s
   assert.equal(grewIn, 'grow', 'with a proud stretch at its next natural moment');
   assert.equal(c.g, 1);
   c.setGrowth(0); // the streak ended
-  run(c, 60000, { from: 63000 });
+  run(c, 150000, { from: 63000 }); // at its next natural moment, which can be after a long stroll
   assert.equal(c.g, 0, 'back to its first size');
 });
 
