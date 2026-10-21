@@ -45,35 +45,49 @@ is still nothing extra to install.
 
 ### Releases and the installer
 
-Releases are built on GitHub, not on a PC, by `.github/workflows/release.yml`
-on a Windows runner. To publish a version, first make sure `package.json` has
-the new version, `CHANGELOG.md` has a section for it and its tag `vX.Y.Z`
-exists. Then either push the tag:
+Releases are built and published on GitHub by `.github/workflows/release.yml`,
+on a Windows runner. **Releasing is automatic:** push a commit to `main` that
+raises `version` in `package.json` and adds its `## X.Y.Z · date` section to
+`CHANGELOG.md`. The workflow then:
 
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
+1. checks the version is new, matches a well-formed tag and has a changelog
+   section (anything wrong stops it before building);
+2. runs the unit tests;
+3. builds the version with `scripts/build-exe.js`, checks the single-file
+   STET.exe reports that version, and zips it;
+4. builds the installer with Inno Setup (`scripts/installer/STET.iss`);
+5. tags the commit `vX.Y.Z` and publishes the release, with the changelog
+   section as its notes.
 
-or, without git, open the repository on GitHub → **Actions** → **Release** →
-**Run workflow** (leave the box empty for the version in `package.json`).
+Pushes that don't change the version do nothing, and only one release runs at
+a time. A release can also be started by pushing a tag `vX.Y.Z`, or from
+GitHub: **Actions** → **Release** → **Run workflow** (leave the box empty for
+the version in `package.json`). Running it for a version that is already
+released replaces that release's files.
 
-The workflow runs the unit tests, builds the tag with `scripts/build-exe.js`,
-and publishes a GitHub Release with that version's changelog section and two
-files:
+Each release has two files, named the same every time so
+`https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/<name>`
+always gets the newest:
 
 - `STET-Windows.zip`: the single-file `STET.exe` described above. Unzip and
-  double-click; nothing to install.
-- `STET-Setup.exe`: an installer made with Inno Setup
-  (`scripts/installer/STET.iss`). Per user, no administrator needed; Start menu
-  and optional desktop shortcut, `.stet` files open in STET, uninstall from
-  Settings > Apps, a newer installer updates in place. It never touches
-  screenplays or `%APPDATA%\STET`.
+  double-click; nothing to install. On the first start of a new version it
+  unpacks once into `%LOCALAPPDATA%\STET\runtime` and removes older ones.
+- `STET-Setup.exe`: the installer. Per user, no administrator needed; Start
+  menu and optional desktop shortcut, `.stet` files open in STET, uninstall from
+  Settings > Apps. It looks for an installed STET first (Windows' uninstall
+  entry for its fixed AppId): with none it installs; with an older version it
+  updates in place after one confirmation, keeping the earlier shortcut choice
+  and closing a running STET first (which saves as usual); with the same version
+  it offers to open STET or reinstall it; with a newer version it stops, so it
+  never downgrades.
 
-The files keep the same names in every release, so
-`https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Windows.zip`
-always downloads the newest version (the README's download link). Running the
-workflow again for a version that already has a release replaces its files.
+**User data is never touched.** Settings, writing statistics, recovery copies
+and the Claude connection live in `%APPDATA%\STET` (Electron's `userData` for
+the app name STET); screenplays live wherever they were saved (by default
+`Documents\STET`). Both are outside the program folder
+(`%LOCALAPPDATA%\Programs\STET`) that the installer replaces, and the
+uninstaller removes only the program, its shortcuts and its file association.
+The portable STET.exe and the installed STET share the same data.
 
 The programs are not code-signed, so Windows SmartScreen warns on first run
 ("Windows protected your PC" → *More info* → *Run anyway*). Signing them in the

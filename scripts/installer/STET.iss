@@ -5,9 +5,16 @@
 ; Installs for the current user only, so Windows never asks for an administrator:
 ; the program goes to %LOCALAPPDATA%\Programs\STET, with a Start menu shortcut, an
 ; optional desktop shortcut, .stet files opening in STET, and an uninstaller in
-; Settings > Apps. Installing a newer version over an older one updates it in place.
+; Settings > Apps.
+;
+; It looks for an installed STET first:
+;   none            a normal install (one page: the desktop shortcut choice);
+;   older version   an update: one confirmation, then the program files are replaced
+;                   in the same folder, keeping the earlier shortcut choice;
+;   same version    offers to open STET instead (or reinstall it, to repair);
+;   newer version   stops: it never downgrades.
 ; Screenplays and STET's settings and statistics (%APPDATA%\STET) are never touched,
-; not even by the uninstaller.
+; not by installing, updating or uninstalling.
 
 #ifndef AppVersion
   #error Pass /DAppVersion=X.Y.Z
@@ -16,9 +23,11 @@
   #error Pass /DAppFiles=<the packaged STET-vX.Y.Z-win32-x64 folder>
 #endif
 
+; Never change the GUID: Windows uses it to recognise an update of the same program.
+#define AppGuid "51B10B2F-DC96-4E93-8E4C-52BFC1015D8B"
+
 [Setup]
-; Never change AppId: Windows uses it to recognise an update of the same program.
-AppId={{51B10B2F-DC96-4E93-8E4C-52BFC1015D8B}
+AppId={{{#AppGuid}}
 AppName=STET
 AppVersion={#AppVersion}
 AppVerName=STET {#AppVersion}
@@ -29,7 +38,6 @@ VersionInfoDescription=STET Setup
 DefaultDirName={autopf}\STET
 DisableDirPage=yes
 DisableProgramGroupPage=yes
-DisableReadyPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -39,6 +47,7 @@ SetupIconFile=..\..\build\icon.ico
 UninstallDisplayIcon={app}\STET.exe
 UninstallDisplayName=STET
 CloseApplications=yes
+RestartApplications=no
 ChangesAssociations=yes
 Compression=lzma2/max
 SolidCompression=yes
@@ -71,3 +80,106 @@ Root: HKA; Subkey: "Software\Classes\STET.Screenplay\shell\open\command"; ValueT
 
 [Run]
 Filename: "{app}\STET.exe"; Description: "Open STET"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#AppGuid}}_is1';
+
+var
+  InstalledVersion: String; // '' when STET isn't installed
+  Updating: Boolean;        // an older version is installed
+
+// The next number of a dotted version string, consuming it.
+function NextPart(var S: String): Integer;
+var
+  P: Integer;
+begin
+  P := Pos('.', S);
+  if P = 0 then
+  begin
+    Result := StrToIntDef(S, 0);
+    S := '';
+  end
+  else
+  begin
+    Result := StrToIntDef(Copy(S, 1, P - 1), 0);
+    Delete(S, 1, P);
+  end;
+end;
+
+// -1, 0 or 1 as version A is older than, the same as, or newer than B.
+function CompareVersions(A, B: String): Integer;
+var
+  I, X, Y: Integer;
+begin
+  Result := 0;
+  for I := 1 to 3 do
+  begin
+    X := NextPart(A);
+    Y := NextPart(B);
+    if X > Y then begin Result := 1; Exit; end;
+    if X < Y then begin Result := -1; Exit; end;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  Location: String;
+  Labels: TArrayOfString;
+  Choice, Code: Integer;
+begin
+  Result := True;
+  if not RegQueryStringValue(HKA, UninstallKey, 'DisplayVersion', InstalledVersion) then
+    InstalledVersion := '';
+  if InstalledVersion = '' then
+    Exit;
+
+  case CompareVersions(InstalledVersion, '{#AppVersion}') of
+    1:
+      begin
+        if not WizardSilent() then
+          MsgBox('A newer version of STET (' + InstalledVersion + ') is already installed, so there is nothing to do.', mbInformation, MB_OK);
+        Result := False;
+      end;
+    0:
+      if not WizardSilent() then
+      begin
+        SetArrayLength(Labels, 2);
+        Labels[0] := 'Open STET';
+        Labels[1] := 'Reinstall';
+        Choice := TaskDialogMsgBox('STET {#AppVersion} is already installed.',
+          'It is up to date. You can open it, or reinstall it if something seems wrong.',
+          mbInformation, MB_YESNOCANCEL, Labels, 0);
+        if Choice = IDYES then
+        begin
+          if RegQueryStringValue(HKA, UninstallKey, 'InstallLocation', Location) then
+            ShellExec('', AddBackslash(Location) + 'STET.exe', '', '', SW_SHOWNORMAL, ewNoWait, Code);
+          Result := False;
+        end
+        else if Choice <> IDNO then
+          Result := False;
+      end;
+    -1:
+      Updating := True;
+  end;
+end;
+
+// An update asks nothing again: the shortcut choice from last time is kept.
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = wpSelectTasks) and Updating;
+  if (PageID = wpReady) and not Updating then
+    Result := True;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpReady) and Updating then
+  begin
+    WizardForm.PageNameLabel.Caption := 'Update STET';
+    WizardForm.PageDescriptionLabel.Caption := 'STET ' + InstalledVersion + ' will be updated to {#AppVersion}.';
+    WizardForm.ReadyLabel.Caption := 'Your screenplays, settings and writing statistics stay exactly as they are. If STET is open, it closes first and saves your work, as it always does.';
+    WizardForm.ReadyMemo.Visible := False;
+    WizardForm.NextButton.Caption := 'Update';
+  end;
+end;

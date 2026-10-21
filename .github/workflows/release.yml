@@ -1,21 +1,25 @@
 # Build the Windows app for a version and publish it as a GitHub Release.
 #
-# Two ways to start it:
-#   - push a tag vX.Y.Z (e.g. `git tag v0.19.5 && git push origin v0.19.5`);
-#   - on GitHub: Actions → Release → Run workflow. Leave the box empty to release
-#     the version in package.json (its tag vX.Y.Z must already exist).
+# Releasing is automatic: push a commit to main that raises the version in
+# package.json (with a matching section in CHANGELOG.md) and this tags it vX.Y.Z,
+# builds it and publishes the release. Pushes that don't change the version do nothing.
+# It can also be started by pushing a tag vX.Y.Z, or on GitHub: Actions → Release →
+# Run workflow (empty box: the version in package.json). Running it for a version that
+# already has a release replaces that release's files.
 #
-# Produces a release named after the version, with its CHANGELOG.md section as the
-# notes and two downloads, named the same in every release so
-# releases/latest/download/<name> always gets the newest one:
+# Each release has the version's CHANGELOG.md section as its notes and two downloads,
+# named the same in every release so releases/latest/download/<name> always gets the
+# newest one:
 #   STET-Windows.zip   STET.exe, the portable single-file program: unzip and double-click
-#   STET-Setup.exe     the installer (scripts/installer/STET.iss)
-# Running it again for a version that already has a release replaces its files.
+#   STET-Setup.exe     the installer (scripts/installer/STET.iss); it updates an
+#                      installed STET in place
 
 name: Release
 
 on:
   push:
+    branches: [main]
+    paths: [package.json]
     tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
@@ -27,34 +31,72 @@ on:
 permissions:
   contents: write
 
+# One release at a time; a second push waits for the first instead of racing it.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.which.outputs.tag }}
+      build: ${{ steps.which.outputs.build }}
+      create: ${{ steps.which.outputs.create }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Which version, and is there anything to do
+        id: which
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_TYPE" = tag ]; then tag=$GITHUB_REF_NAME
+          elif [ -n "$INPUT_TAG" ]; then tag=$(echo "$INPUT_TAG" | xargs)
+          else tag=v$version; fi
+          [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Not a version tag: $tag"; exit 1; }
+          [ "$tag" = "v$version" ] || { echo "::error::$tag does not match package.json version $version"; exit 1; }
+          node scripts/release-notes.js "$tag" > /dev/null || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
+
+          create=false
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null || create=true
+          build=true
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = branch ] && gh release view "$tag" > /dev/null 2>&1; then
+            build=false
+            echo "$tag is already released; nothing to do."
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "create=$create" >> "$GITHUB_OUTPUT"
+          echo "Release $tag: build=$build, new tag=$create"
+
   release:
+    needs: check
+    if: needs.check.outputs.build == 'true'
     runs-on: windows-latest
     defaults:
       run:
         shell: pwsh
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+      CREATE_TAG: ${{ needs.check.outputs.create }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # build-exe.js builds from the tag via a git worktree
           fetch-tags: true
 
+      # A new version is tagged here first, but the tag only goes to GitHub with the release.
+      - name: Tag the new version
+        if: env.CREATE_TAG == 'true'
+        run: git tag $env:TAG $env:GITHUB_SHA
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
-      - name: Which version
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } elseif ($env:INPUT_TAG) { $env:INPUT_TAG.Trim() } else { "v$version" }
-          if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Not a version tag: $tag" }
-          if ($tag -ne "v$version") { throw "Tag $tag does not match package.json version $version" }
-          git rev-parse --verify --quiet "refs/tags/$tag" | Out-Null
-          if ($LASTEXITCODE) { throw "There is no tag $tag yet" }
-          "TAG=$tag" >> $env:GITHUB_ENV
 
       - run: npm ci
 
@@ -64,7 +106,7 @@ jobs:
         shell: bash # a plain byte redirect, so the notes stay UTF-8
         run: |
           {
-            echo '**To get STET, download STET-Windows.zip below, unzip it and double-click STET.exe.**'
+            echo '**To get STET, download STET-Windows.zip below, unzip it and double-click STET.exe.** Already installed with STET-Setup.exe? Run the new STET-Setup.exe and it updates in place.'
             echo
             node scripts/release-notes.js "$TAG"
           } > release-notes.md
@@ -95,9 +137,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if ($env:CREATE_TAG -eq 'true') {
+            git push origin "refs/tags/$env:TAG"
+            if ($LASTEXITCODE) { throw "Pushing tag $env:TAG failed" }
+          }
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release edit $env:TAG --notes-file release-notes.md
+            if ($LASTEXITCODE) { throw 'Updating the release notes failed' }
             gh release upload $env:TAG STET-Windows.zip STET-Setup.exe --clobber
           } else {
             gh release create $env:TAG --verify-tag --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe
