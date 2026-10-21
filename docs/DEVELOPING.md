@@ -46,7 +46,7 @@ is still nothing extra to install.
 ### Releases and the installer
 
 Releases are built and published on GitHub by `.github/workflows/release.yml`,
-on a Windows runner. **Releasing is automatic:** push a commit to `main` that
+on a Windows runner and a Mac runner. **Releasing is automatic:** push a commit to `main` that
 raises `version` in `package.json` and adds its `## X.Y.Z · date` section to
 `CHANGELOG.md`. The workflow then:
 
@@ -56,16 +56,21 @@ raises `version` in `package.json` and adds its `## X.Y.Z · date` section to
 3. builds the version with `scripts/build-exe.js`, checks the single-file
    STET.exe reports that version, and zips it;
 4. builds the installer with Inno Setup (`scripts/installer/STET.iss`);
-5. tags the commit `vX.Y.Z` and publishes the release, with the changelog
+5. on a Mac (Apple silicon): runs the unit tests, builds `STET-macOS.dmg` with
+   `scripts/build-mac.js`, then opens the disk image, checks STET.app's signature
+   and version, and runs the app and patch end-to-end tests against it;
+6. tags the commit `vX.Y.Z` and publishes the release, with the changelog
    section as its notes.
 
 Pushes that don't change the version do nothing, and only one release runs at
 a time. A release can also be started by pushing a tag `vX.Y.Z`, or from
 GitHub: **Actions** → **Release** → **Run workflow** (leave the box empty for
 the version in `package.json`). Running it for a version that is already
-released replaces that release's files.
+released replaces that release's files. Run by hand with **publish** unticked,
+it only builds and tests the Mac app and keeps the disk image with the run (under
+Artifacts), for trying out a change to the Mac build.
 
-Each release has three files. The first two are named the same every time so
+Each release has four files. The first three are named the same every time so
 `https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/<name>`
 always gets the newest:
 
@@ -80,13 +85,19 @@ always gets the newest:
   and closing a running STET first (which saves as usual); with the same version
   it offers to open STET or reinstall it; with a newer version it stops, so it
   never downgrades.
+- `STET-macOS.dmg`: STET.app for Macs with Apple silicon (macOS 12 or later),
+  with a link to Applications to drag it to. `.stet` files open in STET from the
+  Finder. It is signed ad hoc, not with an Apple Developer ID, so macOS asks once
+  before the first start (README.md says how); signing with a Developer ID and
+  notarizing would remove that, and needs a paid Apple developer account.
 - `STET-Patch-electron-<version>.zip`: the in-app update, about a megabyte. Just
   STET's own files (what goes into `app.asar`), for a STET running on that
-  Electron version.
+  Electron version, on Windows or the Mac alike.
 
 To keep the downloads small, the build leaves out what never runs
 (`scripts/package-tools.js`): type declarations, source maps and TypeScript
-sources in `node_modules`, and Chromium's interface strings other than English.
+sources in `node_modules`, and Chromium's interface strings other than English
+(on the Mac, the `.lproj` folders).
 Most of what remains is Electron itself.
 
 **In-app updates** (`src/main/update.js`, interface in `src/renderer/ui/update.js`).
@@ -98,8 +109,8 @@ file for this copy in the background, checking it against the size and SHA-256
 GitHub publishes. *Restart now* saves everything as when closing, then:
 
 - a release with a patch for the Electron STET runs on (almost every release):
-  the patch was unpacked into `%LOCALAPPDATA%\STET\app\<version>` when it
-  downloaded, and STET just restarts. `src/main/boot.js`, the entry point, starts
+  the patch was unpacked into `%LOCALAPPDATA%\STET\app\<version>` (on a Mac
+  `~/Library/Application Support/STET/app/<version>`) when it downloaded, and STET just restarts. `src/main/boot.js`, the entry point, starts
   the newest patch made for this Electron that is newer than the shipped version
   (`src/main/patch.js`). The program files are never touched. A patch that
   doesn't get as far as its window on its first start is marked failed and never
@@ -116,8 +127,8 @@ When a release moves to a new Electron, the full download is used:
 - portable copy (the launcher passes its own path as `STET_PORTABLE_EXE`):
   unpacks the new `STET.exe` beside it as `STET.exe.new`, swaps it in by renaming
   (the previous one stays as `STET.exe.old` until the next start) and relaunches it;
-- anything else (running from source, a `dist` folder) only offers the download
-  page.
+- anything else (a Mac, running from source, a `dist` folder) only offers the
+  download page.
 
 Nothing changes on disk unless the download checked out. `STET_UPDATE_URL`
 points the check at another address (the tests use a local stand-in for GitHub);
@@ -131,7 +142,9 @@ the app name STET); screenplays live wherever they were saved (by default
 `Documents\STET`). Both are outside the program folder
 (`%LOCALAPPDATA%\Programs\STET`) that the installer replaces, and the
 uninstaller removes only the program, its shortcuts and its file association.
-The portable STET.exe and the installed STET share the same data.
+The portable STET.exe and the installed STET share the same data. On a Mac the
+data is in `~/Library/Application Support/STET`, and STET.app is never changed by
+an update.
 
 The programs are not code-signed, so Windows SmartScreen warns on first run
 ("Windows protected your PC" → *More info* → *Run anyway*). Signing them in the

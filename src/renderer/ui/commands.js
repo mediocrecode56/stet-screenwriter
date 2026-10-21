@@ -6,6 +6,8 @@ import { arrive, leave, DUR_FAST } from './motion.js';
 const SUB_GRACE = 110; // ms a flyout waits before closing, so the pointer can cross a neighbouring row to reach it
 import { h, open } from './dialog.js';
 
+import { MAC, macKeys } from '../../core/keys.js';
+
 const commands = new Map();
 const bindings = new Map(); // normalized key -> command id
 
@@ -41,6 +43,8 @@ function eventKey(e) {
   else if (e.code === 'BracketRight') key = ']';
   else if (e.code === 'Equal') key = '=';
   else if (e.code === 'Minus') key = '-';
+  // On a Mac, Option with a letter types a symbol (Option+M is µ): the key itself counts.
+  else if (MAC && e.altKey && e.code && /^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
   else if (key.length === 1) key = key.toUpperCase();
   return [(e.ctrlKey || e.metaKey) ? 'C' : '', e.altKey ? 'A' : '', e.shiftKey ? 'S' : '', key].join('-');
 }
@@ -60,8 +64,9 @@ export function handleKey(e) {
 
 export function keyLabel(c) {
   const k = c.display || [].concat(c.keys || [])[0];
-  return k ? k.replace(/\bArrow/g, '') : '';
+  return k ? macKeys(k.replace(/\bArrow/g, '')) : '';
 }
+
 
 // ---- menu bar ---------------------------------------------------------------
 

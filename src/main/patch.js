@@ -5,6 +5,7 @@
 // touched, so nothing needs an installer, and the version that shipped stays as it was.
 //
 //   %LOCALAPPDATA%\STET\app\<version>\          one folder per patch, a full copy of the app
+//   (on a Mac: ~/Library/Application Support/STET/app/<version>/)
 //     .stet-patch.json                          written last: the patch is complete
 //     .launching / .ok                          the first start of a patch, and that it worked
 //     .failed                                   it didn't reach its window: never used again
@@ -22,10 +23,12 @@ const MARK = '.stet-patch.json';
 
 export const patchAsset = (electron) => `STET-Patch-electron-${electron}.zip`;
 
-/** Where patches live, or null where STET doesn't patch itself (only on Windows; STET_PATCH_DIR in tests). */
+/** Where patches live, or null where STET doesn't patch itself (Windows and Mac only; STET_PATCH_DIR in tests). */
 export function patchRoot(env = process.env, platform = process.platform) {
   if (env.STET_PATCH_DIR) return env.STET_PATCH_DIR;
-  return platform === 'win32' && env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'STET', 'app') : null;
+  if (platform === 'win32') return env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'STET', 'app') : null;
+  if (platform === 'darwin') return env.HOME ? path.join(env.HOME, 'Library', 'Application Support', 'STET', 'app') : null;
+  return null;
 }
 
 function parse(v) {

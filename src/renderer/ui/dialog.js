@@ -5,6 +5,7 @@
 // keyboard are back at once.
 
 import { arrive, leave, reducedMotion, DUR_FAST, EASE_IN_OUT } from './motion.js';
+import { macKeys } from '../../core/keys.js';
 
 const overlay = () => document.getElementById('overlay');
 let active = null;
@@ -19,7 +20,7 @@ export function h(tag, attrs = {}, ...kids) {
     else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
     else if (k === 'html') n.innerHTML = v;
     else if (k in n && typeof v !== 'string') n[k] = v;
-    else n.setAttribute(k, v === true ? '' : v);
+    else n.setAttribute(k, v === true ? '' : k === 'title' ? macKeys(v) : v); // shortcuts in tooltips the Mac way on a Mac
   }
   for (const c of kids.flat()) if (c != null && c !== false) n.append(c.nodeType ? c : String(c));
   return n;
@@ -77,12 +78,12 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
 export function isOpen() { return !!active; }
 
 export async function confirm(title, message, okLabel = 'OK', cancelLabel = 'Cancel') {
-  const v = await open({ title, body: h('div', { class: 'body' }, h('p', {}, message)), buttons: [{ label: cancelLabel, value: false }, { label: okLabel, value: true, primary: true }] });
+  const v = await open({ title, body: h('div', { class: 'body' }, h('p', {}, macKeys(message))), buttons: [{ label: cancelLabel, value: false }, { label: okLabel, value: true, primary: true }] });
   return v === true;
 }
 
 export function alertBox(title, message, detail) {
-  return open({ title, body: h('div', { class: 'body' }, h('p', {}, message), detail ? h('div', { class: 'err-text' }, detail) : null), buttons: [{ label: 'OK', value: true, primary: true }] });
+  return open({ title, body: h('div', { class: 'body' }, h('p', {}, macKeys(message)), detail ? h('div', { class: 'err-text' }, detail) : null), buttons: [{ label: 'OK', value: true, primary: true }] });
 }
 
 /** Three-way choice. Returns the chosen value or null. */

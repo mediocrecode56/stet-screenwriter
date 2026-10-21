@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.22.0 · 21 Oct 2026
+
+- STET for the Mac: STET-macOS.dmg, for Macs with Apple silicon. Open it and drag STET to Applications.
+- On a Mac, shortcuts use ⌘ instead of Ctrl and are shown that way. Option moves by word, ⌘ with the arrows goes to the start or end of a line or of the screenplay.
+- It updates itself the same way as on Windows, with a small download and a restart.
+
 ## 0.21.1 · 21 Oct 2026
 
 - While STET is in the background, grass comes up sooner and more of it: up to twelve tufts instead of five.

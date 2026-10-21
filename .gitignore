@@ -6,3 +6,4 @@ dist/
 STET.exe
 STET.exe.new
 STET.exe.old
+.build-mac/

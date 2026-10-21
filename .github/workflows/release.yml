@@ -1,4 +1,4 @@
-# Build the Windows app for a version and publish it as a GitHub Release.
+# Build STET for Windows and the Mac for a version and publish it as a GitHub Release.
 #
 # Releasing is automatic: push a commit to main that raises the version in
 # package.json (with a matching section in CHANGELOG.md) and this tags it vX.Y.Z,
@@ -8,14 +8,20 @@
 # already has a release replaces that release's files.
 #
 # Each release has the version's CHANGELOG.md section as its notes and these files
-# (the first two named the same in every release, so releases/latest/download/<name>
+# (the first three named the same in every release, so releases/latest/download/<name>
 # always gets the newest one):
 #   STET-Windows.zip   STET.exe, the portable single-file program: unzip and double-click
 #   STET-Setup.exe     the installer (scripts/installer/STET.iss); it updates an
 #                      installed STET in place
+#   STET-macOS.dmg     STET.app for Macs with Apple silicon (scripts/build-mac.js), built and
+#                      tested on a Mac first
 #   STET-Patch-electron-<version>.zip
 #                      the in-app update for a STET running on that Electron: just
-#                      STET's own files, a megabyte or two (src/main/patch.js)
+#                      STET's own files, a megabyte or two (src/main/patch.js); the same
+#                      on Windows and the Mac
+#
+# Run by hand with "publish" unticked, it only builds and tests the Mac app, and keeps
+# STET-macOS.dmg with the run (Artifacts), to try a change to the Mac build.
 
 name: Release
 
@@ -30,6 +36,10 @@ on:
         description: 'Version tag to release, e.g. v0.19.4 (empty: the version in package.json)'
         required: false
         default: ''
+      publish:
+        description: 'Publish the release (unticked: only build and test the Mac app)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -75,9 +85,61 @@ jobs:
           echo "create=$create" >> "$GITHUB_OUTPUT"
           echo "Release $tag: build=$build, new tag=$create"
 
-  release:
+  mac:
     needs: check
     if: needs.check.outputs.build == 'true'
+    runs-on: macos-15 # Apple silicon
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # build-mac.js builds from the tag via a git worktree
+          fetch-tags: true
+
+      - name: Tag the new version (here only; the release job pushes it)
+        if: needs.check.outputs.create == 'true'
+        run: git tag "$TAG" "$GITHUB_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Build STET.app and STET-macOS.dmg
+        env:
+          STET_DMG_OUT: ${{ github.workspace }}
+        run: node scripts/build-mac.js "$TAG"
+
+      # The disk image as it will be downloaded: it opens, holds a signed STET.app of this
+      # version, and that STET starts, works and updates itself with a patch.
+      - name: Check and test the app in the disk image
+        run: |
+          mnt=$(mktemp -d)
+          hdiutil attach STET-macOS.dmg -nobrowse -readonly -mountpoint "$mnt"
+          trap 'hdiutil detach "$mnt" -force' EXIT
+          app="$mnt/STET.app"
+          test -L "$mnt/Applications"
+          codesign --verify --deep --strict "$app"
+          built=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
+          [ "v$built" = "$TAG" ] || { echo "::error::STET.app reports version $built, expected $TAG"; exit 1; }
+          file "$app/Contents/MacOS/STET" | grep -q arm64
+          STET_E2E_EXE="$app/Contents/MacOS/STET" node --test --test-concurrency=1 test/e2e/app.e2e.js test/e2e/patch.e2e.js
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: STET-macOS
+          path: STET-macOS.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [check, mac]
+    if: needs.check.outputs.build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish)
     runs-on: windows-latest
     defaults:
       run:
@@ -105,11 +167,15 @@ jobs:
 
       - run: npm test
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: STET-macOS
+
       - name: Release notes from CHANGELOG.md
         shell: bash # a plain byte redirect, so the notes stay UTF-8
         run: |
           {
-            echo '**To get STET, download STET-Windows.zip below, unzip it and double-click STET.exe.** Already have STET 0.20 or later? It updates itself: click UPDATE at the bottom right.'
+            echo '**To get STET on Windows, download STET-Windows.zip below, unzip it and double-click STET.exe. On a Mac, download STET-macOS.dmg, open it and drag STET to Applications.** Already have STET? It updates itself: click UPDATE at the bottom right.'
             echo
             node scripts/release-notes.js "$TAG"
           } > release-notes.md
@@ -154,8 +220,8 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release edit $env:TAG --notes-file release-notes.md
             if ($LASTEXITCODE) { throw 'Updating the release notes failed' }
-            gh release upload $env:TAG STET-Windows.zip STET-Setup.exe $env:PATCH --clobber
+            gh release upload $env:TAG STET-Windows.zip STET-Setup.exe STET-macOS.dmg $env:PATCH --clobber
           } else {
-            gh release create $env:TAG --verify-tag --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe $env:PATCH
+            gh release create $env:TAG --verify-tag --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe STET-macOS.dmg $env:PATCH
           }
           if ($LASTEXITCODE) { throw "Publishing the release failed ($LASTEXITCODE)" }

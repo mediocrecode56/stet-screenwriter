@@ -6,9 +6,12 @@ A calm, simple place to write your screenplay.
 
 ### [Download STET for Windows](https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Windows.zip)
 
-Free. For Windows 10 and 11. Nothing to install.
+### [Download STET for Mac](https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-macOS.dmg)
 
-## Get started
+Free. For Windows 10 and 11, and Macs with Apple silicon (M1 or later) on macOS 12
+or later.
+
+## Get started on Windows
 
 1. Download **STET-Windows.zip** with the link above.
 2. Open the zip and drag **STET.exe** to your Desktop, or any folder you like.
@@ -19,18 +22,31 @@ Windows may say *"Windows protected your PC"* because STET is a new app it
 doesn't know yet. Click **More info**, then **Run anyway**. You only need to do
 this once.
 
-**Updating:** STET checks for a new version when it opens. When there is one,
-**UPDATE** appears at the bottom right: click it, then **Update now**. STET
-downloads it while you keep writing (usually about a megabyte) and asks to
-restart when it's ready. A second later you're on the new version. Your
-screenplays, settings and writing statistics stay just as they are. You can also
-check any time under **Help → Check for Updates**.
-
 **Prefer a regular install?** Download the
 [installer](https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/STET-Setup.exe)
 instead. It adds STET to your Start menu, lets you open screenplays with a
 double-click, and can be removed from Settings → Apps. It updates the same way,
 from inside STET.
+
+## Get started on a Mac
+
+1. Download **STET-macOS.dmg** with the link above and open it.
+2. Drag **STET** to the **Applications** folder.
+3. Open STET from Applications.
+
+The first time, macOS may say it can't check STET for malware, because STET is
+a new app from an independent developer. Click **Done**, then open **System
+Settings → Privacy & Security**, scroll down and click **Open Anyway** next to
+STET. You only need to do this once.
+
+## Updating
+
+STET checks for a new version when it opens. When there is one,
+**UPDATE** appears at the bottom right: click it, then **Update now**. STET
+downloads it while you keep writing (usually about a megabyte) and asks to
+restart when it's ready. A second later you're on the new version. Your
+screenplays, settings and writing statistics stay just as they are. You can also
+check any time under **Help → Check for Updates**.
 
 ## What it's like
 

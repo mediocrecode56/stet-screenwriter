@@ -1,6 +1,7 @@
 // Application dialogs. Each returns a promise and never blocks typing state.
 
 import { h, open, esc, alertBox } from './dialog.js';
+import { MAC, macKeys } from '../../core/keys.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
 import { paginate } from '../../core/layout.js';
 import { parseTime, formatTime, toAmPm, fromAmPm, label as timeLabel } from '../../core/schedule.js';
@@ -426,13 +427,14 @@ export async function changelogDialog(md, version) {
 }
 
 export async function shortcutsDialog(cmds) {
-  const rows = cmds.filter((c) => c.keys && c.label).map((c) => h('tr', {}, h('td', {}, c.cat || ''), h('td', {}, typeof c.label === 'function' ? c.label() : c.label), h('td', {}, [].concat(c.keys).join('  ·  '))));
+  const rows = cmds.filter((c) => c.keys && c.label).map((c) => h('tr', {}, h('td', {}, c.cat || ''), h('td', {}, typeof c.label === 'function' ? c.label() : c.label), h('td', {}, [].concat(c.keys).map((k) => macKeys(k.replace(/\bArrow/g, ''))).join('  ·  '))));
   const extra = [
     ['Write', 'Next element / convert empty element', 'Enter'], ['Write', 'Line break inside element', 'Shift+Enter'],
     ['Write', 'Cycle element type', 'Tab / Shift+Tab'], ['Write', 'Start parenthetical in dialogue', '('],
-    ['Move', 'Word / paragraph', 'Ctrl+Arrows'], ['Move', 'Page', 'PageUp / PageDown'],
-    ['View', 'Zoom', 'Ctrl+Mouse wheel'],
-  ].map(([a, b, c]) => h('tr', {}, h('td', {}, a), h('td', {}, b), h('td', {}, c)));
+    ...(MAC ? [['Move', 'Word', '⌥Arrows'], ['Move', 'Line start / end, top / end', '⌘Arrows']] : [['Move', 'Word / paragraph', 'Ctrl+Arrows']]),
+    ['Move', 'Page', 'PageUp / PageDown'],
+    ['View', 'Zoom', MAC ? '⌘Mouse wheel / pinch' : 'Ctrl+Mouse wheel'],
+  ].map(([a, b, c]) => h('tr', {}, h('td', {}, a), h('td', {}, b), h('td', {}, macKeys(c))));
   return open({ title: 'KEYS', body: h('div', { class: 'body', style: 'width:640px' }, h('table', { class: 't' }, h('tbody', {}, ...extra, ...rows))), buttons: [{ label: 'Close', value: null, primary: true }] });
 }
 

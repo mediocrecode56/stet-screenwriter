@@ -51,6 +51,24 @@ export function trimLocales(electronDir) {
   return saved;
 }
 
+/** The same on a Mac, where Chromium's (and Electron's) interface strings are <language>.lproj folders. */
+export function trimMacLocales(appDir) {
+  let saved = 0;
+  const size = (p) => { let n = 0; for (const e of fs.readdirSync(p, { withFileTypes: true })) n += e.isDirectory() ? size(path.join(p, e.name)) : fs.lstatSync(path.join(p, e.name)).size; return n; };
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue; // symbolic links inside frameworks are not followed
+      const p = path.join(dir, e.name);
+      if (!e.name.endsWith('.lproj')) { walk(p); continue; }
+      if (/^(en|en_GB|en-GB|Base)\.lproj$/i.test(e.name)) continue;
+      saved += size(p);
+      fs.rmSync(p, { recursive: true, force: true });
+    }
+  };
+  walk(appDir);
+  return saved;
+}
+
 /** The patch for in-app updates: the app's files (as they go into app.asar), zipped. */
 export async function writePatch(appDir, outFile) {
   fs.mkdirSync(path.dirname(outFile), { recursive: true });

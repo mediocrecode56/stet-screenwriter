@@ -7,6 +7,7 @@ import { linesOf } from '../../core/layout.js';
 import { lineIndexOf } from '../../core/nav.js';
 import { pos } from '../../core/editor.js';
 import { esc } from './dialog.js';
+import { macKeys } from '../../core/keys.js';
 
 function idle(fn) {
   return (window.requestIdleCallback || ((f) => setTimeout(f, 50)))(fn, { timeout: 300 });
@@ -44,7 +45,7 @@ export class ScenePanel {
     if (key === this.lastKey) return;
     this.lastKey = key;
     this.count.textContent = scenes.length ? `· ${scenes.length}` : '';
-    if (!scenes.length) { this.list.innerHTML = '<div class="empty">No scene headings yet. Ctrl+1 starts one.</div>'; return; }
+    if (!scenes.length) { this.list.innerHTML = `<div class="empty">No scene headings yet. ${macKeys('Ctrl+1')} starts one.</div>`; return; }
     let h = '';
     scenes.forEach((s, i) => {
       const pg = pageOf(pages, s.b, 0) + 1;
@@ -107,7 +108,7 @@ export class NotesPanel {
     this.lastKey = key;
     this.count.textContent = anchors.length ? `· ${anchors.length}` : '';
     if (!anchors.length) {
-      this.list.innerHTML = '<div class="empty">No notes. Select text and press Ctrl+Alt+M.</div>';
+      this.list.innerHTML = `<div class="empty">No notes. Select text and press ${macKeys('Ctrl+Alt+M')}.</div>`;
       return;
     }
     const blocks = this.ed.blocks;

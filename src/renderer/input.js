@@ -7,6 +7,7 @@ import { pos, cmp } from '../core/editor.js';
 import { wordAt } from '../core/text.js';
 import { toPlainText, parsePlainText } from '../core/plaintext.js';
 import { WheelZoom, stepZoom } from '../core/wheelzoom.js';
+import { MAC } from '../core/keys.js';
 
 export class Input {
   constructor({ textarea, view, editor, onCommandKey, onCommentClick }) {
@@ -42,7 +43,7 @@ export class Input {
     window.addEventListener('mouseup', () => { if (this.drag) { this.drag = null; clearInterval(this.autoScroll); } });
     const wz = new WheelZoom();
     sc.addEventListener('wheel', (e) => {
-      if (!e.ctrlKey) return;
+      if (!e.ctrlKey && !(MAC && e.metaKey)) return; // a trackpad pinch arrives with ctrlKey
       e.preventDefault();
       const steps = wz.feed(e.deltaY, e.deltaMode, e.timeStamp);
       if (!steps) return;
@@ -97,23 +98,27 @@ export class Input {
     if (this.onCommandKey(e)) { e.preventDefault(); return; }
 
     const ext = e.shiftKey;
-    const word = mod;
+    // On a Mac, Option moves and deletes by word, and Command goes to the ends of the line
+    // (or of the screenplay, up and down), as in every Mac text field.
+    const word = MAC ? e.altKey && !e.metaKey : mod;
+    const edge = MAC && e.metaKey;
     let move = null;
     let keepGoal = false;
     const p = ed.caret;
     switch (k) {
       case 'ArrowLeft':
         if (ed.hasSelection() && !ext) move = ed.ordered()[0];
-        else move = word ? nav.wordLeftPos(ed.blocks, p) : nav.left(ed.blocks, p);
+        else move = edge ? nav.lineHome(ed.blocks, p) : word ? nav.wordLeftPos(ed.blocks, p) : nav.left(ed.blocks, p);
         break;
       case 'ArrowRight':
         if (ed.hasSelection() && !ext) move = ed.ordered()[1];
-        else move = word ? nav.wordRightPos(ed.blocks, p) : nav.right(ed.blocks, p);
+        else move = edge ? nav.lineEnd(ed.blocks, p) : word ? nav.wordRightPos(ed.blocks, p) : nav.right(ed.blocks, p);
         break;
       case 'ArrowUp':
       case 'ArrowDown': {
         if (e.altKey) return; // scene navigation is a command
         const dir = k === 'ArrowUp' ? -1 : 1;
+        if (edge) { const lb = ed.blocks.length - 1; move = dir < 0 ? pos(0, 0) : pos(lb, ed.blocks[lb].text.length); break; }
         if (word) { move = this.paragraphMove(p, dir); break; }
         if (this.goalCol == null) this.goalCol = nav.columnOf(ed.blocks, p);
         move = nav.vertical(ed.blocks, p, dir, this.goalCol);
@@ -128,8 +133,12 @@ export class Input {
       }
       case 'PageUp':
       case 'PageDown': move = this.pageMove(k === 'PageUp' ? -1 : 1); keepGoal = true; break;
-      case 'Backspace': ed.backspace(word); this.goalCol = null; this.after(); e.preventDefault(); return;
-      case 'Delete': ed.deleteForward(word); this.goalCol = null; this.after(); e.preventDefault(); return;
+      case 'Backspace':
+        if (edge && !ed.hasSelection()) ed.setSel(nav.lineHome(ed.blocks, p), p);
+        ed.backspace(word); this.goalCol = null; this.after(); e.preventDefault(); return;
+      case 'Delete':
+        if (edge && !ed.hasSelection()) ed.setSel(p, nav.lineEnd(ed.blocks, p));
+        ed.deleteForward(word); this.goalCol = null; this.after(); e.preventDefault(); return;
       case 'Enter':
         if (mod) return;
         if (ext) ed.softBreak(); else ed.enter();

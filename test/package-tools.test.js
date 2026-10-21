@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pruneModules, trimLocales, writePatch } from '../scripts/package-tools.js';
+import { pruneModules, trimLocales, trimMacLocales, writePatch } from '../scripts/package-tools.js';
 import { zipEntries } from '../src/main/zip.js';
 
 function tree(root, files) {
@@ -41,4 +41,26 @@ test('only the English Chromium strings are kept; the patch is the app folder, z
   const out = path.join(root, '..', path.basename(root) + '-patch.zip');
   await writePatch(path.join(root, 'locales'), out);
   assert.deepEqual(zipEntries(fs.readFileSync(out)).map((e) => [e.name, e.read().toString()]), [['en-GB.pak', 'gb'], ['en-US.pak', 'en']]);
+});
+
+test('on a Mac, only the English .lproj folders are kept, and framework links are left alone', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-lproj-'));
+  const fw = 'Electron.app/Contents/Frameworks/Electron Framework.framework';
+  tree(root, {
+    [`${fw}/Versions/A/Resources/en.lproj/locale.pak`]: 'en', [`${fw}/Versions/A/Resources/en_GB.lproj/locale.pak`]: 'gb',
+    [`${fw}/Versions/A/Resources/de.lproj/locale.pak`]: 'de', [`${fw}/Versions/A/Resources/pt_BR.lproj/locale.pak`]: 'pt',
+    'Electron.app/Contents/Resources/Base.lproj/x.nib': 'b', 'Electron.app/Contents/Resources/fr.lproj/x.strings': 'f',
+    'Electron.app/Contents/Resources/electron.icns': 'i',
+  });
+  fs.symlinkSync('Versions/A/Resources', path.join(root, fw, 'Resources'));
+  assert.equal(trimMacLocales(root), 5); // de, pt and fr
+  assert.deepEqual(all(root), [
+    // (the same two again, through the framework's link)
+    'Electron.app/Contents/Frameworks/Electron Framework.framework/Resources/en.lproj/locale.pak',
+    'Electron.app/Contents/Frameworks/Electron Framework.framework/Resources/en_GB.lproj/locale.pak',
+    'Electron.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en.lproj/locale.pak',
+    'Electron.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB.lproj/locale.pak',
+    'Electron.app/Contents/Resources/Base.lproj/x.nib', 'Electron.app/Contents/Resources/electron.icns',
+  ]);
+  assert.ok(fs.lstatSync(path.join(root, fw, 'Resources')).isSymbolicLink());
 });

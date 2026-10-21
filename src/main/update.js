@@ -14,7 +14,7 @@
 //   portable   the single-file STET.exe from STET-Windows.zip (its launcher passes its own
 //              path as STET_PORTABLE_EXE). The new STET.exe is unpacked beside it as
 //              STET.exe.new, swapped in by renaming, and started once this one has quit.
-//   manual     anything else (running from source, a dist folder, not Windows): STET
+//   manual     anything else (a Mac, running from source, a dist folder): STET
 //              only offers the download page.
 // Every download is checked against the size and SHA-256 that GitHub publishes for the
 // file before anything is changed. Settings, statistics and screenplays live elsewhere

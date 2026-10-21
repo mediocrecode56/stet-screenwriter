@@ -70,6 +70,7 @@ function createWindow() {
     show: false,
     backgroundColor: THEME_BAR[theme].bg,
     titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 12, y: 8 }, // a Mac's window buttons, centred in the top bar (style.css leaves them room)
     titleBarOverlay: process.platform === 'darwin' ? true : { color: THEME_BAR[theme].color, symbolColor: THEME_BAR[theme].symbolColor, height: 30 },
     webPreferences: {
       preload: path.join(SRC, 'preload.cjs'),
@@ -90,6 +91,7 @@ function createWindow() {
     if (SHOT || flag('--hidden')) return;
     if (b.maximized) win.maximize(); else win.show();
   });
+  for (const [ev, on] of [['enter-full-screen', true], ['leave-full-screen', false]]) win.on(ev, () => win.webContents.send('app:fullscreen', on));
   win.on('close', (e) => {
     saveBounds();
     if (allowClose) return;

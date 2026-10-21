@@ -13,7 +13,7 @@ const INVOKE = new Set([
   'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel',
   'app:open-url', 'update:check', 'update:download', 'update:cancel', 'update:install',
 ]);
-const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress']);
+const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress', 'app:fullscreen']);
 
 contextBridge.exposeInMainWorld('stet', {
   invoke(channel, ...args) {

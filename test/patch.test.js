@@ -57,8 +57,9 @@ test('zip: written, read back and unpacked, every file checked', async () => {
   await assert.rejects(fs.access(path.join(tmp, 'evil.txt')));
 });
 
-test('patches live in Local AppData on Windows only (or where tests say)', () => {
+test('patches live in Local AppData on Windows, Application Support on a Mac (or where tests say)', () => {
   assert.equal(patchRoot({ LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' }, 'win32'), path.join('C:\\Users\\a\\AppData\\Local', 'STET', 'app'));
+  assert.equal(patchRoot({ HOME: '/Users/a' }, 'darwin'), path.join('/Users/a', 'Library', 'Application Support', 'STET', 'app'));
   assert.equal(patchRoot({}, 'linux'), null);
   assert.equal(patchRoot({ STET_PATCH_DIR: '/x' }, 'linux'), '/x');
   assert.equal(patchAsset('44.5.1'), 'STET-Patch-electron-44.5.1.zip');

@@ -20,8 +20,14 @@ import { initUpdates } from './ui/update.js';
 import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
+import { MAC, macKeys } from '../core/keys.js';
 
 const api = window.stet;
+// On a Mac the window buttons sit at the left of the top bar (style.css), and shortcuts read ⌘.
+if (MAC) {
+  document.documentElement.classList.add('mac');
+  for (const el of document.querySelectorAll('[title]')) el.title = macKeys(el.title);
+}
 const $ = (id) => document.getElementById(id);
 
 const info = await api.invoke('app:info');
@@ -878,6 +884,7 @@ const updates = initUpdates({
   saveSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
 });
 api.on('app:open-file', (file) => openPath(file));
+api.on('app:fullscreen', (on) => { document.documentElement.classList.toggle('fullscreen', on); fitTitle(); }); // a Mac hides its window buttons
 api.on('perf:start', () => runPerfProbe({ editor, view, input, session, writing, api, report: true }));
 
 window.addEventListener('dragover', (e) => e.preventDefault());
