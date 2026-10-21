@@ -118,6 +118,8 @@ function saveBounds() {
   settings.set({ window: { ...bounds, maximized } });
 }
 
+let probeDir = null; // the performance probe's scratch folder while it runs
+
 function addRecent(file) {
   const s = settings.get();
   // Autosave calls this every few seconds: only touch settings.json when the list changes.
@@ -184,7 +186,7 @@ function registerIpc() {
   });
   handle('doc:save', async ({ path: file, rev, json, force }) => {
     const r = await queue.save(file, rev, json, { force });
-    if (r.ok && !r.skipped) addRecent(file);
+    if (r.ok && !r.skipped && !(probeDir && path.dirname(file) === probeDir)) addRecent(file);
     return r;
   });
   handle('doc:known', (file, mtimeMs) => queue.known(file, mtimeMs));
@@ -337,6 +339,20 @@ function registerIpc() {
       pw.destroy();
       fs.rm(tmp, { force: true }).catch(() => {});
     }
+  });
+
+  // The performance probe saves into a scratch folder of its own, which never reaches Open Recent
+  // and is deleted as soon as the probe ends.
+  handle('perf:scratch', async () => {
+    probeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-probe-'));
+    return path.join(probeDir, 'probe.stet');
+  });
+  handle('perf:cleanup', async () => {
+    if (!probeDir) return;
+    const dir = probeDir;
+    probeDir = null;
+    queue.forget(path.join(dir, 'probe.stet'));
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
   });
 
   handle('perf:report', async (data) => {

@@ -4,6 +4,20 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.19.1 — 21 October 2026
+
+### Changed
+
+- **The performance probe gives you a score.** Tools → Run Performance Probe now shows one score out of 100 with a grade: excellent, good, fair or slow. Below it, each measurement (typing, saving, scrolling, opening, finding and more) is listed against its time budget. A measurement within its budget scores 100. Typing must reach the screen by the next frame, so its budget follows your display's refresh rate.
+- **The probe is about twice as fast**: around 4 seconds instead of 9 on this computer.
+
+### Fixed
+
+- **The probe leaves no trace.** Before, it closed your screenplay, added a probe file to Open Recent, and could count its typing in your writing statistics. Now:
+  - your screenplay comes back exactly as it was, with the caret and scroll position where you left them;
+  - nothing the probe types is autosaved, recovered, backed up or counted;
+  - its test saves go to a temporary folder that is deleted afterwards.
+
 ## 0.19.0 — 21 October 2026
 
 ### Changed

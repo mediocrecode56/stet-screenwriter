@@ -817,7 +817,7 @@ cmd.register([
   { id: 'revise-prev', cat: 'Tools', label: 'Previous Suggestion', keys: 'Shift+F7', global: true, run: () => revision.step(-1) },
   { id: 'revise-dict', cat: 'Tools', label: 'Dictionary & Ignored…', run: () => dictionaryDialog(revision) },
   { id: 'claude-key', cat: 'Tools', label: 'Claude Connection…', run: () => keyDialog() },
-  { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, api, report: false }) },
+  { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, writing, api, report: false }) },
 
   { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog(cmd.all()) },
   { id: 'changelog', cat: 'Help', label: 'Changelog', run: async () => dialogs.changelogDialog(await api.invoke('app:changelog'), info.version) },
@@ -867,7 +867,7 @@ api.on('app:before-close', async () => {
   }
 });
 api.on('app:open-file', (file) => openPath(file));
-api.on('perf:start', () => runPerfProbe({ editor, view, input, session, api, report: true }));
+api.on('perf:start', () => runPerfProbe({ editor, view, input, session, writing, api, report: true }));
 
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => {

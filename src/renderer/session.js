@@ -33,6 +33,7 @@ export class Session {
     this.ownsRecovery = false; // only clear recovery copies this session wrote or restored
     this.backupTimer = setInterval(() => this.maybeBackup(), 20000);
     this.lastSerializeMs = 0;
+    this.quiet = false; // the performance probe: no autosave, recovery copy or backup of what it types
   }
 
   get rev() { return this.editor.rev + this.metaRev; }
@@ -72,7 +73,7 @@ export class Session {
 
   /** Called after every document change. Debounces autosave / recovery. */
   changed() {
-    if (!this.dirty) return;
+    if (!this.dirty || this.quiet) return;
     if (this.status !== 'saving' && this.status !== 'error' && this.status !== 'conflict') this.status = 'dirty';
     this.emit();
     clearTimeout(this.timer);
@@ -178,7 +179,7 @@ export class Session {
   // ---- backups -------------------------------------------------------------------
 
   async maybeBackup(force = false) {
-    if (!this.doc) return;
+    if (!this.doc || this.quiet) return;
     const b = this.doc.settings.backup;
     if (!b.enabled && !force) return;
     const rev = this.rev;

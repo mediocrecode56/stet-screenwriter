@@ -488,3 +488,13 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .md ul ul { margin: 2px 0 4px; }
 .md .li-p { margin: 2px 0 4px 18px; }
 .md code { font: 10px var(--ui); border: 1px solid var(--rule); padding: 0 3px; }
+
+/* Performance probe results: the score large, then each measure against its budget. */
+.pf-dlg { width: min(560px, 92vw); }
+.pf-head { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; }
+.pf-score { font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pf-grade { letter-spacing: .14em; }
+.pf-dim { color: var(--ink-3); }
+.pf-n { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pf-t td:first-child, .pf-t th:first-child { width: 100%; }
+.pf-t td + td, .pf-t th + th { padding-left: 14px; }
