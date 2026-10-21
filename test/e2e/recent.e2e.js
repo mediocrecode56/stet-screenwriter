@@ -49,6 +49,19 @@ test('double-clicking the title renames the file in place; Open Recent follows; 
   assert.ok(!recent.some((r) => r.path === file));
 });
 
+test('a click anywhere outside the title ends the rename and its highlight; no focus outline anywhere', async () => {
+  await app.eval(`document.getElementById('doctitle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+  assert.equal(await app.eval(`String(getSelection())`), 'Final Cut');
+  // A toolbar button keeps the focus where it is (no blur), so this is the case that used to stick.
+  await app.eval(`document.querySelector('#toolbar .tb, .tb').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
+  await sleep(100);
+  assert.equal(await app.eval(`document.getElementById('doctitle').isContentEditable`), false);
+  assert.equal(await app.eval(`String(getSelection())`), '', 'nothing is left highlighted');
+  const outlines = await app.eval(`[...document.querySelectorAll('button, input, textarea, [tabindex], #doctitle')].filter((e) => { e.focus(); return getComputedStyle(e).outlineStyle !== 'none'; }).map((e) => e.id || e.className)`);
+  assert.deepEqual(outlines, [], 'no focus outline');
+  await app.key('Escape');
+});
+
 test('Open Recent: a folder icon on each row, beside × and the bin', async () => {
   await app.eval(`void __stet.cmd.run('recent')`);
   await sleep(300);

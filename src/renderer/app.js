@@ -381,10 +381,13 @@ function renameInPlace() {
   const finish = async (keep) => {
     if (done) return;
     done = true;
+    $('top').classList.remove('renaming');
     t.removeEventListener('keydown', onKey);
     t.removeEventListener('blur', onBlur);
+    removeEventListener('mousedown', onDown, true);
     t.contentEditable = 'false';
     t.classList.remove('editing');
+    getSelection().removeAllRanges();
     const name = t.textContent.replace(/\s+/g, ' ').trim();
     renderTitle();
     input.focus();
@@ -402,8 +405,18 @@ function renameInPlace() {
     else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
   };
   const onBlur = () => finish(true);
+  // Any click outside ends it, the menus and toolbar too: they keep the focus where it is, so the
+  // title would never blur. The title bar stops dragging the window meanwhile, or a click on it
+  // would never reach the page.
+  const onDown = (e) => {
+    if (t.contains(e.target)) return;
+    if (e.target.closest('#top')) e.preventDefault(); // the bar takes no focus: typing goes on in the script
+    finish(true);
+  };
+  $('top').classList.add('renaming');
   t.addEventListener('keydown', onKey);
   t.addEventListener('blur', onBlur);
+  addEventListener('mousedown', onDown, true);
   fitTitle();
 }
 $('brand').addEventListener('click', () => cmd.run('changelog'));

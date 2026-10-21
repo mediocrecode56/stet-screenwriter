@@ -4,6 +4,16 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.18.5 — 21 October 2026
+
+### Fixed
+
+- **Clicking anywhere outside the name you are renaming ends the rename.** Before, a click on the toolbar, a menu or the empty title bar left the name editable and highlighted. Now any click outside keeps the new name, clears the highlight and puts you back in the screenplay. While you rename, the title bar no longer drags the window; it works as usual again afterwards.
+
+### Changed
+
+- **No more outline lines around focused controls.** Buttons, fields and the name at the top no longer show a hard outline when they have the keyboard focus. A button you reach with the keyboard is tinted instead, the same way as on hover.
+
 ## 0.18.4 — 21 October 2026
 
 ### Fixed

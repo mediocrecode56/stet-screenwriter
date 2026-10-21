@@ -68,6 +68,9 @@
 }
 
 * { box-sizing: border-box; }
+/* No focus outline anywhere: a control reached from the keyboard shows the hover tint instead. */
+:focus, :focus-visible { outline: none; }
+.mb:focus-visible, .tb:focus-visible, .btn:focus-visible { background: var(--hover-on); color: var(--ink); }
 /* Every hover tint arrives at once and fades out over --dur-fast (each element's own transition). */
 .mb:hover, .mb.open, .mi:hover, .mi.active, .mi.sub-open, .tb:hover, .row:hover, .btn:hover,
 table.t tr.pick:hover td, #doctitle:hover { transition: none; }
@@ -97,6 +100,7 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 }
 /* File, Edit, Element… start at the window's left edge. */
 #menubar { display: flex; flex: none; -webkit-app-region: no-drag; }
+#top.renaming { -webkit-app-region: no-drag; } /* a click on the bar ends the rename (app.js) */
 .mb { border: 0; background: none; padding: 0 10px; cursor: default; text-transform: uppercase; letter-spacing: .12em; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .mb:hover { background: var(--hover); color: var(--ink); }
 .mb.open, .mb.pressed { background: var(--hover-on); color: var(--ink); }
@@ -113,7 +117,7 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 #doctitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-app-region: no-drag; cursor: default; padding: 1px 4px; transition: background-color var(--dur-fast) var(--ease-out); }
 #doctitle:hover { background: var(--hover); }
 /* Renaming in place (double-click): the title becomes a field. */
-#doctitle.editing { background: var(--hover-on); color: var(--ink); outline: none; cursor: text; text-overflow: clip; user-select: text; }
+#doctitle.editing { background: var(--hover-on); color: var(--ink); cursor: text; text-overflow: clip; user-select: text; }
 #docdot { width: 7px; height: 7px; border: 1px solid var(--ink-2); flex: none; }
 #docdot.dirty { background: var(--ink); border-color: var(--ink); }
 #docdot.error { background: none; border: 1px solid var(--ink); animation: blinkerr 1s steps(2) infinite; }
@@ -172,7 +176,7 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 /* The find bar slides out from under the toolbar (motion.js setPanel, side top). */
 #elbar { position: relative; z-index: 2; }
 #findbar { position: relative; z-index: 1; flex: none; display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--rule); background: var(--bar); }
-#findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 220px; outline: none; user-select: text; }
+#findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 220px; user-select: text; }
 #findbar input:focus { border-color: var(--rule-strong); }
 .chk { display: flex; align-items: center; gap: 3px; color: var(--ink-2); }
 #find-count { color: var(--ink-3); min-width: 70px; }
@@ -192,7 +196,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .note { padding: 8px 10px; border-bottom: 1px solid var(--rule); }
 .note.cur { box-shadow: inset 2px 0 0 var(--ink); }
 .note .q { color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: default; }
-.note textarea { width: 100%; min-height: 44px; resize: vertical; border: 1px solid var(--rule); padding: 4px 6px; outline: none; user-select: text; font: 12px/1.4 var(--ui); }
+.note textarea { width: 100%; min-height: 44px; resize: vertical; border: 1px solid var(--rule); padding: 4px 6px; user-select: text; font: 12px/1.4 var(--ui); }
 .note textarea:focus { border-color: var(--rule-strong); }
 .note .meta { display: flex; justify-content: space-between; color: var(--ink-3); margin-top: 3px; }
 .note .meta button { border: 0; background: none; color: var(--ink-3); cursor: default; padding: 0; }
@@ -200,7 +204,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .empty { padding: 14px 10px; color: var(--ink-3); }
 
 /* ---- the screenplay -------------------------------------------------- */
-#scroller { flex: 1; overflow: auto; position: relative; outline: none; }
+#scroller { flex: 1; overflow: auto; position: relative; }
 #content { position: relative; margin: 0 auto; }
 /* Script text is laid out on a character grid: nothing from the interface
    typography (letter-spacing, kerning, ligatures) may change glyph advances. */
@@ -240,7 +244,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 
 /* title page fields are real inputs laid over the page grid */
 .tp-f {
-  position: absolute; border: 0; outline: none; padding: 0; margin: 0; background: transparent;
+  position: absolute; border: 0; padding: 0; margin: 0; background: transparent;
   font-family: var(--script); color: var(--ink); line-height: 1; resize: none; overflow: hidden; user-select: text;
 }
 .tp-f::placeholder { color: var(--ph); }
@@ -253,7 +257,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #input {
   position: fixed; left: -1000px; top: 0; width: 2px; height: 18px; opacity: 0; border: 0; padding: 0;
   resize: none; overflow: hidden; white-space: pre; z-index: 6; color: var(--ink); background: var(--page);
-  font-family: var(--script); outline: none;
+  font-family: var(--script);
 }
 #input.composing { opacity: 1; width: auto; min-width: 40px; box-shadow: 0 0 0 1px var(--ink-3); }
 
@@ -318,7 +322,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .field { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px; align-items: center; margin-bottom: 8px; }
 .field label { color: var(--ink-2); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
 .field input[type=text], .field input[type=number], .field select, .field input:not([type]) {
-  border: 1px solid var(--rule); padding: 3px 6px; outline: none; width: 100%; background: var(--page);
+  border: 1px solid var(--rule); padding: 3px 6px; width: 100%; background: var(--page);
 }
 .field input:focus, .field select:focus { border-color: var(--rule-strong); }
 .field .inline { display: flex; gap: 6px; align-items: center; }
@@ -328,7 +332,7 @@ input[type=checkbox] { accent-color: var(--ink); margin: 0 4px 0 0; }
 .hint { color: var(--ink-3); font-size: 10px; }
 .err-text { border-left: 2px solid var(--ink); padding: 4px 8px; margin: 6px 0; }
 .palette { width: 560px; }
-.palette input { width: 100%; border: 0; border-bottom: 1px solid var(--rule); padding: 10px 14px; outline: none; font-size: 13px; background: var(--page); }
+.palette input { width: 100%; border: 0; border-bottom: 1px solid var(--rule); padding: 10px 14px; font-size: 13px; background: var(--page); }
 .palette .list { max-height: 50vh; }
 .palette .mi { padding: 4px 14px; }
 table.t { border-collapse: collapse; width: 100%; }
@@ -357,7 +361,7 @@ table.recent-t { table-layout: fixed; width: 100%; }
 .ra-dismiss { margin-left: 4px; }
 .ra-trash { margin-left: 12px; }
 tr:hover .ra, tr.on .ra, tr:focus-within .ra, .ra:focus-visible { opacity: 1; }
-.ra:hover, .ra:focus-visible { color: var(--ink); background: var(--hover-on); outline: none; }
+.ra:hover, .ra:focus-visible { color: var(--ink); background: var(--hover-on); }
 table.t tr.missing td:first-child { text-decoration: line-through; color: var(--ink-3); }
 
 /* English revision */
@@ -453,7 +457,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-days small { font-size: 10px; letter-spacing: 0; }
 .wk-goals { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rule); padding-top: 8px; }
 .wk-goals label { display: flex; align-items: center; justify-content: center; gap: 8px; }
-.wk-in { width: 72px; border: 1px solid var(--rule); padding: 1px 5px; outline: none; text-align: center; -moz-appearance: textfield; }
+.wk-in { width: 72px; border: 1px solid var(--rule); padding: 1px 5px; text-align: center; -moz-appearance: textfield; }
 .wk-in::-webkit-inner-spin-button, .wk-in::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .wk-in:focus { border-color: var(--rule-strong); }
 .wk-reset { color: var(--ink-3); font-size: 10px; letter-spacing: .1em; }
