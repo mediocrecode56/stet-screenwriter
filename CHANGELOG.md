@@ -4,6 +4,17 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.18.1 — 21 October 2026
+
+### Fixed
+
+- **Square corners again, everywhere.** 0.18.0 rounded the corners of menus, dialogs, buttons and highlights, which broke STET's raw, square look. Every rounded corner is gone, including the slightly rounded review marks.
+- **The raw look is back:** menus and dialogs have their hard 1 px border and hard offset shadow again, instead of the soft blurred one.
+- **The 0.18.0 polish stays:**
+  - the readable grey hover highlight, which appears at once and fades out gently;
+  - menus and dialogs settling in with a slight scale;
+  - the recent list fading in, with its grace period as you move the pointer to it.
+
 ## 0.18.0 — 21 October 2026
 
 ### New
@@ -22,13 +33,12 @@ STET is in beta, so version numbers stay below 1.0. Every version is saved as it
 - **Smoother, more polished menus and dialogs.**
   - **Readable highlight:** hovering a menu item, a menu title or a row in Open Recent now shows a soft grey highlight, and the text keeps its own colour. Before, the whole row flipped to bright white.
   - **The highlight timing:** it appears at once and fades out gently as you move on.
-  - **The look:** menus and dialogs have rounded corners and a soft shadow instead of the hard offset one. Buttons are rounded too.
   - **Opening:** menus and dialogs settle in with a slight scale as they fade in, no slower than before.
   - **The recent list:** it fades in, and you can move the pointer across a neighbouring row on your way to it without it disappearing.
 
 ### For the technically curious
 
-- **The new styles:** hover colours come from `--hover`, `--hover-on` and `--float-shadow` in both themes, and `arrive()` takes a `scale`.
+- **The new styles:** hover colours come from `--hover` and `--hover-on` in both themes, and `arrive()` takes a `scale`.
 - **Renaming in place:** the title becomes `contenteditable` while you rename. It is never overwritten during autosaves, and the rename goes through `doc:rename` as before.
 - **On startup:** the blank page is no longer saved as "the last screenplay". If the last screenplay is missing, the first entry in Open Recent that can still be read is opened, and any that can't be read are skipped without an error.
 - **Tests:**

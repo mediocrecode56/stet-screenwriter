@@ -522,5 +522,5 @@ export function fitStart(el, text) {
   el.textContent = '…' + text.slice(cut);
 }
 const DISMISS_SVG = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
-const FOLDER_SVG = '<svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true"><path d="M1 2.2V9.5h11V3.4H6.2L5 2H1z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>';
+const FOLDER_SVG = '<svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true"><path d="M1 2.2V9.5h11V3.4H6.2L5 2H1z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
 const TRASH_SVG = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true"><path d="M1 3h9M4 3V1.5h3V3M2.2 3l.6 8h5.4l.6-8M4.5 5v4.5M6.5 5v4.5" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
