@@ -2,9 +2,10 @@
 #
 # Triggered by pushing a tag vX.Y.Z (e.g. `git tag v0.19.5 && git push origin v0.19.5`).
 # Produces a release named after the tag, with that version's CHANGELOG.md section
-# as its notes and two downloads:
-#   STET.exe                       the single-file program (nothing to install)
-#   STET-vX.Y.Z-win32-x64.zip      the same version as a plain folder
+# as its notes and two downloads, named the same in every release so
+# releases/latest/download/STET-Setup.exe always gets the newest one:
+#   STET-Setup.exe      the installer (scripts/installer/STET.iss)
+#   STET-Portable.exe   the single-file program, nothing to install
 
 name: Release
 
@@ -45,7 +46,12 @@ jobs:
 
       - name: Release notes from CHANGELOG.md
         shell: bash # a plain byte redirect, so the notes stay UTF-8
-        run: node scripts/release-notes.js "$TAG" > release-notes.md
+        run: |
+          {
+            echo '**To install STET, download STET-Setup.exe below and open it.**'
+            echo
+            node scripts/release-notes.js "$TAG"
+          } > release-notes.md
 
       # Called with node rather than `npm run exe --`: PowerShell's npm shim drops the `--`.
       - name: Build STET.exe
@@ -53,17 +59,23 @@ jobs:
           STET_EXE_DIR: ${{ runner.temp }}\stet-exe
         run: node scripts/build-exe.js $env:TAG
 
-      - name: Check and package the build
+      - name: Check the single-file STET.exe
         run: |
           $exe = Join-Path $env:RUNNER_TEMP 'stet-exe\STET.exe'
           $built = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
           if ("v$built" -ne $env:TAG) { throw "STET.exe reports version $built, expected $env:TAG (is $env:TAG the newest tag?)" }
-          Copy-Item $exe STET.exe
-          $folder = "dist\STET-$env:TAG-win32-x64"
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $folder), "$PWD\STET-$env:TAG-win32-x64.zip", [IO.Compression.CompressionLevel]::Optimal, $true)
+          Copy-Item $exe STET-Portable.exe
+
+      - name: Build the installer
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --yes --no-progress; if ($LASTEXITCODE) { throw 'Installing Inno Setup failed' } }
+          $files = Resolve-Path "dist\STET-$env:TAG-win32-x64"
+          & $iscc /Q "/DAppVersion=$($env:TAG.Substring(1))" "/DAppFiles=$files" "/O$PWD" scripts\installer\STET.iss
+          if ($LASTEXITCODE) { throw "Inno Setup failed ($LASTEXITCODE)" }
+          if (-not (Test-Path STET-Setup.exe)) { throw 'STET-Setup.exe was not created' }
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create $env:TAG --verify-tag --title $env:TAG --notes-file release-notes.md STET.exe "STET-$env:TAG-win32-x64.zip"
+        run: gh release create $env:TAG --verify-tag --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Setup.exe STET-Portable.exe
