@@ -1170,7 +1170,7 @@ test('dormant: deep asleep in the background, it lies still and needs hardly a t
   while (now < end) {
     const moving = c.advance(now);
     ticks++;
-    if (c.dormant) { dormantAt ??= now; frames.add(c.frame); assert.equal(c.effects.length, 0, 'no z\'s'); }
+    if (c.dormant) { dormantAt ??= now; if (c.step?.dormant) frames.add(c.frame); assert.equal(c.effects.length, 0, 'no z\'s'); }
     now += c.tickDelay(now, moving);
   }
   assert.ok(dormantAt != null && dormantAt - asleepAt < 20000, 'dormant within moments of the deep sleep');

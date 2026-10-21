@@ -74,9 +74,9 @@ const LARGE = new Set(['cactus', 'palm']);
 // and in its own time eats the grass. All in ms; Critter's `timing` option overrides any of them.
 export const TIMING = {
   deepSleep: 12 * MIN,          // in the background this long: a deep sleep
-  tuftFirst: [1.5 * MIN, 4 * MIN], // the first tuft after the window loses the focus…
-  tuftEvery: [3 * MIN, 7 * MIN],   // …and then one every so often
-  tuftsMax: 5,
+  tuftFirst: [1 * MIN, 2.5 * MIN], // the first tuft after the window loses the focus…
+  tuftEvery: [1.5 * MIN, 4 * MIN], // …and then one every so often
+  tuftsMax: 12,                    // a little meadow by the time you're back
   tuftGrow: 45000,              // per stage of a tuft's growth
   grazeAfter: [8000, 45000],    // back and writing again: a while before it starts on the grass
   dormantTick: 60000,           // dormant (see Critter.dormant): at most this long between ticks
@@ -511,7 +511,7 @@ export class Critter {
    * still (no breaths, no z's) and the app rests with it (Dino.onDormant): a tick only
    * when something is due (a tuft of grass), at most every T.dormantTick. Focus ends it at once.
    */
-  get dormant() { return this.deep && !this.focused && this.asleep() && !this.inReaction && !this.envDue && !this.queue.length; }
+  get dormant() { return this.deep && !this.focused && this.asleep() && !this.inReaction && !this.envDue && !this.queue.length && !this.effects.length; } // (a z still drifting would freeze in mid-air)
   /** Long enough in the background for a deep sleep. */
   deepDue(now = this.now) { return !this.focused && this.blurAt != null && now - this.blurAt >= this.T.deepSleep; }
   /** Straight into a deep sleep where it is (only ever while nobody can see). */

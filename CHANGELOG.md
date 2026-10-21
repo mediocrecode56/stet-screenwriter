@@ -2,6 +2,10 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.21.1 · 21 Oct 2026
+
+- While STET is in the background, grass comes up sooner and more of it: up to twelve tufts instead of five.
+
 ## 0.21.0 · 21 Oct 2026
 
 - Updates are small now, usually about a megabyte instead of a hundred.
