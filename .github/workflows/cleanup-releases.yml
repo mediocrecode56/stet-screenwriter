@@ -1,0 +1,31 @@
+# Deletes every release except the newest, with its files. Tags stay (build-exe.js and
+# build-mac.js build from them). Run by hand: Actions → Clean up releases → Run workflow.
+
+name: Clean up releases
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all releases but the newest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          latest=$(gh release view --json tagName -q .tagName)
+          echo "Keeping $latest"
+          gh release list --limit 1000 --json tagName -q '.[].tagName' | while read -r tag; do
+            [ "$tag" = "$latest" ] && continue
+            echo "Deleting release $tag"
+            gh release delete "$tag" --yes
+          done
