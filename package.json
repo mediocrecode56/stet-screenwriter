@@ -1,7 +1,7 @@
 {
   "name": "stet",
   "productName": "STET",
-  "version": "0.16.6",
+  "version": "0.16.7",
   "description": "A fast, minimal, dependable screenwriting application.",
   "type": "module",
   "main": "src/main/main.js",

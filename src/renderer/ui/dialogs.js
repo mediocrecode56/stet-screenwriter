@@ -206,8 +206,8 @@ export async function recoveryDialog(items) {
 
 /**
  * The writing week, laid out symmetrically: two equal boxes (the week, today),
- * a full-width day-by-day chart with the numbers on the bars and the daily
- * goal as a dashed line, the screenplays written in, and the goals. Reset lives here
+ * a centred day-by-day chart with the numbers on the bars, a word scale and the
+ * daily goal as a dashed line, and the goals. Reset lives here
  * (and only here), behind its own confirmation.
  * `api` = { summary(offset), notice(), saveGoals(goals), reset() }.
  */
@@ -230,13 +230,13 @@ export async function statsDialog(api) {
       flash ? h('div', { class: 'wk-flash' }, flash) : null,
       weekHeader(s, nav),
       weekChart(s),
-      weekDocs(s),
-      h('div', { class: 'wk-goals', title: `All-time: ${s.total.toLocaleString()} words since ${fmtDate(s.since, true)}` },
+      h('div', { class: 'wk-goals' },
         h('label', {}, h('span', { class: 'wk-k' }, 'DAILY GOAL'), goalIn), h('label', {}, h('span', { class: 'wk-k' }, 'WEEKLY GOAL'), weekIn)),
     );
     flash = '';
     const v = await open({
-      title: 'WRITING', sub: weekLabel(s.week), body, cls: 'wk-dlg', foot: resetBtn,
+      // All-time words, small beside the title.
+      title: ['WRITING', h('span', { class: 'wk-all', title: `Every word recorded since ${fmtDate(s.since, true)}` }, `all-time ${fmtWords(s.total)}`)], sub: weekLabel(s.week), body, cls: 'wk-dlg', foot: resetBtn,
       buttons: [{ label: 'Close', value: null }, { label: 'Save goals', primary: true, value: () => ({ goals: { daily: Math.max(0, Math.round(+goalIn.value) || 0), weekly: Math.max(0, Math.round(+weekIn.value) || 0) } }) }],
       init: (_dlg, c) => { close = c; },
     });
@@ -302,7 +302,7 @@ function weekHeader(s, nav) {
 // Chart geometry (px). Bars are sized in pixels, not percentages, so a label
 // can never squeeze a bar: every bar has the full BAR_H to scale against and
 // its number sits in the band above it.
-const BAR_H = 104, BAND = 16;
+const BAR_H = 88, BAND = 16;
 
 function weekChart(s) {
   const goal = s.goals.daily;
@@ -332,17 +332,6 @@ function weekChart(s) {
   });
   const days = h('div', { class: 'wk-days' }, ...s.week.days.map((d, i) => h('div', { class: d.today ? 'today' : '' }, DOW[i], h('small', {}, ' ' + d.day.slice(8).replace(/^0/, '')))));
   return h('div', { class: 'wk-chart' }, h('div', { class: 'wk-frame' }, scale, plot, marks), days);
-}
-
-function weekDocs(s) {
-  const docs = s.week.docs;
-  if (!docs.length) return null;
-  const shown = docs.slice(0, 3);
-  const rest = docs.slice(3).reduce((n, d) => n + d.words, 0);
-  return h('div', { class: 'wk-docs' },
-    h('div', { class: 'wk-k' }, 'BY SCREENPLAY'),
-    ...shown.map((d) => h('div', { class: 'wk-row', title: d.title }, h('span', { class: 'wk-doc' }, d.title), h('span', { class: 'wk-num' }, fmtWords(d.words)))),
-    rest ? h('div', { class: 'wk-row' }, h('span', { class: 'wk-doc' }, `${docs.length - 3} more`), h('span', { class: 'wk-num' }, fmtWords(rest))) : null);
 }
 
 /**
