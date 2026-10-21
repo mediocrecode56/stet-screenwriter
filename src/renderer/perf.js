@@ -214,6 +214,7 @@ function showResults(r) {
   const big = r.cases['400p'];
   const body = h('div', { class: 'body pf' },
     h('div', { class: 'pf-head' }, h('div', { class: 'pf-score' }, String(r.score)), h('div', {}, h('div', { class: 'pf-grade' }, grade(r.score)), h('div', { class: 'pf-dim' }, `out of 100 · ${big.pages} pages · display ${fmt(r.frameMs)} ms per frame`))),
-    h('table', { class: 't pf-t' }, h('thead', {}, h('tr', {}, h('th', {}, 'Measured on the large script'), h('th', { class: 'pf-n' }, 'Time'), h('th', { class: 'pf-n' }, 'Budget'), h('th', { class: 'pf-n' }, 'Score'))), h('tbody', {}, ...rows)));
+    h('table', { class: 't pf-t' }, h('thead', {}, h('tr', {}, h('th', {}, 'Measured on the large script'), h('th', { class: 'pf-n' }, 'Time'), h('th', { class: 'pf-n' }, 'Budget'), h('th', { class: 'pf-n' }, 'Score'))), h('tbody', {}, ...rows)),
+    h('p', { class: 'hint' }, 'Your screenplay was put back as it was; nothing from the probe was kept.'));
   dlg.open({ title: 'PERFORMANCE', body, cls: 'pf-dlg', buttons: [{ label: 'Close', value: null, primary: true }] });
 }

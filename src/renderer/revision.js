@@ -265,7 +265,7 @@ export class Revision {
   async addToDictionary(id, word) {
     const f = this.byId(id);
     if (!f || f.decision) return;
-    const v = word ?? await dlg.prompt('ADD TO DICTIONARY', 'Word or phrase', (f.original.trim() || f.shownOriginal.trim()));
+    const v = word ?? await dlg.prompt('ADD TO DICTIONARY', 'Word or phrase', (f.original.trim() || f.shownOriginal.trim()), 'Saved for every screenplay. Claude will not flag it again.');
     if (!v || !v.trim()) return;
     const dict = [...(this.getSettings().dictionary || [])];
     if (!dict.some((d) => normalize(d) === normalize(v))) dict.push(v.trim());
@@ -373,7 +373,7 @@ export class Revision {
       msg = `${state}${when ? ' ' + esc(when) : ''} · ${n} undecided of ${this.findings.length}`;
       if (r && r.suppressed) msg += ` · ${r.suppressed} hidden by your lists`;
       if (r && r.rejected) msg += ` · ${r.rejected} unverifiable discarded`;
-    } else msg = 'Claude reads the action and dialogue and suggests minimal fixes. Nothing changes until you accept.';
+    } else msg = 'Claude suggests fixes; nothing changes until you accept.';
     let html = `<div class="rv-status"><span class="hint">${msg}</span><button class="btn primary" data-act="run">${rv ? 'REVIEW AGAIN' : 'REVIEW SCRIPT'}</button></div>`;
     if (r && r.finished && r.failed.size) {
       const first = [...r.failed.values()][0];
@@ -480,7 +480,8 @@ export async function keyDialog(lead = '') {
       lead ? dlg.h('p', {}, lead) : null,
       dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'Connect through'), choice),
       where,
-      dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key (optional)'), input)),
+      dlg.h('div', { class: 'field' }, dlg.h('label', {}, 'API key (optional)'), input),
+      dlg.h('p', { class: 'hint' }, 'A key stays in this app\'s main process and is only sent to the Anthropic API when you start a review. STET never switches between your sign-in and a key by itself: if the chosen one fails, the review says so.')),
     buttons: [
       ...(st.key === 'saved' ? [{ label: 'Remove key', value: 'clear' }] : []),
       { label: 'Check', value: 'check' },

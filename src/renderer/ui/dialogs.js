@@ -90,7 +90,8 @@ function scheduleFields(sched) {
   const hint = h('div', { class: 'hint' });
   const upd = () => {
     const d = dark.value(), l = light.value();
-    hint.textContent = d === l ? 'Both times are the same: the schedule would stay light. Pick different times.' : '';
+    hint.textContent = d === l ? 'Both times are the same: the schedule would stay light. Pick different times.'
+      : `Dark from ${timeLabel(d)} until ${timeLabel(l)}${parseTime(d) > parseTime(l) ? ' the next morning' : ''}; light the rest of the day. Uses this computer's clock and time zone. Picking LIGHT or DARK by hand turns the schedule off.`;
   };
   for (const x of [...dark.els, ...light.els]) x.addEventListener('change', upd);
   upd();
@@ -194,7 +195,8 @@ export async function recoveryDialog(items) {
   }));
   const body = h('div', { class: 'body' },
     h('p', {}, 'STET did not close cleanly. These documents have changes that were not saved to their files:'),
-    h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'document'), h('th', {}, 'file'), h('th', {}, 'last change'))), tbody));
+    h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'document'), h('th', {}, 'file'), h('th', {}, 'last change'))), tbody),
+    h('p', { class: 'hint' }, 'Restore opens the recovered text. Nothing is overwritten until it is saved.'));
   const v = await open({
     title: 'RECOVER WORK', body,
     buttons: [{ label: 'Discard', value: 'discard' }, { label: 'Later', value: 'later' }, { label: 'Restore', value: 'restore', primary: true }],
@@ -377,7 +379,7 @@ export async function previewDialog(doc, initial) {
   range.addEventListener('input', render);
   const body = h('div', { class: 'body' },
     h('div', { class: 'opts' },
-      h('div', { class: 'field' }, h('label', {}, 'Pages'), range),
+      h('div', { class: 'field' }, h('label', {}, 'Pages'), range, h('div', { class: 'hint' }, 'e.g. 1-5, 9, 12-  · title page is not numbered')),
       h('label', { class: 'chk' }, tp, 'title page'),
       h('label', { class: 'chk' }, hl, 'highlights'),
       h('label', { class: 'chk' }, cm, 'notes (marked + listed at end)'),
