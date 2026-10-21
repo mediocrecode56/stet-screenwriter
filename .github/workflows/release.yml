@@ -106,7 +106,7 @@ jobs:
         shell: bash # a plain byte redirect, so the notes stay UTF-8
         run: |
           {
-            echo '**To get STET, download STET-Windows.zip below, unzip it and double-click STET.exe.** Already installed with STET-Setup.exe? Run the new STET-Setup.exe and it updates in place.'
+            echo '**To get STET, download STET-Windows.zip below, unzip it and double-click STET.exe.** Already have STET 0.20 or later? It updates itself: click UPDATE at the bottom right.'
             echo
             node scripts/release-notes.js "$TAG"
           } > release-notes.md

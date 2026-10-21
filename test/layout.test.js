@@ -100,6 +100,34 @@ test('incremental pagination equals full pagination', () => {
   }
 });
 
+test('incremental pagination: a page that loses its (CONT\'D) line is laid out again', () => {
+  // Found by the random test above: deleting the character cue of a speech that runs onto the
+  // next page leaves that page without its (CONT'D) line, so its lines move up; the quick
+  // update used to keep the old layout. This replays the exact edits that showed it.
+  let s = 174;
+  const rnd = (n) => { s = (s * 1664525 + 1013904223) >>> 0; return Math.floor((s / 4294967296) * n); };
+  const blocks = generateScript(80, 3);
+  let pages = paginate(blocks, settings);
+  for (let k = 0; k < 210; k++) {
+    let dirty = null;
+    const op = rnd(3);
+    const i = rnd(blocks.length);
+    if (op === 0) {
+      blocks[i] = withText(blocks[i], blocks[i].text + ' extra words here and there'.repeat(rnd(4)));
+      dirty = mergeDirty(dirty, i, 1, 1);
+    } else if (op === 1 && blocks.length > 10) {
+      const c = 1 + rnd(3);
+      blocks.splice(i, c);
+      dirty = mergeDirty(dirty, i, c, 0);
+    } else {
+      blocks.splice(i, 0, makeBlock('action', 'Inserted line of action.'), makeBlock('character', 'TEO'), makeBlock('dialogue', 'Hey.'));
+      dirty = mergeDirty(dirty, i, 0, 3);
+    }
+    pages = paginate(blocks, settings, pages, dirty);
+    assert.deepEqual(strip(pages), strip(paginate(blocks, settings)), `mismatch after op ${k}`);
+  }
+});
+
 function strip(pages) {
   return pages.map((p) => ({ s: p.startBi, l: p.startLine, i: p.items, m: p.more, c: p.cont }));
 }

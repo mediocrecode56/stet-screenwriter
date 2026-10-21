@@ -114,19 +114,32 @@ export function paginate(blocks, settings, prev = null, dirty = null) {
   const newPage = (nbi, nline) => {
     // A speech continuing onto the next page gets (MORE) on this one.
     if (nbi < N && page.items.length && contCue(blocks, nbi, nline)) page.more = y;
-    // Resync with the previous pagination once we're past the edit.
+    // Resync with the previous pagination once we're past the edit: a page that starts at the
+    // same place, with or without a (CONT'D) line as before, lays out as before.
     if (nbi >= resyncFrom) {
       const want = nbi - delta;
       while (oldIdx < prev.length && (prev[oldIdx].startBi < want || (prev[oldIdx].startBi === want && prev[oldIdx].startLine < nline))) oldIdx++;
       const old = prev[oldIdx];
-      if (old && old.startBi === want && old.startLine === nline) {
-        for (let k = oldIdx; k < prev.length; k++) pages.push(shiftPage(blocks, prev[k], delta));
-        return true;
+      if (old && old.startBi === want && old.startLine === nline && !!contCue(blocks, nbi, nline) === !!old.cont) {
+        let k = oldIdx;
+        for (; k < prev.length; k++) {
+          const shifted = shiftPage(blocks, prev[k], delta);
+          if (!!shifted.cont !== !!prev[k].cont) break;
+          pages.push(shifted);
+        }
+        if (k === prev.length) return true;
+        // Page k gained or lost its (CONT'D) line (the edit changed whose speech it continues),
+        // which moves its lines and the (MORE) at the foot of the page before: lay both out again.
+        pages.pop();
+        oldIdx = k;
+        nbi = prev[k - 1].startBi + delta;
+        nline = prev[k - 1].startLine;
       }
     }
     page = makePage(blocks, nbi, nline);
     pages.push(page);
     y = page.cont ? 1 : 0;
+    bi = nbi; line = nline;
     return false;
   };
 
@@ -157,7 +170,6 @@ export function paginate(blocks, settings, prev = null, dirty = null) {
       page.items.push({ bi, l0: line, l1: line + avail, y: y + sb });
       y += sb + avail;
       if (newPage(bi, line + avail)) return pages;
-      line += avail;
       continue;
     }
     if (newPage(bi, line)) return pages;

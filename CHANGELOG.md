@@ -2,6 +2,10 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.20.1 · 21 Oct 2026
+
+- Deleting a character's name could leave the next page with a blank line too many at the top, until the page was redrawn. Fixed.
+
 ## 0.20.0 · 21 Oct 2026
 
 - STET checks for a new version when it starts. If there is one, UPDATE appears in the status bar.
