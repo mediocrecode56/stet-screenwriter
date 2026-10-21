@@ -1510,6 +1510,35 @@ export const ACTIVITIES = {
     yield { f: 'armsUp', t: 500, fx: d.chance(0.5) ? 'heart' : 'star' };
     yield { f: 'stand', t: 400 };
   },
+  *groom(d) {
+    // Sits and tidies itself up: nibbles a claw, has a look at it, a quick scratch, and is satisfied.
+    yield* d.getTo('sit');
+    yield { f: 'sit', t: d.rnd(300, 500), face: d.inward() || d.face };
+    for (let i = 0, n = d.rint(2, 4); i < n; i++) {
+      for (let k = 0; k < 3; k++) { yield { f: 'sitChew', t: 150 }; yield { f: 'sit', t: 130 }; }
+      yield { f: 'sitUp', t: d.rnd(400, 700) }; // inspects the result
+      if (d.chance(0.4)) for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'sitScratch1' : 'sitScratch2', t: 110 };
+      yield { f: d.chance(0.3) ? 'sitBlink' : 'sit', t: d.rnd(250, 450) };
+    }
+    yield { f: 'sitBlink', t: 300, fx: d.chance(0.4) ? 'heart' : null };
+    yield { f: 'sit', t: 500 };
+  },
+  *sniffTrail(d) {
+    // Picks up a scent: nose to the ground, it follows it in little stretches,
+    // stopping to check, and either finds something or loses the trail.
+    yield* d.getTo('stand');
+    let dir = d.inward() || (d.chance(0.5) ? 1 : -1);
+    yield { f: 'sniff', t: 500, face: dir };
+    yield { f: 'sniffBlink', t: 200 };
+    for (let i = 0, n = d.rint(3, 5); i < n; i++) {
+      for (let k = 0, m = d.rint(3, 6); k < m; k++) yield { f: k % 2 ? 'creep2' : 'creep1', t: 200, dx: 1.2 * dir, face: dir };
+      yield { f: 'sniff', t: d.rnd(400, 700) };
+      if (d.chance(0.25)) { dir = -dir; yield { f: 'stand', t: 300, face: dir, fx: '?' }; } // the trail doubles back
+    }
+    if (d.chance(0.55)) { yield { f: 'up', t: 300, fx: '!' }; yield { f: 'jump', t: 300, jump: 3 }; yield { f: 'wag', t: 180 }; yield { f: 'stand', t: 180 }; yield { f: 'wag', t: 180 }; }
+    else { yield { f: 'stand', t: 700, fx: 'dots' }; yield { f: 'blink', t: 150 }; }
+    yield { f: 'stand', t: 400 };
+  },
   *shadowbox(d) {
     yield* d.getTo('stand');
     const n = d.rint(6, 12);
@@ -2112,8 +2141,8 @@ export const CATEGORY = {
 export const MOODS = {
   content: { act: {}, react: {} },
   playful: { act: { tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
-  curious: { act: { explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
-  sleepy: { act: { explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
+  curious: { act: { sniffTrail: 2, explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
+  sleepy: { act: { groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
   grumpy: { act: { roar: 2.5, look: 1.3, dance: 0.3, rest: 1.2, scratch: 1.5, wag: 0.3, sing: 0.4 }, react: { normal: 1.2, none: 1.6, big: 0.8 } },
   silly: { act: { tightrope: 2, trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 2.5, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
 };

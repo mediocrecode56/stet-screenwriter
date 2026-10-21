@@ -258,7 +258,7 @@ function renderSaveState(s) {
 
 function renderTitle() {
   const name = session.path ? session.name : (session.doc && session.doc.titlePage.title) || 'Untitled';
-  $('doctitle').textContent = name;
+  if (!$('doctitle').isContentEditable) $('doctitle').textContent = name; // (not while it is being renamed)
   fitTitle();
   document.title = `${session.dirty ? '• ' : ''}${name} — STET`;
   describeDoc();
@@ -367,7 +367,49 @@ tbClick('zoom-out', 'zoom-out');
 tbClick('zoom-val', 'zoom-reset');
 $('st-goal').addEventListener('click', () => cmd.run('stats'));
 $('st-save').addEventListener('click', () => { if (session.status === 'conflict' || session.status === 'error') cmd.run('save'); });
-$('doctitle').addEventListener('dblclick', () => cmd.run('rename'));
+$('doctitle').addEventListener('dblclick', () => (session.path ? renameInPlace() : cmd.run('save-as')));
+
+// Rename in place: the title becomes a field. Enter (or clicking away) renames the file on disk,
+// its backups and its place in Open Recent; Escape leaves it as it was.
+function renameInPlace() {
+  const t = $('doctitle');
+  if (!session.path || t.isContentEditable) return;
+  const was = session.name;
+  t.textContent = was;
+  t.contentEditable = 'plaintext-only';
+  t.classList.add('editing');
+  t.focus();
+  getSelection().selectAllChildren(t);
+  let done = false;
+  const finish = async (keep) => {
+    if (done) return;
+    done = true;
+    t.removeEventListener('keydown', onKey);
+    t.removeEventListener('blur', onBlur);
+    t.contentEditable = 'false';
+    t.classList.remove('editing');
+    const name = t.textContent.replace(/\s+/g, ' ').trim();
+    renderTitle();
+    input.focus();
+    if (!keep || !name || name === was) return;
+    t.textContent = name; // shown at once; the disk catches up
+    await session.flushAll();
+    const r = await api.invoke('doc:rename', { path: session.path, name, backupDir: session.doc.settings.backup.dir });
+    if (!r.ok) { renderTitle(); return dlg.alertBox('RENAME FAILED', r.error); }
+    session.path = r.path;
+    api.invoke('settings:set', { lastOpen: r.path });
+    renderTitle(); session.emit();
+  };
+  const onKey = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  };
+  const onBlur = () => finish(true);
+  t.addEventListener('keydown', onKey);
+  t.addEventListener('blur', onBlur);
+  fitTitle();
+}
 $('brand').addEventListener('click', () => cmd.run('changelog'));
 // The title is centred on the window; it gets equal room on both sides, up to wherever the menus
 // (or the window controls) begin; a long title is shortened with an ellipsis. Only in a window so
@@ -671,6 +713,7 @@ cmd.register([
       list: () => api.invoke('recent:list'),
       dismiss: (p) => api.invoke('recent:dismiss', p),
       trash: (p) => api.invoke('recent:trash', p),
+      reveal: (p) => api.invoke('shell:reveal', p),
       confirm: dlg.confirm, alert: dlg.alertBox, currentPath: session.path,
     });
     settings = await api.invoke('settings:get');
@@ -678,16 +721,7 @@ cmd.register([
   } },
   { id: 'save', cat: 'File', label: 'Save', keys: 'Ctrl+S', global: true, run: save },
   { id: 'save-as', cat: 'File', label: 'Save As…', keys: 'Ctrl+Shift+S', global: true, run: saveAs },
-  { id: 'rename', cat: 'File', label: 'Rename…', enabled: () => !!session.path, run: async () => {
-    const name = await dlg.prompt('RENAME', 'New name', session.name, 'Renames the file (and its backup folder) on disk.');
-    if (!name || name === session.name) return;
-    await session.flushAll();
-    const r = await api.invoke('doc:rename', { path: session.path, name, backupDir: session.doc.settings.backup.dir });
-    if (!r.ok) return dlg.alertBox('RENAME FAILED', r.error);
-    session.path = r.path;
-    api.invoke('settings:set', { lastOpen: r.path });
-    renderTitle(); session.emit();
-  } },
+  { id: 'rename', cat: 'File', label: 'Rename…', enabled: () => !!session.path, run: () => renameInPlace() },
   { id: 'reveal', cat: 'File', label: 'Show in Folder', enabled: () => !!session.path, run: () => api.invoke('shell:reveal', session.path) },
   { id: 'backups', cat: 'File', label: 'Backups & Restore…', keys: 'Ctrl+Shift+B', global: true, run: () => restoreFromBackups(session.ref()) },
   { id: 'backup-now', cat: 'File', label: 'Backup Now', run: async () => { const r = await session.maybeBackup(true); $('st-save').textContent = r && r.ok ? 'BACKUP WRITTEN' : 'BACKUP FAILED'; } },
@@ -853,7 +887,7 @@ dino.onDormant = (on) => {
 dino.setEnabled(settings.companion !== false);
 if (settings.panels?.notes) showPanel('notes', true);
 
-session.newUntitled();
+session.load(newDocument(), null); // (not newUntitled: that would forget the screenplay to reopen)
 renderGoal();
 input.focus();
 
@@ -864,8 +898,13 @@ if (info.sample) {
   const recovered = await checkRecovery(true);
   if (!recovered) {
     const pending = await api.invoke('app:pending-open');
-    const target = pending || settings.lastOpen;
-    if (target && (await api.invoke('doc:exists', target))) await openPath(target);
+    // The screenplay open last time, or else the most recent one still on disk.
+    let target = pending || settings.lastOpen;
+    if (!target || !(await api.invoke('doc:exists', target))) {
+      target = null;
+      for (const r of settings.recent || []) if ((await Session.readFile(r.path)).ok) { target = r.path; break; } // (quietly skips any that can't be read)
+    }
+    if (target) await openPath(target);
   }
 }
 if (info.run) setTimeout(() => cmd.run(info.run), 300);

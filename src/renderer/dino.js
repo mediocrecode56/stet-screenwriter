@@ -386,6 +386,8 @@ export class Critter {
       flamingo: 0.15,
       peekaboo: 0.12 + 0.2 * e,
       shadowbox: 0.08 + 0.35 * e,
+      groom: 0.3 + 0.3 * (1 - e),                         // everyday habits
+      sniffTrail: 0.25 + 0.25 * e,
       patrol: 0.2 + 0.3 * e,
       explore: roomOut ? 0.1 + 0.1 * e : 0,
       cornerBite: this.cornerOf() && this.zone(0) > 120 && now - this.lastCorner > 40 * MIN ? 0.004 * Math.min(4, (now - this.lastCorner) / (60 * MIN)) : 0, // very rare

@@ -430,14 +430,15 @@ export async function shortcutsDialog(cmds) {
 }
 
 /**
- * Open Recent. Each row has two actions, shown while the row is hovered,
+ * Open Recent. Each row has three actions, shown while the row is hovered,
  * focused or selected, and kept visually apart:
+ *  folder icon (reveal): shows the file in its folder.
  *  × (dismiss): removes the entry from this list only; the file is untouched.
  *  bin icon (trash): after a confirmation, moves the file to the Recycle Bin.
  * The table has a fixed layout that never grows past the dialog: the name
  * keeps priority, a long path is shortened from its start ("…\Drafts\Film.stet",
  * the full path in its tooltip), and the actions always keep their column.
- * `api` = { list, dismiss, trash, confirm, alert, currentPath }.
+ * `api` = { list, dismiss, trash, reveal, confirm, alert, currentPath }.
  */
 export async function recentDialog(api) {
   let recent = await api.list();
@@ -449,6 +450,8 @@ export async function recentDialog(api) {
   const sub = async (fn) => { inSub = true; try { await fn(); } finally { inSub = false; show(); } };
   const render = () => {
     tbody.replaceChildren(...recent.map((r) => {
+      const reveal = h('button', { class: 'ra ra-reveal', title: 'Show in Folder', 'aria-label': `Show ${r.name} in its folder`, html: FOLDER_SVG, disabled: !r.exists });
+      reveal.addEventListener('click', (e) => { e.stopPropagation(); api.reveal(r.path); });
       const dismiss = h('button', { class: 'ra ra-dismiss', title: 'Remove from Recent (the file is kept)', 'aria-label': `Remove ${r.name} from Recent`, html: DISMISS_SVG });
       const trash = h('button', { class: 'ra ra-trash', title: 'Move to Recycle Bin…', 'aria-label': `Move ${r.name} to the Recycle Bin`, html: TRASH_SVG });
       dismiss.addEventListener('click', async (e) => {
@@ -472,7 +475,7 @@ export async function recentDialog(api) {
         h('td', { class: 'rc-name', title: r.name }, r.name),
         h('td', { class: 'hint rc-path', title: r.path, 'data-path': r.path }),
         h('td', { class: 'rc-time', title: r.exists ? fmtTime(r.opened) : 'The file is no longer there' }, r.exists ? fmtWhen(r.opened) : 'missing'),
-        h('td', { class: 'ra-cell' }, dismiss, trash));
+        h('td', { class: 'ra-cell' }, reveal, dismiss, trash));
       tr.addEventListener('click', () => { chosen = r.exists ? r.path : null; render(); });
       tr.addEventListener('dblclick', () => { if (r.exists) { chosen = r.path; if (openBtn) openBtn.click(); } });
       return tr;
@@ -480,7 +483,7 @@ export async function recentDialog(api) {
     const table = h('table', { class: 't recent-t' },
       h('colgroup', {}, h('col', { class: 'c-name' }), h('col', {}), h('col', { class: 'c-time' }), h('col', { class: 'c-act' })), tbody);
     body.replaceChildren(recent.length ? table : h('div', { class: 'empty' }, 'No recent documents.'),
-      h('p', { class: 'hint', style: 'margin:10px 0 0' }, '× removes an entry from this list only. The bin icon moves the file itself to the Recycle Bin.'));
+      h('p', { class: 'hint', style: 'margin:10px 0 0' }, 'The folder shows the file in its folder. × removes an entry from this list only. The bin icon moves the file itself to the Recycle Bin.'));
     if (openBtn) openBtn.disabled = !chosen;
     fitPaths();
   };
@@ -519,4 +522,5 @@ export function fitStart(el, text) {
   el.textContent = '…' + text.slice(cut);
 }
 const DISMISS_SVG = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
+const FOLDER_SVG = '<svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true"><path d="M1 2.2V9.5h11V3.4H6.2L5 2H1z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>';
 const TRASH_SVG = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true"><path d="M1 3h9M4 3V1.5h3V3M2.2 3l.6 8h5.4l.6-8M4.5 5v4.5M6.5 5v4.5" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';

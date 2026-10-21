@@ -45,7 +45,7 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
       h('div', { class: 'foot' }, h('span', { class: 'grow' }, foot || ''), ...btns));
     ov.replaceChildren(dlg);
     ov.hidden = false;
-    if (!swap) arrive(dlg);
+    if (!swap) arrive(dlg, { dist: 4, scale: 0.97 });
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
       else if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {

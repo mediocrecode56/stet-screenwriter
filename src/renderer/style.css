@@ -24,6 +24,9 @@
   --page-shadow: 0 0 0 1px rgba(0, 0, 0, .16);
   --warn: #000;
   --ph: #8e8e89;
+  --hover: rgba(0, 0, 0, .06);      /* hovered rows and menu items: a soft tint, the text keeps its colour */
+  --hover-on: rgba(0, 0, 0, .11);
+  --float-shadow: 0 10px 30px rgba(0, 0, 0, .14), 0 1px 3px rgba(0, 0, 0, .10);
   --rev-hover: rgba(0, 0, 0, .08);  /* review marks: neutral greys, text always readable (colour is for your own highlights) */
   --rev-cur: rgba(0, 0, 0, .10);
   /* Motion: one set of curves and durations for the whole app. Nothing
@@ -59,6 +62,9 @@
   --ph: #6b6b67;
   --rev-hover: rgba(255, 255, 255, .12);
   --rev-cur: rgba(255, 255, 255, .14);
+  --hover: rgba(255, 255, 255, .08);
+  --hover-on: rgba(255, 255, 255, .15);
+  --float-shadow: 0 12px 34px rgba(0, 0, 0, .55), 0 1px 3px rgba(0, 0, 0, .45);
 }
 
 * { box-sizing: border-box; }
@@ -89,7 +95,8 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 /* File, Edit, Element… start at the window's left edge. */
 #menubar { display: flex; flex: none; -webkit-app-region: no-drag; }
 .mb { border: 0; background: none; padding: 0 10px; cursor: default; text-transform: uppercase; letter-spacing: .12em; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
-.mb:hover, .mb.open { background: var(--inv-bg); color: var(--inv-fg); }
+.mb:hover { background: var(--hover); color: var(--ink); }
+.mb.open { background: var(--hover-on); color: var(--ink); transition: none; }
 /* The screenplay's title alone, centred on the window itself (not on the space
    left between the menus and the window controls). It may use the same room on
    either side — app.js sets --title-side from wherever the menus end — and
@@ -100,7 +107,10 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
   display: flex; align-items: center; gap: 8px; color: var(--ink-2); min-width: 0;
 }
 #top.narrow #docname { left: var(--title-left); right: var(--title-right); transform: none; max-width: none; justify-content: center; }
-#doctitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-app-region: no-drag; cursor: default; }
+#doctitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-app-region: no-drag; cursor: default; border-radius: 4px; padding: 1px 4px; transition: background-color 120ms var(--ease-out); }
+#doctitle:hover { background: var(--hover); }
+/* Renaming in place (double-click): the title becomes a field. */
+#doctitle.editing { background: var(--hover-on); color: var(--ink); outline: none; cursor: text; text-overflow: clip; user-select: text; }
 #docdot { width: 7px; height: 7px; border: 1px solid var(--ink-2); flex: none; }
 #docdot.dirty { background: var(--ink); border-color: var(--ink); }
 #docdot.error { background: none; border: 1px solid var(--ink); animation: blinkerr 1s steps(2) infinite; }
@@ -109,16 +119,17 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 
 /* ---- dropdown menus -------------------------------------------------- */
 .menu {
-  position: fixed; z-index: 50; min-width: 250px; background: var(--page); border: 1px solid var(--rule-strong);
-  padding: 3px 0; box-shadow: 4px 4px 0 var(--rule);
+  position: fixed; z-index: 50; min-width: 250px; background: var(--page); border: 1px solid var(--rule);
+  padding: 4px; border-radius: 7px; box-shadow: var(--float-shadow); transform-origin: top left;
 }
 @keyframes fade-in { from { opacity: 0; } }
-.mi { display: flex; justify-content: space-between; gap: 24px; padding: 3px 12px; white-space: nowrap; cursor: default; }
-.mi:hover, .mi.active { background: var(--inv-bg); color: var(--inv-fg); }
+/* Highlight at once on the way in, a short fade on the way out. */
+.mi { display: flex; justify-content: space-between; gap: 24px; padding: 3px 10px; border-radius: 4px; white-space: nowrap; cursor: default; transition: background-color 120ms var(--ease-out); }
+.mi:hover, .mi.active, .mi.sub-open { background: var(--hover-on); color: var(--ink); transition: none; }
 .mi .k { color: var(--ink-3); }
-.mi:hover .k, .mi.active .k { color: inherit; opacity: .7; }
+.mi:hover .k, .mi.active .k { color: var(--ink-2); }
 .mi.disabled { color: var(--ink-3); pointer-events: none; }
-.msep { height: 1px; background: var(--rule); margin: 3px 0; }
+.msep { height: 1px; background: var(--rule); margin: 4px 6px; }
 /* A menu row with a quick flyout (Open Recent), and the flyout: short, long titles end in "…". */
 .mi.has-sub .k::after { content: '›'; margin-left: 10px; }
 .msub { position: absolute; min-width: 160px; max-width: 260px; }
@@ -142,7 +153,8 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 #elright::before { content: ''; position: absolute; left: -12px; right: -6px; top: -4px; height: 1px; background: var(--bar); pointer-events: none; }
 .tb:hover { color: var(--ink); background: var(--rule); }
 /* Pressed feedback is painted at pointerdown, before the command's own result. */
-.tb.pressed, .mb.pressed, .btn.pressed { background: var(--inv-bg); color: var(--inv-fg); }
+.tb.pressed, .btn.pressed { background: var(--inv-bg); color: var(--inv-fg); }
+.mb.pressed { background: var(--hover-on); }
 .tb.pressed sup { color: inherit; }
 .tb.on { background: var(--inv-bg); color: var(--inv-fg); }
 .tb sup { font-size: 8px; margin-left: 3px; color: var(--ink-3); vertical-align: 2px; }
@@ -293,14 +305,14 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #overlay { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 9vh; animation: fade var(--dur-fast) var(--ease-out); }
 :root[data-theme="dark"] #overlay { background: rgba(0, 0, 0, .6); }
 @keyframes fade { from { background-color: transparent; } }
-.dlg { background: var(--page); border: 1px solid var(--rule-strong); min-width: 420px; max-width: min(860px, 92vw); max-height: 82vh; display: flex; flex-direction: column; box-shadow: 6px 6px 0 var(--rule); user-select: text; }
+.dlg { background: var(--page); border: 1px solid var(--rule); border-radius: 9px; overflow: hidden; min-width: 420px; max-width: min(860px, 92vw); max-height: 82vh; display: flex; flex-direction: column; box-shadow: var(--float-shadow); user-select: text; transform-origin: 50% 30%; }
 .dlg h2 { margin: 0; padding: 10px 14px 8px; font-size: 11px; letter-spacing: .26em; font-weight: 700; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; }
 .dlg h2 small { font-weight: 400; color: var(--ink-3); letter-spacing: .08em; }
 .dlg .body { padding: 12px 14px; overflow: auto; }
 .dlg .foot { padding: 8px 14px; border-top: 1px solid var(--rule); display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
 .dlg .foot .grow { flex: 1; color: var(--ink-3); }
-.btn { border: 1px solid var(--rule-strong); background: none; padding: 4px 12px; cursor: default; text-transform: uppercase; letter-spacing: .12em; transition: background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
-.btn:hover { background: var(--rule); }
+.btn { border: 1px solid var(--rule-strong); border-radius: 5px; background: none; padding: 4px 12px; cursor: default; text-transform: uppercase; letter-spacing: .12em; transition: background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+.btn:hover { background: var(--hover-on); }
 .btn.primary { background: var(--inv-bg); color: var(--inv-fg); }
 .btn.primary:hover { opacity: .85; }
 .btn:disabled { opacity: .35; }
@@ -324,8 +336,9 @@ table.t { border-collapse: collapse; width: 100%; }
 table.t td, table.t th { text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid var(--rule); font-weight: 400; }
 table.t th { color: var(--ink-3); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
 table.t tr.pick { cursor: default; }
-table.t tr.pick:hover td { background: var(--rule); }
-table.t tr.on td { background: var(--inv-bg); color: var(--inv-fg); }
+table.t tr.pick td { transition: background-color 120ms var(--ease-out); }
+table.t tr.pick:hover td { background: var(--hover); transition: none; }
+table.t tr.on td, table.t tr.on:hover td { background: var(--hover-on); color: var(--ink); }
 /* Open Recent: a fixed-layout table that never grows past the dialog (no horizontal scrolling).
    The name keeps priority; paths are shortened from the start (dialogs.js fitStart); the
    actions keep their own column. They show while the row is hovered, focused or selected,
@@ -335,17 +348,17 @@ table.t tr.on td { background: var(--inv-bg); color: var(--inv-fg); }
 table.recent-t { table-layout: fixed; width: 100%; }
 .recent-t col.c-name { width: 34%; }
 .recent-t col.c-time { width: 136px; }
-.recent-t col.c-act { width: 62px; }
+.recent-t col.c-act { width: 92px; }
 .recent-t td { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .recent-t td.rc-name { padding-right: 12px; }
 .recent-t td.ra-cell { overflow: visible; }
-.ra-cell { width: 62px; text-align: right; white-space: nowrap; padding-right: 2px !important; }
-.ra { border: 1px solid transparent; background: none; color: var(--ink-3); width: 20px; height: 18px; padding: 0; cursor: default; opacity: 0; vertical-align: middle; line-height: 1; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.ra-cell { width: 92px; text-align: right; white-space: nowrap; padding-right: 2px !important; }
+.ra { border: 0; border-radius: 4px; background: none; color: var(--ink-3); width: 22px; height: 20px; padding: 0; cursor: default; opacity: 0; vertical-align: middle; line-height: 1; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
 .ra svg { display: block; margin: auto; }
-.ra-trash { margin-left: 14px; }
+.ra-dismiss { margin-left: 4px; }
+.ra-trash { margin-left: 12px; }
 tr:hover .ra, tr.on .ra, tr:focus-within .ra, .ra:focus-visible { opacity: 1; }
-.ra:hover, .ra:focus-visible { color: var(--ink); border-color: var(--rule-strong); outline: none; }
-table.t tr.on .ra { color: var(--inv-fg); }
+.ra:hover, .ra:focus-visible { color: var(--ink); background: var(--hover-on); outline: none; }
 table.t tr.missing td:first-child { text-decoration: line-through; color: var(--ink-3); }
 
 /* English revision */

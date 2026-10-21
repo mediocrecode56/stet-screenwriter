@@ -94,7 +94,7 @@ function showMenu(btn, items) {
     const label = typeof c.label === 'function' ? c.label() : c.label;
     const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') + (c.sub ? ' has-sub' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
     row.addEventListener('mouseup', () => { closeMenu(); if (c.run) setTimeout(() => (c.id ? run(c.id) : c.run()), 0); });
-    if (c.sub && !disabled) quickSub(el, row, c.sub()); else row.addEventListener('mouseenter', () => hideSub(el));
+    if (c.sub && !disabled) quickSub(el, row, c.sub()); else row.addEventListener('mouseenter', () => hideSub(el, 110));
     el.appendChild(row);
   }
   document.body.appendChild(el);
@@ -103,7 +103,7 @@ function showMenu(btn, items) {
   el.style.top = r.bottom + 'px';
   btn.classList.add('open');
   openMenu = { btn, el };
-  if (!switching) arrive(el, { dist: 3, dur: DUR_FAST });
+  if (!switching) arrive(el, { dist: 2, dur: 120, scale: 0.98 });
 }
 
 // A quick flyout beside a menu row (Open Recent): its items load as the menu opens and show
@@ -115,9 +115,12 @@ function quickSub(menu, row, load) {
 }
 
 function showSub(menu, row, items) {
-  hideSub(menu);
+  clearTimeout(menu._hide);
+  if (menu.querySelector('.msub')) return; // already showing
   if (!items.length) return;
   const sub = h('div', { class: 'menu msub' });
+  sub.addEventListener('mouseenter', () => clearTimeout(menu._hide));
+  row.classList.add('sub-open');
   for (const it of items) {
     const r = h('div', { class: 'mi' + (it.disabled ? ' disabled' : '') + (it.current ? ' cur' : ''), title: it.title || '' }, h('span', { class: 'mi-t' }, it.label));
     r.addEventListener('mouseup', (e) => { e.stopPropagation(); closeMenu(); setTimeout(it.run, 0); });
@@ -128,10 +131,16 @@ function showSub(menu, row, items) {
   // row; on the left instead if it would leave the window.
   const m = menu.getBoundingClientRect();
   sub.style.left = (m.right + sub.offsetWidth > window.innerWidth ? -sub.offsetWidth : m.width - 1) + 'px';
-  sub.style.top = Math.min(row.offsetTop - 4, window.innerHeight - m.top - sub.offsetHeight) + 'px';
+  sub.style.top = Math.min(row.offsetTop - 5, window.innerHeight - m.top - sub.offsetHeight) + 'px';
+  arrive(sub, { dist: 0, dur: 100 });
 }
 
-function hideSub(menu) { const s = menu.querySelector('.msub'); if (s) s.remove(); }
+// Hidden after a short grace, so the pointer can cross a neighbouring row on its way into the flyout.
+function hideSub(menu, delay = 0) {
+  clearTimeout(menu._hide);
+  const go = () => { const s = menu.querySelector('.msub'); if (s) s.remove(); for (const r of menu.querySelectorAll('.sub-open')) r.classList.remove('sub-open'); };
+  if (delay) menu._hide = setTimeout(go, delay); else go();
+}
 
 export function closeMenu(animated = true) {
   if (!openMenu) return;

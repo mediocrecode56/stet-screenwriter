@@ -4,6 +4,38 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.18.0 — 21 October 2026
+
+### New
+
+- **Rename right from the title.** Double-click the screenplay's name at the top: it turns into a field with the name selected. Type the new name and press Enter (or click away). The file is renamed on disk with its backups, and Open Recent shows the new name. Escape leaves everything as it was. For a screenplay that has never been saved, double-clicking opens Save As instead.
+- **A folder icon in Open Recent.** Each project now has a folder icon beside × and the bin. It shows the file in its folder in File Explorer.
+- **Two new everyday habits for the dinosaur.** These come up as often as its other habits and blend in with them.
+  - **It grooms itself:** it sits down, nibbles a claw, looks at the result, has a quick scratch and looks pleased.
+  - **It follows a scent:** nose to the ground, it creeps along in short stretches and stops to check. Sometimes the trail doubles back. Either it finds something (a little hop and a wag) or it loses the trail.
+
+  It grooms more often when sleepy, and follows scents more often when curious.
+
+### Improved
+
+- **STET always opens your last screenplay.** Before, if you last had a new untitled screenplay open, or the last file had moved, STET opened on a blank page. It now opens the most recent screenplay that is still on disk.
+- **Smoother, more polished menus and dialogs.**
+  - **Readable highlight:** hovering a menu item, a menu title or a row in Open Recent now shows a soft grey highlight, and the text keeps its own colour. Before, the whole row flipped to bright white.
+  - **The highlight timing:** it appears at once and fades out gently as you move on.
+  - **The look:** menus and dialogs have rounded corners and a soft shadow instead of the hard offset one. Buttons are rounded too.
+  - **Opening:** menus and dialogs settle in with a slight scale as they fade in, no slower than before.
+  - **The recent list:** it fades in, and you can move the pointer across a neighbouring row on your way to it without it disappearing.
+
+### For the technically curious
+
+- **The new styles:** hover colours come from `--hover`, `--hover-on` and `--float-shadow` in both themes, and `arrive()` takes a `scale`.
+- **Renaming in place:** the title becomes `contenteditable` while you rename. It is never overwritten during autosaves, and the rename goes through `doc:rename` as before.
+- **On startup:** the blank page is no longer saved as "the last screenplay". If the last screenplay is missing, the first entry in Open Recent that can still be read is opened, and any that can't be read are skipped without an error.
+- **Tests:**
+  - A new end-to-end file, `recent.e2e.js`, covers renaming in place (Enter, Escape, the file on disk and Open Recent), the folder icon, and reopening after a new untitled screenplay.
+  - The Open Recent layout test now checks all three icons.
+  - The dinosaur's 43 unit tests pass, including the one that runs every activity from every posture.
+
 ## 0.17.0 — 21 October 2026
 
 ### New

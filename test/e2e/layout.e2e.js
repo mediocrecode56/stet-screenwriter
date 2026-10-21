@@ -271,10 +271,11 @@ test('Open Recent: both actions visible and working on hover, no horizontal scro
       return { scroll: body.scrollWidth - body.clientWidth, icons, path: p.textContent, full: p.title, pathFits: p.scrollWidth <= p.clientWidth, nameRight: n.getBoundingClientRect().right, pathLeft: p.getBoundingClientRect().left, iconLeft: Math.min(...[...row.querySelectorAll('.ra')].map((e) => e.getBoundingClientRect().left)), pathRight: p.getBoundingClientRect().right };
     })()`);
     assert.equal(r.scroll, 0, `no horizontal scrolling at ${w} px`);
-    assert.equal(r.icons.length, 2);
+    assert.equal(r.icons.length, 3);
     for (const i of r.icons) { assert.equal(i.op, '1', `${i.title} visible on hover`); assert.ok(i.inside && i.onTop, `${i.title} inside the dialog and not covered`); }
-    assert.match(r.icons[0].title, /Remove from Recent/);
-    assert.match(r.icons[1].title, /Move to Recycle Bin/);
+    assert.match(r.icons[0].title, /Show in Folder/);
+    assert.match(r.icons[1].title, /Remove from Recent/);
+    assert.match(r.icons[2].title, /Move to Recycle Bin/);
     assert.ok(r.path.startsWith('…') && r.full.endsWith(r.path.slice(1)), `shortened at the start: ${r.path}`);
     assert.ok(r.path.endsWith('.stet'), 'the file name is kept');
     assert.ok(r.pathFits && r.pathRight <= r.iconLeft, 'the path never runs under the icons');

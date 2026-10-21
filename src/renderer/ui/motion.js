@@ -55,10 +55,10 @@ export function setPanel(el, want) {
   setTimeout(() => { if (el._anim === a) { a.cancel(); done(); } }, dur + 80);
 }
 
-/** A floating surface (dialog, menu) arrives: a short drop into place while it fades in. */
-export function arrive(el, { dist = 6, dur = DUR_PANEL } = {}) {
+/** A floating surface (dialog, menu) arrives: a short drop into place, a touch of scale, while it fades in. */
+export function arrive(el, { dist = 6, dur = DUR_PANEL, scale = 1 } = {}) {
   if (reduced.matches) return;
-  el.animate([{ opacity: 0, transform: `translateY(${-dist}px)` }, { opacity: 1, transform: 'none' }], { duration: dur, easing: EASE_OUT });
+  el.animate([{ opacity: 0, transform: `translateY(${-dist}px) scale(${scale})` }, { opacity: 1, transform: 'none' }], { duration: dur, easing: EASE_OUT });
 }
 
 /**
