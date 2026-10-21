@@ -4,6 +4,26 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.18.4 — 21 October 2026
+
+### Fixed
+
+- **Double-clicking the screenplay's name at the top now renames it.** This was meant to work from 0.18.0, but in the real window a double-click on the name maximised or restored the window instead. Now the name turns into a field:
+  - type the new name, then press Enter or click away;
+  - the file is renamed on disk with its backups, and Open Recent shows the new name;
+  - Escape leaves everything as it was.
+
+### For the technically curious
+
+- **The cause:** an empty spacer in the title bar (`.grow`) sat after the title in the page and inherited the window's drag area. Windows applies the page's drag regions in order, so the spacer's region covered the title, which is why Windows took the double-click as "maximise".
+- **Why the tests missed it:** they sent the double-click straight into the page, which never goes through Windows' title-bar handling.
+- **The fix:**
+  - the spacer is gone; the window-controls space now sits at the right with `margin-left: auto`;
+  - the title comes last in the title bar;
+  - the title is centred with equal left and right insets instead of a CSS transform.
+- **Checked:** a real double-click through Windows on a visible window now opens the rename field, and the window no longer maximises.
+- **A new end-to-end check:** it fails if any drag region later in the title bar covers the title. It catches the old title bar and passes on the new one.
+
 ## 0.18.3 — 21 October 2026
 
 ### Removed

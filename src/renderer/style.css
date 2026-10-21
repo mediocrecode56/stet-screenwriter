@@ -103,13 +103,13 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 /* The screenplay's title alone, centred on the window itself (not on the space
    left between the menus and the window controls). It may use the same room on
    either side — app.js sets --title-side from wherever the menus end — and
-   shortens with an ellipsis rather than ever reaching them. */
+   shortens with an ellipsis rather than ever reaching them. Equal insets centre it; never a
+   transform, which the window's drag regions don't follow (the title must stay clickable). */
 #docname {
-  position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
-  max-width: max(0px, calc(100% - 2 * var(--title-side, 50%)));
-  display: flex; align-items: center; gap: 8px; color: var(--ink-2); min-width: 0;
+  position: absolute; top: 0; bottom: 0; left: var(--title-side, 0px); right: var(--title-side, 0px);
+  display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-2); min-width: 0;
 }
-#top.narrow #docname { left: var(--title-left); right: var(--title-right); transform: none; max-width: none; justify-content: center; }
+#top.narrow #docname { left: var(--title-left); right: var(--title-right); }
 #doctitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-app-region: no-drag; cursor: default; padding: 1px 4px; transition: background-color var(--dur-fast) var(--ease-out); }
 #doctitle:hover { background: var(--hover); }
 /* Renaming in place (double-click): the title becomes a field. */
@@ -118,7 +118,10 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 #docdot.dirty { background: var(--ink); border-color: var(--ink); }
 #docdot.error { background: none; border: 1px solid var(--ink); animation: blinkerr 1s steps(2) infinite; }
 @keyframes blinkerr { 50% { background: var(--ink); } }
-#drag { width: 140px; flex: none; } /* native window controls overlay */
+/* Room for the native window controls, at the far right. The title (#docname) comes after it in the
+   page and no element spans the middle of the bar: a drag region later in the page would otherwise
+   cover the title, and Windows would take a double-click on it as "maximise". */
+#drag { width: 140px; flex: none; margin-left: auto; }
 
 /* ---- dropdown menus -------------------------------------------------- */
 .menu {

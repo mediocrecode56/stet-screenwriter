@@ -22,6 +22,12 @@ test('double-clicking the title renames the file in place; Open Recent follows; 
   assert.equal((await app.eval(`__stet.session.saveTo(${JSON.stringify(file)})`)).ok, true);
   await app.eval(`__stet.openPath(${JSON.stringify(file)})`);
   await sleep(300);
+  // Windows decides where the window can be dragged from the page's drag regions, later ones winning:
+  // nothing after the title may be a drag region over it, or a real double-click maximises the
+  // window instead of reaching the title (synthetic events here would never notice).
+  const covered = await app.eval(`(() => { const t = document.getElementById('doctitle'), r = t.getBoundingClientRect(); return [...document.querySelectorAll('#top *')].filter((e) => t.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING && getComputedStyle(e).webkitAppRegion === 'drag').filter((e) => { const q = e.getBoundingClientRect(); return q.width && q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top; }).map((e) => e.id || e.className); })()`);
+  assert.deepEqual(covered, [], 'no drag region covers the title');
+  assert.equal(await app.eval(`getComputedStyle(document.getElementById('doctitle')).webkitAppRegion`), 'no-drag');
   // Escape leaves everything as it was.
   await app.eval(`document.getElementById('doctitle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
   assert.equal(await app.eval(`document.getElementById('doctitle').isContentEditable`), true, 'the title becomes a field');
