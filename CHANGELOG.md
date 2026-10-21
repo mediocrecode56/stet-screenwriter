@@ -4,223 +4,222 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ## 0.19.4 · 21 Oct 2026
 
-- The little explanations in windows are back. We missed them. Open Recent didn't.
-- The Revise panel introduces itself in one sentence now. Brevity: we've heard of it.
+- The explanatory notes in windows are back, except in Open Recent.
+- The Revise panel's introduction is one sentence.
 
 ## 0.19.3 · 21 Oct 2026
 
-- Removed the little explanations from windows. Bold. Brave. Reversed the next day.
-- Warnings that actually matter stayed. We're minimalists, not monsters.
+- Explanatory notes removed from windows.
+- Warnings and consent notes kept.
 
 ## 0.19.2 · 21 Oct 2026
 
-- The speed test was typing and taking credit for it. 1,526 words, a daily goal and a streak, all fake. Its words are gone.
-- Three separate locks now stop it from ever doing that again. It knows what it did.
+- Words typed by the speed test no longer count as your writing. The 1,526 it added are removed, and your streak is rebuilt.
+- Three separate checks stop it from happening again.
 
 ## 0.19.1 · 21 Oct 2026
 
-- The speed test now gives a score out of 100. Finally, a grade you can't argue with.
-- It runs twice as fast, which is fitting for a speed test.
-- It cleans up after itself. Your screenplay is exactly where you left it.
+- The speed test gives a score out of 100.
+- It takes half as long.
+- Your screenplay is left exactly as it was.
 
 ## 0.19.0 · 21 Oct 2026
 
-- Page margins now match the industry standard to the inch. Hollywood can relax.
-- Long paths in Open Recent show where they start, not where they end.
-- A plain clock sits in the corner. The little square by the title tells you if you're saved.
-- Hollow means saved. Filled means not yet. Blinking means please click me.
-- Text in windows can't be accidentally selected anymore. It was never that interesting.
+- Page margins match the industry standard.
+- Long paths in Open Recent are cut at the end, not the start.
+- A clock replaces the save text. The square by the title shows whether you're saved.
+- Text in windows can no longer be selected by accident.
 
 ## 0.18.5 · 21 Oct 2026
 
-- Clicking anywhere else now finishes renaming. No more names stuck in limbo.
-- No more thick outlines around buttons. They were shouting.
+- Clicking elsewhere finishes renaming.
+- No outlines around focused buttons.
 
 ## 0.18.4 · 21 Oct 2026
 
-- Double-clicking the title renames the screenplay, as promised two versions ago. Windows kept maximising instead.
+- Double-clicking the title renames the screenplay, instead of maximising the window.
 
 ## 0.18.3 · 21 Oct 2026
 
-- The autocomplete popup is gone for good. It interrupted. Nobody asked it to.
+- The autocomplete popup is removed.
 
 ## 0.18.2 · 21 Oct 2026
 
-- Square corners, done properly this time. Not just hidden: removed.
-- Every hover looks the same now. Consistency, at last.
+- Leftovers from the rounded corners removed.
+- One hover style everywhere.
 
 ## 0.18.1 · 21 Oct 2026
 
-- Rounded corners lasted one version. The square look is back, as nature intended.
+- Square corners again.
 
 ## 0.18.0 · 21 Oct 2026
 
-- Double-click the title to rename your screenplay. Backups and Open Recent follow along.
-- Open Recent has a folder button that shows you where the file lives.
-- STET always reopens your last screenplay. No more surprise blank pages.
-- The dinosaur grooms itself and follows scents. It has a rich inner life.
+- Double-click the title to rename the screenplay.
+- Open Recent can show a file in its folder.
+- STET reopens your last screenplay, instead of a blank page.
+- The dinosaur grooms itself and follows scents.
 
 ## 0.17.0 · 21 Oct 2026
 
-- Hover Open Recent in the File menu and your last ten screenplays appear. One click, no detour.
+- Your last ten screenplays appear when you hover Open Recent in the File menu.
 
 ## 0.16.7 · 21 Oct 2026
 
-- The weekly view lost weight. Smaller window, same numbers.
+- Smaller weekly view.
 
 ## 0.16.6 · 21 Oct 2026
 
-- Save goals now closes the window instead of pretending to be stuck.
-- The weekly chart has a scale. Numbers, now with context.
+- Save goals closes the window.
+- The weekly chart has a scale.
 
 ## 0.16.5 · 21 Oct 2026
 
-- Change your daily goal and the weekly one follows. They talk to each other now.
+- Changing the daily goal adjusts the weekly goal, and the other way round.
 
 ## 0.16.4 · 21 Oct 2026
 
-- The weekly view lines up nicely. Two equal boxes, a wide chart, nothing wobbly.
+- Weekly view layout evened out.
 
 ## 0.16.3 · 21 Oct 2026
 
-- One more line of facts removed from the weekly view. The chart already said it.
+- Weekly view: one redundant line removed.
 
 ## 0.16.2 · 21 Oct 2026
 
-- The weekly view's facts fit on one short line. The flame handles the streak.
+- Weekly view: facts on one line.
 
 ## 0.16.1 · 21 Oct 2026
 
-- Your streak counts days you hit your goal, not days you typed one word. Sorry.
-- The rest-day shield follows the same rule. It's strict but fair.
+- A day joins your streak when you reach your daily goal, not with its first word.
+- Rest days follow the same rule.
 
 ## 0.16.0 · 21 Oct 2026
 
-- A little shield shows how many rest days you have left this week.
-- STET opens maximised without flashing an empty window first. Very smooth.
+- A shield shows the rest days left this week.
+- STET no longer opens as an empty window first.
 
 ## 0.15.4 · 21 Oct 2026
 
-- The suggestion you're looking at just gets a soft grey glow. No boxes, no fuss.
+- The selected suggestion is marked with grey only.
 
 ## 0.15.3 · 21 Oct 2026
 
-- Click anywhere on a suggestion to jump to it. Not just the one tiny line.
+- Clicking anywhere on a suggestion goes to it.
 
 ## 0.15.2 · 21 Oct 2026
 
-- Clicking a suggestion always brings it to the middle of the screen. Every time, really.
-- Review highlights are grey now, not yellow. Yellow is for your highlights.
+- Clicking a suggestion always centres it on screen.
+- Review highlights are grey, not yellow.
 
 ## 0.15.1 · 20 Oct 2026
 
-- Clicking a suggestion glides you there instead of teleporting. Less dizzy.
+- Clicking a suggestion scrolls to it smoothly.
 
 ## 0.15.0 · 20 Oct 2026
 
-- English review works again without an API key. Claude moved house; STET found it.
-- Pick how STET connects to Claude. It never switches behind your back.
-- Signed out of Claude? You'll hear it once, clearly, not twenty times.
-- The dinosaur keeps its face in every pose. It was having an identity crisis.
-- When the dinosaur sleeps deeply, STET rests too. Barely sips power.
+- The English review works without an API key again.
+- You choose how STET connects to Claude.
+- A signed-out Claude account is reported once, before the review starts.
+- The dinosaur's face no longer breaks in some poses.
+- STET uses almost nothing while the dinosaur is asleep.
 
 ## 0.14.0 · 20 Oct 2026
 
-- Your streak gets two rest days a week. Even writers need weekends.
-- Grass grows around the dinosaur while you're away. It eats it when you're back and writing.
-- Leave long enough and it falls fast asleep. Come back and it stretches.
-- It makes its bed, lines up pebbles, walks a tightrope and plants flowers. Busy.
+- Two rest days a week for your streak.
+- Grass grows around the dinosaur while you're away. It eats it once you're writing again.
+- After a long absence it falls asleep.
+- It makes its bed, lines up pebbles, walks a tightrope and plants flowers.
 
 ## 0.13.0 · 20 Oct 2026
 
-- The dinosaur can roam the whole width of the window. It mostly stays home anyway.
-- Very rarely, it walks to the corner and bites the window border. We don't know why either.
-- Plants come and go. The cactus is a lesson it keeps learning.
-- It actually walks now. No more gliding like a ghost.
+- The dinosaur can use the whole width of the window.
+- Occasionally it bites the corner of the window.
+- Plants come and go.
+- It walks instead of sliding.
 
 ## 0.12.0 · 20 Oct 2026
 
-- The dinosaur is STET's icon now. It earned it.
-- Sitting and lying down no longer turn it into a lump.
-- Rare surprises always come back around eventually. Patience pays.
+- The dinosaur is STET's icon.
+- Sitting and lying poses redrawn.
+- Rare events always come round eventually.
 
 ## 0.11.0 · 20 Oct 2026
 
-- The dinosaur watches sunsets and sunrises when the theme changes by itself. Very cinematic.
-- Visitors: a balloon, a paper plane, a frog, a ladybird, a dandelion and an uncatchable worm.
-- Its everyday routines come out a little different each time. Nobody likes reruns.
+- The dinosaur watches the sun set and rise when the theme changes on schedule.
+- New visitors: a balloon, a paper plane, a frog, a ladybird, a dandelion and a worm.
+- Everyday routines vary more.
 
 ## 0.10.0 · 20 Oct 2026
 
-- Bold, italic, underline and strikethrough. Ctrl+B, I, U and D. Groundbreaking stuff.
-- They print exactly as they look. Courier doesn't budge.
+- Bold, italic, underline and strikethrough (Ctrl+B, I, U, D).
+- Printed and exported as shown.
 
 ## 0.9.0 · 20 Oct 2026
 
-- A writing streak with a little flame. Write daily, feel smug.
-- The dinosaur grows with your streak. Your guilt now has a mascot.
-- Rain, wind, birds, tumbleweeds and shooting stars visit its little world.
-- Clicking it gets reactions that fit the moment. Wake it and it talks in its sleep.
+- A writing streak, shown as a flame.
+- The dinosaur grows with your streak.
+- Weather and visitors in the dinosaur's world.
+- Clicking it gets a reaction suited to what it was doing.
 
 ## 0.8.0 · 20 Oct 2026
 
-- The dinosaur gets more room to play, without stealing any from you.
-- The weekly view handles huge writing days. Ambitious of us.
-- Every panel slides in the same way. Harmony.
-- Open Recent's buttons no longer hide off-screen.
+- More room for the dinosaur, none taken from the page.
+- The weekly view handles large numbers.
+- All panels slide the same way.
+- Open Recent's buttons no longer go off-screen.
 
 ## 0.7.0 · 20 Oct 2026
 
-- Your writing is counted across every screenplay, forever. No pressure.
-- A weekly view with a chart. Press F9 and judge yourself.
-- Resetting statistics asks first and keeps a copy. We're not savages.
-- Deleting text no longer stops today's count. Editing is writing too.
-- The dinosaur has hobbies now: balls, bones, butterflies, a tiny typewriter.
+- Your writing is recorded across all screenplays.
+- A weekly view with a chart (F9).
+- Resetting statistics asks first and keeps a copy.
+- Deleting text no longer stops today's count.
+- The dinosaur plays with balls, bones and butterflies, and sometimes types.
 
 ## 0.6.1 · 19 Oct 2026
 
-- One thin line was a few pixels too long. It has been dealt with.
+- A line above the toolbar was too long. Shortened.
 
 ## 0.6.0 · 19 Oct 2026
 
-- Claude's suggestions stay put until you decide. Edits don't make them vanish.
-- Hover a suggestion to see exactly which words it means.
-- A tiny pixel dinosaur moves in above the word count. The more you write, the livelier it gets.
-- Open Recent can forget a file or move it to the Recycle Bin. Politely.
-- Today's word count stopped freezing after pastes. It was being dramatic.
+- Claude's suggestions stay until you decide.
+- Hovering a suggestion shows the words it refers to.
+- A pixel dinosaur lives above the word count.
+- Open Recent can remove a file from the list or move it to the Recycle Bin.
+- Today's count no longer stalls after pasting.
 
 ## 0.5.0 · 19 Oct 2026
 
-- English review works with your Claude account. No API key, no homework.
+- The English review works with your Claude account. No API key needed.
 
 ## 0.4.0 · 19 Oct 2026
 
-- Claude can check your English and suggest small fixes. Your slang stays your slang.
-- Nothing changes until you accept. You're the writer here.
+- Claude can review your English and suggest fixes.
+- Nothing changes until you accept.
 
 ## 0.3.1 · 19 Oct 2026
 
-- The blinking cursor stopped wandering into your letters. It had one job.
+- The cursor no longer drifts into the text.
 
 ## 0.3.0 · 19 Oct 2026
 
-- Light and dark switch by themselves on a schedule you choose.
-- STET gets an icon. Very official.
-- Word counting got up to ten times faster. It was already fast. We're competitive.
+- Light and dark switch on a schedule.
+- STET has an icon.
+- Faster word counting.
 
 ## 0.2.1 · 19 Oct 2026
 
-- STET becomes a real Windows program. Double-click and go.
+- STET runs as a Windows program.
 
 ## 0.2.0 · 19 Oct 2026
 
-- Crash recovery got safer. Your unsaved work comes first.
-- Tab after dialogue starts a parenthetical, like it always should have.
-- Lots of small fixes. The boring, important kind.
+- Safer crash recovery.
+- Tab after dialogue starts a parenthetical.
+- Small fixes.
 
 ## 0.1.0 · 19 Oct 2026
 
-- The first version. Standard screenplay formatting, page breaks and all.
-- Enter and Tab move you through scenes, characters and dialogue.
-- Autosave, backups and crash recovery from day one. Trust issues, but productive ones.
-- Print, PDF, title page, notes, highlights, light and dark. Not bad for a first day.
+- First version.
+- Standard screenplay formatting and page breaks.
+- Autosave, backups and crash recovery.
+- Print, PDF, title page, notes, highlights, light and dark.
