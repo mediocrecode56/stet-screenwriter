@@ -128,7 +128,7 @@ jobs:
           built=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
           [ "v$built" = "$TAG" ] || { echo "::error::STET.app reports version $built, expected $TAG"; exit 1; }
           file "$app/Contents/MacOS/STET" | grep -q arm64
-          STET_E2E_EXE="$app/Contents/MacOS/STET" node --test --test-concurrency=1 test/e2e/app.e2e.js test/e2e/patch.e2e.js
+          STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test --test-concurrency=1 test/e2e/app.e2e.js test/e2e/patch.e2e.js
 
       - uses: actions/upload-artifact@v4
         with:

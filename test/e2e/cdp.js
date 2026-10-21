@@ -10,6 +10,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const ELECTRON = process.env.STET_E2E_EXE || path.join(ROOT, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const APP_ARGS = process.env.STET_E2E_EXE ? [] : [ROOT];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// How long STET may take to start. A Mac checks a newly downloaded app once, on its first start (the release workflow).
+const START_MS = Number(process.env.STET_E2E_START_MS) || 15000;
 
 export class App {
   static async launch({ userData, port = 9300 + Math.floor(Math.random() * 500), args = [], hidden = true, env = {} }) {
@@ -19,16 +21,17 @@ export class App {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     child.stdout.on('data', () => {});
-    child.stderr.on('data', () => {});
+    let err = '';
+    child.stderr.on('data', (d) => { err = (err + d).slice(-2000); });
     let target = null;
-    for (let i = 0; i < 100 && !target; i++) {
+    for (const end = Date.now() + START_MS; Date.now() < end && !target;) {
       await sleep(150);
       try {
         const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
         target = list.find((t) => t.type === 'page' && t.url.startsWith('stet://app/'));
       } catch { /* not up yet */ }
     }
-    if (!target) { child.kill(); throw new Error('app did not start'); }
+    if (!target) { child.kill(); throw new Error('app did not start' + (err ? ':\n' + err : '')); }
     const app = new App(child, target.webSocketDebuggerUrl);
     await app.open();
     await app.send('Emulation.setFocusEmulationEnabled', { enabled: true });
