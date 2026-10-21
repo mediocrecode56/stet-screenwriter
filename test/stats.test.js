@@ -8,7 +8,7 @@ import fs from 'node:fs/promises';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { StatsBook, upgradeStats, dayKey, weekStart, addDays, STATS_VERSION } from '../src/core/stats.js';
+import { StatsBook, upgradeStats, dayKey, weekStart, addDays, STATS_VERSION, isProbePath } from '../src/core/stats.js';
 import { StatsStore } from '../src/main/statsstore.js';
 import { Editor, pos } from '../src/core/editor.js';
 import { makeBlock } from '../src/core/model.js';
@@ -343,4 +343,35 @@ test('week chart: the scale adapts to the data, bars stay proportional, an outli
   assert.equal(fmtWords(12500, true), L(12.5) + 'k');
   assert.equal(fmtWords(200000, true), '200k');
   assert.equal(fmtWords(500, true), '500');
+});
+
+test('the performance probe never counts: its words are refused, and old ones are taken out on start', async () => {
+  assert.ok(isProbePath('C:/Users/A/AppData/Roaming/STET/perf-probe.stet'));
+  assert.ok(isProbePath('C:/Temp/stet-probe-x1Y2/probe.stet'));
+  assert.ok(!isProbePath('G:/Scripts/probe.stet') && !isProbePath(null));
+  const now = () => new Date('2026-10-21T12:00:00');
+  const t = now().getTime();
+  // Refused when booked, in either copy.
+  const book = new StatsBook(null, now);
+  assert.equal(book.apply([{ doc: 'p', n: 700, t }], { p: { path: 'C:/Temp/stet-probe-a/probe.stet' } }, 600), 0);
+  assert.equal(book.data.total, 0);
+  // Words from before the fix: removed with the streak they faked, the writer's own kept.
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-stats-probe-'));
+  const day = { w: 1574, g: 600, docs: { mine: 48, probe1: 763, probe2: 763 } };
+  writeFileSync(path.join(dir, 'stats.json'), JSON.stringify({ version: 2, start: '2026-10-20T09:00:00.000Z', since: '2026-10-20', total: 1575,
+    days: { '2026-10-20': { w: 1, docs: { mine: 1 } }, '2026-10-21': day },
+    docs: { mine: { title: 'Mine', path: 'G:/Mine.stet', w: 49, first: '2026-10-20', last: '2026-10-21' },
+      probe1: { title: 'perf-probe', path: 'C:/U/AppData/Roaming/STET/perf-probe.stet', w: 763, first: '2026-10-21', last: '2026-10-21' },
+      probe2: { title: 'perf-probe', path: 'C:/U/AppData/Roaming/STET/perf-probe.stet', w: 763, first: '2026-10-21', last: '2026-10-21' } },
+    resets: [], streak: { last: '2026-10-21', count: 1, best: 1, spared: ['2026-10-20'], prev: { last: null, count: 0, spared: [] }, rule: 'goal' } }));
+  const s = new StatsStore(dir, now);
+  await s.flush();
+  const saved = JSON.parse(readFileSync(path.join(dir, 'stats.json'), 'utf8'));
+  assert.equal(saved.total, 49);
+  assert.deepEqual(saved.days['2026-10-21'].docs, { mine: 48 });
+  assert.deepEqual(Object.keys(saved.docs), ['mine']);
+  assert.equal(saved.streak.count, 0, 'the goal was never really met');
+  assert.equal(saved.streak.best, 0);
+  assert.ok((await fs.readdir(dir)).some((n) => n.startsWith('stats-before-probe-cleanup-')), 'the file as it was is kept');
+  await fs.rm(dir, { recursive: true, force: true });
 });

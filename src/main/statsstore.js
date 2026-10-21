@@ -21,7 +21,7 @@ import fs from 'node:fs/promises';
 import { readFileSync, existsSync, renameSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 import { atomicWrite } from './files.js';
-import { StatsBook, upgradeStats, dayKey, FutureStatsError } from '../core/stats.js';
+import { StatsBook, upgradeStats, dayKey, FutureStatsError, isProbePath } from '../core/stats.js';
 
 const parse = (buf) => {
   const v = JSON.parse(buf.toString('utf8'));
@@ -80,6 +80,13 @@ export class StatsStore {
       this.readOnly = true;
       this.notice = `${e.message} This version can't add to them without risking them, so writing isn't being recorded. Your statistics are untouched — use the newest STET.`;
       this.book = new StatsBook(null, this.now);
+    }
+    // Words the performance probe once booked (before 0.19.1) are taken out, with the file as it
+    // was kept beside it first.
+    if (!this.readOnly && this.book.data.docs && Object.values(this.book.data.docs).some((d) => isProbePath(d.path))) {
+      const keep = path.join(this.dir, `stats-before-probe-cleanup-${this.now().toISOString().replace(/[:.]/g, '-')}.json`);
+      try { if (existsSync(this.file)) copyFileSync(this.file, keep); } catch {}
+      if (this.book.purgeProbe()) this.dirty = true;
     }
     if (this.dirty) this.schedule(0);
   }

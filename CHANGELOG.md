@@ -4,6 +4,16 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.19.2 — 21 October 2026
+
+### Fixed
+
+- **Words typed by the performance probe are removed from your writing statistics.** Earlier versions counted the probe's typing as your writing: 1,526 words today. That met your daily goal and started a streak you hadn't earned. When this version starts, it removes every word recorded under the probe's document and rebuilds your streak from your own writing. A copy of the statistics as they were is kept first, as  in STET's data folder.
+- **The probe can never count toward your goals again.** Three separate checks now stop it:
+  - the editor doesn't pass on the probe's typing;
+  - the window refuses words for a probe document;
+  - the statistics file refuses them too, even if one slipped through.
+
 ## 0.19.1 — 21 October 2026
 
 ### Changed

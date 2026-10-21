@@ -5,7 +5,7 @@
 // Credits are sent in numbered batches. A batch that fails to send is kept and
 // re-sent with the same id, which the main process books at most once.
 
-import { StatsBook } from '../core/stats.js';
+import { StatsBook, isProbePath } from '../core/stats.js';
 
 export class WritingStats {
   constructor(api, state, { enabled = true } = {}) {
@@ -38,7 +38,7 @@ export class WritingStats {
 
   /** Record a document's credits ([{ n, t }]). Returns the net words booked. */
   record(docId, credits) {
-    if (!this.enabled || !credits.length) return 0;
+    if (!this.enabled || !credits.length || isProbePath(this.info[docId]?.path)) return 0;
     const entries = credits.map((c) => ({ doc: docId, n: c.n, t: c.t }));
     const first = !this.book.data.docs[docId];
     const net = this.book.apply(entries, {}, this.goal);

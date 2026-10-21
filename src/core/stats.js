@@ -30,6 +30,12 @@
 import { emptyStreak, cleanStreak, streakFromDays, bookDay, unbookDay, currentStreak, restUsed, REST_DAYS, growthFor, unlocksFor, nextMilestone } from './streak.js';
 
 export const STATS_VERSION = 2;
+
+/**
+ * A performance-probe document: never the writer's words. Up to 0.19.0 the probe saved as
+ * perf-probe.stet in STET's data folder; from 0.19.1 it saves to a stet-probe-… temporary folder.
+ */
+export const isProbePath = (p) => typeof p === 'string' && /(^|[\\/])(perf-probe\.stet|stet-probe-[^\\/]*[\\/]probe\.stet)$/i.test(p);
 const UNKNOWN_DOC = '(earlier)'; // per-document detail the old format had already dropped
 
 export function dayKey(d = new Date()) {
@@ -196,10 +202,11 @@ export class StatsBook {
     if (goal != null) this.setGoal(goal);
     let net = 0;
     const touched = new Set();
+    const probe = (id) => isProbePath(meta?.[id]?.path ?? this.data.docs[id]?.path);
     for (const e of entries || []) {
       const n = Math.round(+e.n) || 0;
       const t = +e.t || 0;
-      if (!n || !e.doc || t < this.startMs) continue;
+      if (!n || !e.doc || t < this.startMs || probe(e.doc)) continue;
       const k = dayKey(new Date(t));
       let day = this.data.days[k];
       if (n > 0) {
@@ -237,6 +244,39 @@ export class StatsBook {
     }
     for (const k of [...touched].sort()) this.evaluate(k);
     return net;
+  }
+
+  /**
+   * Take out every word booked to a probe document (see isProbePath) and rebuild the streak from
+   * the days that are left. A best streak from before (or from before a reset) is kept.
+   * Returns the words removed.
+   */
+  purgeProbe() {
+    const ids = Object.keys(this.data.docs).filter((id) => isProbePath(this.data.docs[id].path));
+    if (!ids.length) return 0;
+    let removed = 0;
+    for (const [k, day] of Object.entries(this.data.days)) {
+      for (const id of ids) {
+        const n = day.docs[id];
+        if (!n) continue;
+        delete day.docs[id];
+        day.w -= n;
+        removed += n;
+      }
+      if (day.w <= 0) delete this.data.days[k];
+    }
+    for (const id of ids) delete this.data.docs[id];
+    this.data.total = Math.max(0, this.data.total - removed);
+    const old = this.data.streak;
+    this.data.streak = { ...emptyStreak(), rule: old.rule };
+    const today = dayKey(this.now());
+    // Days without their own goal are judged by the goal now in force, or else the latest recorded.
+    const goal = this.goal;
+    if (goal == null) this.goal = Object.keys(this.data.days).sort().map((k) => this.data.days[k].g).filter((g) => g != null).pop() ?? null;
+    for (const k of Object.keys(this.data.days).filter((x) => this.known(x, today)).sort()) this.evaluate(k);
+    this.goal = goal;
+    if (old.best > old.count) this.data.streak.best = Math.max(this.data.streak.best, old.best);
+    return removed;
   }
 
   _doc(id, k) {

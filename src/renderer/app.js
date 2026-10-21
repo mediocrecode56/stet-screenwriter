@@ -126,7 +126,7 @@ let statsTimer = 0, verifyAt = 0, dino = null;
 function trackWords() {
   if (!session.doc) return;
   const credits = editor.takeCredits();
-  if (!credits.length) return;
+  if (!credits.length || session.quiet) return; // the performance probe's typing is never counted
   const net = writing.record(session.doc.meta.id, credits);
   if (net > 0 && dino) dino.wrote(net);
   scheduleStats();
