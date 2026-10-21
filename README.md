@@ -21,7 +21,8 @@ this once.
 
 **Updating:** STET checks for a new version when it opens. When there is one,
 **UPDATE** appears at the bottom right: click it, then **Update now**. STET
-downloads it while you keep writing and asks to restart when it's ready. Your
+downloads it while you keep writing (usually about a megabyte) and asks to
+restart when it's ready. A second later you're on the new version. Your
 screenplays, settings and writing statistics stay just as they are. You can also
 check any time under **Help → Check for Updates**.
 

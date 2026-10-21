@@ -18,6 +18,7 @@ import {
   backupDirFor, createBackup, listBackups, pruneBackups, docBase,
 } from './files.js';
 import { Updater, installKind, cleanupPortable, UpdateError, REPO_URL, RELEASES_URL } from './update.js';
+import { patchRoot, confirmLaunch, cleanupPatches } from './patch.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
@@ -80,6 +81,8 @@ function createWindow() {
     },
   });
   win.loadURL('stet://app/renderer/index.html');
+  // Started as a patch (src/main/boot.js): it works, so it is kept.
+  if (process.env.STET_PATCH) win.webContents.once('did-finish-load', () => confirmLaunch(process.env.STET_PATCH).catch(() => {}));
   // Shown only once the interface has painted, in one go. A maximized window is maximized here,
   // not at creation: on Windows maximize() shows a hidden window at once, so it used to appear
   // empty and then fill in (a jump on every start).
@@ -167,7 +170,7 @@ function registerIpc() {
   // The window has already saved everything (as when closing); STET quits once the new version is in place.
   handle('update:install', async () => {
     try {
-      await updater.apply({ spawn, relaunch: (exe) => { if (!E2E) app.relaunch({ execPath: exe, args: [] }); } });
+      await updater.apply({ spawn, pid: process.pid, relaunch: (exe) => { if (!E2E) app.relaunch(exe ? { execPath: exe, args: [] } : undefined); } });
     } catch (e) {
       return { ok: false, error: e instanceof UpdateError ? e.message : 'The update could not be installed.' };
     }
@@ -435,8 +438,11 @@ app.whenReady().then(async () => {
   // E2E tests can stand in a portable STET.exe (STET_UPDATE_TARGET) to run the whole update short of quitting.
   const kind = E2E && process.env.STET_UPDATE_TARGET ? { kind: 'portable', target: process.env.STET_UPDATE_TARGET }
     : installKind({ platform: process.platform, packaged: app.isPackaged, execPath: process.execPath, env: process.env, exists: existsSync });
-  updater = new Updater({ current: pkg.version, fetch: (url, opts) => net.fetch(url, opts), kind, dir: path.join(app.getPath('temp'), 'STET-update'), url: process.env.STET_UPDATE_URL || undefined });
+  // Most updates are a small patch of STET's code (src/main/patch.js); a new Electron needs the full download.
+  const patches = (app.isPackaged || process.env.STET_PATCH_DIR) ? patchRoot() : null;
+  updater = new Updater({ current: pkg.version, fetch: (url, opts) => net.fetch(url, opts), kind, patches, electron: process.versions.electron, dir: path.join(app.getPath('temp'), 'STET-update'), url: process.env.STET_UPDATE_URL || undefined });
   if (kind.kind === 'portable') cleanupPortable(kind.target);
+  cleanupPatches({ root: patches, running: pkg.version, keep: process.env.STET_PATCH });
   await fs.mkdir(recovery.dir, { recursive: true });
 
   protocol.handle('stet', (req) => {

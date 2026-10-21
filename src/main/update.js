@@ -3,9 +3,13 @@
 // Plain Node, no Electron, so it can be unit-tested; main.js supplies fetch (Electron's
 // net.fetch, which follows the system proxy), process spawning and the relaunch.
 //
-// How STET was installed decides how it updates (installKind):
+// Most releases change only STET's own code. Those come as a patch of a couple of
+// megabytes, made for the Electron STET runs on (src/main/patch.js): it is unpacked into a
+// folder of its own and STET restarts into it. No installer, nothing else changes.
+// When a release needs a new Electron, the full download is used, and then how STET was
+// installed decides how it updates (installKind):
 //   installer  STET-Setup.exe (unins000.exe sits beside the program). The new installer
-//              runs with a small progress window, replaces the program in place, keeps
+//              runs invisibly once STET has closed, replaces the program in place, keeps
 //              the shortcut choice and opens STET again (/relaunch=1, see STET.iss).
 //   portable   the single-file STET.exe from STET-Windows.zip (its launcher passes its own
 //              path as STET_PORTABLE_EXE). The new STET.exe is unpacked beside it as
@@ -22,14 +26,14 @@ import { finished } from 'node:stream/promises';
 import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import zlib from 'node:zlib';
-import { crc32 } from './container.js';
+import { zipEntries } from './zip.js';
+import { patchAsset, patchReady, patchFailed, installPatch } from './patch.js';
 
 export const REPO_URL = 'https://github.com/mediocrecode56/stet-screenwriter';
 export const RELEASES_URL = REPO_URL + '/releases/latest';
 export const LATEST_API = 'https://api.github.com/repos/mediocrecode56/stet-screenwriter/releases/latest';
 export const ASSETS = { installer: 'STET-Setup.exe', portable: 'STET-Windows.zip' };
-export const INSTALLER_ARGS = ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOCANCEL', '/relaunch=1'];
+export const INSTALLER_ARGS = ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOCANCEL', '/FORCECLOSEAPPLICATIONS', '/relaunch=1'];
 
 export class UpdateError extends Error {
   constructor(message, { cancelled = false } = {}) { super(message); this.cancelled = cancelled; }
@@ -137,31 +141,12 @@ export async function download({ asset, dest, fetch, onProgress = () => {}, sign
 
 /** The contents of one file (by name, in any folder) from a zip archive, checked against its CRC. */
 export async function readZipEntry(zipPath, name) {
-  const buf = await fs.readFile(zipPath);
   const bad = () => new UpdateError('The downloaded archive is damaged. Try again.');
-  let eocd = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
-  if (eocd < 0) throw bad();
-  const count = buf.readUInt16LE(eocd + 10);
-  let p = buf.readUInt32LE(eocd + 16);
-  for (let n = 0; n < count; n++) {
-    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) throw bad();
-    const method = buf.readUInt16LE(p + 10), crc = buf.readUInt32LE(p + 16);
-    const csize = buf.readUInt32LE(p + 20), usize = buf.readUInt32LE(p + 24);
-    const nlen = buf.readUInt16LE(p + 28), xlen = buf.readUInt16LE(p + 30), clen = buf.readUInt16LE(p + 32);
-    const off = buf.readUInt32LE(p + 42);
-    const file = buf.toString('utf8', p + 46, p + 46 + nlen);
-    p += 46 + nlen + xlen + clen;
-    if (file.split(/[\\/]/).pop().toLowerCase() !== name.toLowerCase()) continue;
-    if (off + 30 > buf.length || buf.readUInt32LE(off) !== 0x04034b50) throw bad();
-    const start = off + 30 + buf.readUInt16LE(off + 26) + buf.readUInt16LE(off + 28);
-    const data = buf.subarray(start, start + csize);
-    let out;
-    try { out = method === 0 ? data : method === 8 ? zlib.inflateRawSync(data) : null; } catch { throw bad(); }
-    if (!out || out.length !== usize || crc32(out) !== crc) throw bad();
-    return out;
-  }
-  throw new UpdateError(`The downloaded archive has no ${name}.`);
+  let entries;
+  try { entries = zipEntries(await fs.readFile(zipPath)); } catch { throw bad(); }
+  const e = entries.find((x) => x.name.split(/[\\/]/).pop().toLowerCase() === name.toLowerCase());
+  if (!e) throw new UpdateError(`The downloaded archive has no ${name}.`);
+  try { return e.read(); } catch { throw bad(); }
 }
 
 const folderError = (target) => new UpdateError(`STET can't replace itself in ${path.dirname(target)}. Move STET.exe to a folder you can change, such as your Desktop, or download the new version from the website.`);
@@ -191,22 +176,34 @@ export async function cleanupPortable(target) {
 }
 
 /**
- * One update at a time: check, download (and for the portable STET.exe, unpack), apply.
- * deps: { current, fetch, kind: installKind(), dir: a folder for downloads, url? }
+ * One update at a time: check, download (and unpack: a patch, or the portable STET.exe), apply.
+ * deps: { current, fetch, kind: installKind(), patches: patchRoot() or null, electron:
+ * the running Electron's version, dir: a folder for downloads, url? }
  */
 export class Updater {
-  constructor({ current, fetch, kind, dir, url = LATEST_API }) {
-    Object.assign(this, { current, fetch, kind, dir, url });
+  constructor({ current, fetch, kind, patches = null, electron = '', dir, url = LATEST_API }) {
+    Object.assign(this, { current, fetch, kind, patches, electron, dir, url });
     this.latest = null; // the release found by the last check
-    this.ready = null;  // { version, file } once downloaded and checked
+    this.ready = null;  // { version, file, mode } once downloaded and checked
     this.abort = null;
+  }
+
+  /** How the release found would be installed: 'patch', or the full download ('installer' | 'portable'), or 'manual'. */
+  mode(rel = this.latest) {
+    if (rel && this.patches && this.electron && rel.assets[patchAsset(this.electron)] && !patchFailed(this.patches, rel.version)) return 'patch';
+    return this.kind.kind;
   }
 
   async check() {
     const r = await checkForUpdate({ current: this.current, fetch: this.fetch, url: this.url });
     if (r.status === 'available') this.latest = r;
     const { assets, ...rest } = r;
-    return { ...rest, kind: this.kind.kind, ready: !!(this.ready && this.latest && this.ready.version === this.latest.version) };
+    if (r.status !== 'available') return rest;
+    const mode = this.mode(r);
+    const asset = assets[mode === 'patch' ? patchAsset(this.electron) : ASSETS[mode]];
+    const ready = (this.ready && this.ready.version === r.version) || (mode === 'patch' && patchReady(this.patches, r.version, this.electron));
+    if (ready && !this.ready) this.ready = { version: r.version, mode };
+    return { ...rest, kind: mode, size: asset ? asset.size : 0, ready: !!ready };
   }
 
   async download(onProgress) {
@@ -214,14 +211,18 @@ export class Updater {
     if (!rel) throw new UpdateError('Check for updates first.');
     if (this.ready && this.ready.version === rel.version) return this.ready;
     if (this.abort) throw new UpdateError('The update is already downloading.');
-    const asset = rel.assets[ASSETS[this.kind.kind]];
+    const mode = this.mode(rel);
+    const asset = rel.assets[mode === 'patch' ? patchAsset(this.electron) : ASSETS[mode]];
     if (!asset || !asset.url) throw new UpdateError('This version has no download for your copy of STET. Download it from the website instead.');
     this.abort = new AbortController();
     try {
       await fs.rm(this.dir, { recursive: true, force: true }).catch(() => {});
       const file = await download({ asset, dest: path.join(this.dir, asset.name), fetch: this.fetch, onProgress, signal: this.abort.signal, userAgent: `STET/${this.current}` });
-      if (this.kind.kind === 'portable') await preparePortable({ zipPath: file, target: this.kind.target });
-      this.ready = { version: rel.version, file };
+      if (mode === 'patch') {
+        try { await installPatch({ zipPath: file, root: this.patches, version: rel.version, electron: this.electron }); } catch (e) { throw new UpdateError(e.message); }
+        await fs.rm(this.dir, { recursive: true, force: true }).catch(() => {});
+      } else if (mode === 'portable') await preparePortable({ zipPath: file, target: this.kind.target });
+      this.ready = { version: rel.version, file, mode };
       return this.ready;
     } finally {
       this.abort = null;
@@ -231,15 +232,18 @@ export class Updater {
   cancel() { if (this.abort) this.abort.abort(); }
 
   /** Puts the downloaded version in place. The caller quits STET straight after. */
-  async apply({ spawn, relaunch }) {
+  async apply({ spawn, relaunch, pid = process.pid }) {
     if (!this.ready) throw new UpdateError('Nothing has been downloaded yet.');
-    if (this.kind.kind === 'installer') {
-      // Only quit once the installer is really running.
-      const child = spawn(this.ready.file, INSTALLER_ARGS, { detached: true, stdio: 'ignore' });
+    const mode = this.ready.mode;
+    if (mode === 'patch') {
+      relaunch(null); // the same STET.exe; src/main/boot.js starts the patch
+    } else if (mode === 'installer') {
+      // Only quit once the installer is really running. It waits for this STET to close (/waitpid).
+      const child = spawn(this.ready.file, [...INSTALLER_ARGS, `/waitpid=${pid}`], { detached: true, stdio: 'ignore' });
       await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); })
         .catch(() => { throw new UpdateError("The installer couldn't be started. Download the new version from the website instead."); });
       child.unref();
-    } else if (this.kind.kind === 'portable') {
+    } else if (mode === 'portable') {
       await swapPortable(this.kind.target);
       relaunch(this.kind.target);
     } else {

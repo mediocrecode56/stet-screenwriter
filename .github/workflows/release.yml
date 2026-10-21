@@ -7,12 +7,15 @@
 # Run workflow (empty box: the version in package.json). Running it for a version that
 # already has a release replaces that release's files.
 #
-# Each release has the version's CHANGELOG.md section as its notes and two downloads,
-# named the same in every release so releases/latest/download/<name> always gets the
-# newest one:
+# Each release has the version's CHANGELOG.md section as its notes and these files
+# (the first two named the same in every release, so releases/latest/download/<name>
+# always gets the newest one):
 #   STET-Windows.zip   STET.exe, the portable single-file program: unzip and double-click
 #   STET-Setup.exe     the installer (scripts/installer/STET.iss); it updates an
 #                      installed STET in place
+#   STET-Patch-electron-<version>.zip
+#                      the in-app update for a STET running on that Electron: just
+#                      STET's own files, a megabyte or two (src/main/patch.js)
 
 name: Release
 
@@ -112,10 +115,16 @@ jobs:
           } > release-notes.md
 
       # Called with node rather than `npm run exe --`: PowerShell's npm shim drops the `--`.
-      - name: Build STET.exe
+      - name: Build STET.exe and the patch
         env:
           STET_EXE_DIR: ${{ runner.temp }}\stet-exe
-        run: node scripts/build-exe.js $env:TAG
+          STET_PATCH_OUT: ${{ github.workspace }}
+        run: |
+          node scripts/build-exe.js $env:TAG
+          if ($LASTEXITCODE) { throw 'Building STET failed' }
+          $patch = @(Get-ChildItem STET-Patch-electron-*.zip)
+          if ($patch.Count -ne 1) { throw "Expected one patch, found $($patch.Count)" }
+          "PATCH=$($patch[0].Name)" >> $env:GITHUB_ENV
 
       - name: Check STET.exe and zip it
         run: |
@@ -145,8 +154,8 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             gh release edit $env:TAG --notes-file release-notes.md
             if ($LASTEXITCODE) { throw 'Updating the release notes failed' }
-            gh release upload $env:TAG STET-Windows.zip STET-Setup.exe --clobber
+            gh release upload $env:TAG STET-Windows.zip STET-Setup.exe $env:PATCH --clobber
           } else {
-            gh release create $env:TAG --verify-tag --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe
+            gh release create $env:TAG --verify-tag --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe $env:PATCH
           }
           if ($LASTEXITCODE) { throw "Publishing the release failed ($LASTEXITCODE)" }

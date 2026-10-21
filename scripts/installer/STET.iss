@@ -13,8 +13,10 @@
 ;                   in the same folder, keeping the earlier shortcut choice;
 ;   same version    offers to open STET instead (or reinstall it, to repair);
 ;   newer version   stops: it never downgrades.
-; STET's own updater (src/main/update.js) runs it with /SILENT /relaunch=1: a progress
-; window only, then STET opens again.
+; STET's own updater (src/main/update.js) runs it only when a release needs a new Electron
+; (other updates are small patches that need no installer), with /VERYSILENT /relaunch=1:
+; nothing on screen. It waits for STET to have closed completely, updates, and opens
+; STET again.
 ; Screenplays and STET's settings and statistics (%APPDATA%\STET) are never touched,
 ; not by installing, updating or uninstalling.
 
@@ -48,7 +50,7 @@ WizardStyle=modern
 SetupIconFile=..\..\build\icon.ico
 UninstallDisplayIcon={app}\STET.exe
 UninstallDisplayName=STET
-CloseApplications=yes
+CloseApplications=force
 RestartApplications=no
 ChangesAssociations=yes
 Compression=lzma2/max
@@ -171,6 +173,27 @@ begin
     -1:
       Updating := True;
   end;
+end;
+
+// Started by STET's updater: wait until STET has closed completely (every one of its
+// processes) before any file is replaced, so nothing is in use. At most 30 seconds;
+// anything still running after that is closed by Setup (CloseApplications=force).
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Pid, Code: Integer;
+  Cmd, AppDir: String;
+begin
+  Result := '';
+  if not RelaunchRequested() then
+    Exit;
+  Cmd := '';
+  Pid := StrToIntDef(ExpandConstant('{param:waitpid|0}'), 0);
+  if Pid > 0 then
+    Cmd := 'Wait-Process -Id ' + IntToStr(Pid) + ' -Timeout 30 -ErrorAction SilentlyContinue; ';
+  AppDir := ExpandConstant('{app}');
+  StringChangeEx(AppDir, '''', '''''', True); // a quote in the folder name, inside a PowerShell string
+  Cmd := Cmd + 'Get-Process STET -ErrorAction SilentlyContinue | Where-Object { $_.Path -like ''' + AppDir + '\*'' } | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300';
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' + Cmd + '"', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
 // An update asks nothing again: the shortcut choice from last time is kept.

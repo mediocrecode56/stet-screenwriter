@@ -84,7 +84,7 @@ export function initUpdates({ api, button, getSettings, saveSettings, prepareQui
       body: body(
         p(`STET ${r.version} is available. You have ${r.current}.`),
         r.notes ? h('div', { class: 'md upd-notes', html: mdToHtml(r.notes) }) : null,
-        p(manual ? 'This copy of STET updates from the website.' : 'Your screenplays, settings and statistics stay as they are.', 'hint'),
+        p(manual ? 'This copy of STET updates from the website.' : `${r.size ? `A ${mb(r.size)} MB download. ` : ''}Your screenplays, settings and statistics stay as they are.`, 'hint'),
       ),
       buttons: [{ label: 'Later', value: null }, manual ? { label: 'Open download page', value: 'page', primary: true } : { label: 'Update now', value: 'update', primary: true }],
     });
@@ -140,7 +140,7 @@ export function initUpdates({ api, button, getSettings, saveSettings, prepareQui
   }
 
   async function restartPrompt() {
-    const how = found.kind === 'installer' ? 'STET closes, installs the update and opens again.' : 'STET closes and opens again with the new version.';
+    const how = found.kind === 'installer' ? 'STET closes, updates and opens again by itself.' : 'STET restarts with the new version.';
     const v = await open({
       title: 'UPDATE', sub: 'v' + found.version,
       body: body(p(`STET ${found.version} is ready.`), p(how + ' Your work is saved first.', 'hint')),
@@ -149,7 +149,7 @@ export function initUpdates({ api, button, getSettings, saveSettings, prepareQui
     if (v !== 'go') return;
     state = 'installing';
     if (!(await prepareQuit())) { state = 'ready'; renderButton(); return; }
-    open({ title: 'UPDATE', sub: 'v' + found.version, body: body(p(found.kind === 'installer' ? 'Installing…' : 'Restarting…')), buttons: [] });
+    open({ title: 'UPDATE', sub: 'v' + found.version, body: body(p(found.kind === 'installer' ? 'Updating… STET opens again in a moment.' : 'Restarting…')), buttons: [] });
     const res = await api.invoke('update:install');
     if (res.ok) return; // STET quits now
     state = 'ready';

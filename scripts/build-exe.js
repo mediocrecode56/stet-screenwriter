@@ -7,7 +7,11 @@
 // Each tag is checked out into a temporary git worktree (your working tree is
 // never touched) and packaged with the Electron version that tag pins.
 // Output: dist/STET-vX.Y.Z-win32-x64/STET.exe (one folder per version, never overwritten
-// unless rebuilt), and DocumentsSTETSTET.exe: the newest version as a single file.
+// unless rebuilt), and Documents\STET\STET.exe: the newest version as a single file.
+// What is never run is left out (scripts/package-tools.js): type declarations and sources
+// in node_modules, and Chromium's interface strings other than English.
+// STET_PATCH_OUT=<folder> (the release workflow) also writes the patch for in-app updates
+// there: STET-Patch-electron-<version>.zip, the app's files (src/main/patch.js).
 
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -15,6 +19,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
+import { pruneModules, trimLocales, writePatch } from './package-tools.js';
+import { patchAsset } from '../src/main/patch.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -63,7 +69,15 @@ for (const tag of targets) {
       prune: false, // node_modules holds production dependencies only (npm ci --omit=dev)
       overwrite: true,
       asar: true,
-      ignore: [/^\/(dist|bench|test|docs|scripts|\.perf|\.build)(\/|$)/, /^\/\.git/, /^\/build\/icon-\d+\.png$/],
+      ignore: [/^\/(dist|bench|test|docs|scripts|\.perf|\.build)(\/|$)/, /^\/\.git/, /^\/build\/icon-\d+\.png$/, /^\/(README\.md|package-lock\.json)$/],
+      afterExtract: [({ buildPath }) => { trimLocales(buildPath); }],
+      afterCopy: [async ({ buildPath }) => {
+        pruneModules(buildPath);
+        if (process.env.STET_PATCH_OUT) {
+          const file = path.join(process.env.STET_PATCH_OUT, patchAsset(electronVersion));
+          console.log(`${tag}: patch ${path.basename(file)} (${(await writePatch(buildPath, file) / 1048576).toFixed(1)} MB)`);
+        }
+      }],
       quiet: true,
     });
     fs.rmSync(out, { recursive: true, force: true });

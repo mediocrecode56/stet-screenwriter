@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.21.0 · 21 Oct 2026
+
+- Updates are small now, usually about a megabyte instead of a hundred.
+- Updating no longer runs an installer. STET restarts and is on the new version.
+- Fixed: an update could finish and then offer itself again. STET now waits until it has fully closed before anything is replaced.
+- The full download is a little smaller.
+
 ## 0.20.2 · 21 Oct 2026
 
 - The dinosaur now doodles in the sand. It keeps the drawing for a while, or scuffs it out.

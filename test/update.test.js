@@ -205,7 +205,7 @@ test('the whole update for the portable STET.exe: check, download, unpack, swap,
   assert.deepEqual(await fs.readFile(target), EXE);
 });
 
-test('the whole update for an installed STET: the new installer runs silently and reopens STET', async () => {
+test('the whole update for an installed STET (a new Electron): the new installer runs invisibly once STET has closed, and reopens it', async () => {
   routes['/latest'] = json(release('0.20.0'));
   routes['/setup'] = { body: SETUP };
   const u = new Updater({ current: '0.19.4', fetch, kind: { kind: 'installer' }, dir: path.join(tmp, 'work2'), url: base + '/latest' });
@@ -219,11 +219,12 @@ test('the whole update for an installed STET: the new installer runs silently an
     setImmediate(() => child.emit('spawn'));
     return child;
   };
-  await u.apply({ spawn, relaunch: () => assert.fail('the installer reopens STET itself') });
+  await u.apply({ spawn, pid: 4242, relaunch: () => assert.fail('the installer reopens STET itself') });
   assert.equal(call.file, path.join(tmp, 'work2', ASSETS.installer));
   assert.deepEqual(await fs.readFile(call.file), SETUP);
-  assert.deepEqual(call.args, INSTALLER_ARGS);
-  assert.ok(call.args.includes('/relaunch=1') && call.args.includes('/SILENT'));
+  assert.deepEqual(call.args, [...INSTALLER_ARGS, '/waitpid=4242']);
+  assert.ok(call.args.includes('/relaunch=1') && call.args.includes('/VERYSILENT'), 'no installer window at all');
+  assert.ok(!call.args.includes('/SILENT'));
   assert.equal(call.opts.detached, true);
   assert.equal(call.unref, true);
 

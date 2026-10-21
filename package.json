@@ -1,10 +1,10 @@
 {
   "name": "stet",
   "productName": "STET",
-  "version": "0.20.2",
+  "version": "0.21.0",
   "description": "A fast, minimal, dependable screenwriting application.",
   "type": "module",
-  "main": "src/main/main.js",
+  "main": "src/main/boot.js",
   "license": "MIT",
   "private": true,
   "scripts": {

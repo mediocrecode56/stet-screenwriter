@@ -65,7 +65,7 @@ GitHub: **Actions** → **Release** → **Run workflow** (leave the box empty fo
 the version in `package.json`). Running it for a version that is already
 released replaces that release's files.
 
-Each release has two files, named the same every time so
+Each release has three files. The first two are named the same every time so
 `https://github.com/mediocrecode56/stet-screenwriter/releases/latest/download/<name>`
 always gets the newest:
 
@@ -80,6 +80,14 @@ always gets the newest:
   and closing a running STET first (which saves as usual); with the same version
   it offers to open STET or reinstall it; with a newer version it stops, so it
   never downgrades.
+- `STET-Patch-electron-<version>.zip`: the in-app update, about a megabyte. Just
+  STET's own files (what goes into `app.asar`), for a STET running on that
+  Electron version.
+
+To keep the downloads small, the build leaves out what never runs
+(`scripts/package-tools.js`): type declarations, source maps and TypeScript
+sources in `node_modules`, and Chromium's interface strings other than English.
+Most of what remains is Electron itself.
 
 **In-app updates** (`src/main/update.js`, interface in `src/renderer/ui/update.js`).
 A packaged STET asks the GitHub API for the latest release a few seconds after it
@@ -89,9 +97,22 @@ opens once per new version with that release's notes. *Update now* downloads the
 file for this copy in the background, checking it against the size and SHA-256
 GitHub publishes. *Restart now* saves everything as when closing, then:
 
+- a release with a patch for the Electron STET runs on (almost every release):
+  the patch was unpacked into `%LOCALAPPDATA%\STET\app\<version>` when it
+  downloaded, and STET just restarts. `src/main/boot.js`, the entry point, starts
+  the newest patch made for this Electron that is newer than the shipped version
+  (`src/main/patch.js`). The program files are never touched. A patch that
+  doesn't get as far as its window on its first start is marked failed and never
+  used again (the shipped version, or the previous patch, starts instead, and
+  the next update is the full download). Older patches are removed on the next
+  start. In tests, `STET_PATCH_DIR` stands in for that folder.
+
+When a release moves to a new Electron, the full download is used:
+
 - installed copy (`unins000.exe` beside the program): runs the new
-  `STET-Setup.exe /SILENT /relaunch=1`, which shows only a progress window,
-  updates in place and opens STET again;
+  `STET-Setup.exe /VERYSILENT /relaunch=1 /waitpid=<pid>`. Nothing shows on
+  screen: it waits until every STET process has closed, updates in place and
+  opens STET again;
 - portable copy (the launcher passes its own path as `STET_PORTABLE_EXE`):
   unpacks the new `STET.exe` beside it as `STET.exe.new`, swaps it in by renaming
   (the previous one stays as `STET.exe.old` until the next start) and relaunches it;
