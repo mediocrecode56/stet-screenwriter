@@ -22,7 +22,6 @@ export class Session {
     this.savedRev = 0;
     this.status = 'saved';      // saved | dirty | saving | error | conflict
     this.error = null;
-    this.lastSavedAt = null;
     this.autosave = true;
     this.autosaveDelay = 1200;
     this.timer = 0;
@@ -129,7 +128,6 @@ export class Session {
     try { r = await p; } finally { this.saving = null; }
     if (r.ok) {
       if (rev > this.savedRev) this.savedRev = rev;
-      this.lastSavedAt = new Date();
       this.error = null;
       this.retryMs = 2000;
       this.status = this.dirty ? 'dirty' : 'saved';

@@ -231,7 +231,7 @@ export async function statsDialog(api) {
       weekHeader(s, nav),
       weekChart(s),
       h('div', { class: 'wk-goals' },
-        h('label', {}, h('span', { class: 'wk-k' }, 'DAILY GOAL'), goalIn), h('label', {}, h('span', { class: 'wk-k' }, 'WEEKLY GOAL'), weekIn)),
+        h('div', { class: 'wk-g' }, h('span', { class: 'wk-k' }, 'DAILY GOAL'), goalIn), h('div', { class: 'wk-g' }, h('span', { class: 'wk-k' }, 'WEEKLY GOAL'), weekIn)),
     );
     flash = '';
     const v = await open({
@@ -436,7 +436,7 @@ export async function shortcutsDialog(cmds) {
  *  × (dismiss): removes the entry from this list only; the file is untouched.
  *  bin icon (trash): after a confirmation, moves the file to the Recycle Bin.
  * The table has a fixed layout that never grows past the dialog: the name
- * keeps priority, a long path is shortened from its start ("…\Drafts\Film.stet",
+ * keeps priority, a long path keeps its beginning and is cut at the end ("C:\Users\…",
  * the full path in its tooltip), and the actions always keep their column.
  * `api` = { list, dismiss, trash, reveal, confirm, alert, currentPath }.
  */
@@ -473,7 +473,7 @@ export async function recentDialog(api) {
       });
       const tr = h('tr', { class: 'pick recent-row' + (r.path === chosen ? ' on' : '') + (r.exists ? '' : ' missing') },
         h('td', { class: 'rc-name', title: r.name }, r.name),
-        h('td', { class: 'hint rc-path', title: r.path, 'data-path': r.path }),
+        h('td', { class: 'hint rc-path', title: r.path }, r.path),
         h('td', { class: 'rc-time', title: r.exists ? fmtTime(r.opened) : 'The file is no longer there' }, r.exists ? fmtWhen(r.opened) : 'missing'),
         h('td', { class: 'ra-cell' }, reveal, dismiss, trash));
       tr.addEventListener('click', () => { chosen = r.exists ? r.path : null; render(); });
@@ -485,42 +485,16 @@ export async function recentDialog(api) {
     body.replaceChildren(recent.length ? table : h('div', { class: 'empty' }, 'No recent documents.'),
       h('p', { class: 'hint', style: 'margin:10px 0 0' }, 'The folder shows the file in its folder. × removes an entry from this list only. The bin icon moves the file itself to the Recycle Bin.'));
     if (openBtn) openBtn.disabled = !chosen;
-    fitPaths();
   };
-  // Paths are shortened to their cells' width once laid out, and again if the dialog changes size.
-  const fitPaths = () => requestAnimationFrame(() => { for (const td of body.querySelectorAll('.rc-path')) fitStart(td, td.dataset.path); });
-  const ro = new ResizeObserver(fitPaths);
-  ro.observe(body);
   const show = () => {
     render();
     open({ title: 'RECENT', body, cls: 'recent-dlg', buttons: [{ label: 'Cancel', value: null }, { label: 'Open', value: () => chosen, primary: true, disabled: !chosen }], init: (_d, _c, btns) => { openBtn = btns[1]; } })
-      .then((v) => { if (!inSub) { ro.disconnect(); done(v); } });
+      .then((v) => { if (!inSub) done(v); });
   };
   show();
   return result;
 }
 const withExists = (old, list) => (list || []).map((r) => ({ ...r, exists: (old.find((o) => o.path === r.path) || { exists: true }).exists }));
-/**
- * Show as much of the end of `text` as fits in `el`, with "…" in front:
- * for a path, the file name and the folders nearest it are the useful part.
- * Starts the shown part at a folder boundary when one is close.
- */
-export function fitStart(el, text) {
-  el.textContent = text;
-  const avail = el.clientWidth - (parseFloat(getComputedStyle(el).paddingLeft) || 0) - (parseFloat(getComputedStyle(el).paddingRight) || 0);
-  if (avail <= 0 || el.scrollWidth <= el.clientWidth) return;
-  const g = (fitStart.ctx ||= document.createElement('canvas').getContext('2d'));
-  const cs = getComputedStyle(el);
-  g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-  const ls = parseFloat(cs.letterSpacing) || 0;
-  const width = (t) => g.measureText(t).width + ls * t.length;
-  let lo = 0, hi = text.length; // smallest cut that fits
-  while (lo < hi) { const mid = (lo + hi) >> 1; if (width('…' + text.slice(mid)) <= avail - 1) hi = mid; else lo = mid + 1; }
-  let cut = lo;
-  const sep = text.slice(cut).search(/[\\/]/);
-  if (sep > 0 && sep <= 8 && cut + sep < text.length - 1) cut += sep;
-  el.textContent = '…' + text.slice(cut);
-}
 const DISMISS_SVG = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
 const FOLDER_SVG = '<svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true"><path d="M1 2.2V9.5h11V3.4H6.2L5 2H1z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
 const TRASH_SVG = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true"><path d="M1 3h9M4 3V1.5h3V3M2.2 3l.6 8h5.4l.6-8M4.5 5v4.5M6.5 5v4.5" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';

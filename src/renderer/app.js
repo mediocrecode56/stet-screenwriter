@@ -235,23 +235,26 @@ function polls(resting = false) {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) renderGoal(); });
 
+// The square beside the title is the one sign of the save state: hollow when saved, filled while
+// there are unsaved changes, blinking when saving fails (a click on it then saves again).
 function renderSaveState(s) {
-  const el = $('st-save');
   const dot = $('docdot');
-  el.classList.remove('err');
-  dot.className = '';
-  let t;
-  switch (s.status) {
-    case 'saving': t = 'SAVING…'; dot.className = 'dirty'; break;
-    case 'dirty': t = s.path ? (settings.autosave ? 'EDITED' : 'UNSAVED · CTRL+S') : 'NOT SAVED · CTRL+S'; dot.className = 'dirty'; break;
-    case 'error': t = 'SAVE FAILED · RETRYING · RECOVERY COPY KEPT'; el.classList.add('err'); dot.className = 'error'; el.title = s.error || ''; break;
-    case 'conflict': t = 'FILE CHANGED ON DISK · CTRL+S TO RESOLVE'; el.classList.add('err'); dot.className = 'error'; el.title = s.error || ''; break;
-    default: t = s.lastSavedAt ? 'SAVED ' + s.lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : (s.path ? 'SAVED' : 'NEW');
-  }
-  if (!s.path && s.status === 'saved') t = 'NEW · NOT YET SAVED';
-  el.textContent = t;
+  const problem = s.status === 'error' || s.status === 'conflict';
+  dot.className = problem ? 'error' : s.status === 'saving' || s.status === 'dirty' ? 'dirty' : '';
+  dot.title = s.status === 'error' ? 'Save failed; retrying (a recovery copy is kept). Click to save now.'
+    : s.status === 'conflict' ? 'The file changed on disk. Click to resolve.'
+    : s.status === 'saved' ? (s.path ? 'Saved' : 'Not saved yet') : 'Unsaved changes';
   renderTitle();
 }
+
+// A plain digital clock in the status bar. Checked every second, so it is right again at once
+// after sleep or a change of time or time zone.
+function tickClock() {
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if ($('st-clock').textContent !== t) $('st-clock').textContent = t;
+}
+tickClock();
+setInterval(tickClock, 1000);
 
 function renderTitle() {
   const name = session.path ? session.name : (session.doc && session.doc.titlePage.title) || 'Untitled';
@@ -363,7 +366,7 @@ tbClick('zoom-in', 'zoom-in');
 tbClick('zoom-out', 'zoom-out');
 tbClick('zoom-val', 'zoom-reset');
 $('st-goal').addEventListener('click', () => cmd.run('stats'));
-$('st-save').addEventListener('click', () => { if (session.status === 'conflict' || session.status === 'error') cmd.run('save'); });
+$('docdot').addEventListener('click', () => { if (session.status === 'conflict' || session.status === 'error') cmd.run('save'); });
 $('doctitle').addEventListener('dblclick', () => (session.path ? renameInPlace() : cmd.run('save-as')));
 
 // Rename in place: the title becomes a field. Enter (or clicking away) renames the file on disk,
@@ -687,7 +690,6 @@ async function exportPdf(options = lastPrintOpts) {
   const r = await api.invoke('export:pdf', { json: session.serialize(), options: { ...options, appVersion: info.version }, name: session.name });
   if (r.canceled) return;
   if (!r.ok) return dlg.alertBox('EXPORT FAILED', 'The PDF could not be written.', r.error);
-  $('st-save').textContent = `PDF → ${r.file.split(/[\\/]/).pop()} (${Math.round(r.ms)} ms)`;
 }
 
 // ---- commands -----------------------------------------------------------------------------------
@@ -734,7 +736,7 @@ cmd.register([
   { id: 'rename', cat: 'File', label: 'Rename…', enabled: () => !!session.path, run: () => renameInPlace() },
   { id: 'reveal', cat: 'File', label: 'Show in Folder', enabled: () => !!session.path, run: () => api.invoke('shell:reveal', session.path) },
   { id: 'backups', cat: 'File', label: 'Backups & Restore…', keys: 'Ctrl+Shift+B', global: true, run: () => restoreFromBackups(session.ref()) },
-  { id: 'backup-now', cat: 'File', label: 'Backup Now', run: async () => { const r = await session.maybeBackup(true); $('st-save').textContent = r && r.ok ? 'BACKUP WRITTEN' : 'BACKUP FAILED'; } },
+  { id: 'backup-now', cat: 'File', label: 'Backup Now', run: async () => { const r = await session.maybeBackup(true); if (r && !r.ok) dlg.alertBox('BACKUP FAILED', 'The backup could not be written.', r.error); } },
   { id: 'recover', cat: 'File', label: 'Recover Unsaved Work…', run: () => checkRecovery(false) },
   { id: 'print', cat: 'File', label: 'Print / Export Preview…', keys: 'Ctrl+P', global: true, run: preview },
   { id: 'export-pdf', cat: 'File', label: 'Export PDF…', keys: 'Ctrl+Shift+E', global: true, run: () => exportPdf() },

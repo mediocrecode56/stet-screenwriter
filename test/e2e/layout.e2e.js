@@ -267,7 +267,7 @@ test('Open Recent: both actions visible and working on hover, no horizontal scro
       const row = document.querySelector('#overlay .recent-row');
       const icons = [...row.querySelectorAll('.ra')].map((e) => { const q = e.getBoundingClientRect(), at = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2); return { label: e.getAttribute('aria-label'), title: e.title, op: getComputedStyle(e).opacity, inside: q.left >= dlg.left && q.right <= dlg.right, onTop: e === at || e.contains(at) }; });
       const p = row.querySelector('.rc-path'), n = row.querySelector('.rc-name');
-      return { scroll: body.scrollWidth - body.clientWidth, icons, path: p.textContent, full: p.title, pathFits: p.scrollWidth <= p.clientWidth, nameRight: n.getBoundingClientRect().right, pathLeft: p.getBoundingClientRect().left, iconLeft: Math.min(...[...row.querySelectorAll('.ra')].map((e) => e.getBoundingClientRect().left)), pathRight: p.getBoundingClientRect().right };
+      return { scroll: body.scrollWidth - body.clientWidth, icons, path: p.textContent, full: p.title, pathEllipsis: getComputedStyle(p).textOverflow === 'ellipsis', nameRight: n.getBoundingClientRect().right, pathLeft: p.getBoundingClientRect().left, iconLeft: Math.min(...[...row.querySelectorAll('.ra')].map((e) => e.getBoundingClientRect().left)), pathRight: p.getBoundingClientRect().right };
     })()`);
     assert.equal(r.scroll, 0, `no horizontal scrolling at ${w} px`);
     assert.equal(r.icons.length, 3);
@@ -275,9 +275,9 @@ test('Open Recent: both actions visible and working on hover, no horizontal scro
     assert.match(r.icons[0].title, /Show in Folder/);
     assert.match(r.icons[1].title, /Remove from Recent/);
     assert.match(r.icons[2].title, /Move to Recycle Bin/);
-    assert.ok(r.path.startsWith('…') && r.full.endsWith(r.path.slice(1)), `shortened at the start: ${r.path}`);
-    assert.ok(r.path.endsWith('.stet'), 'the file name is kept');
-    assert.ok(r.pathFits && r.pathRight <= r.iconLeft, 'the path never runs under the icons');
+    assert.equal(r.path, r.full, 'the whole path, from its beginning');
+    assert.ok(r.pathEllipsis, 'a long path is cut at the end');
+    assert.ok(r.pathRight <= r.iconLeft, 'the path never runs under the icons');
     await app.key('Escape');
     await sleep(200);
   }

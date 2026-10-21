@@ -15,16 +15,29 @@ export const PAGE = {
   leftCol: 15,       // 1.5in: binding margin
 };
 
-// left: first column, width: columns available, before: blank rows above.
-export const ELEMENT = {
-  scene:      { left: 15, width: 60, before: 1, upper: true },
-  action:     { left: 15, width: 60, before: 1 },
-  character:  { left: 37, width: 38, before: 1, upper: true },
-  paren:      { left: 31, width: 25, before: 0 },
-  dialogue:   { left: 25, width: 35, before: 0 },
-  transition: { left: 55, width: 20, before: 1, upper: true, right: true },
-  shot:       { left: 15, width: 60, before: 1, upper: true },
+// The industry-standard element margins (Final Draft's screenplay defaults), in inches from the
+// page's left edge: [left, right]. Everything else is derived from these.
+const MARGINS = {
+  scene:      [1.5, 7.5],
+  action:     [1.5, 7.5],
+  character:  [3.5, 7.25],
+  paren:      [3.0, 5.5],
+  dialogue:   [2.5, 6.0],
+  transition: [5.5, 7.1],
+  shot:       [1.5, 7.5],
 };
+const STYLE = {
+  scene:      { before: 1, upper: true },
+  action:     { before: 1 },
+  character:  { before: 1, upper: true },
+  paren:      { before: 0 },
+  dialogue:   { before: 0 },
+  transition: { before: 1, upper: true, right: true },
+  shot:       { before: 1, upper: true },
+};
+// left: first column, width: whole characters that fit between the margins, before: blank rows above.
+export const ELEMENT = Object.fromEntries(Object.entries(MARGINS).map(([type, [l, r]]) =>
+  [type, { left: Math.round(l * 10), width: Math.floor((r - l) * 10 + 1e-9), ...STYLE[type] }]));
 
 export function spaceBefore(type, settings) {
   if (type === 'scene' && settings && settings.sceneSpacing) return settings.sceneSpacing;

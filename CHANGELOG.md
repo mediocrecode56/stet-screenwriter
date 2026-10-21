@@ -4,6 +4,22 @@ What changed in each version of STET, and why it matters to you.
 
 STET is in beta, so version numbers stay below 1.0. Every version is saved as its own snapshot (a tagged git commit, `vX.Y.Z`) and gets its own Windows program in `dist\STET-vX.Y.Z-win32-x64\STET.exe`. From 0.6.0 on, the newest version is also always available as a single file, `Documents\STET\STET.exe`.
 
+## 0.19.0 — 21 October 2026
+
+### Changed
+
+- **Page margins now match the industry standard exactly**, the same as Final Draft's defaults. Character names start at 3.5 inches (was 3.7), parentheticals at 3.0 to 5.5 inches (was 3.1), and transitions sit between 5.5 and 7.1 inches. Scene headings, action and shots (1.5 to 7.5 inches) and dialogue (2.5 to 6.0 inches) were already right. The page on screen, printing and PDF export all use these same margins, so (MORE) and (CONT'D) move with the character name.
+- **Open Recent shows the beginning of each path.** A path too long for its row is now cut at the end with "…". The full path is still in the tooltip.
+- **A plain digital clock replaces the save text at the bottom right.** The square beside the title is now the only sign of whether your work is saved:
+  - hollow when saved;
+  - filled when there are unsaved changes;
+  - blinking if saving fails (click it to save again).
+- **Text in windows and the status bar can no longer be selected or copied.** Only real input fields, the screenplay and the name you are renaming take a text cursor. In the Writing window, only the two goal numbers react to a click.
+
+### Removed
+
+- Unused leftovers, including an old native-code experiment that never shipped.
+
 ## 0.18.5 — 21 October 2026
 
 ### Fixed

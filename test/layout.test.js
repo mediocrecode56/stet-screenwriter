@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { wrap, lineText, PAGE } from '../src/core/format.js';
+import { wrap, lineText, PAGE, ELEMENT } from '../src/core/format.js';
 import { paginate, linesOf, mergeDirty, pageOf } from '../src/core/layout.js';
 import { makeBlock, withText, defaultDocSettings } from '../src/core/model.js';
 import { generateScript } from './fixtures.js';
@@ -110,4 +110,15 @@ test('pageOf finds the page containing a block', () => {
   for (let p = 0; p < pages.length; p++) {
     for (const it of pages[p].items) assert.equal(pageOf(pages, it.bi, it.l0), p);
   }
+});
+
+test('element margins are the industry standard (Final Draft defaults), in inches from the page edge', () => {
+  const inches = (t) => [ELEMENT[t].left / 10, (ELEMENT[t].left + ELEMENT[t].width) / 10];
+  assert.deepEqual(inches('scene'), [1.5, 7.5]);
+  assert.deepEqual(inches('action'), [1.5, 7.5]);
+  assert.deepEqual(inches('character'), [3.5, 7.2]); // to 7.25in: 37 whole characters
+  assert.deepEqual(inches('paren'), [3.0, 5.5]);
+  assert.deepEqual(inches('dialogue'), [2.5, 6.0]);
+  assert.deepEqual(inches('transition'), [5.5, 7.1]);
+  assert.deepEqual(inches('shot'), [1.5, 7.5]);
 });

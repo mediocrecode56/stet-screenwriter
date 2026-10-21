@@ -25,7 +25,8 @@ was the one candidate worth testing in C.
 
 ## 2. The C experiment
 
-`bench/native-experiment/` contains the full, reproducible experiment:
+The full, reproducible experiment lived in `bench/native-experiment/` (removed in 0.19.0; it is in any
+earlier version, e.g. `git checkout v0.18.5 -- bench/native-experiment`):
 
 - `stet_text.c` — freestanding C (no libc), table-driven 3-state word counter
   over UTF-8, Unicode letter/number ranges generated from the JS engine's own
@@ -39,7 +40,7 @@ was the one candidate worth testing in C.
   per Electron version and runs in the renderer, workers and tests alike.
 - `native.js` — the JS bridge; `bench.js` — the benchmark below.
 
-Reproduce: `npm i --no-save @yowasp/clang && node bench/native-experiment/build.js && node bench/native-experiment/bench.js`
+Reproduce (after restoring the folder): `npm i --no-save @yowasp/clang && node bench/native-experiment/build.js && node bench/native-experiment/bench.js`
 
 ## 3. Results (456 pages, ms per full pass, median of 40 after warm-up)
 

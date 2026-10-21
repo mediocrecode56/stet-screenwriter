@@ -82,10 +82,12 @@ body {
   letter-spacing: .02em;
   display: flex;
   flex-direction: column;
-  user-select: none;
+  user-select: none; /* only fields and the script take a text cursor or a selection */
+  cursor: default;
 }
 button { font: inherit; color: inherit; letter-spacing: inherit; }
 input, textarea, select { font: inherit; color: var(--ink); background: transparent; }
+input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { cursor: text; }
 [hidden] { display: none !important; }
 ::selection { background: var(--sel); }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -118,7 +120,7 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 #doctitle:hover { background: var(--hover); }
 /* Renaming in place (double-click): the title becomes a field. */
 #doctitle.editing { background: var(--hover-on); color: var(--ink); cursor: text; text-overflow: clip; user-select: text; }
-#docdot { width: 7px; height: 7px; border: 1px solid var(--ink-2); flex: none; }
+#docdot { width: 7px; height: 7px; border: 1px solid var(--ink-2); flex: none; -webkit-app-region: no-drag; }
 #docdot.dirty { background: var(--ink); border-color: var(--ink); }
 #docdot.error { background: none; border: 1px solid var(--ink); animation: blinkerr 1s steps(2) infinite; }
 @keyframes blinkerr { 50% { background: var(--ink); } }
@@ -176,7 +178,7 @@ input, textarea, select { font: inherit; color: var(--ink); background: transpar
 /* The find bar slides out from under the toolbar (motion.js setPanel, side top). */
 #elbar { position: relative; z-index: 2; }
 #findbar { position: relative; z-index: 1; flex: none; display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--rule); background: var(--bar); }
-#findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 220px; user-select: text; }
+#findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 220px; }
 #findbar input:focus { border-color: var(--rule-strong); }
 .chk { display: flex; align-items: center; gap: 3px; color: var(--ink-2); }
 #find-count { color: var(--ink-3); min-width: 70px; }
@@ -196,7 +198,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .note { padding: 8px 10px; border-bottom: 1px solid var(--rule); }
 .note.cur { box-shadow: inset 2px 0 0 var(--ink); }
 .note .q { color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: default; }
-.note textarea { width: 100%; min-height: 44px; resize: vertical; border: 1px solid var(--rule); padding: 4px 6px; user-select: text; font: 12px/1.4 var(--ui); }
+.note textarea { width: 100%; min-height: 44px; resize: vertical; border: 1px solid var(--rule); padding: 4px 6px; font: 12px/1.4 var(--ui); }
 .note textarea:focus { border-color: var(--rule-strong); }
 .note .meta { display: flex; justify-content: space-between; color: var(--ink-3); margin-top: 3px; }
 .note .meta button { border: 0; background: none; color: var(--ink-3); cursor: default; padding: 0; }
@@ -291,16 +293,14 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #dino canvas { display: block; image-rendering: pixelated; }
 .dino-hit { position: absolute; pointer-events: auto; cursor: default; }
 #dino.pass .dino-hit { pointer-events: none; }
-#st-save.err { background: var(--inv-bg); color: var(--inv-fg); }
 .zoom, .seg { gap: 0; padding: 0 !important; }
 .seg .tb { padding: 0 7px; font-size: 10px; }
 .seg .tb.cur { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
 #status { overflow: hidden; }
 #status .st { flex: none; }
-#st-save { flex: 0 1 auto !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 1100px) { #st-goal { display: none; } }
 @media (max-width: 920px) { #st-scene, #st-words { display: none; } }
-@media (max-width: 780px) { #st-save { display: none; } }
+#st-clock { font-variant-numeric: tabular-nums; }
 .zoom .tb { padding: 0 6px; }
 #zoom-val { min-width: 48px; }
 
@@ -308,7 +308,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #overlay { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 9vh; animation: fade var(--dur-fast) var(--ease-out); }
 :root[data-theme="dark"] #overlay { background: rgba(0, 0, 0, .6); }
 @keyframes fade { from { background-color: transparent; } }
-.dlg { background: var(--page); border: 1px solid var(--rule-strong); min-width: 420px; max-width: min(860px, 92vw); max-height: 82vh; display: flex; flex-direction: column; box-shadow: 6px 6px 0 var(--rule); user-select: text; transform-origin: 50% 30%; }
+.dlg { background: var(--page); border: 1px solid var(--rule-strong); min-width: 420px; max-width: min(860px, 92vw); max-height: 82vh; display: flex; flex-direction: column; box-shadow: 6px 6px 0 var(--rule); transform-origin: 50% 30%; }
 .dlg h2 { margin: 0; padding: 10px 14px 8px; font-size: 11px; letter-spacing: .26em; font-weight: 700; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; }
 .dlg h2 small { font-weight: 400; color: var(--ink-3); letter-spacing: .08em; }
 .dlg .body { padding: 12px 14px; overflow: auto; }
@@ -343,7 +343,7 @@ table.t tr.pick td { transition: background-color var(--dur-fast) var(--ease-out
 table.t tr.pick:hover td { background: var(--hover); }
 table.t tr.on td, table.t tr.on:hover td { background: var(--hover-on); color: var(--ink); }
 /* Open Recent: a fixed-layout table that never grows past the dialog (no horizontal scrolling).
-   The name keeps priority; paths are shortened from the start (dialogs.js fitStart); the
+   The name keeps priority; a long path keeps its beginning and is cut at the end; the
    actions keep their own column. They show while the row is hovered, focused or selected,
    dismiss and trash kept apart. */
 .recent-dlg { width: min(760px, 92vw); }
@@ -396,7 +396,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-item.cur { box-shadow: inset 2px 0 0 var(--ink); background: var(--hover-on); }
 .rv-item.decided .rv-diff, .rv-item.decided .rv-why { opacity: .6; }
 .rv-acts .tb:disabled { opacity: .35; }
-.rv-diff { font: 12px/1.45 var(--script); cursor: default; user-select: text; }
+.rv-diff { font: 12px/1.45 var(--script); cursor: default; }
 .rv-old { text-decoration: line-through; color: var(--ink-2); }
 .rv-new { color: var(--ink); }
 .k-grammar .rv-new { box-shadow: inset 0 -2px 0 var(--ink); }
@@ -405,7 +405,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-arrow { color: var(--ink-3); }
 .rv-conf { font: 9px var(--ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--rule); padding: 0 4px; margin-left: 4px; vertical-align: 1px; }
 .rv-conf.c-high { color: var(--ink); border-color: var(--ink); }
-.rv-why { color: var(--ink-2); margin: 3px 0 4px; user-select: text; }
+.rv-why { color: var(--ink-2); margin: 3px 0 4px; }
 .rv-acts { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
 .rv-acts .tb { padding: 1px 6px; font-size: 10px; border: 1px solid var(--rule); }
 .rv-acts .tb[data-act="accept"] { border-color: var(--ink); color: var(--ink); }
@@ -456,7 +456,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-days .today { color: var(--ink); font-weight: 700; }
 .wk-days small { font-size: 10px; letter-spacing: 0; }
 .wk-goals { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rule); padding-top: 8px; }
-.wk-goals label { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.wk-goals .wk-g { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .wk-in { width: 72px; border: 1px solid var(--rule); padding: 1px 5px; text-align: center; -moz-appearance: textfield; }
 .wk-in::-webkit-inner-spin-button, .wk-in::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .wk-in:focus { border-color: var(--rule-strong); }
@@ -484,7 +484,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .md p { margin: 4px 0; color: var(--ink-2); }
 .md h3 + p { color: var(--ink); }
 .md h4 { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin: 10px 0 3px; font-weight: 400; }
-.md li { line-height: 1.5; user-select: text; }
+.md li { line-height: 1.5; }
 .md ul ul { margin: 2px 0 4px; }
 .md .li-p { margin: 2px 0 4px 18px; }
 .md code { font: 10px var(--ui); border: 1px solid var(--rule); padding: 0 3px; }

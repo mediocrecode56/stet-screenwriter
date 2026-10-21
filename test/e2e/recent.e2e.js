@@ -62,6 +62,22 @@ test('a click anywhere outside the title ends the rename and its highlight; no f
   await app.key('Escape');
 });
 
+test('status bar: a plain clock and no save text; the square beside the title is the only save sign', async () => {
+  const v = await app.eval(`({ clock: document.getElementById('st-clock').textContent, now: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), save: !!document.getElementById('st-save'), dot: document.getElementById('docdot').title })`);
+  assert.equal(v.clock, v.now, 'the time now, in this computer’s format');
+  assert.equal(v.save, false);
+  assert.match(v.dot, /Saved/);
+});
+
+test('goals popup: only the goal numbers take clicks; no dialog text can be selected', async () => {
+  await app.eval(`void __stet.cmd.run('stats')`);
+  await sleep(300);
+  const v = await app.eval(`(() => { const d = document.querySelector('#overlay .dlg'), k = d.querySelector('.wk-goals .wk-k'); return { labels: d.querySelectorAll('label').length, inputs: d.querySelectorAll('.wk-goals input').length, select: getComputedStyle(k).userSelect, cursor: getComputedStyle(k).cursor, inCursor: getComputedStyle(d.querySelector('.wk-in')).cursor }; })()`);
+  assert.deepEqual(v, { labels: 0, inputs: 2, select: 'none', cursor: 'default', inCursor: 'text' });
+  await app.key('Escape');
+  await sleep(200);
+});
+
 test('Open Recent: a folder icon on each row, beside × and the bin', async () => {
   await app.eval(`void __stet.cmd.run('recent')`);
   await sleep(300);
