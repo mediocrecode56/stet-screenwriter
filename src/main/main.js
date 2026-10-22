@@ -198,10 +198,29 @@ function registerIpc() {
   handle('doc:open-dialog', async () => {
     const r = await dialog.showOpenDialog(win, {
       defaultPath: settings.get().defaultDir || defaultDir(),
-      filters: [{ name: 'STET Screenplay', extensions: ['stet'] }, { name: 'All files', extensions: ['*'] }],
+      filters: [{ name: 'STET Screenplay', extensions: ['stet'] }, { name: 'Final Draft', extensions: ['fdx'] }, { name: 'All files', extensions: ['*'] }],
       properties: ['openFile'],
     });
     return r.canceled ? null : r.filePaths[0];
+  });
+  // File > Import Final Draft: pick an .fdx (unless one was dropped or opened) and read it for the window to convert.
+  handle('doc:import-fdx', async (file) => {
+    if (!file) {
+      const r = await dialog.showOpenDialog(win, {
+        defaultPath: settings.get().defaultDir || defaultDir(),
+        filters: [{ name: 'Final Draft', extensions: ['fdx'] }, { name: 'All files', extensions: ['*'] }],
+        properties: ['openFile'],
+      });
+      if (r.canceled || !r.filePaths[0]) return null;
+      file = r.filePaths[0];
+    }
+    try {
+      const st = await fs.stat(file);
+      if (st.size > 64 * 1024 * 1024) return { ok: false, file, error: 'The file is too large to be a screenplay.' };
+      return { ok: true, file, name: path.basename(file).replace(/\.fdx$/i, ''), xml: await fs.readFile(file, 'utf8') };
+    } catch (e) {
+      return { ok: false, file, error: e.code === 'ENOENT' ? 'The file no longer exists.' : e.message };
+    }
   });
   handle('doc:save-dialog', async ({ name, dir }) => {
     const r = await dialog.showSaveDialog(win, {

@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const INVOKE = new Set([
   'settings:get', 'settings:set', 'app:info', 'app:changelog', 'app:close-ready', 'app:close-cancel',
-  'doc:open-dialog', 'doc:read', 'doc:save', 'doc:save-dialog', 'doc:known', 'doc:forget', 'doc:rename', 'doc:exists',
+  'doc:open-dialog', 'doc:import-fdx', 'doc:read', 'doc:save', 'doc:save-dialog', 'doc:known', 'doc:forget', 'doc:rename', 'doc:exists',
   'dialog:folder', 'path:join', 'path:default-dir',
   'recovery:write', 'recovery:clear', 'recovery:list', 'recovery:read',
   'backup:create', 'backup:list', 'backup:prune', 'backup:read', 'backup:dir', 'backup:reveal',

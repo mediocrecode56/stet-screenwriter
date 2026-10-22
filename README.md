@@ -81,6 +81,10 @@ included, ready to send.
 
 ![Print and export](docs/images/print.png)
 
+**Bring your Final Draft scripts.** File → Import Final Draft… turns an .fdx
+file into a STET screenplay: scenes, action, characters, dialogue, the title
+page and bold, italic, underline and strikeout come across as they were.
+
 **A second pair of eyes (optional).** If you use Claude, it can read through
 your dialogue and action and suggest fixes to the English. Nothing changes
 until you accept.

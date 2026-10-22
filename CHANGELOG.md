@@ -2,6 +2,11 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## Next (not released yet)
+
+- File → Import Final Draft… opens a Final Draft (.fdx) script as a new STET screenplay. Scene headings, action, characters, parentheticals, dialogue, transitions and shots come across formatted as they were, with bold, italic, underline and strikeout, the title page and the cast. STET then asks where to save the new .stet file and how to back it up, as for any new screenplay. It never overwrites a screenplay that is already there.
+- Opening or dropping an .fdx file on STET imports it the same way.
+
 ## 0.23.2 · 22 Oct 2026
 
 - Help → Open .stet Files with STET now really makes double-clicking a screenplay open it in STET, on Windows and on the Mac. Before, Windows could still ask "How do you want to open this file?" or open another app it remembered, and on a Mac nothing changed.

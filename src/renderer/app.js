@@ -23,6 +23,7 @@ import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/sc
 import { MAC, macKeys } from '../core/keys.js';
 import { stepZoom } from '../core/wheelzoom.js';
 import { castOrder, touchCast } from '../core/cast.js';
+import { parseFdx } from '../core/fdx.js';
 
 const api = window.stet;
 // On a Mac the window buttons sit at the left of the top bar (style.css), and shortcuts read ⌘.
@@ -538,6 +539,7 @@ async function saveAs() {
 
 /** Opens a screenplay; true once it is open. `quiet`: a file that can't be read is skipped without a word. */
 async function openPath(file, { quiet = false } = {}) {
+  if (/\.fdx$/i.test(file)) return importFdx(file);
   if (!(await releaseCurrent())) return false;
   const r = await Session.readFile(file);
   if (!r.ok) {
@@ -589,6 +591,44 @@ async function newDoc() {
   session.load(doc, null);
   const r = await session.saveTo(file);
   if (!r.ok) dlg.alertBox('COULD NOT CREATE FILE', 'The screenplay is open but not saved yet.', r.error);
+}
+
+/** File > Import Final Draft: converts an .fdx into a new screenplay, saved where the writer says, with its backups. */
+async function importFdx(file = null) {
+  const r = await api.invoke('doc:import-fdx', file);
+  if (!r) return false;
+  let fd;
+  try {
+    if (!r.ok) throw new Error(r.error);
+    fd = parseFdx(r.xml);
+  } catch (e) {
+    await dlg.alertBox('CANNOT IMPORT', `${r.file}\n\n${e.message}`);
+    return false;
+  }
+  if (!(await releaseCurrent())) return false;
+  let dir = await api.invoke('path:default-dir');
+  let name = r.name;
+  const doc = newDocument();
+  for (;;) {
+    const cfg = await dialogs.setupDialog({ title: 'IMPORT FINAL DRAFT', name, dir, backup: doc.settings.backup, allowUntitled: false, ok: 'Import' });
+    if (!cfg) return false;
+    ({ name, dir } = cfg);
+    doc.settings.backup = cfg.backup;
+    const target = await api.invoke('path:join', cfg.dir, cfg.name + '.stet');
+    if (await api.invoke('doc:exists', target)) {
+      await dlg.alertBox('FILE EXISTS', `${target} already exists. Choose another name or folder.`);
+      continue;
+    }
+    doc.blocks = fd.blocks;
+    doc.titlePage = fd.titlePage;
+    if (!doc.titlePage.title) doc.titlePage.title = cfg.name.toUpperCase();
+    doc.cast = fd.cast;
+    session.load(doc, null);
+    const w = await session.saveTo(target);
+    if (!w.ok) { await dlg.alertBox('COULD NOT CREATE FILE', 'The screenplay is imported and open but not saved yet.', w.error); return true; }
+    if (fd.warnings.length) dlg.alertBox('IMPORTED WITH CHANGES', 'The screenplay was imported. STET has no place for some parts of it:', fd.warnings.join('\n'));
+    return true;
+  }
 }
 
 async function restoreFromBackups(ref, asNew = false) {
@@ -743,6 +783,7 @@ cmd.register([
     settings = await api.invoke('settings:get');
     if (f) openPath(f);
   } },
+  { id: 'import-fdx', cat: 'File', label: 'Import Final Draft…', run: () => importFdx() },
   { id: 'save', cat: 'File', label: 'Save', keys: 'Ctrl+S', global: true, run: save },
   { id: 'save-as', cat: 'File', label: 'Save As…', keys: 'Ctrl+Shift+S', global: true, run: saveAs },
   { id: 'rename', cat: 'File', label: 'Rename…', enabled: () => !!session.path, run: () => renameInPlace() },
@@ -844,7 +885,7 @@ cmd.register([
 ]);
 
 cmd.buildMenubar($('menubar'), [
-  { label: 'File', items: () => ['new', 'open', 'recent', '-', 'save', 'save-as', 'rename', 'reveal', '-', 'backups', 'backup-now', 'recover', '-', 'print', 'export-pdf', '-', 'prefs'] },
+  { label: 'File', items: () => ['new', 'open', 'recent', 'import-fdx', '-', 'save', 'save-as', 'rename', 'reveal', '-', 'backups', 'backup-now', 'recover', '-', 'print', 'export-pdf', '-', 'prefs'] },
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
@@ -901,11 +942,11 @@ window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => {
   e.preventDefault();
   const f = e.dataTransfer.files[0];
-  if (f && /\.stet$/i.test(f.name)) openPath(api.pathForFile(f));
+  if (f && /\.(stet|fdx)$/i.test(f.name)) openPath(api.pathForFile(f));
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, openPath, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 

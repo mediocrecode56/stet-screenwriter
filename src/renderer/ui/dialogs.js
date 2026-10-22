@@ -27,7 +27,7 @@ function field(label, control, hint) {
  * New document / first save setup. Returns
  * { name, dir, backup: {enabled, intervalMin, retentionDays, dir} , untitled } or null.
  */
-export async function setupDialog({ title = 'NEW SCREENPLAY', name = 'Untitled Screenplay', dir, backup, allowUntitled = true }) {
+export async function setupDialog({ title = 'NEW SCREENPLAY', name = 'Untitled Screenplay', dir, backup, allowUntitled = true, ok = 'Create' }) {
   const nameIn = h('input', { type: 'text', value: name, spellcheck: false });
   const dirIn = h('input', { type: 'text', value: dir, spellcheck: false });
   const browse = h('button', { class: 'btn', onclick: async () => { const d = await api.invoke('dialog:folder', dirIn.value); if (d) { dirIn.value = d; upd(); } } }, 'Browse');
@@ -56,7 +56,7 @@ export async function setupDialog({ title = 'NEW SCREENPLAY', name = 'Untitled S
   );
   const buttons = [{ label: 'Cancel', value: null }];
   if (allowUntitled) buttons.push({ label: 'Not now', value: 'untitled' });
-  buttons.push({ label: 'Create', value: 'ok', primary: true });
+  buttons.push({ label: ok, value: 'ok', primary: true });
   const v = await open({ title, sub: 'name · location · backups', body, buttons, foot: allowUntitled ? 'Not now: write without a file — protected by crash recovery' : '' });
   if (!v) return null;
   const cfg = {

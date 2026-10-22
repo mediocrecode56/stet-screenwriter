@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<FinalDraft DocumentType="Script" Template="No" Version="6">
+  <Content>
+    <Paragraph Type="Scene Heading" Number="1">
+      <SceneProperties Length="1/8" Page="1" Title=""/>
+      <Text Style="Bold+AllCaps">int. harbour office - night</Text>
+    </Paragraph>
+    <Paragraph Type="Action">
+      <Text>Rain on the glass. </Text>
+      <Text Style="Italic">Somewhere</Text>
+      <Text>, a radio &amp; a kettle.</Text>
+    </Paragraph>
+    <Paragraph Type="Character">
+      <Text>Mara (V.O.)</Text>
+    </Paragraph>
+    <Paragraph Type="Parenthetical">
+      <Text>quietly</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue">
+      <Text>
+You came.
+
+
+Late, but you came.</Text>
+    </Paragraph>
+    <Paragraph Type="Dialogue"><Text Style="Bold">Still</Text><Text> here.</Text></Paragraph>
+    <Paragraph Type="Dialogue"/>
+    <Paragraph Type="Dialogue"><Text>
+And now.</Text></Paragraph>
+    <DualDialogue>
+      <Paragraph Type="Character"><Text>TEO</Text></Paragraph>
+      <Paragraph Type="Dialogue"><Text Style="Underline">Always.</Text></Paragraph>
+      <Paragraph Type="Character"><Text>MARA</Text></Paragraph>
+      <Paragraph Type="Dialogue"><Text Style="Strikeout">Never.</Text></Paragraph>
+    </DualDialogue>
+    <Paragraph Type="Transition">
+      <Text>cut to:</Text>
+    </Paragraph>
+    <Paragraph Type="New Act">
+      <Text>ACT TWO</Text>
+    </Paragraph>
+    <Paragraph Type="Shot"><Text>Close on the kettle</Text></Paragraph>
+  </Content>
+  <TitlePage>
+    <Content>
+      <Paragraph Alignment="Center"><Text Style="Underline+AllCaps">the harbour</Text></Paragraph>
+      <Paragraph Alignment="Center"/>
+      <Paragraph Alignment="Center"><Text>Written by</Text></Paragraph>
+      <Paragraph Alignment="Center"><Text>Ana Ruiz</Text></Paragraph>
+      <Paragraph Alignment="Left"><Text>ana@example.com</Text></Paragraph>
+      <Paragraph Alignment="Left"><Text>555 0100</Text></Paragraph>
+      <Paragraph Alignment="Right"><Text>Blue draft</Text></Paragraph>
+      <Paragraph Alignment="Right"><Text>October 2026</Text></Paragraph>
+    </Content>
+  </TitlePage>
+</FinalDraft>
