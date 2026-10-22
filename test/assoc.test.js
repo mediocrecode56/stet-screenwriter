@@ -47,13 +47,13 @@ test('Windows: an earlier "Always" choice opens Windows\' own Open with window',
 
 test('Mac: STET.app is registered with Launch Services and made the default', async () => {
   const calls = [];
-  const exec = async (f, a) => { calls.push([f, a]); return a.at(-1).includes('LSCopy') ? BUNDLE_ID + '\n' : ''; };
+  const exec = async (f, a) => { calls.push([f, a]); return a.at(-1).includes('URLForApplicationToOpenContentType') ? BUNDLE_ID + '\n' : ''; };
   const r = await linkFiles({ platform: 'darwin', exe: '/Applications/STET.app/Contents/MacOS/STET', exec });
   assert.equal(r.ok, true);
   assert.match(r.message, /now opens it in STET/);
   assert.match(calls[0][0], /lsregister$/);
   assert.deepEqual(calls[0][1], ['-f', '/Applications/STET.app']);
-  assert.match(calls[1][1].at(-1), /LSSetDefaultRoleHandlerForContentType/);
+  assert.match(calls[1][1].at(-1), /setDefaultApplicationAtURLToOpenContentType.*"\/Applications\/STET\.app"/s);
   const kept = await linkFiles({ platform: 'darwin', exe: '/Applications/STET.app/Contents/MacOS/STET', exec: async () => 'com.other.app' });
   assert.match(kept.message, /Change All/);
   assert.equal((await linkFiles({ platform: 'darwin', exe: '/opt/electron/electron', exec: async () => '' })).ok, false);

@@ -52,9 +52,16 @@ export function windowsExe(env = process.env, execPath = process.execPath) {
 // Tells Explorer that file types changed (SHChangeNotify), so the new icon shows now.
 const NOTIFY = 'Add-Type -Namespace W -Name S -MemberDefinition \'[DllImport("shell32.dll")] public static extern void SHChangeNotify(int e, int f, System.IntPtr a, System.IntPtr b);\'; [W.S]::SHChangeNotify(0x08000000, 0, [System.IntPtr]::Zero, [System.IntPtr]::Zero)';
 
-// JavaScript for Automation: make the app with BUNDLE_ID the default for UTI (every role).
-export const MAC_SET_DEFAULT = `ObjC.import('CoreServices'); $.LSSetDefaultRoleHandlerForContentType($('${UTI}'), 0xFFFFFFFF, $('${BUNDLE_ID}'));`;
-export const MAC_GET_DEFAULT = `ObjC.import('CoreServices'); ObjC.unwrap(ObjC.castRefToObject($.LSCopyDefaultRoleHandlerForContentType($('${UTI}'), 0xFFFFFFFF)));`;
+// JavaScript for Automation (macOS 12+): make the app at `app` the default for STET Screenplays,
+// and read which app is. The first prints 'ok' or why not.
+export const macSetDefault = (app, uti = UTI) => `ObjC.import('AppKit'); ObjC.import('UniformTypeIdentifiers');
+var done = false, err = '';
+$.NSWorkspace.sharedWorkspace.setDefaultApplicationAtURLToOpenContentTypeCompletionHandler($.NSURL.fileURLWithPath(${JSON.stringify(app)}), $.UTType.typeWithIdentifier(${JSON.stringify(uti)}), function (e) { err = e && !e.isNil() ? ObjC.unwrap(e.localizedDescription) : ''; done = true; });
+for (var i = 0; i < 150 && !done; i++) $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
+done ? (err || 'ok') : 'no answer'`;
+export const MAC_GET_DEFAULT = `ObjC.import('AppKit'); ObjC.import('UniformTypeIdentifiers');
+var u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenContentType($.UTType.typeWithIdentifier('${UTI}'));
+u.isNil() ? '' : ObjC.unwrap($.NSBundle.bundleWithURL(u).bundleIdentifier)`;
 
 const run = (file, args) => new Promise((resolve, reject) => {
   execFile(file, args, { windowsHide: true, timeout: 30000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
@@ -90,7 +97,7 @@ export async function linkFiles({ platform = process.platform, exe, file = null,
       const bundle = path.posix.resolve(path.posix.dirname(exe), '..', '..');
       if (!bundle.endsWith('.app')) return { ok: false, error: 'This copy of STET is not an app bundle, so it cannot be linked to .stet files.' };
       await exec(LSREGISTER, ['-f', bundle]);
-      await exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', MAC_SET_DEFAULT]);
+      await exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', macSetDefault(bundle)]);
       const now = (await exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', MAC_GET_DEFAULT]).catch(() => '')).trim();
       if (now.toLowerCase() !== BUNDLE_ID) {
         return { ok: true, message: 'STET is registered for .stet screenplays, but macOS kept another app as their default. Select a .stet file in the Finder, choose File > Get Info, pick STET under "Open with" and click Change All.' };

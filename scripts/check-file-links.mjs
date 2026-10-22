@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { linkFiles, MAC_GET_DEFAULT, BUNDLE_ID, UTI, PROG_ID } from '../src/main/assoc.js';
+import { linkFiles, macSetDefault, MAC_GET_DEFAULT, BUNDLE_ID, UTI, PROG_ID } from '../src/main/assoc.js';
 import { MAC_DOC_INFO } from './package-tools.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -32,9 +32,9 @@ const ps = (script) => execFileSync(PS, ['-NoProfile', '-NonInteractive', '-Comm
 function winAssoc() {
   const out = ps(`Add-Type -Namespace W -Name A -MemberDefinition '[DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] public static extern int AssocQueryString(int f, int s, string a, string e, System.Text.StringBuilder o, ref int n);'
     function Q($s) { $n = 2048; $b = New-Object System.Text.StringBuilder 2048; if ([W.A]::AssocQueryString(0, $s, '.stet', $null, $b, [ref]$n) -eq 0) { $b.ToString() } else { '' } }
-    (Q 2) + '|' + (Q 15)`); // ASSOCSTR_EXECUTABLE, ASSOCSTR_DEFAULTICON
-  const [exe, icon] = out.split('|');
-  return { exe, icon };
+    (Q 2) + '|' + (Q 15) + '|' + (Q 1)`); // ASSOCSTR_EXECUTABLE, ASSOCSTR_DEFAULTICON, ASSOCSTR_COMMAND
+  const [exe, icon, command] = out.split('|');
+  return { exe, icon, command };
 }
 const regHas = (key) => spawnSync('reg', ['query', key], { stdio: 'ignore' }).status === 0;
 const KEY = `HKCU\\Software\\Classes\\${PROG_ID}`;
@@ -42,6 +42,19 @@ function winUnlink() {
   spawnSync('reg', ['delete', KEY, '/f'], { stdio: 'ignore' });
   spawnSync('reg', ['delete', 'HKCU\\Software\\Classes\\.stet', '/f'], { stdio: 'ignore' });
 }
+/**
+ * Opens `doc` the way a double-click does (ShellExecute) and returns the program that ran.
+ * The stand-in STET.exe is node.exe, which runs the screenplay as a script: it records itself.
+ */
+function winDoubleClick(dir) {
+  const doc = path.join(dir, 'Pilot.stet'), mark = path.join(dir, 'opened-by.txt');
+  fs.rmSync(mark, { force: true });
+  fs.writeFileSync(doc, `require('fs').writeFileSync(${JSON.stringify(mark)}, process.execPath)`);
+  ps(`Start-Process -FilePath '${doc.replace(/'/g, "''")}'`);
+  for (let i = 0; i < 100 && !fs.existsSync(mark); i++) spawnSync(PS, ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 200']);
+  return fs.existsSync(mark) ? fs.readFileSync(mark, 'utf8') : '';
+}
+
 // A stand-in STET.exe with an icon of its own: a copy of node.exe.
 function fakeExe(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -52,19 +65,19 @@ function fakeExe(dir) {
 
 async function winHelper() {
   winUnlink();
-  check(!winAssoc().exe, 'before: nothing opens .stet files');
+  check(!winAssoc().command, 'before: nothing opens .stet files');
   const exe = fakeExe(path.join(tmp, 'Portable Folder'));
   const r = await linkFiles({ platform: 'win32', exe });
   check(r.ok && /now opens it in STET/.test(r.message), `Help > Open .stet Files: ${r.message || r.error}`);
   const a = winAssoc();
-  check(same(a.exe, exe), `a double-click starts STET.exe (${a.exe})`);
+  check(same(winDoubleClick(tmp), exe), `a double-click starts this STET.exe (Windows reports ${a.exe || a.command})`);
   check(a.icon.toLowerCase() === `${exe},0`.toLowerCase(), `.stet files show STET's icon (${a.icon})`);
   const cmd = execFileSync('reg', ['query', `${KEY}\\shell\\open\\command`, '/ve'], { encoding: 'utf8' });
   check(cmd.includes(`"${exe}" "%1"`), 'the file is passed to STET, quoted (a folder name with spaces)');
   // Linking again (another copy of STET) moves the link there.
   const exe2 = fakeExe(path.join(tmp, 'Other'));
   await linkFiles({ platform: 'win32', exe: exe2 });
-  check(same(winAssoc().exe, exe2), 'linking again from another copy points the files there');
+  check(same(winDoubleClick(tmp), exe2), 'linking again from another copy points the files there');
   winUnlink();
 }
 
@@ -87,18 +100,18 @@ async function winInstaller() {
 
   install(); // the box as it comes: ticked
   let a = winAssoc();
-  check(same(a.exe, installed), `installer, box ticked: a double-click starts the installed STET (${a.exe})`);
+  check(same(winDoubleClick(tmp), installed), `installer, box ticked: a double-click starts the installed STET (${a.command})`);
   check(a.icon.toLowerCase() === `${installed},0`.toLowerCase(), `installer: .stet files show STET's icon (${a.icon})`);
   uninstall();
   check(!fs.existsSync(installed), 'uninstalled');
-  check(!regHas(KEY) && !winAssoc().exe, 'uninstalling removes the link');
+  check(!regHas(KEY) && !winAssoc().command, 'uninstalling removes the link');
 
   install('/MERGETASKS=!assoc'); // the box unticked
-  check(!regHas(KEY) && !winAssoc().exe, 'installer, box unticked: .stet files are left alone');
+  check(!regHas(KEY) && !winAssoc().command, 'installer, box unticked: .stet files are left alone');
   await linkFiles({ platform: 'win32', exe: installed }); // Help > Open .stet Files, later
-  check(same(winAssoc().exe, installed), 'then Help > Open .stet Files links them to the installed STET');
+  check(same(winDoubleClick(tmp), installed), 'then Help > Open .stet Files links them to the installed STET');
   uninstall();
-  check(!regHas(KEY) && !winAssoc().exe, 'uninstalling removes a link made from the Help menu too');
+  check(!regHas(KEY) && !winAssoc().command, 'uninstalling removes a link made from the Help menu too');
 }
 
 // ---- Mac ----------------------------------------------------------------------------------
@@ -136,11 +149,13 @@ async function macHelper() {
   // Another app that also claims .stet files, and is their default for now.
   const other = fakeApp('Other', 'com.example.other', { CFBundleDocumentTypes: [{ CFBundleTypeName: 'Screenplay', CFBundleTypeRole: 'Editor', LSHandlerRank: 'Owner', LSItemContentTypes: [UTI] }] });
   const stet = fakeApp('STET', BUNDLE_ID, MAC_DOC_INFO);
-  jxa(`ObjC.import('CoreServices'); $.LSSetDefaultRoleHandlerForContentType($('${UTI}'), 0xFFFFFFFF, $('com.example.other'))`);
-  check(jxa(MAC_GET_DEFAULT).toLowerCase() === 'com.example.other', 'before: another app is the default for .stet files');
+  const set = jxa(macSetDefault(other.app));
+  const before = jxa(MAC_GET_DEFAULT);
+  check(before.toLowerCase() === 'com.example.other', `before: another app is the default for .stet files (${set}; ${before})`);
   const r = await linkFiles({ platform: 'darwin', exe: stet.exe });
   check(r.ok && /now opens it in STET/.test(r.message), `Help > Open .stet Files: ${r.message || r.error}`);
-  check(jxa(MAC_GET_DEFAULT).toLowerCase() === BUNDLE_ID, 'STET is the default app for STET Screenplays');
+  const now = jxa(MAC_GET_DEFAULT);
+  check(now.toLowerCase() === BUNDLE_ID, `STET is the default app for STET Screenplays (${now})`);
   const by = opener(doc);
   check(by && same(fs.realpathSync(by), fs.realpathSync(stet.app)), `the Finder opens a .stet file with STET.app (${by})`);
   const kind = jxa(`ObjC.import('AppKit'); ObjC.unwrap($.NSWorkspace.sharedWorkspace.typeOfFileError(${JSON.stringify(doc)}, null))`);
