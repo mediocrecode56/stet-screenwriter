@@ -113,3 +113,36 @@ test('plain text interchange recovers element types', () => {
   assert.equal(back[5].type, 'dialogue');
   assert.equal(back[10].type, 'transition');
 });
+
+test('aligned paragraphs print where the editor shows them; a justified line fills its width', async () => {
+  const { ELEMENT, lineGaps, colIn, offsetAtCol, setText } = await import('../src/core/format.js');
+  const { linesOf } = await import('../src/core/layout.js');
+  const { makeBlock } = await import('../src/core/model.js');
+  const doc = newDocument('');
+  const long = 'The rain does not stop. It runs down the glass in long grey lines and nobody in the diner looks up from their plates.';
+  doc.blocks = [
+    { ...makeBlock('action', 'Centred.'), align: 'center' },
+    { ...makeBlock('action', 'Right.'), align: 'right' },
+    { ...makeBlock('action', long), align: 'justify' },
+  ];
+  const { pages } = buildPrintPages(doc, { titlePage: false });
+  const at = (text) => pages[0].lines.find((l) => l.text === text);
+  const w = ELEMENT.action.width, left = ELEMENT.action.left;
+  assert.equal(at('Centred.').col, left + Math.floor((w - 8) / 2));
+  assert.equal(at('Right.').col, left + w - 6);
+  const b = doc.blocks[2], starts = linesOf(b);
+  assert.ok(starts.length >= 2);
+  const first = pages[0].lines.find((l) => /^The +rain/.test(l.text));
+  assert.equal(first.col, left);
+  assert.equal(first.text.length, w, 'a justified line reaches the right margin');
+  assert.equal(first.text.replace(/ +/g, ' '), long.slice(0, starts[1]).trim());
+  const lastLine = pages[0].lines.find((l) => l.row === first.row + starts.length - 1);
+  assert.ok(!/ {2}/.test(lastLine.text), 'the last line is set as written');
+  // Columns and offsets map both ways over the widened spaces.
+  const gaps = lineGaps(b, starts, 0);
+  const t = setText(long.slice(0, starts[1] - 1), gaps);
+  for (let k = 0; k < starts[1] - 1; k++) {
+    assert.equal(t[colIn(gaps, k)], long[k]);
+    assert.equal(offsetAtCol(gaps, colIn(gaps, k), starts[1] - 1), k);
+  }
+});

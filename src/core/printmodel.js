@@ -2,7 +2,7 @@
 // It is built from the document structure and the same pagination the editor
 // uses — never from the editor's screen, zoom or theme.
 
-import { PAGE, ELEMENT, lineText, lineX } from './format.js';
+import { PAGE, ELEMENT, lineText, lineX, lineGaps, colIn, setText } from './format.js';
 import { paginate, linesOf } from './layout.js';
 import { TITLE_FIELDS_SPEC } from './titlepage.js';
 import { styleRuns } from './model.js';
@@ -62,13 +62,15 @@ export function buildPrintPages(doc, options = {}) {
       const starts = linesOf(b);
       for (let l = it.l0; l < it.l1; l++) {
         const row = top + it.y + l - it.l0;
-        const col = lineX(b.type, b.text, starts, l);
+        const col = lineX(b, starts, l);
         const text = lineText(b.text, starts, l);
+        const gaps = lineGaps(b, starts, l); // a justified line's widened spaces
+        const at = (k) => col + colIn(gaps, k);
         // Text styles always print; a styled line goes out as runs (st: e.g. 'bu').
         if (text) {
           const ls = starts[l];
           for (const r of styleRuns(b.marks, ls, ls + text.length)) {
-            const ln = { col: col + r.s - ls, row, text: text.slice(r.s - ls, r.e - ls) };
+            const ln = { col: at(r.s - ls), row, text: setText(text, gaps, r.s - ls, r.e - ls) };
             if (r.st) ln.st = r.st;
             lines.push(ln);
           }
@@ -78,9 +80,9 @@ export function buildPrintPages(doc, options = {}) {
         for (const m of b.marks) {
           const a = Math.max(m.s, ls), z = Math.min(m.e, le);
           if (z <= a) continue;
-          if (m.k === 'hl' && opt.highlights) rects.push({ col: col + a - ls, row, w: z - a, color: m.v });
+          if (m.k === 'hl' && opt.highlights) rects.push({ col: at(a - ls), row, w: at(z - ls) - at(a - ls), color: m.v });
           if (m.k === 'cm' && opt.comments) {
-            notes.push({ col: col + a - ls, row, w: z - a });
+            notes.push({ col: at(a - ls), row, w: at(z - ls) - at(a - ls) });
             if (!noteIndex.has(m.v)) {
               noteIndex.set(m.v, noteList.length + 1);
               noteList.push({ n: noteList.length + 1, page: number, text: (doc.comments[m.v] || {}).text || '' });

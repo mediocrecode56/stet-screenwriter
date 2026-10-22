@@ -6,20 +6,22 @@ import { arrive, leave, DUR_FAST } from './motion.js';
 const SUB_GRACE = 110; // ms a flyout waits before closing, so the pointer can cross a neighbouring row to reach it
 import { h, open } from './dialog.js';
 
-import { MAC, macKeys } from '../../core/keys.js';
+import { Keymap, comboOf, showKeys } from '../../core/keys.js';
 
 const commands = new Map();
-const bindings = new Map(); // normalized key -> command id
+const keymap = new Keymap(); // shortcut -> command, with the writer's own changes (Help > Keyboard Shortcuts)
+const listeners = [];
 
 export function register(list) {
   for (const c of list) {
     commands.set(c.id, c);
-    for (const k of [].concat(c.keys || [])) bindings.set(normalize(k), c.id);
+    keymap.define(c.id, c.keys);
   }
 }
 
 export function get(id) { return commands.get(id); }
 export function all() { return [...commands.values()]; }
+export { keymap };
 
 export function run(id, ...args) {
   const c = commands.get(id);
@@ -28,44 +30,43 @@ export function run(id, ...args) {
   return true;
 }
 
-function normalize(k) {
-  const parts = k.split('+').map((s) => s.trim());
-  const key = parts.pop();
-  const mods = new Set(parts.map((p) => p.toLowerCase()));
-  return [mods.has('ctrl') ? 'C' : '', mods.has('alt') ? 'A' : '', mods.has('shift') ? 'S' : '', key.length === 1 ? key.toUpperCase() : key].join('-');
+/** The writer's changed shortcuts ({ id: [shortcut] }) are in effect from now on. */
+export function setShortcuts(over) {
+  keymap.setOverrides(over);
+  for (const f of listeners) f();
+}
+/** Called whenever shortcuts change (tooltips, menus). */
+export function onShortcuts(f) { listeners.push(f); }
+export function changed() { for (const f of listeners) f(); }
+
+/**
+ * A key event: { cmd } when it completes a shortcut, { pending: true } when it begins one
+ * (the rest of the sequence is still to come), or null.
+ */
+export function resolve(e) {
+  const r = keymap.feed(comboOf(e));
+  if (!r) return null;
+  if (r.pending) return r;
+  return { cmd: commands.get(r.id) };
 }
 
-function eventKey(e) {
-  let key = e.key;
-  if (e.code && /^Digit\d$/.test(e.code)) key = e.code.slice(5);
-  else if (e.code === 'Backslash') key = '\\';
-  else if (e.code === 'BracketLeft') key = '[';
-  else if (e.code === 'BracketRight') key = ']';
-  else if (e.code === 'Equal') key = '=';
-  else if (e.code === 'Minus') key = '-';
-  // On a Mac, Option with a letter types a symbol (Option+M is µ): the key itself counts.
-  else if (MAC && e.altKey && e.code && /^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
-  else if (key.length === 1) key = key.toUpperCase();
-  return [(e.ctrlKey || e.metaKey) ? 'C' : '', e.altKey ? 'A' : '', e.shiftKey ? 'S' : '', key].join('-');
-}
-
-/** Command bound to a key event, if any. */
-export function lookup(e) {
-  const id = bindings.get(eventKey(e));
-  return id ? commands.get(id) : null;
-}
-
-/** Run the command bound to a key event. Returns true if handled. */
+/** Run the command bound to a key event. Returns true if the key was taken. */
 export function handleKey(e) {
-  const id = bindings.get(eventKey(e));
-  if (!id) return false;
-  return run(id);
+  const r = resolve(e);
+  if (!r) return false;
+  return r.cmd ? run(r.cmd.id) : true;
 }
 
+export function waiting() { return keymap.waiting; }
+
+/** The shortcut shown for a command (its first), the Mac way on a Mac. */
 export function keyLabel(c) {
-  const k = c.display || [].concat(c.keys || [])[0];
-  return k ? macKeys(k.replace(/\bArrow/g, '')) : '';
+  if (c.display) return showKeys(c.display);
+  const k = keymap.keysOf(c.id)[0];
+  return k ? showKeys(k) : '';
 }
+/** The same, by command id. */
+export const keyText = (id) => { const c = commands.get(id); return c ? keyLabel(c) : ''; };
 
 
 // ---- menu bar ---------------------------------------------------------------
@@ -84,9 +85,15 @@ export function buildMenubar(host, menus) {
     b.addEventListener('mouseenter', () => { if (openMenu && openMenu.btn !== b) showMenu(b, m.items); });
     host.appendChild(b);
   }
-  window.addEventListener('mousedown', (e) => { if (openMenu && !openMenu.el.contains(e.target) && !e.target.classList.contains('mb')) closeMenu(); });
+  window.addEventListener('mousedown', (e) => { if (openMenu && !openMenu.el.contains(e.target) && !e.target.closest('.mb, .mbtn')) closeMenu(); });
   window.addEventListener('keydown', (e) => { if (openMenu && e.key === 'Escape') closeMenu(); }, true);
   window.addEventListener('blur', closeMenu);
+}
+
+/** A small menu under a toolbar button (class mbtn); pressing the button again closes it. */
+export function popup(btn, items) {
+  if (openMenu && openMenu.btn === btn) return closeMenu();
+  showMenu(btn, items);
 }
 
 function showMenu(btn, items) {
@@ -99,7 +106,7 @@ function showMenu(btn, items) {
     if (!c) continue;
     const disabled = c.enabled && !c.enabled();
     const label = typeof c.label === 'function' ? c.label() : c.label;
-    const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') + (c.sub ? ' has-sub' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
+    const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') + (c.sub ? ' has-sub' : '') + (c.checked && c.checked() ? ' cur' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
     row.addEventListener('mouseup', () => { closeMenu(); if (c.run) setTimeout(() => (c.id ? run(c.id) : c.run()), 0); });
     if (c.sub && !disabled) quickSub(el, row, c.sub()); else row.addEventListener('mouseenter', () => hideSub(el, SUB_GRACE));
     el.appendChild(row);

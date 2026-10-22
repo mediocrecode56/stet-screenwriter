@@ -7,7 +7,15 @@ import { linesOf } from '../../core/layout.js';
 import { lineIndexOf } from '../../core/nav.js';
 import { pos } from '../../core/editor.js';
 import { esc } from './dialog.js';
-import { macKeys } from '../../core/keys.js';
+import { keyText } from './commands.js';
+
+// Scroll a panel's list (only the list) so a row is in view. scrollIntoView would also scroll the
+// panel's own frame, which is offscreen while it slides in, and break the slide.
+function reveal(list, row) {
+  const l = list.getBoundingClientRect(), r = row.getBoundingClientRect();
+  if (r.top < l.top) list.scrollTop += r.top - l.top;
+  else if (r.bottom > l.bottom) list.scrollTop += Math.min(r.bottom - l.bottom, r.top - l.top);
+}
 
 function idle(fn) {
   return (window.requestIdleCallback || ((f) => setTimeout(f, 50)))(fn, { timeout: 300 });
@@ -45,7 +53,7 @@ export class ScenePanel {
     if (key === this.lastKey) return;
     this.lastKey = key;
     this.count.textContent = scenes.length ? `· ${scenes.length}` : '';
-    if (!scenes.length) { this.list.innerHTML = `<div class="empty">No scene headings yet. ${macKeys('Ctrl+1')} starts one.</div>`; return; }
+    if (!scenes.length) { this.list.innerHTML = `<div class="empty">No scene headings yet. ${keyText('type-scene') || 'Scene Heading in the Element menu'} starts one.</div>`; return; }
     let h = '';
     scenes.forEach((s, i) => {
       const pg = pageOf(pages, s.b, 0) + 1;
@@ -53,7 +61,7 @@ export class ScenePanel {
     });
     this.list.innerHTML = h;
     const c = this.list.querySelector('.cur');
-    if (c) c.scrollIntoView({ block: 'nearest' });
+    if (c) reveal(this.list, c);
   }
 }
 
@@ -109,7 +117,7 @@ export class NotesPanel {
     this.lastKey = key;
     this.count.textContent = anchors.length ? `· ${anchors.length}` : '';
     if (!anchors.length) {
-      this.list.innerHTML = `<div class="empty">No notes. Select text and press ${macKeys('Ctrl+Alt+M')}.</div>`;
+      this.list.innerHTML = `<div class="empty">No notes. Select text and press ${keyText('note-add') || '+NOTE'}.</div>`;
       return;
     }
     const blocks = this.ed.blocks;
@@ -140,11 +148,11 @@ export class NotesPanel {
     this.render();
     this.markCurrent();
     const a = this.anchors().find((x) => x.id === id);
-    if (a && jumpTo) this.jump(pos(a.b, a.s), true, pos(a.b, a.e));
+    if (a && jumpTo) this.jump(pos(a.b, a.s), true, pos(a.b, a.e), true); // a glide to its passage, as for F8
     const n = this.list.querySelector(`.note[data-id="${CSS.escape(id)}"]`);
     if (n) {
-      n.scrollIntoView({ block: 'nearest' });
-      if (focusText) { const ta = n.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      reveal(this.list, n);
+      if (focusText) { const ta = n.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); }
     }
   }
 

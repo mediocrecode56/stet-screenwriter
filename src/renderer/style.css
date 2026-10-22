@@ -149,10 +149,16 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .msub .mi-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .msub .mi.cur { color: var(--ink-3); }
 .msub .mi.cur:hover { color: var(--inv-fg); }
+/* A toolbar menu (alignment): the current choice marked like the current scene or note. */
+.menu > .mi.cur { box-shadow: inset 2px 0 0 var(--ink); }
 
 /* ---- element bar ----------------------------------------------------- */
 #elbar { height: 30px; flex: none; display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); background: var(--bar); padding: 0 6px; }
-#eltypes, #hlbar, #stbar { display: flex; }
+#eltypes, #hlbar, #stbar, #albar { display: flex; }
+.tb.mbtn { display: flex; align-items: center; gap: 4px; padding: 0 7px; }
+.tb.mbtn.open { color: var(--ink); background: var(--hover-on); }
+.tb.mbtn svg { display: block; }
+.tb.mbtn .dn { font-size: 8px; color: var(--ink-3); }
 .tb.st { font: 13px/1 var(--script); padding: 0 7px; text-transform: none; letter-spacing: 0; }
 .tb { border: 0; background: none; padding: 0 8px; cursor: default; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-2); transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .tb.pressed, .tb.on, .mb.pressed, .btn.pressed { transition: none; }
@@ -201,8 +207,8 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .note { padding: 8px 10px; border-bottom: 1px solid var(--rule); }
 .note.cur { box-shadow: inset 2px 0 0 var(--ink); }
 .note .q { color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; cursor: default; }
-.note textarea { width: 100%; min-height: 44px; resize: vertical; border: 1px solid var(--rule); padding: 4px 6px; font: 12px/1.4 var(--ui); }
-.note textarea:focus { border-color: var(--rule-strong); }
+.note textarea { display: block; width: 100%; min-height: 1.4em; field-sizing: content; resize: none; overflow: hidden; border: 0; outline: 0; background: none; color: var(--ink); padding: 0; margin: 0; font: 12px/1.4 var(--ui); cursor: text; }
+.note textarea::placeholder { color: var(--ink-3); }
 .note .meta { display: flex; justify-content: space-between; color: var(--ink-3); margin-top: 3px; }
 .note .meta button { border: 0; background: none; color: var(--ink-3); cursor: default; padding: 0; }
 .note .meta button:hover { color: var(--ink); text-decoration: underline; }
@@ -347,6 +353,11 @@ table.t tr.pick { cursor: default; }
 table.t tr.pick td { transition: background-color var(--dur-fast) var(--ease-out); }
 table.t tr.pick:hover td { background: var(--hover); }
 table.t tr.on td, table.t tr.on:hover td { background: var(--hover-on); color: var(--ink); }
+/* Keyboard Shortcuts: the keys column is what is clicked to change a shortcut. */
+table.keys td.kc { white-space: nowrap; }
+table.keys tr.pick:focus, .dlg .body:focus { outline: 0; }
+.klink { border: 0; background: none; color: var(--ink-3); cursor: default; padding: 0; margin-left: 8px; font: inherit; }
+.klink:hover, .klink:focus-visible { color: var(--ink); text-decoration: underline; outline: 0; }
 /* Open Recent: a fixed-layout table that never grows past the dialog (no horizontal scrolling).
    The name keeps priority; a long path keeps its beginning and is cut at the end; the
    actions keep their own column. They show while the row is hovered, focused or selected:

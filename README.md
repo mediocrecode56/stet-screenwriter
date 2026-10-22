@@ -94,13 +94,14 @@ until you accept.
 | Press | To |
 |---|---|
 | Enter | move on to the next line: after a character, their dialogue |
-| Tab | change what kind of line you're on |
+| Tab | start a different kind of line, or change an empty one |
 | Ctrl+S | save (STET also saves by itself) |
 | Ctrl+F | find |
 | Ctrl+P | print or save as PDF |
 | F9 | see your writing week |
 | Ctrl+K | search every command |
-| F1 | see all the keys |
+| Ctrl+L, E, R, J | align left, centre, right, or justify |
+| F1 | see all the keys, and change any of them |
 
 ## Good to know
 

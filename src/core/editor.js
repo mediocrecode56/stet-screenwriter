@@ -6,11 +6,12 @@
 // used by incremental pagination. Undo/redo replays those steps.
 
 import {
-  makeBlock, withText, withType, UPPER_TYPES, cueName,
+  makeBlock, withText, withType, withTyped, withAlign, sliceBlock, UPPER_TYPES, cueName,
   marksAfterInsert, marksAfterDelete, sliceMarks, concatMarks, setHighlight, removeCommentMarks, STYLES, setStyle, hasStyle,
 } from './model.js';
 import { blockWords, documentWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
 import { mergeDirty } from './layout.js';
+import { ELEMENT } from './format.js';
 
 export const NEXT_ON_ENTER = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'action', transition: 'scene', shot: 'action' };
 export const TAB_NEXT = { action: 'character', character: 'transition', transition: 'scene', scene: 'action', dialogue: 'paren', paren: 'dialogue', shot: 'action' };
@@ -287,7 +288,9 @@ export class Editor {
       const b = this.blocks[i];
       const a = i === s.b ? s.o : 0;
       const z = i === e.b ? e.o : b.text.length;
-      out.push({ type: b.type, text: b.text.slice(a, z), marks: sliceMarks(b.marks, a, z) });
+      const f = { type: b.type, text: b.text.slice(a, z), marks: sliceMarks(b.marks, a, z) };
+      if (b.align) f.align = b.align;
+      out.push(f);
     }
     return out;
   }
@@ -325,10 +328,13 @@ export class Editor {
 
   _insertAt(p, str, styles = null) {
     const b = this.blocks[p.b];
+    const typed = str;
     if (UPPER_TYPES.has(b.type)) str = str.toUpperCase();
     let marks = marksAfterInsert(b.marks, p.o, str.length);
     if (styles) for (const [k, on] of Object.entries(styles)) marks = setStyle(marks, p.o, p.o + str.length, k, on);
-    this._replace(p.b, withText(b, b.text.slice(0, p.o) + str + b.text.slice(p.o), marks));
+    let nb = withText(b, b.text.slice(0, p.o) + str + b.text.slice(p.o), marks);
+    if (UPPER_TYPES.has(b.type)) nb = withTyped(b, nb, p.o, typed);
+    this._replace(p.b, nb);
     const np = pos(p.b, p.o + str.length);
     this.sel = { a: np, f: np };
     return np;
@@ -397,10 +403,10 @@ export class Editor {
         if (i === 0) {
           if (head.length) type = cur.type;
           if (UPPER_TYPES.has(type)) text = text.toUpperCase();
-          out.push({ id: cur.id, type, text: head + text, marks: concatMarks(headMarks, head.length, text.length === f.text.length ? marks : []) });
+          out.push(withAlign({ id: cur.id, type, text: head + text, marks: concatMarks(headMarks, head.length, text.length === f.text.length ? marks : []) }, head.length ? cur.align : f.align));
         } else {
           if (UPPER_TYPES.has(type)) { const up = text.toUpperCase(); if (up.length !== text.length) marks = []; text = up; }
-          out.push(makeBlock(type, text, marks));
+          out.push(withAlign(makeBlock(type, text, marks), f.align));
         }
       });
       const lastBlock = out[out.length - 1];
@@ -481,9 +487,8 @@ export class Editor {
       }
       const left = withText(b, b.text.slice(0, p.o).replace(/ +$/, ''), sliceMarks(b.marks, 0, p.o));
       const rightText = b.text.slice(p.o);
-      const trimmed = rightText.replace(/^ +/, '');
-      const cut = rightText.length - trimmed.length;
-      const right = makeBlock(b.type, trimmed, sliceMarks(b.marks, p.o + cut, b.text.length));
+      const cut = rightText.length - rightText.replace(/^ +/, '').length;
+      const right = sliceBlock(b, p.o + cut, b.text.length);
       this._splice(p.b, 1, [left, right]);
       this.sel = { a: pos(p.b + 1, 0), f: pos(p.b + 1, 0) };
     }, { close: true });
@@ -498,29 +503,72 @@ export class Editor {
   }
 
   /**
-   * Tab / Shift+Tab. In an empty element (or mid-text) it cycles the element
-   * type; at the end of a written element, Tab starts the element that
-   * usually follows it (dialogue -> parenthetical, cue -> parenthetical,
-   * parenthetical -> dialogue, action -> character).
+   * Tab / Shift+Tab. A new element type only ever applies to what is selected or to what is
+   * written next, never to text already there:
+   *  - in an empty element it cycles that element's type;
+   *  - at the end of a written element, Tab starts the element that usually follows it
+   *    (dialogue -> parenthetical, cue -> parenthetical, parenthetical -> dialogue,
+   *    action -> character), Shift+Tab the one before it in the cycle;
+   *  - inside written text it starts an empty element of the next (or previous) type at the
+   *    caret, the text before and after it keeping theirs;
+   *  - with a selection, only the selected text changes type (split off from the rest).
    */
   tab(reverse = false) {
     const b = this.block;
     const p = this.caret;
-    const atEnd = !this.hasSelection() && b.text !== '' && b.text !== '()' &&
-      (p.o === b.text.length || (b.type === 'paren' && p.o === b.text.length - 1 && b.text.endsWith(')')));
-    if (reverse || !atEnd) { this.setType((reverse ? TAB_PREV : TAB_NEXT)[b.type]); return; }
-    const type = TAB_AFTER[b.type];
+    const cycle = reverse ? TAB_PREV : TAB_NEXT;
+    if (this.hasSelection()) { this.retypeSelection(cycle[this.blocks[this.ordered()[0].b].type]); return; }
+    if (b.text === '' || b.text === '()') { this.setType(cycle[b.type]); return; }
+    const atEnd = p.o === b.text.length || (b.type === 'paren' && p.o === b.text.length - 1 && b.text.endsWith(')'));
+    const type = atEnd && !reverse ? TAB_AFTER[b.type] : cycle[b.type];
     this.edit('enter', () => {
+      let at = p.b + 1;
+      if (!atEnd && p.o === 0) at = p.b;
+      else if (!atEnd) {
+        const head = b.text.slice(0, p.o).replace(/ +$/, '').length;
+        const rest = b.text.slice(p.o);
+        const from = p.o + rest.length - rest.replace(/^ +/, '').length;
+        this._splice(p.b, 1, [sliceBlock(b, 0, head, b.id), sliceBlock(b, from, b.text.length)]);
+      }
       const nb = type === 'paren' ? makeBlock('paren', '()') : makeBlock(type, '');
-      this._splice(p.b + 1, 0, [nb]);
+      this._splice(at, 0, [nb]);
       const o = type === 'paren' ? 1 : 0;
-      this.sel = { a: pos(p.b + 1, o), f: pos(p.b + 1, o) };
+      this.sel = { a: pos(at, o), f: pos(at, o) };
+    }, { close: true });
+  }
+
+  /**
+   * Change the element type of the selected text only: a paragraph partly selected is split
+   * where the selection begins or ends, and only the selected part changes.
+   */
+  retypeSelection(type) {
+    let [s, e] = this.ordered();
+    // A selection ending at the very start of a paragraph doesn't take it in (nor one beginning at the very end).
+    if (e.b > s.b && e.o === 0) e = pos(e.b - 1, this.blocks[e.b - 1].text.length);
+    if (s.b < e.b && s.o === this.blocks[s.b].text.length) s = pos(s.b + 1, 0);
+    this.edit('type-change', () => {
+      const last = this.blocks[e.b];
+      // The text left outside the selection loses the spaces at the cut, as with Enter.
+      if (e.o < last.text.length && e.o > (s.b === e.b ? s.o : 0)) {
+        const rest = last.text.slice(e.o);
+        this._splice(e.b, 1, [sliceBlock(last, 0, e.o, last.id), sliceBlock(last, e.o + rest.length - rest.replace(/^ +/, '').length, last.text.length)]);
+      }
+      let b0 = s.b, b1 = e.b;
+      const first = this.blocks[s.b];
+      if (s.o > 0 && s.o < first.text.length) {
+        this._splice(s.b, 1, [sliceBlock(first, 0, first.text.slice(0, s.o).replace(/ +$/, '').length, first.id), sliceBlock(first, s.o, first.text.length)]);
+        b0++; b1++;
+      }
+      this.sel = { a: pos(b0, 0), f: pos(b1, this.blocks[b1].text.length) };
+      this.setType(type);
+      this.sel = { a: pos(b0, 0), f: pos(b1, this.blocks[b1].text.length) };
     }, { close: true });
   }
 
   /** Change the element type of every block touched by the selection. */
   setType(type) {
-    const [s, e] = this.ordered();
+    let [s, e] = this.ordered();
+    if (e.b > s.b && e.o === 0) e = pos(e.b - 1, this.blocks[e.b - 1].text.length); // a selection ending at a paragraph's start doesn't take it in
     this.edit('type-change', () => {
       for (let i = s.b; i <= e.b; i++) {
         const b = this.blocks[i];
@@ -539,6 +587,22 @@ export class Editor {
         this._replace(i, nb);
       }
       this.sel = { a: this.clampPos(this.sel.a), f: this.clampPos(this.sel.f) };
+    }, { close: true });
+  }
+
+  /**
+   * Align the paragraphs the selection takes in, or the caret's: 'left', 'center', 'right' or
+   * 'justify'. The element's own alignment is stored as none, so the paragraph follows its element.
+   */
+  setAlign(align) {
+    let [s, e] = this.ordered();
+    if (e.b > s.b && e.o === 0) e = pos(e.b - 1, this.blocks[e.b - 1].text.length);
+    this.edit('mark', () => {
+      for (let i = s.b; i <= e.b; i++) {
+        const b = this.blocks[i];
+        const want = align === (ELEMENT[b.type].right ? 'right' : 'left') ? null : align;
+        if ((b.align || null) !== want) this._replace(i, withAlign(b, want));
+      }
     }, { close: true });
   }
 

@@ -6,7 +6,7 @@
 // Caret, selection and find results are thin overlay layers positioned with
 // grid arithmetic — no text measurement after the initial glyph-width probe.
 
-import { PAGE, ELEMENT, lineText, lineX } from '../core/format.js';
+import { PAGE, ELEMENT, lineText, lineX, lineGaps, colIn, offsetAtCol, setText } from '../core/format.js';
 import { ZOOM_MIN, ZOOM_MAX } from '../core/wheelzoom.js';
 import { linesOf, paginate, pageOf, rowOf } from '../core/layout.js';
 import { lineIndexOf, lineEndOffset } from '../core/nav.js';
@@ -31,12 +31,12 @@ function ver(block) {
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** A line's text, its bold/italic/underline/strikethrough runs as spans. */
-function styledLine(b, ls, txt) {
-  if (!b.marks.length) return esc(txt);
+/** A line's text as it is set (gaps: a justified line's widened spaces), its bold/italic/underline/strikethrough runs as spans. */
+function styledLine(b, ls, txt, gaps) {
+  if (!b.marks.length) return esc(setText(txt, gaps));
   let h = '';
   for (const r of styleRuns(b.marks, ls, ls + txt.length)) {
-    const t = esc(txt.slice(r.s - ls, r.e - ls));
+    const t = esc(setText(txt, gaps, r.s - ls, r.e - ls));
     h += r.st ? `<span class="${[...r.st].map((k) => 's' + k).join(' ')}">${t}</span>` : t;
   }
   return h;
@@ -221,15 +221,16 @@ export class View {
       const starts = linesOf(b);
       for (let l = it.l0; l < it.l1; l++) {
         const y = (top + it.y + l - it.l0) * row;
-        const x0 = lineX(b.type, b.text, starts, l);
+        const x0 = lineX(b, starts, l);
         const txt = lineText(b.text, starts, l);
-        if (txt) h += `<div class="l" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt)}</div>`;
+        const gaps = lineGaps(b, starts, l);
+        if (txt) h += `<div class="l" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt, gaps)}</div>`;
         if (!b.marks.length) continue;
         const ls = starts[l], le = ls + txt.length;
         for (const m of b.marks) {
           const a = Math.max(m.s, ls), z = Math.min(m.e, le);
           if (z <= a) continue;
-          const x = this.xAt(x0, a - ls), w = (z - a) * this.cw;
+          const x = this.xAt(x0, colIn(gaps, a - ls)), w = (colIn(gaps, z - ls) - colIn(gaps, a - ls)) * this.cw;
           if (m.k === 'hl') h += `<div class="mk hl-${m.v}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
           else if (m.k === 'cm') {
             h += `<div class="mk cm" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
@@ -330,15 +331,17 @@ export class View {
         for (let l = it.l0; l < it.l1; l++) {
           const ls = starts[l];
           const le = lineEndOffset(b.text, starts, l);
-          const x0 = lineX(b.type, b.text, starts, l);
+          const x0 = lineX(b, starts, l);
+          const gaps = lineGaps(b, starts, l);
+          const cx = (k) => this.xAt(x0, colIn(gaps, k - ls)); // page x of offset k on this line
           const y = ptop + (it.y + l - it.l0) * this.row;
           if (inSel) {
             const a = it.bi === s.b ? Math.max(ls, s.o) : ls;
             const z = it.bi === e.b ? Math.min(le, e.o) : le;
             const extend = (it.bi < e.b && (l === starts.length - 1 || z === le)) || (it.bi === e.b && e.o > le);
             if (z > a || (extend && a <= le && (it.bi > s.b || s.o <= le))) {
-              const w = Math.max(0, z - a) * this.cw + (extend ? this.cw * 0.6 : 0);
-              selHTML += `<div class="selr" style="left:${left + this.xAt(x0, a - ls)}px;top:${y}px;width:${w}px;height:${this.row}px"></div>`;
+              const w = Math.max(0, cx(z) - cx(a)) + (extend ? this.cw * 0.6 : 0);
+              selHTML += `<div class="selr" style="left:${left + cx(a)}px;top:${y}px;width:${w}px;height:${this.row}px"></div>`;
             }
           }
           if (hasFind) {
@@ -347,7 +350,7 @@ export class View {
               const a = Math.max(m.s, ls), z = Math.min(m.e, le === b.text.length ? le : le + 1);
               if (z <= a) continue;
               const cur = k === this.find.cur ? ' cur' : '';
-              findHTML += `<div class="findr${cur}" style="left:${left + this.xAt(x0, a - ls)}px;top:${y}px;width:${(z - a) * this.cw}px;height:${this.row}px"></div>`;
+              findHTML += `<div class="findr${cur}" style="left:${left + cx(a)}px;top:${y}px;width:${cx(z) - cx(a)}px;height:${this.row}px"></div>`;
             }
           }
           if (hasRev) {
@@ -355,7 +358,7 @@ export class View {
               const m = rm[k];
               const a = Math.max(m.s, ls), z = Math.min(m.e, le === b.text.length ? le : le + 1);
               if (z <= a) continue;
-              revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}${m.hov ? ' hov' : ''}" style="left:${left + this.xAt(x0, a - ls)}px;top:${y}px;width:${(z - a) * this.cw}px;height:${this.row}px"></div>`;
+              revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}${m.hov ? ' hov' : ''}" style="left:${left + cx(a)}px;top:${y}px;width:${cx(z) - cx(a)}px;height:${this.row}px"></div>`;
             }
           }
         }
@@ -379,7 +382,7 @@ export class View {
     let r = rowOf(page, p.b, li);
     if (r < 0) r = 0;
     const vi = pi + this.offset;
-    const x = this.pageLeft + this.xAt(lineX(b.type, b.text, starts, li), p.o - starts[li]);
+    const x = this.pageLeft + this.xAt(lineX(b, starts, li), colIn(lineGaps(b, starts, li), p.o - starts[li]));
     const y = this.pageTop(vi) + (PAGE.topRows + r) * this.row;
     return { x, y, h: this.row, page: pi };
   }
@@ -459,8 +462,8 @@ export class View {
       // Below the item (blank space): end of its last line on this page.
       return pos(best.bi, lineEndOffset(b.text, starts, best.l1 - 1));
     }
-    const x0 = lineX(b.type, b.text, starts, l) * this.col;
-    const o = starts[l] + Math.max(0, Math.round((px - x0) / this.cw));
+    const x0 = lineX(b, starts, l) * this.col;
+    const o = starts[l] + offsetAtCol(lineGaps(b, starts, l), (px - x0) / this.cw, lineEndOffset(b.text, starts, l) - starts[l]);
     return pos(best.bi, Math.min(o, lineEndOffset(b.text, starts, l)));
   }
 
@@ -485,15 +488,18 @@ export class View {
    * drawn as they come into view never knock it off course), and it always ends exactly
    * there: with no frames at all (a hidden window) it is put there when the time is up.
    * A wheel or a press on the script takes over at once; reduced motion goes straight there.
+   * With `top`, the passage goes to the top of the view instead (a scene: its heading, with the
+   * blank line before it and one more above), as far as the end of the script allows.
    */
-  glideTo(a, b = a) {
+  glideTo(a, b = a, { top = false } = {}) {
     const sc = this.scroller;
     this.stopGlide();
     const goal = () => {
       const r0 = this.caretRect(a), r1 = this.caretRect(b);
       if (!r0) return sc.scrollTop;
       const mid = r1 && r1.y >= r0.y ? (r0.y + r1.y + r1.h) / 2 : r0.y + r0.h / 2;
-      return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(mid - sc.clientHeight / 2)));
+      const want = top ? r0.y - 2 * this.row : mid - sc.clientHeight / 2;
+      return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(want)));
     };
     const r = this.caretRect(a);
     if (r) { const lx = r.x - sc.scrollLeft; if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2; }

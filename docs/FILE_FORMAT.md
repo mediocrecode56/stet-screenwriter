@@ -86,6 +86,16 @@ into `x`, `start < end`:
 - `["cm", id]` — comment anchor; `id` keys into `comments`. One comment may
   anchor across several consecutive blocks.
 
+`a` (optional, since 0.24.0) aligns the element between its margins: `left`,
+`center`, `right` or `justify`. Without it the element takes its own alignment
+(transitions right, everything else left).
+
+`c` (optional, since 0.24.0) is the text as it was written, for an element
+stored uppercase, when that differs from `x` (`c` uppercased is always `x`).
+Turning the element into one that isn't uppercase brings this text back.
+
+Older versions of STET open files with `a` or `c` and leave them out.
+
 ### Revision (optional, since 0.4.0)
 
 ```jsonc

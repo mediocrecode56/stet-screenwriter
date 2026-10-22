@@ -1,7 +1,7 @@
 // Application dialogs. Each returns a promise and never blocks typing state.
 
 import { h, open, esc, alertBox } from './dialog.js';
-import { MAC, macKeys } from '../../core/keys.js';
+import { MAC, macKeys, comboOf, showKeys, unusable, MAX_STEPS, SEQ_MS } from '../../core/keys.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
 import { paginate } from '../../core/layout.js';
 import { parseTime, formatTime, toAmPm, fromAmPm, label as timeLabel } from '../../core/schedule.js';
@@ -427,17 +427,127 @@ export async function changelogDialog(md, version) {
   return open({ title: 'CHANGELOG', sub: 'v' + version, body: h('div', { class: 'body md', style: 'width:680px', html: mdToHtml(md) }), buttons: [{ label: 'Close', value: null, primary: true }] });
 }
 
-export async function shortcutsDialog(cmds) {
-  const rows = cmds.filter((c) => c.keys && c.label).map((c) => h('tr', {}, h('td', {}, c.cat || ''), h('td', {}, typeof c.label === 'function' ? c.label() : c.label), h('td', {}, [].concat(c.keys).map((k) => macKeys(k.replace(/\bArrow/g, ''))).join('  ·  '))));
+/**
+ * Help > Keyboard Shortcuts. Every command's shortcut can be changed here: click it, then press
+ * the new keys, up to three combinations one after another (Ctrl+K, then Ctrl+S). A shortcut
+ * already in use is named first, and only replaced from the other command when asked.
+ * `keymap` is the app's (core/keys.js); `save(over)` stores the changes.
+ */
+export async function shortcutsDialog({ cmds, keymap, save }) {
+  const name = (c) => (typeof c.label === 'function' ? c.label() : c.label);
+  const byId = new Map(cmds.map((c) => [c.id, c]));
+  const list = cmds.filter((c) => c.label && !c.display && (keymap.defaults.get(c.id) || []).length);
   const extra = [
     ['Write', 'Next element / convert empty element', 'Enter'], ['Write', 'Line break inside element', 'Shift+Enter'],
-    ['Write', 'Cycle element type', 'Tab / Shift+Tab'], ['Write', 'Start parenthetical in dialogue', '('],
+    ['Write', 'Start another element type here / change an empty line', 'Tab / Shift+Tab'], ['Write', 'Start parenthetical in dialogue', '('],
     ['Write', 'Take the suggested character name / ignore it', 'Enter, Tab, Right / Escape'],
     ...(MAC ? [['Move', 'Word', '⌥Arrows'], ['Move', 'Line start / end, top / end', '⌘Arrows']] : [['Move', 'Word / paragraph', 'Ctrl+Arrows']]),
     ['Move', 'Page', 'PageUp / PageDown'],
     ['View', 'Zoom', MAC ? '⌘Mouse wheel / pinch' : 'Ctrl+Mouse wheel'],
-  ].map(([a, b, c]) => h('tr', {}, h('td', {}, a), h('td', {}, b), h('td', {}, macKeys(c))));
-  return open({ title: 'KEYS', body: h('div', { class: 'body', style: 'width:640px' }, h('table', { class: 't' }, h('tbody', {}, ...extra, ...rows))), buttons: [{ label: 'Close', value: null, primary: true }] });
+  ];
+  const HINT = 'Click a shortcut to change it.';
+  const hint = h('span', {}, HINT);
+  const say = (t) => { hint.textContent = t; };
+  const tbody = h('tbody');
+  const body = h('div', { class: 'body', style: 'width:640px', tabindex: '-1' }, h('table', { class: 't keys' }, tbody));
+  let rec = null; // the row being recorded: { c, td, steps, timer }
+
+  const keysText = (keys) => (keys.length ? keys.map((k) => showKeys(k)).join('  ·  ') : 'none');
+  const render = () => {
+    tbody.replaceChildren(
+      ...extra.map(([a, b, c]) => h('tr', {}, h('td', {}, a), h('td', {}, b), h('td', {}, macKeys(c)))),
+      ...list.map((c) => {
+        const td = h('td', { class: 'kc' }, keysText(keymap.keysOf(c.id)));
+        if (!keymap.isDefault(c.id)) {
+          td.append(h('button', { class: 'klink', title: 'Back to ' + keysText(keymap.defaults.get(c.id)), onclick: (e) => {
+            e.stopPropagation(); keymap.reset(c.id); save(keymap.over); render(); say(`${name(c)}: ${keysText(keymap.keysOf(c.id))} again.`);
+          } }, 'reset'));
+        }
+        const tr = h('tr', { class: 'pick', tabindex: '-1', 'data-id': c.id }, h('td', {}, c.cat || ''), h('td', {}, name(c)), td);
+        tr.addEventListener('click', (e) => { if (!e.target.closest('button')) record(c, tr, td); });
+        return tr;
+      }));
+    // A redrawn row took the focus with it: keep it in the dialog, so Escape and Enter still work there.
+    if (body.isConnected && !body.contains(document.activeElement) && !body.closest('.dlg').contains(document.activeElement)) body.focus({ preventScroll: true });
+  };
+
+  const record = (c, tr, td) => {
+    if (rec) clearTimeout(rec.timer);
+    render();
+    const row = tbody.querySelector(`tr[data-id="${CSS.escape(c.id)}"]`);
+    row.classList.add('on');
+    row.focus({ preventScroll: true }); // keys go to the row, so Space or Enter never presses a button
+    rec = { c, td: row.lastChild, steps: [], timer: 0 };
+    rec.td.textContent = 'press the keys…';
+    say(`Press up to ${MAX_STEPS} key combinations, one after another. Backspace: no shortcut. Escape: cancel.`);
+  };
+
+  const finish = (seq) => {
+    const { c } = rec;
+    clearTimeout(rec.timer);
+    rec = null;
+    render();
+    if (seq) {
+      const why = unusable(seq);
+      if (why) { say(why); return; }
+      const clash = keymap.conflicts(c.id, seq);
+      if (clash.length) return ask(c, seq, clash);
+    }
+    keymap.assign(c.id, seq);
+    save(keymap.over);
+    render();
+    say(seq ? `${name(c)}: ${showKeys(seq)}.` : `${name(c)} has no shortcut now.`);
+  };
+
+  // A clash: named in the row, replaced only if asked.
+  const ask = (c, seq, clash) => {
+    const others = clash.map((x) => `${name(byId.get(x.id))} (${showKeys(x.keys)})`).join(', ');
+    const row = tbody.querySelector(`tr[data-id="${CSS.escape(c.id)}"]`);
+    row.classList.add('on');
+    const td = row.lastChild;
+    const replace = h('button', { class: 'klink', onclick: (e) => {
+      e.stopPropagation();
+      keymap.assign(c.id, seq);
+      save(keymap.over);
+      render();
+      say(`${name(c)}: ${showKeys(seq)}. ${clash.map((x) => name(byId.get(x.id))).join(', ')}: ${clash.map((x) => keysText(keymap.keysOf(x.id))).join(', ')}.`);
+    } }, 'replace');
+    const keep = h('button', { class: 'klink', onclick: (e) => { e.stopPropagation(); render(); say(HINT); } }, 'keep');
+    td.replaceChildren(showKeys(seq), ' ', replace, ' ', keep);
+    say(`${showKeys(seq)} is already used by ${others}. Replace it there?`);
+    replace.focus({ preventScroll: true });
+  };
+
+  const onKey = (e) => {
+    if (!rec) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.type !== 'keydown' || e.repeat) return;
+    if (e.key === 'Escape') { clearTimeout(rec.timer); rec = null; render(); say(HINT); return; }
+    const k = comboOf(e);
+    if (!k) return;
+    if (!rec.steps.length && (k === 'Backspace' || k === 'Delete')) return finish(null);
+    rec.steps.push(k);
+    clearTimeout(rec.timer);
+    const seq = rec.steps.join(' ');
+    rec.td.textContent = showKeys(seq) + (rec.steps.length < MAX_STEPS ? ' …' : '');
+    // The shortcut is done at its third combination, or when no other follows for a moment.
+    if (rec.steps.length >= MAX_STEPS) finish(seq);
+    else rec.timer = setTimeout(() => finish(seq), SEQ_MS / 2);
+  };
+  window.addEventListener('keydown', onKey, true);
+  window.addEventListener('keyup', onKey, true);
+
+  const resetAll = h('button', { class: 'btn', onclick: () => { if (rec) clearTimeout(rec.timer); rec = null; keymap.reset(); save(keymap.over); render(); say('All shortcuts are back to their defaults.'); } }, 'Reset All');
+  render();
+  try {
+    return await open({ title: 'KEYS', body, foot: hint, buttons: [{ label: 'Close', value: null, primary: true }], init: (dlg) => dlg.querySelector('.foot').insertBefore(resetAll, dlg.querySelector('.foot .btn')) });
+  } finally {
+    if (rec) clearTimeout(rec.timer);
+    rec = null;
+    window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('keyup', onKey, true);
+  }
 }
 
 /**

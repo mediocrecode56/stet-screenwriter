@@ -2,7 +2,11 @@
 // replaces the block object, which lets layout caches key on identity and
 // lets undo history keep references instead of copies.
 //
-// Block  = { id, type, text, marks }
+// Block  = { id, type, text, marks, align?, cased? }
+//          align: 'left' | 'center' | 'right' | 'justify', when not its element's own (format.js)
+//          cased: the text as it was written, in an element shown in capitals (UPPER_TYPES),
+//                 when that differs from `text`; it comes back if the element changes to one
+//                 that isn't (a Character turned back into Dialogue keeps its capitalisation)
 // Mark   = { s, e, k, v }   k: 'hl' (v = color) | 'cm' (v = comment id)
 //                           | a text style in STYLES (v = 1)
 
@@ -47,14 +51,64 @@ export function makeBlock(type, text = '', marks = EMPTY, id = newId()) {
 }
 
 export function withText(block, text, marks = block.marks) {
-  return { id: block.id, type: block.type, text, marks };
+  return extras({ id: block.id, type: block.type, text, marks }, block.align, recase(block, text));
 }
 
+/** Change a block's type. Into capitals, the text as written is kept (cased); out of them, it comes back. */
 export function withType(block, type) {
-  const text = UPPER_TYPES.has(type) ? block.text.toUpperCase() : block.text;
-  // Uppercasing can change length (e.g. "ß" -> "SS"); drop marks rather than misplace them.
+  const written = writtenText(block);
+  const text = UPPER_TYPES.has(type) ? written.toUpperCase() : written;
+  // Changing case can change length (e.g. "ß" -> "SS"); drop marks rather than misplace them.
   const marks = text.length === block.text.length ? block.marks : EMPTY;
-  return { id: block.id, type, text, marks };
+  return extras({ id: block.id, type, text, marks }, block.align, UPPER_TYPES.has(type) ? written : undefined);
+}
+
+/** A block aligned `align` (null: its element's own alignment). */
+export function withAlign(block, align) {
+  return extras({ id: block.id, type: block.type, text: block.text, marks: block.marks }, align || undefined, block.cased);
+}
+
+/** The text as it was written: `cased`, if it still matches the capitals shown, else the text. */
+export function writtenText(block) {
+  const c = block.cased;
+  return typeof c === 'string' && c.toUpperCase() === block.text ? c : block.text;
+}
+
+/** Text [a, z) of a block as a block of its own, keeping its element, alignment and written case (a new id unless given). */
+export function sliceBlock(block, a, z, id = newId()) {
+  const w = writtenText(block);
+  return extras({ id, type: block.type, text: block.text.slice(a, z), marks: sliceMarks(block.marks, a, z) }, block.align, w.length === block.text.length ? w.slice(a, z) : undefined);
+}
+
+function extras(b, align, cased) {
+  if (align) b.align = align;
+  if (cased !== undefined && cased !== b.text && cased.toUpperCase() === b.text) b.cased = cased;
+  return b;
+}
+
+/**
+ * The written text of `block` after its text becomes `text`: what changed is taken from
+ * `text` (in capitals), the rest keeps its written case.
+ */
+function recase(block, text) {
+  if (!UPPER_TYPES.has(block.type)) return undefined;
+  const c = writtenText(block), old = block.text;
+  if (c === old || c.length !== old.length) return undefined;
+  let a = 0;
+  while (a < old.length && a < text.length && old[a] === text[a]) a++;
+  let z = 0;
+  while (z < old.length - a && z < text.length - a && old[old.length - 1 - z] === text[text.length - 1 - z]) z++;
+  return c.slice(0, a) + text.slice(a, text.length - z) + c.slice(c.length - z);
+}
+
+/**
+ * `next` is `block` with `typed` inserted at offset o, in capitals: it keeps what was typed as
+ * it was written, so the capitals can be undone by a change of element later.
+ */
+export function withTyped(block, next, o, typed) {
+  const c = writtenText(block);
+  const cased = c.length === block.text.length ? c.slice(0, o) + typed + c.slice(o) : undefined;
+  return extras({ id: next.id, type: next.type, text: next.text, marks: next.marks }, next.align, cased);
 }
 
 export function emptyTitlePage(title = '') {

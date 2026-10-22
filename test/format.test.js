@@ -81,3 +81,21 @@ test('empty documents still round-trip with one block', () => {
   assert.equal(back.blocks.length, 1);
   assert.deepEqual(deserialize(serialize({ ...doc, blocks: [makeBlock('action', 'é ✓ 😀 “quotes”')] })).doc.blocks[0].text, 'é ✓ 😀 “quotes”');
 });
+
+test('alignment and the written case of a capitalised element are saved, and old files still open', () => {
+  const doc = newDocument('T');
+  doc.blocks = [
+    { ...makeBlock('character', 'MARA'), cased: 'Mara', align: 'center' },
+    { ...makeBlock('action', 'Rain.'), align: 'justify' },
+    { ...makeBlock('scene', 'INT. HOUSE'), cased: 'not this' }, // no longer matches its text: dropped
+  ];
+  const json = serialize(doc, 't');
+  const p = JSON.parse(json);
+  assert.deepEqual(p.blocks, [{ t: 'character', x: 'MARA', a: 'center', c: 'Mara' }, { t: 'action', x: 'Rain.', a: 'justify' }, { t: 'scene', x: 'INT. HOUSE' }]);
+  const back = deserialize(json).doc.blocks;
+  assert.deepEqual(back.map((b) => [b.align, b.cased]), [['center', 'Mara'], ['justify', undefined], [undefined, undefined]]);
+  assert.equal(serialize({ ...doc, blocks: back }, 't'), json);
+  // Unknown alignments and a written case that doesn't match are ignored.
+  p.blocks = [{ t: 'action', x: 'A', a: 'diagonal' }, { t: 'character', x: 'BOB', c: 'Rob' }];
+  assert.deepEqual(deserialize(JSON.stringify(p)).doc.blocks.map((b) => [b.align, b.cased]), [[undefined, undefined], [undefined, undefined]]);
+});

@@ -8,6 +8,7 @@ import { wordAt } from '../core/text.js';
 import { toPlainText, parsePlainText } from '../core/plaintext.js';
 import { WheelZoom, stepZoom } from '../core/wheelzoom.js';
 import { MAC } from '../core/keys.js';
+import { ALIGNS } from '../core/format.js';
 import { cueName, TYPES, HIGHLIGHT_COLORS, STYLES } from '../core/model.js';
 import { suggestCue } from '../core/cast.js';
 
@@ -349,7 +350,9 @@ function cleanFragment(frag) {
     const text = f.text.replace(/\r\n?/g, '\n');
     const marks = (Array.isArray(f.marks) ? f.marks : []).filter((m) => m && Number.isInteger(m.s) && Number.isInteger(m.e) && m.s >= 0 && m.e > m.s && m.e <= text.length
       && ((m.k === 'hl' && HIGHLIGHT_COLORS.includes(m.v)) || (m.k === 'cm' && typeof m.v === 'string') || STYLES.includes(m.k)));
-    out.push({ type: TYPES.includes(f.type) ? f.type : 'action', text, marks });
+    const b = { type: TYPES.includes(f.type) ? f.type : 'action', text, marks };
+    if (ALIGNS.includes(f.align)) b.align = f.align;
+    out.push(b);
   }
   return out.length ? out : null;
 }

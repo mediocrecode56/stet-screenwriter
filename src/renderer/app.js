@@ -24,6 +24,7 @@ import { MAC, macKeys } from '../core/keys.js';
 import { stepZoom } from '../core/wheelzoom.js';
 import { castOrder, touchCast } from '../core/cast.js';
 import { parseFdx } from '../core/fdx.js';
+import { alignOf } from '../core/format.js';
 
 const api = window.stet;
 // On a Mac the window buttons sit at the left of the top bar (style.css), and shortcuts read ⌘.
@@ -58,17 +59,18 @@ input.onZoom = () => { renderZoom(); persistZoom(); };
 input.names = () => castOrder(session.doc.cast, editor.characterNames());
 input.onCue = (name) => { session.doc.cast = touchCast(session.doc.cast, name); };
 
+// glide: true glides until the passage is in the middle, 'top' until it is at the top of the view.
 const jump = (p, center = false, end = null, glide = false) => {
   editor.setSel(p, end || p);
   view.relayout();
   view.frame();
-  if (glide) view.glideTo(p, end || p); // glides until the passage is in the middle
+  if (glide) view.glideTo(p, end || p, { top: glide === 'top' });
   else view.revealCaret(center);
   input.focus();
   input.placeTextarea();
 };
 
-const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), { editor, view, jump });
+const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), { editor, view, jump: (p) => jumpScene(p.b) });
 const notes = new NotesPanel($('right'), $('notes'), $('note-count'), { editor, view, session, jump, onChange: () => session.touch() });
 const find = new FindBar({ editor, view, jump, focusEditor: () => input.focus() });
 
@@ -177,7 +179,8 @@ function renderStatus() {
   }
   scene = renderStatus._scene;
   const styles = STYLES.map((k) => (editor.styleActive(k) ? k : '')).join('');
-  const key = `${b.type}|${page}|${view.pages.length}|${scene}|${editor.words}|${styles}`;
+  const align = alignOf(b);
+  const key = `${b.type}|${page}|${view.pages.length}|${scene}|${editor.words}|${styles}|${align}`;
   if (key !== statusKey) {
     statusKey = key;
     $('st-el').textContent = TYPE_LABEL[b.type].toUpperCase();
@@ -186,6 +189,7 @@ function renderStatus() {
     $('st-words').textContent = `${editor.words.toLocaleString()} WORDS`;
     for (const btn of $('eltypes').children) btn.classList.toggle('on', btn.dataset.t === b.type);
     for (const btn of $('stbar').children) btn.classList.toggle('on', styles.includes(btn.dataset.s));
+    if (alignBtn.dataset.a !== align) { alignBtn.dataset.a = align; alignBtn.firstChild.outerHTML = alignIcon(align); }
   }
 }
 
@@ -345,27 +349,61 @@ const STYLE_CMDS = [
   { k: 'u', label: 'Underline', keys: 'Ctrl+U', glyph: 'U' },
   { k: 's', label: 'Strikethrough', keys: 'Ctrl+D', glyph: 'S' },
 ];
+// Alignment: a small menu on the toolbar, its button showing the paragraph's alignment.
+const ALIGN_CMDS = [
+  { a: 'left', label: 'Align Left', keys: 'Ctrl+L' },
+  { a: 'center', label: 'Center', keys: 'Ctrl+E' },
+  { a: 'right', label: 'Align Right', keys: 'Ctrl+R' },
+  { a: 'justify', label: 'Justify', keys: 'Ctrl+J' },
+];
+const ALIGN_ICON = { left: [10, 6, 10, 6], center: [10, 6, 10, 6], right: [10, 6, 10, 6], justify: [10, 10, 10, 10] };
+const alignIcon = (a) => '<svg viewBox="0 0 10 7" width="10" height="7" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor">'
+  + ALIGN_ICON[a].map((w, i) => `<rect x="${a === 'right' ? 10 - w : a === 'center' ? (10 - w) / 2 : 0}" y="${i * 2}" width="${w}" height="1"/>`).join('') + '</svg>';
+
+// Tooltips name each command's shortcut as it is now, so they follow changes made in Help > Keyboard Shortcuts.
+const tips = [];
+const tip = (el, text, id, after = '') => tips.push({ el, text, id, after });
+function renderTips() {
+  for (const t of tips) { const k = cmd.keyText(t.id); t.el.title = k ? `${t.text} (${k}${t.after})` : t.text; }
+}
+
 for (const [i, t] of TYPES.entries()) {
   const short = { scene: 'SCENE', action: 'ACTION', character: 'CHARACTER', paren: 'PAREN', dialogue: 'DIALOGUE', transition: 'TRANS', shot: 'SHOT' }[t];
-  const b = dlg.h('button', { class: 'tb', title: `${TYPE_LABEL[t]} (Ctrl+${i + 1})`, 'data-t': t }, short, dlg.h('sup', {}, String(i + 1)));
+  const b = dlg.h('button', { class: 'tb', 'data-t': t }, short, dlg.h('sup', {}, String(i + 1)));
+  tip(b, TYPE_LABEL[t], 'type-' + t);
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('type-' + t); });
   $('eltypes').appendChild(b);
 }
-for (const [i, c] of HIGHLIGHT_COLORS.entries()) {
-  const b = dlg.h('button', { class: 'tb', title: `Highlight ${c} (Alt+${i + 1})` }, dlg.h('span', { class: 'sw ' + c }));
+for (const c of HIGHLIGHT_COLORS) {
+  const b = dlg.h('button', { class: 'tb' }, dlg.h('span', { class: 'sw ' + c }));
+  tip(b, `Highlight ${c}`, 'hl-' + c);
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('hl-' + c); });
   $('hlbar').appendChild(b);
 }
 {
-  const b = dlg.h('button', { class: 'tb', title: 'Remove highlight (Alt+0)' }, dlg.h('span', { class: 'sw none' }));
+  const b = dlg.h('button', { class: 'tb' }, dlg.h('span', { class: 'sw none' }));
+  tip(b, 'Remove highlight', 'hl-none');
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('hl-none'); });
   $('hlbar').appendChild(b);
 }
 for (const s of STYLE_CMDS) {
-  const b = dlg.h('button', { class: 'tb st', title: `${s.label} (${s.keys})`, 'data-s': s.k }, dlg.h('span', { class: 's' + s.k }, s.glyph));
+  const b = dlg.h('button', { class: 'tb st', 'data-s': s.k }, dlg.h('span', { class: 's' + s.k }, s.glyph));
+  tip(b, s.label, 'style-' + s.k);
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-' + s.k); });
   $('stbar').appendChild(b);
 }
+const alignBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-align', title: 'Alignment', 'aria-haspopup': 'menu', html: alignIcon('left') + '<span class="dn">▾</span>' });
+alignBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(alignBtn, ALIGN_CMDS.map((x) => 'align-' + x.a)); });
+$('albar').appendChild(alignBtn);
+tip($('btn-comment'), 'Comment on selection', 'note-add');
+tip($('btn-rev'), 'English revision with Claude', 'revise-next', ' next suggestion');
+tip($('btn-scenes'), 'Scene navigator', 'panel-scenes');
+tip($('btn-notes'), 'Comments', 'panel-notes');
+tip($('th-light'), 'Light mode', 'theme-toggle', ' toggles');
+tip($('th-dark'), 'Dark mode', 'theme-toggle', ' toggles');
+tip($('zoom-out'), 'Zoom out', 'zoom-out');
+tip($('zoom-val'), 'Reset zoom', 'zoom-reset');
+tip($('zoom-in'), 'Zoom in', 'zoom-in');
 const tbClick = (id, c) => $(id).addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run(c); });
 tbClick('btn-comment', 'note-add');
 tbClick('btn-scenes', 'panel-scenes');
@@ -699,7 +737,7 @@ function addNote() {
 function stepNote(dir) {
   const a = notes.step(dir);
   if (!a) return;
-  jump(pos(a.b, a.s), true, pos(a.b, a.e));
+  jump(pos(a.b, a.s), true, pos(a.b, a.e), true);
   view.activeComment = a.id;
   if (notes.visible) notes.select(a.id);
   view.invalidate();
@@ -717,11 +755,13 @@ function showPanel(which, on) {
   if (want) (which === 'scenes' ? scenes : notes).refresh(true);
 }
 
+// Scenes are reached with the same glide as suggestions and notes, their heading at the top of the view.
+const jumpScene = (b) => jump(pos(b, 0), false, null, 'top');
 function sceneStep(dir) {
   const s = editor.scenes();
   const c = editor.caret.b;
   const t = dir > 0 ? s.find((x) => x.b > c) : [...s].reverse().find((x) => x.b < c);
-  if (t) jump(pos(t.b, 0), true);
+  if (t) jumpScene(t.b);
 }
 
 // ---- export / print ----------------------------------------------------------------------------
@@ -752,6 +792,10 @@ function highlight(color) {
   if (!editor.hasSelection()) editor.setSel(pos(editor.caret.b, 0), pos(editor.caret.b, editor.block.text.length));
   editor.highlight(color); input.after(); input.focus();
 }
+const alignCmds = ALIGN_CMDS.map((x) => ({
+  id: 'align-' + x.a, cat: 'Format', label: x.label, keys: x.keys, checked: () => alignOf(editor.block) === x.a,
+  run: () => { editor.setAlign(x.a); input.after(); input.focus(); },
+}));
 const hlCmds = HIGHLIGHT_COLORS.map((c, i) => ({ id: 'hl-' + c, cat: 'Format', label: `Highlight ${c}`, keys: `Alt+${i + 1}`, run: () => highlight(c) }));
 // With a selection a style toggles across it; without one it applies to what is typed next.
 const styleCmds = STYLE_CMDS.map((s) => ({
@@ -822,6 +866,7 @@ cmd.register([
   { id: 'type-cycle', cat: 'Element', label: 'Next Element Type', display: 'Tab', run: () => { editor.tab(false); input.after(); input.focus(); } },
 
   ...styleCmds,
+  ...alignCmds,
   ...hlCmds,
   { id: 'hl-none', cat: 'Format', label: 'Remove Highlight', keys: 'Alt+0', run: () => highlight(null) },
   { id: 'note-add', cat: 'Format', label: 'Add Note', keys: 'Ctrl+Alt+M', global: true, run: addNote },
@@ -872,7 +917,10 @@ cmd.register([
   { id: 'claude-key', cat: 'Tools', label: 'Claude Connection…', run: () => keyDialog() },
   { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, writing, api, report: false }) },
 
-  { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog(cmd.all()) },
+  { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog({
+    cmds: cmd.all(), keymap: cmd.keymap,
+    save: (shortcuts) => { cmd.changed(); api.invoke('settings:set', { shortcuts: null }).then(() => api.invoke('settings:set', { shortcuts })).then((v) => { settings = v; }); },
+  }) },
   { id: 'changelog', cat: 'Help', label: 'Changelog', run: async () => dialogs.changelogDialog(await api.invoke('app:changelog'), info.version) },
   { id: 'check-updates', cat: 'Help', label: 'Check for Updates…', run: () => updates.check(true) },
   { id: 'link-files', cat: 'Help', label: 'Open .stet Files with STET', run: async () => {
@@ -884,11 +932,15 @@ cmd.register([
   { id: 'about', cat: 'Help', label: 'About STET', run: () => dlg.alertBox('STET ' + info.version + ' β', 'A fast, minimal, dependable screenwriting instrument. Built on Electron ' + info.electron + '.', `Settings & recovery: ${info.userData}`) },
 ]);
 
+cmd.setShortcuts(settings.shortcuts);
+cmd.onShortcuts(renderTips);
+renderTips();
+
 cmd.buildMenubar($('menubar'), [
   { label: 'File', items: () => ['new', 'open', 'recent', 'import-fdx', '-', 'save', 'save-as', 'rename', 'reveal', '-', 'backups', 'backup-now', 'recover', '-', 'print', 'export-pdf', '-', 'prefs'] },
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
-  { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
+  { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
   { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
@@ -899,10 +951,13 @@ window.addEventListener('keydown', (e) => {
   if (e.target === $('input') || dlg.isOpen()) return;
   const t = e.target;
   const inField = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-  if (!e.ctrlKey && !e.metaKey && !e.altKey && !/^F\d+$/.test(e.key)) return;
+  if (!cmd.waiting() && !e.ctrlKey && !e.metaKey && !e.altKey && !/^F\d+$/.test(e.key)) return;
   // Inside text fields only application-level commands run; editing keys stay with the field.
-  const c = cmd.lookup(e);
-  if (!c || (inField && (!c.global || !isGlobalKey(e)))) return;
+  const r = cmd.resolve(e);
+  if (!r) return;
+  if (r.pending) { e.preventDefault(); return; } // the first keys of a longer shortcut
+  const c = r.cmd;
+  if (inField && (!c.global || !isGlobalKey(e))) return;
   e.preventDefault();
   cmd.run(c.id);
 });

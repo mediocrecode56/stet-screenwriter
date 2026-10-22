@@ -90,10 +90,72 @@ export function lineText(text, starts, i) {
   return text.slice(s, e);
 }
 
-/** Column (relative to the page) where line i of a block starts. */
-export function lineX(type, text, starts, i) {
-  const el = ELEMENT[type];
-  if (!el.right) return el.left;
-  const len = lineText(text, starts, i).length;
-  return el.left + Math.max(0, el.width - len);
+// ---- alignment ----------------------------------------------------------------------
+//
+// A paragraph can be aligned left, centred, right or justified between its element's margins.
+// Without one of its own it takes its element's (a Transition is right-aligned, the rest left).
+// Wrapping never changes with alignment: only where each line starts, and for a justified
+// line, how many columns each space between its words takes. Every column stays a whole
+// character, so the caret, selection and printing keep using plain grid arithmetic.
+
+export const ALIGNS = ['left', 'center', 'right', 'justify'];
+
+/** The alignment a block's lines take. */
+export function alignOf(b) {
+  return b.align || (ELEMENT[b.type].right ? 'right' : 'left');
+}
+
+/** Column (relative to the page) where line i of block b starts. */
+export function lineX(b, starts, i) {
+  const el = ELEMENT[b.type];
+  const a = alignOf(b);
+  if (a === 'left' || a === 'justify') return el.left;
+  const free = Math.max(0, el.width - lineText(b.text, starts, i).length);
+  return el.left + (a === 'right' ? free : Math.floor(free / 2));
+}
+
+/**
+ * The spaces a justified line stretches to fill its width: [[offset of a space within the
+ * line, extra columns after it], ...], or null when the line is set as written (any other
+ * alignment, a paragraph's last line, or a line ended by a line break).
+ */
+export function lineGaps(b, starts, i) {
+  if (alignOf(b) !== 'justify' || i + 1 >= starts.length) return null;
+  if (b.text.charCodeAt(starts[i + 1] - 1) === 10) return null;
+  const t = lineText(b.text, starts, i);
+  const free = ELEMENT[b.type].width - t.length;
+  if (free <= 0) return null;
+  const at = [];
+  for (let j = 1; j < t.length - 1; j++) if (t.charCodeAt(j) === 32 && t.charCodeAt(j + 1) !== 32) at.push(j);
+  if (!at.length) return null;
+  const each = Math.floor(free / at.length), rest = free % at.length;
+  return at.map((j, k) => [j, each + (k < rest ? 1 : 0)]);
+}
+
+/** Column within its line of offset k (counted from the line's start). */
+export function colIn(gaps, k) {
+  if (!gaps) return k;
+  let c = k;
+  for (const [at, n] of gaps) if (at < k) c += n;
+  return c;
+}
+
+/** Offset within a line of `len` characters (counted from its start) nearest to column `col`. */
+export function offsetAtCol(gaps, col, len) {
+  if (!gaps) return Math.max(0, Math.round(col));
+  let best = 0;
+  for (let k = 1; k <= len; k++) if (Math.abs(colIn(gaps, k) - col) < Math.abs(colIn(gaps, best) - col)) best = k;
+  return best;
+}
+
+/** Text [s, e) of a line (offsets from its start) as it is set: a justified line's spaces widened. */
+export function setText(t, gaps, s = 0, e = t.length) {
+  if (!gaps) return t.slice(s, e);
+  let out = '', from = s;
+  for (const [at, n] of gaps) {
+    if (at < s || at >= e) continue;
+    out += t.slice(from, at + 1) + ' '.repeat(n);
+    from = at + 1;
+  }
+  return out + t.slice(from, e);
 }

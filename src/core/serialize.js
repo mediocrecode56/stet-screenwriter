@@ -3,7 +3,8 @@
 // Serialization is deterministic (fixed key order, sorted comment ids, no
 // runtime ids), so save(load(save(doc))) is byte-identical to save(doc).
 
-import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, defaultDocSettings, emptyTitlePage, uuid, cueName } from './model.js';
+import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, withAlign, writtenText, defaultDocSettings, emptyTitlePage, uuid, cueName } from './model.js';
+import { ALIGNS } from './format.js';
 import { reviewToJSON, reviewFromJSON } from './revision.js';
 import { readCast } from './cast.js';
 
@@ -41,7 +42,7 @@ export function toPayload(doc, appVersion) {
       backup: { enabled: s.backup.enabled, intervalMin: s.backup.intervalMin, retentionDays: s.backup.retentionDays, dir: s.backup.dir },
     },
     titlePage: tp,
-    blocks: doc.blocks.map((b) => (b.marks.length ? { t: b.type, x: b.text, m: b.marks.map((m) => [m.s, m.e, m.k, m.v]) } : { t: b.type, x: b.text })),
+    blocks: doc.blocks.map(blockPayload),
     comments,
     // Optional: English-revision passages ignored in this script (v0.4+) and the
     // latest review with its suggestions and decisions (v0.6+).
@@ -49,6 +50,17 @@ export function toPayload(doc, appVersion) {
     // Optional (v0.23+): the cast, most recently used first, for completing character cues.
     ...castPayload(doc),
   };
+}
+
+// A block: t type, x text; optional m marks, a alignment (v0.24+), c the text as written when it
+// is shown in capitals (v0.24+).
+function blockPayload(b) {
+  const o = { t: b.type, x: b.text };
+  if (b.marks.length) o.m = b.marks.map((m) => [m.s, m.e, m.k, m.v]);
+  if (b.align) o.a = b.align;
+  const w = writtenText(b);
+  if (w !== b.text) o.c = w;
+  return o;
 }
 
 function castPayload(doc) {
@@ -122,7 +134,10 @@ export function deserialize(json) {
         else if (STYLES.includes(k)) marks.push({ s, e, k, v: 1 });
       }
     }
-    blocks.push(makeBlock(type, text, marks));
+    let b = makeBlock(type, text, marks);
+    if (typeof raw.c === 'string' && raw.c !== text && raw.c.toUpperCase() === text) b.cased = raw.c;
+    if (ALIGNS.includes(raw.a)) b = withAlign(b, raw.a);
+    blocks.push(b);
   }
   if (!blocks.length) blocks.push(makeBlock('scene', ''));
 

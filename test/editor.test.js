@@ -54,8 +54,103 @@ test('Tab at the end of written dialogue starts a parenthetical below', () => {
   assert.deepEqual(texts(ed), ['MARA', 'You came.', '(beat)', '']);
   assert.equal(ed.block.type, 'dialogue');
   ed.setSel(pos(1, 3));
-  ed.tab(); // mid-text: converts
-  assert.equal(ed.blocks[1].type, 'paren');
+  ed.tab(); // mid-text: an empty parenthetical at the caret; the dialogue around it stays dialogue
+  assert.deepEqual(ed.blocks.slice(1, 4).map((b) => [b.type, b.text]), [['dialogue', 'You'], ['paren', '()'], ['dialogue', 'came.']]);
+  assert.deepEqual(ed.caret, pos(2, 1));
+});
+
+test('Tab never changes text already written: only the selection, or what is typed next', () => {
+  // In the middle of a paragraph: a new element at the caret, the text on both sides as it was.
+  let ed = new Editor([makeBlock('action', 'She waits. He comes.'), makeBlock('action', 'Below.')]);
+  ed.setSel(pos(0, 11));
+  ed.tab();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['action', 'She waits.'], ['character', ''], ['action', 'He comes.'], ['action', 'Below.']]);
+  typeStr(ed, 'mara');
+  assert.deepEqual(ed.blocks[1], { ...ed.blocks[1], type: 'character', text: 'MARA' });
+  assert.equal(ed.blocks[2].type, 'action');
+  ed.undo(); ed.undo();
+  assert.deepEqual(ed.blocks.map((b) => b.text), ['She waits. He comes.', 'Below.']);
+
+  // At the start of a paragraph: the new element comes before it.
+  ed = new Editor([makeBlock('action', 'Rain.')]);
+  ed.tab();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['character', ''], ['action', 'Rain.']]);
+
+  // Shift+Tab at the end of written text starts the previous type below, instead of converting it.
+  ed = new Editor([makeBlock('dialogue', 'You came.')]);
+  ed.setSel(pos(0, 9));
+  ed.tab(true);
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['dialogue', 'You came.'], ['character', '']]);
+
+  // A selection: only the selected words change; the paragraph below doesn't, even when the
+  // selection ends at its very start.
+  ed = new Editor([makeBlock('action', 'One two three'), makeBlock('action', 'Four')]);
+  ed.setSel(pos(0, 4), pos(0, 7));
+  ed.tab();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['action', 'One'], ['character', 'TWO'], ['action', 'three'], ['action', 'Four']]);
+  ed = new Editor([makeBlock('action', 'One'), makeBlock('action', 'Four')]);
+  ed.setSel(pos(0, 0), pos(1, 0));
+  ed.tab();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['character', 'ONE'], ['action', 'Four']]);
+  ed.setSel(pos(0, 0), pos(1, 0));
+  ed.setType('scene'); // the element shortcuts follow the same rule
+  assert.deepEqual(ed.blocks.map((b) => b.type), ['scene', 'action']);
+
+  // An empty element still cycles its own type.
+  ed = new Editor([makeBlock('action')]);
+  ed.tab(); ed.tab();
+  assert.deepEqual(ed.blocks.map((b) => b.type), ['transition']);
+});
+
+test('changing to and from capitals keeps the text as it was written', () => {
+  const ed = new Editor([makeBlock('dialogue', 'Hello there, Mara.')]);
+  ed.setType('character');
+  assert.equal(ed.block.text, 'HELLO THERE, MARA.');
+  ed.setSel(pos(0, ed.block.text.length));
+  typeStr(ed, ' Again');
+  assert.equal(ed.block.text, 'HELLO THERE, MARA. AGAIN');
+  ed.setType('dialogue');
+  assert.equal(ed.block.text, 'Hello there, Mara. Again');
+  ed.setType('transition'); ed.setType('scene'); ed.setType('action');
+  assert.equal(ed.block.text, 'Hello there, Mara. Again');
+  // Edited in capitals: the change is taken from the capitals, the rest keeps its case.
+  ed.setType('character');
+  ed.setSel(pos(0, 0), pos(0, 5));
+  typeStr(ed, 'Bye');
+  ed.setType('dialogue');
+  assert.equal(ed.block.text, 'Bye there, Mara. Again');
+  // Undo brings back each step exactly.
+  ed.undo();
+  assert.equal(ed.block.text, 'BYE THERE, MARA. AGAIN');
+  // A cue written in capitals stays in capitals.
+  const cue = new Editor([makeBlock('character')]);
+  typeStr(cue, 'MARA');
+  cue.setType('action');
+  assert.equal(cue.block.text, 'MARA');
+});
+
+test('alignment: left, centre, right and justify, without touching text, type or marks', () => {
+  const ed = new Editor([makeBlock('action', 'Rain hammers.', [{ s: 0, e: 4, k: 'b', v: 1 }]), makeBlock('transition', 'CUT TO:')]);
+  ed.setAlign('center');
+  assert.equal(ed.blocks[0].align, 'center');
+  assert.deepEqual(ed.blocks[0].marks, [{ s: 0, e: 4, k: 'b', v: 1 }]);
+  assert.equal(ed.blocks[1].align, undefined);
+  ed.setSel(pos(0, 2), pos(1, 3));
+  ed.setAlign('right');
+  assert.equal(ed.blocks[0].align, 'right');
+  assert.equal(ed.blocks[1].align, undefined, "a transition's own alignment is stored as none");
+  ed.setAlign('left');
+  assert.equal(ed.blocks[0].align, undefined);
+  assert.equal(ed.blocks[1].align, 'left');
+  ed.undo();
+  assert.equal(ed.blocks[0].align, 'right');
+  // Kept through typing, a change of element, and Enter in the middle.
+  ed.setSel(pos(0, 4));
+  typeStr(ed, '!');
+  ed.setType('dialogue');
+  assert.equal(ed.blocks[0].align, 'right');
+  ed.enter();
+  assert.deepEqual(ed.blocks.slice(0, 2).map((b) => b.align), ['right', 'right']);
 });
 
 test('Enter on an empty element converts instead of adding', () => {

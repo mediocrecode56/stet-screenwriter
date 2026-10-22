@@ -2,6 +2,15 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.24.0 · 22 Oct 2026
+
+- Alignment: a small menu on the toolbar aligns a paragraph left, centred, right or justified, and Format has the same. Ctrl+L, Ctrl+E, Ctrl+R and Ctrl+J do it from the keyboard. It prints and exports as shown, and changes nothing else about the text.
+- Every shortcut can be changed in Help → Keyboard Shortcuts. Click one and press the new keys, up to three combinations one after another (for example Ctrl+K, then S). A shortcut already in use is named first, and only taken from the other command if you choose Replace. Backspace leaves a command without a shortcut, and Reset All goes back to the defaults.
+- Tab no longer changes text that is already written. Inside a line it starts a new element at the caret, and with a selection it changes only the selected text. In an empty line it still changes that line.
+- Turning Dialogue into a Character (or any element shown in capitals) and back keeps the capitalisation it was written with, instead of leaving it all in capitals.
+- Scene navigation (Alt+↓, Alt+↑ and the Scene Navigator) glides to the scene like suggestions and notes do, with the scene heading at the top of the view.
+- Opening the notes by clicking a note slides the panel in the same way as NOTES does. A note is plain text to click and write in, with no box around it.
+
 ## 0.23.3 · 22 Oct 2026
 
 - File → Import Final Draft… opens a Final Draft (.fdx) script as a new STET screenplay. Scene headings, action, characters, parentheticals, dialogue, transitions and shots come across formatted as they were, with bold, italic, underline and strikeout, the title page and the cast. STET then asks where to save the new .stet file and how to back it up, as for any new screenplay. It never overwrites a screenplay that is already there.
