@@ -180,8 +180,10 @@ function plistValue(v, ind) {
 }
 
 /** A minimal app bundle declaring .stet files as STET.app does (MAC_DOC_INFO). */
+// In ~/Applications: macOS won't open documents with apps in a temporary folder.
+const APPS = WIN ? '' : path.join(os.homedir(), 'Applications', 'STET links check');
 function fakeApp(name, id, info) {
-  const app = path.join(tmp, name + '.app');
+  const app = path.join(APPS, name + '.app');
   fs.mkdirSync(path.join(app, 'Contents', 'MacOS'), { recursive: true });
   fs.mkdirSync(path.join(app, 'Contents', 'Resources'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'build', 'icon.icns'), path.join(app, 'Contents', 'Resources', 'electron.icns'));
@@ -234,6 +236,7 @@ try {
   else { console.error('usage: node scripts/check-file-links.mjs helper|installer (installer: Windows only)'); process.exit(2); }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
+  if (APPS) fs.rmSync(APPS, { recursive: true, force: true });
 }
 console.log(failed ? `${failed} check(s) failed` : 'all checks passed');
 process.exit(failed ? 1 : 0);
