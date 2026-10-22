@@ -2,7 +2,8 @@
 #
 # Releasing is automatic: push a commit to main that raises the version in
 # package.json (with a matching section in CHANGELOG.md) and this tags it vX.Y.Z,
-# builds it and publishes the release. Pushes that don't change the version do nothing.
+# builds it and publishes the release. A push whose version is already released does
+# nothing (a quick check); if a release failed, the next push to main tries it again.
 # It can also be started by pushing a tag vX.Y.Z, or on GitHub: Actions → Release →
 # Run workflow (empty box: the version in package.json). Running it for a version that
 # already has a release replaces that release's files.
@@ -28,7 +29,6 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: [package.json]
     tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
