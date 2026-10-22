@@ -1,6 +1,6 @@
 // Checks on a real Windows or Mac machine that .stet screenplays open in STET with its icon
-// (.github/workflows/file-links.yml). Each check asks the system itself which program a
-// double-click would start, as Explorer or the Finder would.
+// (.github/workflows/file-links.yml). Each check opens a screenplay the way a double-click
+// does (Windows) or asks the Finder which app it would use (Mac).
 //
 //   node scripts/check-file-links.mjs helper      Help > Open .stet Files with STET (src/main/assoc.js)
 //   node scripts/check-file-links.mjs installer   STET-Setup.exe: the box ticked, unticked, and
@@ -28,13 +28,11 @@ const same = (a, b) => path.resolve(String(a || '')).toLowerCase() === path.reso
 const PS = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 const ps = (script) => execFileSync(PS, ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' }).trim();
 
-/** What Windows starts for a .stet file, and the icon it shows: { exe, icon } ('' when none). */
-function winAssoc() {
-  const out = ps(`Add-Type -Namespace W -Name A -MemberDefinition '[DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] public static extern int AssocQueryString(int f, int s, string a, string e, System.Text.StringBuilder o, ref int n);'
-    function Q($s) { $n = 2048; $b = New-Object System.Text.StringBuilder 2048; if ([W.A]::AssocQueryString(0, $s, '.stet', $null, $b, [ref]$n) -eq 0) { $b.ToString() } else { '' } }
-    (Q 2) + '|' + (Q 15) + '|' + (Q 1)`); // ASSOCSTR_EXECUTABLE, ASSOCSTR_DEFAULTICON, ASSOCSTR_COMMAND
-  const [exe, icon, command] = out.split('|');
-  return { exe, icon, command };
+/** The icon Windows shows for .stet files ('' when none). */
+function winIcon() {
+  return ps(`Add-Type -Namespace W -Name A -MemberDefinition '[DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] public static extern int AssocQueryString(int f, int s, string a, string e, System.Text.StringBuilder o, ref int n);'
+    $n = 2048; $b = New-Object System.Text.StringBuilder 2048
+    if ([W.A]::AssocQueryString(0, 15, '.stet', $null, $b, [ref]$n) -eq 0) { $b.ToString() } else { '' }`); // ASSOCSTR_DEFAULTICON
 }
 const regHas = (key) => spawnSync('reg', ['query', key], { stdio: 'ignore' }).status === 0;
 const KEY = `HKCU\\Software\\Classes\\${PROG_ID}`;
@@ -50,8 +48,8 @@ function winDoubleClick(dir) {
   const doc = path.join(dir, 'Pilot.stet'), mark = path.join(dir, 'opened-by.txt');
   fs.rmSync(mark, { force: true });
   fs.writeFileSync(doc, `require('fs').writeFileSync(${JSON.stringify(mark)}, process.execPath)`);
-  ps(`Start-Process -FilePath '${doc.replace(/'/g, "''")}'`);
-  for (let i = 0; i < 100 && !fs.existsSync(mark); i++) spawnSync(PS, ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 200']);
+  try { ps(`Start-Process -FilePath '${doc.replace(/'/g, "''")}'`); } catch { return ''; } // no program for .stet files
+  for (const end = Date.now() + 20000; !fs.existsSync(mark) && Date.now() < end;) spawnSync(PS, ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 200']);
   return fs.existsSync(mark) ? fs.readFileSync(mark, 'utf8') : '';
 }
 
@@ -65,13 +63,13 @@ function fakeExe(dir) {
 
 async function winHelper() {
   winUnlink();
-  check(!winAssoc().command, 'before: nothing opens .stet files');
+  check(!regHas(KEY) && !winDoubleClick(tmp), 'before: nothing opens .stet files');
   const exe = fakeExe(path.join(tmp, 'Portable Folder'));
   const r = await linkFiles({ platform: 'win32', exe });
   check(r.ok && /now opens it in STET/.test(r.message), `Help > Open .stet Files: ${r.message || r.error}`);
-  const a = winAssoc();
-  check(same(winDoubleClick(tmp), exe), `a double-click starts this STET.exe (Windows reports ${a.exe || a.command})`);
-  check(a.icon.toLowerCase() === `${exe},0`.toLowerCase(), `.stet files show STET's icon (${a.icon})`);
+  check(same(winDoubleClick(tmp), exe), 'a double-click starts this STET.exe');
+  const icon = winIcon();
+  check(icon.toLowerCase() === `${exe},0`.toLowerCase(), `.stet files show STET's icon (${icon})`);
   const cmd = execFileSync('reg', ['query', `${KEY}\\shell\\open\\command`, '/ve'], { encoding: 'utf8' });
   check(cmd.includes(`"${exe}" "%1"`), 'the file is passed to STET, quoted (a folder name with spaces)');
   // Linking again (another copy of STET) moves the link there.
@@ -99,19 +97,19 @@ async function winInstaller() {
   winUnlink();
 
   install(); // the box as it comes: ticked
-  let a = winAssoc();
-  check(same(winDoubleClick(tmp), installed), `installer, box ticked: a double-click starts the installed STET (${a.command})`);
-  check(a.icon.toLowerCase() === `${installed},0`.toLowerCase(), `installer: .stet files show STET's icon (${a.icon})`);
+  check(same(winDoubleClick(tmp), installed), 'installer, box ticked: a double-click starts the installed STET');
+  const icon = winIcon();
+  check(icon.toLowerCase() === `${installed},0`.toLowerCase(), `installer: .stet files show STET's icon (${icon})`);
   uninstall();
   check(!fs.existsSync(installed), 'uninstalled');
-  check(!regHas(KEY) && !winAssoc().command, 'uninstalling removes the link');
+  check(!regHas(KEY) && !winDoubleClick(tmp), 'uninstalling removes the link');
 
   install('/MERGETASKS=!assoc'); // the box unticked
-  check(!regHas(KEY) && !winAssoc().command, 'installer, box unticked: .stet files are left alone');
+  check(!regHas(KEY) && !winDoubleClick(tmp), 'installer, box unticked: .stet files are left alone');
   await linkFiles({ platform: 'win32', exe: installed }); // Help > Open .stet Files, later
   check(same(winDoubleClick(tmp), installed), 'then Help > Open .stet Files links them to the installed STET');
   uninstall();
-  check(!regHas(KEY) && !winAssoc().command, 'uninstalling removes a link made from the Help menu too');
+  check(!regHas(KEY) && !winDoubleClick(tmp), 'uninstalling removes a link made from the Help menu too');
 }
 
 // ---- Mac ----------------------------------------------------------------------------------
