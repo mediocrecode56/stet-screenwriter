@@ -212,9 +212,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # GitHub refuses this job's token a tag push when commits since the last tag change a
+          # workflow file. The release is then created with the tag made by GitHub itself (--target).
+          $tagged = $true
           if ($env:CREATE_TAG -eq 'true') {
             git push origin "refs/tags/$env:TAG"
-            if ($LASTEXITCODE) { throw "Pushing tag $env:TAG failed" }
+            if ($LASTEXITCODE) { Write-Host "::warning::Pushing tag $env:TAG was refused; GitHub creates it with the release."; $tagged = $false }
           }
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
@@ -222,6 +225,7 @@ jobs:
             if ($LASTEXITCODE) { throw 'Updating the release notes failed' }
             gh release upload $env:TAG STET-Windows.zip STET-Setup.exe STET-macOS.dmg $env:PATCH --clobber
           } else {
-            gh release create $env:TAG --verify-tag --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe STET-macOS.dmg $env:PATCH
+            $where = if ($tagged) { '--verify-tag' } else { "--target=$env:GITHUB_SHA" }
+            gh release create $env:TAG $where --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe STET-macOS.dmg $env:PATCH
           }
           if ($LASTEXITCODE) { throw "Publishing the release failed ($LASTEXITCODE)" }
