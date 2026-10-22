@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { windowsCommands, windowsExe, opensWith, linkFiles, FILE_EXTS, PROG_ID, BUNDLE_ID } from '../src/main/assoc.js';
+import { windowsCommands, windowsExe, opensWith, linkFiles, FILE_EXTS, PROG_ID } from '../src/main/assoc.js';
 
 const EXE = 'C:\\Users\\Ann\\STET\\STET.exe';
 
@@ -64,14 +64,16 @@ test('Windows: if Windows would still not start STET, its own Open with window o
 
 test('Mac: STET.app is registered with Launch Services and made the default', async () => {
   const calls = [];
-  const exec = async (f, a) => { calls.push([f, a]); return a.at(-1).includes('URLForApplicationToOpenContentType') ? BUNDLE_ID + '\n' : ''; };
+  const exec = async (f, a) => { calls.push([f, a]); return a.at(-1).includes('URLForApplicationToOpenURL') ? '/Applications/STET.app\n' : ''; };
   const r = await linkFiles({ platform: 'darwin', exe: '/Applications/STET.app/Contents/MacOS/STET', exec });
   assert.equal(r.ok, true);
   assert.match(r.message, /now opens it in STET/);
   assert.match(calls[0][0], /lsregister$/);
   assert.deepEqual(calls[0][1], ['-f', '/Applications/STET.app']);
+  assert.match(calls[1][1].at(-1), /LSSetDefaultRoleHandlerForContentType\(\$\("app\.stet\.screenplay"\), 0xFFFFFFFF, \$\("app\.stet\.screenwriting"\)\)/);
   assert.match(calls[1][1].at(-1), /setDefaultApplicationAtURLToOpenContentType.*"\/Applications\/STET\.app"/s);
-  const kept = await linkFiles({ platform: 'darwin', exe: '/Applications/STET.app/Contents/MacOS/STET', exec: async () => 'com.other.app' });
+  assert.match(calls[2][1].at(-1), /URLForApplicationToOpenURL/, 'then asks what the Finder would open a screenplay with');
+  const kept = await linkFiles({ platform: 'darwin', exe: '/Applications/STET.app/Contents/MacOS/STET', exec: async () => '/Applications/TextEdit.app' });
   assert.match(kept.message, /Change All/);
   assert.equal((await linkFiles({ platform: 'darwin', exe: '/opt/electron/electron', exec: async () => '' })).ok, false);
   assert.equal((await linkFiles({ platform: 'linux', exe: '/x', exec: async () => '' })).ok, false);

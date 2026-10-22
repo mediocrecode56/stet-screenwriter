@@ -72,24 +72,39 @@ $n = 1024; $b = New-Object System.Text.StringBuilder 1024
 $r = [W.S]::AssocQueryString(0, 1, '.stet', 'open', $b, [ref]$n)
 if ($r -eq 0) { $b.ToString() } else { 'none ' + $r.ToString('x') }`;
 
-// JavaScript for Automation: make the app at `app` the default for STET Screenplays, and read
-// which app is. NSWorkspace's way (macOS 12+) first, Launch Services' older call if that fails.
-// UTType is looked up by name: its framework can't be imported into JavaScript for Automation.
-const JXA_TYPE = `ObjC.import('AppKit'); var T = $.NSClassFromString($('UTType'));`;
+// JavaScript for Automation. UTType's framework is not loaded in osascript and can't be
+// imported, so it is loaded by path and UTType looked up by name (nil if that fails).
+const JXA_TYPE = `ObjC.import('AppKit');
+$.NSBundle.bundleWithPath('/System/Library/Frameworks/UniformTypeIdentifiers.framework').load;
+var T = $.NSClassFromString('UTType'), type = function (u) { return T && !T.isNil() ? T.typeWithIdentifier(u) : $(); };
+ObjC.bindFunction('LSSetDefaultRoleHandlerForContentType', ['int', ['id', 'unsigned int', 'id']]);
+ObjC.bindFunction('LSCopyDefaultRoleHandlerForContentType', ['id', ['id', 'unsigned int']]);`;
+/**
+ * Make the app at `app` (bundle id `id`) the default for STET Screenplays: Launch Services'
+ * call, then NSWorkspace's (macOS 12+). Prints what failed, or 'ok'.
+ */
 export const macSetDefault = (app, uti = UTI, id = BUNDLE_ID) => `${JXA_TYPE}
-var done = false, err = '';
-try {
-  $.NSWorkspace.sharedWorkspace.setDefaultApplicationAtURLToOpenContentTypeCompletionHandler($.NSURL.fileURLWithPath(${JSON.stringify(app)}), T.typeWithIdentifier(${JSON.stringify(uti)}), function (e) { err = e && !e.isNil() ? ObjC.unwrap(e.localizedDescription) : ''; done = true; });
-  for (var i = 0; i < 150 && !done; i++) $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
-} catch (e) { err = String(e); }
-if (!done || err) {
-  ObjC.bindFunction('LSSetDefaultRoleHandlerForContentType', ['int', ['id', 'unsigned int', 'id']]);
-  err += ' / LS ' + $.LSSetDefaultRoleHandlerForContentType($(${JSON.stringify(uti)}), 0xFFFFFFFF, $(${JSON.stringify(id)}));
-}
-err || 'ok'`;
+var err = [], done = false;
+var r = $.LSSetDefaultRoleHandlerForContentType($(${JSON.stringify(uti)}), 0xFFFFFFFF, $(${JSON.stringify(id)}));
+if (r) err.push('LS ' + r);
+var t = type(${JSON.stringify(uti)});
+if (!t.isNil()) {
+  try {
+    $.NSWorkspace.sharedWorkspace.setDefaultApplicationAtURLToOpenContentTypeCompletionHandler($.NSURL.fileURLWithPath(${JSON.stringify(app)}), t, function (e) { if (e && !e.isNil()) err.push(ObjC.unwrap(e.localizedDescription)); done = true; });
+    for (var i = 0; i < 50 && !done; i++) $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
+  } catch (e) { err.push(String(e)); }
+} else err.push('no UTType');
+err.length ? err.join('; ') : 'ok'`;
+/** The bundle id of the default app for STET Screenplays ('' if none). */
 export const MAC_GET_DEFAULT = `${JXA_TYPE}
-var u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenContentType(T.typeWithIdentifier('${UTI}'));
-u.isNil() ? '' : ObjC.unwrap($.NSBundle.bundleWithURL(u).bundleIdentifier)`;
+var h = $.LSCopyDefaultRoleHandlerForContentType($('${UTI}'), 0xFFFFFFFF);
+var id = h && !h.isNil() ? ObjC.unwrap(h) : '';
+if (!id) { var t = type('${UTI}'); var u = t.isNil() ? $() : $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenContentType(t); id = u.isNil() ? '' : ObjC.unwrap($.NSBundle.bundleWithURL(u).bundleIdentifier); }
+id`;
+/** The app bundle the Finder opens `file` with, as a path ('' if none). */
+export const macOpener = (file) => `ObjC.import('AppKit');
+var u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.fileURLWithPath(${JSON.stringify(file)}));
+u.isNil() ? '' : ObjC.unwrap(u.path)`;
 
 const run = (file, args) => new Promise((resolve, reject) => {
   execFile(file, args, { windowsHide: true, timeout: 30000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
@@ -127,8 +142,15 @@ export async function linkFiles({ platform = process.platform, exe, file = null,
       if (!bundle.endsWith('.app')) return { ok: false, error: 'This copy of STET is not an app bundle, so it cannot be linked to .stet files.' };
       await exec(LSREGISTER, ['-f', bundle]);
       await exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', macSetDefault(bundle)]).catch(() => '');
-      const now = (await exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', MAC_GET_DEFAULT]).catch(() => '')).trim();
-      if (now.toLowerCase() !== BUNDLE_ID) {
+      // What the Finder now does with a screenplay: the test that counts.
+      let target = file;
+      if (!target) {
+        target = path.posix.join(os.tmpdir(), 'Screenplay.stet');
+        await fs.writeFile(target, '').catch(() => {});
+      }
+      const by = (await exec('/usr/bin/osascript', ['-l', 'JavaScript', '-e', macOpener(target)]).catch(() => '')).trim();
+      const real = (p) => fs.realpath(p).catch(() => p);
+      if (!by || (await real(by)) !== (await real(bundle))) {
         return { ok: true, message: 'STET is registered for .stet screenplays, but macOS kept another app as their default. Select a .stet file in the Finder, choose File > Get Info, pick STET under "Open with" and click Change All.' };
       }
       return { ok: true, message: 'Done. Double-clicking a .stet screenplay now opens it in STET, and screenplays show the STET icon.' };

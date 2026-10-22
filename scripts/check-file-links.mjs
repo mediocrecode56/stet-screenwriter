@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { linkFiles, macSetDefault, MAC_GET_DEFAULT, NOTIFY_AND_ASK, FILE_EXTS, BUNDLE_ID, UTI, PROG_ID } from '../src/main/assoc.js';
+import { linkFiles, macSetDefault, macOpener, MAC_GET_DEFAULT, NOTIFY_AND_ASK, FILE_EXTS, BUNDLE_ID, UTI, PROG_ID } from '../src/main/assoc.js';
 import { MAC_DOC_INFO } from './package-tools.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -186,15 +186,22 @@ function fakeApp(name, id, info) {
   fs.mkdirSync(path.join(app, 'Contents', 'Resources'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'build', 'icon.icns'), path.join(app, 'Contents', 'Resources', 'electron.icns'));
   const exe = path.join(app, 'Contents', 'MacOS', name);
-  fs.writeFileSync(exe, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  fs.copyFileSync('/usr/bin/true', exe); // a real program, signed below like STET.app (ad hoc)
+  fs.chmodSync(exe, 0o755);
   const plist = { CFBundleIdentifier: id, CFBundleName: name, CFBundleExecutable: name, CFBundlePackageType: 'APPL', CFBundleIconFile: 'electron.icns', ...info };
   fs.writeFileSync(path.join(app, 'Contents', 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n${plistValue(plist, 0)}\n</plist>\n`);
+  execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', app]);
   execFileSync(LSREGISTER, ['-f', app]);
   return { app, exe };
 }
 
 /** The app the Finder would open `file` with. */
-const opener = (file) => jxa(`ObjC.import('AppKit'); const u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.fileURLWithPath(${JSON.stringify(file)})); u.isNil() ? '' : ObjC.unwrap(u.path)`);
+const opener = (file) => jxa(macOpener(file));
+/** What Launch Services knows about .stet files, shown when a check fails. */
+function macDump() {
+  const dump = spawnSync('/bin/sh', ['-c', `${LSREGISTER} -dump | grep -i -B3 -A3 'stet' | head -80`], { encoding: 'utf8' }).stdout;
+  console.log(dump.split('\n').map((l) => '        ' + l).join('\n'));
+}
 
 async function macHelper() {
   const doc = path.join(tmp, 'Pilot.stet');
@@ -205,6 +212,7 @@ async function macHelper() {
   const set = jxa(macSetDefault(other.app, UTI, 'com.example.other'));
   const before = jxa(MAC_GET_DEFAULT);
   check(before.toLowerCase() === 'com.example.other', `before: another app is the default for .stet files (${set}; ${before})`);
+  console.log(`      before, the Finder opens a .stet file with: ${opener(doc)}`);
   const r = await linkFiles({ platform: 'darwin', exe: stet.exe });
   check(r.ok && /now opens it in STET/.test(r.message), `Help > Open .stet Files: ${r.message || r.error}`);
   const now = jxa(MAC_GET_DEFAULT);
@@ -214,6 +222,7 @@ async function macHelper() {
   const kind = jxa(`ObjC.import('AppKit'); ObjC.unwrap($.NSWorkspace.sharedWorkspace.typeOfFileError(${JSON.stringify(doc)}, null))`);
   check(kind === UTI, `a .stet file is a STET Screenplay (${kind})`);
   check(fs.existsSync(path.join(other.app, 'Contents')), 'the other app is still there, only no longer the default');
+  if (failed) macDump();
 }
 
 // --------------------------------------------------------------------------------------------
