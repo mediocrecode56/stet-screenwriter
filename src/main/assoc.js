@@ -44,10 +44,11 @@ const run = (file, args) => new Promise((resolve, reject) => {
 export async function linkFiles({ platform = process.platform, exe = process.execPath, exec = run } = {}) {
   try {
     if (platform === 'win32') {
-      const reg = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe');
+      const { join } = path.win32;
+      const reg = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe');
       for (const args of windowsCommands(exe)) await exec(reg, args);
       // Explorer shows the new icon now rather than after the next sign-in.
-      await exec(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'ie4uinit.exe'), ['-show']).catch(() => {});
+      await exec(join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'ie4uinit.exe'), ['-show']).catch(() => {});
       const chosen = userChoice(await exec(reg, ['query', USER_CHOICE, '/v', 'ProgId']).catch(() => ''));
       if (chosen && chosen !== PROG_ID) {
         return { ok: true, message: 'STET is set up to open .stet files, but Windows was told earlier to always open them with another app, and only you can change that: right-click a .stet file, choose Open with > Choose another app, pick STET and tick "Always use this app".' };
@@ -55,7 +56,7 @@ export async function linkFiles({ platform = process.platform, exe = process.exe
       return { ok: true, message: 'Double-clicking a .stet screenplay now opens it in STET.' };
     }
     if (platform === 'darwin') {
-      const bundle = path.resolve(path.dirname(exe), '..', '..');
+      const bundle = path.posix.resolve(path.posix.dirname(exe), '..', '..');
       if (!bundle.endsWith('.app')) return { ok: false, error: 'This copy of STET is not an app bundle, so it cannot be linked to .stet files.' };
       await exec(LSREGISTER, ['-f', bundle]);
       return { ok: true, message: 'STET is registered for .stet screenplays. If one still opens elsewhere, select it in the Finder, choose File > Get Info, pick STET under "Open with" and click Change All.' };
