@@ -6,6 +6,10 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 - File → Import Final Draft… opens a Final Draft (.fdx) script as a new STET screenplay. Scene headings, action, characters, parentheticals, dialogue, transitions and shots come across formatted as they were, with bold, italic, underline and strikeout, the title page and the cast. STET then asks where to save the new .stet file and how to back it up, as for any new screenplay. It never overwrites a screenplay that is already there.
 - Opening or dropping an .fdx file on STET imports it the same way.
+- A name made only of characters a file can't hold (like `???`) no longer makes a file called `.stet`, and emptying "Save in" saves where it was set, not in a folder of STET's.
+- Renaming a screenplay to a name with a `$` in it keeps its backups' names right.
+- Text pasted from another app keeps its tabs as spaces, as it already did over several lines. A note pasted in from another screenplay can be written in.
+- A PDF export that fails inside STET now says so instead of waiting forever.
 
 ## 0.23.2 · 22 Oct 2026
 

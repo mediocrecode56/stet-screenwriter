@@ -116,7 +116,11 @@ function toBlock(p, warnings) {
     if (up.length !== text.length) marks = [];
     text = up;
   }
-  if (type === 'paren' && !/^\(.*\)$/s.test(text)) text = '(' + text.replace(/^\(|\)$/g, '') + ')';
+  if (type === 'paren' && !/^\(.*\)$/s.test(text)) {
+    // Wrapped in brackets as STET writes it; an added "(" moves the styles along by one.
+    if (!text.startsWith('(')) marks = marks.map((m) => ({ ...m, s: m.s + 1, e: m.e + 1 }));
+    text = '(' + text.replace(/^\(|\)$/g, '') + ')';
+  }
   const b = makeBlock(type, text, marks);
   // A paragraph that opens on an empty line shows that line in Final Draft.
   b.gap = /^[ \t]*\r?\n/.test(runs.text);

@@ -60,8 +60,9 @@ export async function setupDialog({ title = 'NEW SCREENPLAY', name = 'Untitled S
   const v = await open({ title, sub: 'name · location · backups', body, buttons, foot: allowUntitled ? 'Not now: write without a file — protected by crash recovery' : '' });
   if (!v) return null;
   const cfg = {
-    name: (nameIn.value.trim() || 'Untitled').replace(/[<>:"/\\|?*\x00-\x1f]/g, ''),
-    dir: dirIn.value.trim(),
+    // Characters no file name may hold are left out (and Windows drops trailing dots and spaces).
+    name: nameIn.value.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim().replace(/[. ]+$/, '') || 'Untitled',
+    dir: dirIn.value.trim() || dir, // an emptied "Save in" means where it was, never STET's own folder
     backup: {
       enabled: bkOn.checked,
       intervalMin: Math.max(1, Math.min(120, +every.value || 5)),

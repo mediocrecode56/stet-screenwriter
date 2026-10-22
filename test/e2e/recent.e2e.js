@@ -96,3 +96,15 @@ test('launching opens the last screenplay, even after a new untitled one', async
   await sleep(900);
   assert.equal(await app.eval(`__stet.session.path`), path.join(tmp, 'Final Cut.stet'), '…so the most recent one opens instead');
 });
+
+test('a "$" in a new name is kept in the backups\' names too', async () => {
+  const file = path.join(tmp, 'Cost.stet');
+  assert.equal((await app.eval(`__stet.session.saveTo(${JSON.stringify(file)})`)).ok, true);
+  assert.equal((await app.eval(`__stet.api.invoke('backup:create', { path: ${JSON.stringify(file)}, id: 'x', dir: null, json: __stet.session.serialize() })`)).ok, true);
+  const r = await app.eval(`__stet.api.invoke('doc:rename', { path: ${JSON.stringify(file)}, name: 'Cost $& More', backupDir: null })`);
+  assert.equal(r.ok, true);
+  assert.equal(r.path, path.join(tmp, 'Cost $& More.stet'));
+  const names = await fs.readdir(path.join(tmp, 'Cost $& More Backups'));
+  assert.equal(names.length, 1);
+  assert.ok(names[0].startsWith('Cost $& More '), names[0]);
+});

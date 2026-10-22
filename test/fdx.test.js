@@ -63,3 +63,10 @@ test('entities, numeric characters and CDATA are read as text', () => {
   const { blocks } = parseFdx('<FinalDraft><Content><Paragraph Type="Action"><Text>caf&#233; &#x2014; &lt;b&gt;<![CDATA[ & more]]></Text></Paragraph></Content></FinalDraft>');
   assert.equal(blocks[0].text, 'café — <b> & more');
 });
+
+test('a parenthetical without brackets gets them, its styles staying on their words', () => {
+  const { blocks } = parseFdx('<FinalDraft><Content><Paragraph Type="Parenthetical"><Text>quietly, </Text><Text Style="Italic">to Teo</Text></Paragraph></Content></FinalDraft>');
+  assert.equal(blocks[0].text, '(quietly, to Teo)');
+  const m = blocks[0].marks[0];
+  assert.equal(blocks[0].text.slice(m.s, m.e), 'to Teo');
+});

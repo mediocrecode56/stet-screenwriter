@@ -8,7 +8,7 @@ import { wordAt } from '../core/text.js';
 import { toPlainText, parsePlainText } from '../core/plaintext.js';
 import { WheelZoom, stepZoom } from '../core/wheelzoom.js';
 import { MAC } from '../core/keys.js';
-import { cueName } from '../core/model.js';
+import { cueName, TYPES, HIGHLIGHT_COLORS, STYLES } from '../core/model.js';
 import { suggestCue } from '../core/cast.js';
 
 export class Input {
@@ -321,13 +321,13 @@ export class Input {
     const dt = e.clipboardData;
     let frag = null;
     const custom = dt.getData('application/x-stet-fragment');
-    if (custom) { try { frag = JSON.parse(custom); } catch { frag = null; } }
+    if (custom) { try { frag = cleanFragment(JSON.parse(custom)); } catch { frag = null; } }
     const text = dt.getData('text/plain');
     if (!frag && this.lastCopy && text === this.lastCopy.text) frag = this.lastCopy.frag;
     if (!frag) {
       if (!text) return;
       const norm = text.replace(/\r\n?/g, '\n');
-      if (!norm.includes('\n')) frag = [{ type: this.ed.block.type, text: norm, marks: [] }];
+      if (!norm.includes('\n')) frag = [{ type: this.ed.block.type, text: norm.replace(/\t/g, '    '), marks: [] }];
       else frag = parsePlainText(norm);
       // Unstructured single paragraph (no blank lines): keep it in the current element.
       if (frag.length === 1 && !/\n\s*\n/.test(norm)) frag[0].type = this.ed.block.type;
@@ -337,3 +337,19 @@ export class Input {
   }
 }
 
+/**
+ * A STET fragment from the clipboard, checked: it may come from another program or another
+ * version of STET. Unknown elements become Action, marks outside their text are dropped.
+ */
+function cleanFragment(frag) {
+  if (!Array.isArray(frag)) return null;
+  const out = [];
+  for (const f of frag) {
+    if (!f || typeof f.text !== 'string') continue;
+    const text = f.text.replace(/\r\n?/g, '\n');
+    const marks = (Array.isArray(f.marks) ? f.marks : []).filter((m) => m && Number.isInteger(m.s) && Number.isInteger(m.e) && m.s >= 0 && m.e > m.s && m.e <= text.length
+      && ((m.k === 'hl' && HIGHLIGHT_COLORS.includes(m.v)) || (m.k === 'cm' && typeof m.v === 'string') || STYLES.includes(m.k)));
+    out.push({ type: TYPES.includes(f.type) ? f.type : 'action', text, marks });
+  }
+  return out.length ? out : null;
+}

@@ -73,10 +73,11 @@ export class NotesPanel {
       const ta = e.target.closest('textarea');
       if (!ta) return;
       const id = ta.closest('.note').dataset.id;
-      const c = this.session.doc.comments[id];
-      if (!c) return;
+      // A note pasted in from another screenplay arrives without its text: it starts empty here.
+      const now = new Date().toISOString();
+      const c = this.session.doc.comments[id] ||= { text: '', created: now, modified: now };
       c.text = ta.value;
-      c.modified = new Date().toISOString();
+      c.modified = now;
       this.onChange();
     });
     list.addEventListener('focusin', (e) => {

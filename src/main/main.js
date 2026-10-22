@@ -57,7 +57,7 @@ function resolvedTheme() {
 }
 
 function fileArg(args) {
-  return args.find((a) => /\.stet$/i.test(a) && !a.startsWith('--'));
+  return args.find((a) => /\.(stet|fdx)$/i.test(a) && !a.startsWith('--'));
 }
 
 function createWindow() {
@@ -250,7 +250,7 @@ function registerIpc() {
   handle('doc:forget', (file) => queue.forget(file));
   handle('doc:exists', async (file) => { try { await fs.access(file); return true; } catch { return false; } });
   handle('doc:rename', async ({ path: file, name, backupDir }) => {
-    const clean = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim();
+    const clean = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim().replace(/[. ]+$/, '');
     if (!clean) return { ok: false, error: 'Invalid name.' };
     const target = path.join(path.dirname(file), clean + '.stet');
     if (target === file) return { ok: true, path: file };
@@ -265,7 +265,7 @@ function registerIpc() {
       if (renamedBackups) {
         // Backup files carry the document name; rename them so they stay associated.
         for (const bk of await listBackups(newB)) {
-          const nn = bk.name.replace(docBase(file), clean);
+          const nn = bk.name.replace(docBase(file), () => clean); // (a "$" in the name is just a "$")
           if (nn !== bk.name) await fs.rename(bk.file, path.join(newB, nn)).catch(() => {});
         }
       }
@@ -428,6 +428,8 @@ function renderPdf(json, options) {
     const w = new Worker(new URL('./pdf-worker.js', import.meta.url), { workerData: { json, options } });
     w.once('message', (m) => { m.ok ? resolve(m.bytes) : reject(new Error(m.error)); w.terminate(); });
     w.once('error', reject);
+    // A worker that dies without a word (out of memory) must not leave the export waiting forever.
+    w.once('exit', (code) => reject(new Error(`The PDF could not be made (${code}).`)));
   });
 }
 
