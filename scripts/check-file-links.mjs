@@ -147,7 +147,7 @@ async function macHelper() {
   // Another app that also claims .stet files, and is their default for now.
   const other = fakeApp('Other', 'com.example.other', { CFBundleDocumentTypes: [{ CFBundleTypeName: 'Screenplay', CFBundleTypeRole: 'Editor', LSHandlerRank: 'Owner', LSItemContentTypes: [UTI] }] });
   const stet = fakeApp('STET', BUNDLE_ID, MAC_DOC_INFO);
-  const set = jxa(macSetDefault(other.app));
+  const set = jxa(macSetDefault(other.app, UTI, 'com.example.other'));
   const before = jxa(MAC_GET_DEFAULT);
   check(before.toLowerCase() === 'com.example.other', `before: another app is the default for .stet files (${set}; ${before})`);
   const r = await linkFiles({ platform: 'darwin', exe: stet.exe });
