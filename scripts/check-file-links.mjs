@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { linkFiles, macSetDefault, MAC_GET_DEFAULT, BUNDLE_ID, UTI, PROG_ID } from '../src/main/assoc.js';
+import { linkFiles, macSetDefault, MAC_GET_DEFAULT, NOTIFY_AND_ASK, FILE_EXTS, BUNDLE_ID, UTI, PROG_ID } from '../src/main/assoc.js';
 import { MAC_DOC_INFO } from './package-tools.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,11 +34,14 @@ function winIcon() {
     $n = 2048; $b = New-Object System.Text.StringBuilder 2048
     if ([W.A]::AssocQueryString(0, 15, '.stet', $null, $b, [ref]$n) -eq 0) { $b.ToString() } else { '' }`); // ASSOCSTR_DEFAULTICON
 }
+/** The program Windows says a double-click on a .stet file starts ('-' when none). */
+const winOpener = () => ps(NOTIFY_AND_ASK);
 const regHas = (key) => spawnSync('reg', ['query', key], { stdio: 'ignore' }).status === 0;
 const KEY = `HKCU\\Software\\Classes\\${PROG_ID}`;
 function winUnlink() {
   spawnSync('reg', ['delete', KEY, '/f'], { stdio: 'ignore' });
   spawnSync('reg', ['delete', 'HKCU\\Software\\Classes\\.stet', '/f'], { stdio: 'ignore' });
+  spawnSync('reg', ['delete', FILE_EXTS, '/f'], { stdio: 'ignore' });
 }
 /**
  * Opens `doc` the way a double-click does (ShellExecute) and returns the program that ran.
@@ -50,6 +53,7 @@ function winDoubleClick(dir) {
   fs.writeFileSync(doc, `require('fs').writeFileSync(${JSON.stringify(mark)}, process.execPath)`);
   try { ps(`Start-Process -FilePath '${doc.replace(/'/g, "''")}'`); } catch { return ''; } // no program for .stet files
   for (const end = Date.now() + 20000; !fs.existsSync(mark) && Date.now() < end;) spawnSync(PS, ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 200']);
+  spawnSync(PS, ['-NoProfile', '-Command', 'Stop-Process -Name OpenWith -Force -ErrorAction SilentlyContinue']); // Windows asked instead
   return fs.existsSync(mark) ? fs.readFileSync(mark, 'utf8') : '';
 }
 
@@ -77,6 +81,48 @@ async function winHelper() {
   await linkFiles({ platform: 'win32', exe: exe2 });
   check(same(winDoubleClick(tmp), exe2), 'linking again from another copy points the files there');
   winUnlink();
+  await winRemembered(exe);
+}
+
+// What Explorer remembers about .stet files from earlier, which made Windows ask "How do you
+// want to open this file?" (or open another app) although STET was registered. Each is set
+// up the way Explorer leaves it, then Help > Open .stet Files must still make a double-click
+// start STET.
+const REMEMBERED = {
+  'apps tried once (Open with)': [
+    ['add', `${FILE_EXTS}\\OpenWithList`, '/v', 'a', '/t', 'REG_SZ', '/d', 'notepad.exe', '/f'],
+    ['add', `${FILE_EXTS}\\OpenWithList`, '/v', 'MRUList', '/t', 'REG_SZ', '/d', 'a', '/f'],
+    ['add', `${FILE_EXTS}\\OpenWithProgids`, '/v', 'txtfile', '/t', 'REG_NONE', '/f'],
+  ],
+  'an "Always" choice of another app (UserChoice)': [
+    ['add', `${FILE_EXTS}\\UserChoice`, '/v', 'ProgId', '/t', 'REG_SZ', '/d', 'txtfile', '/f'],
+    ['add', `${FILE_EXTS}\\UserChoice`, '/v', 'Hash', '/t', 'REG_SZ', '/d', 'kZ8m1Xx2Y0Q=', '/f'],
+  ],
+  'an "Always" choice of STET from an older copy (UserChoice)': [
+    ['add', `${FILE_EXTS}\\UserChoice`, '/v', 'ProgId', '/t', 'REG_SZ', '/d', 'Applications\\STET.exe', '/f'],
+    ['add', `${FILE_EXTS}\\UserChoice`, '/v', 'Hash', '/t', 'REG_SZ', '/d', 'kZ8m1Xx2Y0Q=', '/f'],
+  ],
+  'the newer Windows 11 choice (UserChoiceLatest)': [
+    ['add', `${FILE_EXTS}\\UserChoiceLatest`, '/v', 'ProgId', '/t', 'REG_SZ', '/d', 'txtfile', '/f'],
+    ['add', `${FILE_EXTS}\\UserChoiceLatest`, '/v', 'Hash', '/t', 'REG_SZ', '/d', 'kZ8m1Xx2Y0Q=', '/f'],
+  ],
+};
+// Explorer locks an "Always" choice: the user may not change its values, only delete it.
+const LOCK = (key) => `$k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('${key.replace(/^HKCU\\/, '')}', [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree, [System.Security.AccessControl.RegistryRights]::ChangePermissions -bor [System.Security.AccessControl.RegistryRights]::ReadKey)
+$a = $k.GetAccessControl(); $a.AddAccessRule((New-Object System.Security.AccessControl.RegistryAccessRule([System.Security.Principal.WindowsIdentity]::GetCurrent().User, 'SetValue', 'Deny'))); $k.SetAccessControl($a)`;
+
+async function winRemembered(exe) {
+  for (const [what, adds] of Object.entries(REMEMBERED)) {
+    winUnlink();
+    await linkFiles({ platform: 'win32', exe }); // linked once before
+    for (const args of adds) execFileSync('reg', args, { stdio: 'ignore' });
+    for (const k of new Set(adds.map((a) => a[1]).filter((k) => /UserChoice/.test(k)))) ps(LOCK(k));
+    console.log(`      with ${what}, Windows would start: ${winOpener()}`);
+    const r = await linkFiles({ platform: 'win32', exe, spawnDetached: () => {} });
+    check(r.ok && /now opens it in STET/.test(r.message), `${what}: Help > Open .stet Files: ${r.message || r.error}`);
+    check(same(winDoubleClick(tmp), exe), `${what}: then a double-click starts this STET.exe (${winOpener()})`);
+  }
+  winUnlink();
 }
 
 async function winInstaller() {
@@ -95,14 +141,17 @@ async function winInstaller() {
     spawnSync(PS, ['-NoProfile', '-Command', 'Start-Sleep -Seconds 2']);
   };
   winUnlink();
+  for (const args of REMEMBERED['an "Always" choice of another app (UserChoice)']) execFileSync('reg', args, { stdio: 'ignore' });
+  ps(LOCK(`${FILE_EXTS}\\UserChoice`));
 
-  install(); // the box as it comes: ticked
+  install(); // the box as it comes: ticked (and Explorer remembered another app)
   check(same(winDoubleClick(tmp), installed), 'installer, box ticked: a double-click starts the installed STET');
   const icon = winIcon();
   check(icon.toLowerCase() === `${installed},0`.toLowerCase(), `installer: .stet files show STET's icon (${icon})`);
   uninstall();
   check(!fs.existsSync(installed), 'uninstalled');
   check(!regHas(KEY) && !winDoubleClick(tmp), 'uninstalling removes the link');
+  check(!regHas('HKCU\\Software\\STET\\Capabilities'), 'uninstalling removes STET from Settings > Default apps');
 
   install('/MERGETASKS=!assoc'); // the box unticked
   check(!regHas(KEY) && !winDoubleClick(tmp), 'installer, box unticked: .stet files are left alone');

@@ -82,6 +82,14 @@ Root: HKA; Subkey: "Software\Classes\.stet\OpenWithProgids"; ValueType: string; 
 Root: HKA; Subkey: "Software\Classes\STET.Screenplay"; ValueType: string; ValueName: ""; ValueData: "STET Screenplay"; Flags: uninsdeletekey; Tasks: assoc
 Root: HKA; Subkey: "Software\Classes\STET.Screenplay\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\STET.exe,0"; Tasks: assoc
 Root: HKA; Subkey: "Software\Classes\STET.Screenplay\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\STET.exe"" ""%1"""; Tasks: assoc
+; STET as an app that opens .stet files, listed in Settings > Default apps.
+Root: HKA; Subkey: "Software\STET\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "STET"; Flags: uninsdeletekey; Tasks: assoc
+Root: HKA; Subkey: "Software\STET\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Screenwriting"; Tasks: assoc
+Root: HKA; Subkey: "Software\STET\Capabilities\FileAssociations"; ValueType: string; ValueName: ".stet"; ValueData: "STET.Screenplay"; Tasks: assoc
+Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "STET"; ValueData: "Software\STET\Capabilities"; Flags: uninsdeletevalue; Tasks: assoc
+; What Explorer remembered about .stet files (an earlier "Open with" choice, apps tried once)
+; would win over the lines above or make Windows ask again: cleared, as src/main/assoc.js does.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.stet"; Flags: deletekey; Tasks: assoc
 
 [Run]
 Filename: "{app}\STET.exe"; Description: "Open STET"; Flags: nowait postinstall skipifsilent
@@ -232,5 +240,8 @@ begin
     RegDeleteValue(HKCU, 'Software\Classes\.stet\OpenWithProgids', 'STET.Screenplay');
     if RegQueryStringValue(HKCU, 'Software\Classes\.stet', '', Kind) and (Kind = 'STET.Screenplay') then
       RegDeleteValue(HKCU, 'Software\Classes\.stet', '');
+    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\STET\Capabilities');
+    RegDeleteKeyIfEmpty(HKCU, 'Software\STET');
+    RegDeleteValue(HKCU, 'Software\RegisteredApplications', 'STET');
   end;
 end;
