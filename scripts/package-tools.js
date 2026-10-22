@@ -23,6 +23,15 @@ export const APP_IGNORE = [
   /^\/(README\.md|CLAUDE\.md|package-lock\.json)$/,
 ];
 
+/**
+ * What STET.app's Info.plist says about screenplays: .stet files are STET Screenplays
+ * (app.stet.screenplay), STET owns them, and they show its icon (packager names it electron.icns).
+ */
+export const MAC_DOC_INFO = {
+  CFBundleDocumentTypes: [{ CFBundleTypeName: 'STET Screenplay', CFBundleTypeRole: 'Editor', LSHandlerRank: 'Owner', LSItemContentTypes: ['app.stet.screenplay'], CFBundleTypeIconFile: 'electron.icns' }],
+  UTExportedTypeDeclarations: [{ UTTypeIdentifier: 'app.stet.screenplay', UTTypeDescription: 'STET Screenplay', UTTypeConformsTo: ['public.data', 'public.content'], UTTypeIconFile: 'electron.icns', UTTypeTagSpecification: { 'public.filename-extension': ['stet'] } }],
+};
+
 /** Removes from node_modules what is never run. Returns the bytes saved. */
 export function pruneModules(appDir) {
   const nm = path.join(appDir, 'node_modules');

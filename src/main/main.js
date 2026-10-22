@@ -154,7 +154,7 @@ function registerIpc() {
     // A packaged STET checks for updates when it starts (unless turned off in Preferences); tests point it at a mock.
     updateCheck: (app.isPackaged || !!process.env.STET_UPDATE_URL) && !PERF && !SHOT && !SAMPLE,
   }));
-  handle('app:link-files', () => (E2E ? { ok: true, message: 'e2e' } : linkFiles()));
+  handle('app:link-files', (file) => (E2E && !process.env.STET_E2E_LINK ? { ok: true, message: 'e2e' } : linkFiles({ file: typeof file === 'string' && /\.stet$/i.test(file) ? file : null })));
   handle('app:open-url', (which) => shell.openExternal(which === 'releases' ? RELEASES_URL : REPO_URL));
 
   handle('update:check', () => updater.check());

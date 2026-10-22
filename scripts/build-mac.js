@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
-import { APP_IGNORE, pruneModules, trimMacLocales } from './package-tools.js';
+import { APP_IGNORE, MAC_DOC_INFO, pruneModules, trimMacLocales } from './package-tools.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -62,8 +62,7 @@ try {
     ...(fs.existsSync(icns) ? { icon: icns } : {}),
     // Screenplays (.stet) open in STET from the Finder (main.js: open-file).
     extendInfo: {
-      CFBundleDocumentTypes: [{ CFBundleTypeName: 'STET Screenplay', CFBundleTypeRole: 'Editor', LSHandlerRank: 'Owner', LSItemContentTypes: ['app.stet.screenplay'], CFBundleTypeIconFile: 'electron.icns' }],
-      UTExportedTypeDeclarations: [{ UTTypeIdentifier: 'app.stet.screenplay', UTTypeDescription: 'STET Screenplay', UTTypeConformsTo: ['public.data', 'public.content'], UTTypeTagSpecification: { 'public.filename-extension': ['stet'] } }],
+      ...MAC_DOC_INFO,
       LSMinimumSystemVersion: '12.0',
     },
     prune: false, // node_modules holds production dependencies only (npm ci --omit=dev)

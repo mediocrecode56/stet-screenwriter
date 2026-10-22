@@ -1,0 +1,162 @@
+// Checks on a real Windows or Mac machine that .stet screenplays open in STET with its icon
+// (.github/workflows/file-links.yml). Each check asks the system itself which program a
+// double-click would start, as Explorer or the Finder would.
+//
+//   node scripts/check-file-links.mjs helper      Help > Open .stet Files with STET (src/main/assoc.js)
+//   node scripts/check-file-links.mjs installer   STET-Setup.exe: the box ticked, unticked, and
+//                                                 uninstalling (Windows; needs Inno Setup 6)
+//
+// It changes the file links of the user running it: meant for a throwaway CI machine.
+
+import { execFileSync, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { linkFiles, MAC_GET_DEFAULT, BUNDLE_ID, UTI, PROG_ID } from '../src/main/assoc.js';
+import { MAC_DOC_INFO } from './package-tools.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const WIN = process.platform === 'win32';
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-links-'));
+let failed = 0;
+const check = (ok, what) => { console.log(`${ok ? 'ok  ' : 'FAIL'}  ${what}`); if (!ok) failed++; };
+const same = (a, b) => path.resolve(String(a || '')).toLowerCase() === path.resolve(String(b || '')).toLowerCase();
+
+// ---- Windows ------------------------------------------------------------------------------
+
+const PS = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+const ps = (script) => execFileSync(PS, ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' }).trim();
+
+/** What Windows starts for a .stet file, and the icon it shows: { exe, icon } ('' when none). */
+function winAssoc() {
+  const out = ps(`Add-Type -Namespace W -Name A -MemberDefinition '[DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] public static extern int AssocQueryString(int f, int s, string a, string e, System.Text.StringBuilder o, ref int n);'
+    function Q($s) { $n = 2048; $b = New-Object System.Text.StringBuilder 2048; if ([W.A]::AssocQueryString(0, $s, '.stet', $null, $b, [ref]$n) -eq 0) { $b.ToString() } else { '' } }
+    (Q 2) + '|' + (Q 15)`); // ASSOCSTR_EXECUTABLE, ASSOCSTR_DEFAULTICON
+  const [exe, icon] = out.split('|');
+  return { exe, icon };
+}
+const regHas = (key) => spawnSync('reg', ['query', key], { stdio: 'ignore' }).status === 0;
+const KEY = `HKCU\\Software\\Classes\\${PROG_ID}`;
+function winUnlink() {
+  spawnSync('reg', ['delete', KEY, '/f'], { stdio: 'ignore' });
+  spawnSync('reg', ['delete', 'HKCU\\Software\\Classes\\.stet', '/f'], { stdio: 'ignore' });
+}
+// A stand-in STET.exe with an icon of its own: a copy of node.exe.
+function fakeExe(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  const exe = path.join(dir, 'STET.exe');
+  fs.copyFileSync(process.execPath, exe);
+  return exe;
+}
+
+async function winHelper() {
+  winUnlink();
+  check(!winAssoc().exe, 'before: nothing opens .stet files');
+  const exe = fakeExe(path.join(tmp, 'Portable Folder'));
+  const r = await linkFiles({ platform: 'win32', exe });
+  check(r.ok && /now opens it in STET/.test(r.message), `Help > Open .stet Files: ${r.message || r.error}`);
+  const a = winAssoc();
+  check(same(a.exe, exe), `a double-click starts STET.exe (${a.exe})`);
+  check(a.icon.toLowerCase() === `${exe},0`.toLowerCase(), `.stet files show STET's icon (${a.icon})`);
+  const cmd = execFileSync('reg', ['query', `${KEY}\\shell\\open\\command`, '/ve'], { encoding: 'utf8' });
+  check(cmd.includes(`"${exe}" "%1"`), 'the file is passed to STET, quoted (a folder name with spaces)');
+  // Linking again (another copy of STET) moves the link there.
+  const exe2 = fakeExe(path.join(tmp, 'Other'));
+  await linkFiles({ platform: 'win32', exe: exe2 });
+  check(same(winAssoc().exe, exe2), 'linking again from another copy points the files there');
+  winUnlink();
+}
+
+async function winInstaller() {
+  const iscc = path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe');
+  const files = path.join(tmp, 'app');
+  fakeExe(files);
+  execFileSync(iscc, ['/Q', '/DAppVersion=0.0.1', `/DAppFiles=${files}`, `/O${tmp}`, path.join(ROOT, 'scripts', 'installer', 'STET.iss')], { stdio: 'inherit' });
+  const setup = path.join(tmp, 'STET-Setup.exe');
+  const installed = path.join(process.env.LOCALAPPDATA, 'Programs', 'STET', 'STET.exe');
+  const install = (...args) => execFileSync(setup, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ...args], { stdio: 'inherit' });
+  const uninstall = () => {
+    execFileSync(path.join(path.dirname(installed), 'unins000.exe'), ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], { stdio: 'inherit' });
+    // The uninstaller runs on from a copy of itself: wait until it has finished.
+    const end = Date.now() + 120000;
+    while (fs.existsSync(installed) && Date.now() < end) spawnSync(PS, ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 500']);
+    spawnSync(PS, ['-NoProfile', '-Command', 'Start-Sleep -Seconds 2']);
+  };
+  winUnlink();
+
+  install(); // the box as it comes: ticked
+  let a = winAssoc();
+  check(same(a.exe, installed), `installer, box ticked: a double-click starts the installed STET (${a.exe})`);
+  check(a.icon.toLowerCase() === `${installed},0`.toLowerCase(), `installer: .stet files show STET's icon (${a.icon})`);
+  uninstall();
+  check(!fs.existsSync(installed), 'uninstalled');
+  check(!regHas(KEY) && !winAssoc().exe, 'uninstalling removes the link');
+
+  install('/MERGETASKS=!assoc'); // the box unticked
+  check(!regHas(KEY) && !winAssoc().exe, 'installer, box unticked: .stet files are left alone');
+  await linkFiles({ platform: 'win32', exe: installed }); // Help > Open .stet Files, later
+  check(same(winAssoc().exe, installed), 'then Help > Open .stet Files links them to the installed STET');
+  uninstall();
+  check(!regHas(KEY) && !winAssoc().exe, 'uninstalling removes a link made from the Help menu too');
+}
+
+// ---- Mac ----------------------------------------------------------------------------------
+
+const jxa = (code) => execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', code], { encoding: 'utf8' }).trim();
+const LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister';
+
+function plistValue(v, ind) {
+  const pad = '  '.repeat(ind);
+  if (Array.isArray(v)) return `<array>\n${v.map((x) => pad + '  ' + plistValue(x, ind + 1)).join('\n')}\n${pad}</array>`;
+  if (typeof v === 'object') return `<dict>\n${Object.entries(v).map(([k, x]) => `${pad}  <key>${k}</key>\n${pad}  ${plistValue(x, ind + 1)}`).join('\n')}\n${pad}</dict>`;
+  return `<string>${v}</string>`;
+}
+
+/** A minimal app bundle declaring .stet files as STET.app does (MAC_DOC_INFO). */
+function fakeApp(name, id, info) {
+  const app = path.join(tmp, name + '.app');
+  fs.mkdirSync(path.join(app, 'Contents', 'MacOS'), { recursive: true });
+  fs.mkdirSync(path.join(app, 'Contents', 'Resources'), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, 'build', 'icon.icns'), path.join(app, 'Contents', 'Resources', 'electron.icns'));
+  const exe = path.join(app, 'Contents', 'MacOS', name);
+  fs.writeFileSync(exe, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const plist = { CFBundleIdentifier: id, CFBundleName: name, CFBundleExecutable: name, CFBundlePackageType: 'APPL', CFBundleIconFile: 'electron.icns', ...info };
+  fs.writeFileSync(path.join(app, 'Contents', 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n${plistValue(plist, 0)}\n</plist>\n`);
+  execFileSync(LSREGISTER, ['-f', app]);
+  return { app, exe };
+}
+
+/** The app the Finder would open `file` with. */
+const opener = (file) => jxa(`ObjC.import('AppKit'); const u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.fileURLWithPath(${JSON.stringify(file)})); u.isNil() ? '' : ObjC.unwrap(u.path)`);
+
+async function macHelper() {
+  const doc = path.join(tmp, 'Pilot.stet');
+  fs.writeFileSync(doc, '');
+  // Another app that also claims .stet files, and is their default for now.
+  const other = fakeApp('Other', 'com.example.other', { CFBundleDocumentTypes: [{ CFBundleTypeName: 'Screenplay', CFBundleTypeRole: 'Editor', LSHandlerRank: 'Owner', LSItemContentTypes: [UTI] }] });
+  const stet = fakeApp('STET', BUNDLE_ID, MAC_DOC_INFO);
+  jxa(`ObjC.import('CoreServices'); $.LSSetDefaultRoleHandlerForContentType($('${UTI}'), 0xFFFFFFFF, $('com.example.other'))`);
+  check(jxa(MAC_GET_DEFAULT).toLowerCase() === 'com.example.other', 'before: another app is the default for .stet files');
+  const r = await linkFiles({ platform: 'darwin', exe: stet.exe });
+  check(r.ok && /now opens it in STET/.test(r.message), `Help > Open .stet Files: ${r.message || r.error}`);
+  check(jxa(MAC_GET_DEFAULT).toLowerCase() === BUNDLE_ID, 'STET is the default app for STET Screenplays');
+  const by = opener(doc);
+  check(by && same(fs.realpathSync(by), fs.realpathSync(stet.app)), `the Finder opens a .stet file with STET.app (${by})`);
+  const kind = jxa(`ObjC.import('AppKit'); ObjC.unwrap($.NSWorkspace.sharedWorkspace.typeOfFileError(${JSON.stringify(doc)}, null))`);
+  check(kind === UTI, `a .stet file is a STET Screenplay (${kind})`);
+  check(fs.existsSync(path.join(other.app, 'Contents')), 'the other app is still there, only no longer the default');
+}
+
+// --------------------------------------------------------------------------------------------
+
+const what = process.argv[2];
+try {
+  if (what === 'helper') await (WIN ? winHelper() : macHelper());
+  else if (what === 'installer' && WIN) await winInstaller();
+  else { console.error('usage: node scripts/check-file-links.mjs helper|installer (installer: Windows only)'); process.exit(2); }
+} finally {
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+console.log(failed ? `${failed} check(s) failed` : 'all checks passed');
+process.exit(failed ? 1 : 0);

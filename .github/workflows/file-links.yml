@@ -1,0 +1,45 @@
+# Checks on real Windows and Mac machines that .stet screenplays open in STET with its icon:
+# Help > Open .stet Files with STET (src/main/assoc.js) and the installer's box, ticked,
+# unticked and uninstalled (scripts/installer/STET.iss). See scripts/check-file-links.mjs.
+
+name: File links
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - src/main/assoc.js
+      - scripts/installer/**
+      - scripts/check-file-links.mjs
+      - .github/workflows/file-links.yml
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Help > Open .stet Files with STET
+        run: node scripts/check-file-links.mjs helper
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --yes --no-progress; if ($LASTEXITCODE) { throw 'Installing Inno Setup failed' } }
+      - name: The installer, ticked, unticked and uninstalled
+        run: node scripts/check-file-links.mjs installer
+
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Help > Open .stet Files with STET
+        run: node scripts/check-file-links.mjs helper

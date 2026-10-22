@@ -835,7 +835,8 @@ cmd.register([
   { id: 'changelog', cat: 'Help', label: 'Changelog', run: async () => dialogs.changelogDialog(await api.invoke('app:changelog'), info.version) },
   { id: 'check-updates', cat: 'Help', label: 'Check for Updates…', run: () => updates.check(true) },
   { id: 'link-files', cat: 'Help', label: 'Open .stet Files with STET', run: async () => {
-    const r = await api.invoke('app:link-files');
+    let r;
+    try { r = await api.invoke('app:link-files', session.path); } catch { r = { ok: false, error: 'STET could not link .stet files.' }; }
     dlg.alertBox('STET FILES', r.ok ? r.message : r.error);
   } },
   { id: 'github', cat: 'Help', label: 'STET on GitHub', run: () => api.invoke('app:open-url', 'repo') },
