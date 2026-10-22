@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.23.2 · 22 Oct 2026
+
+- Help → Open .stet Files with STET now really makes double-clicking a screenplay open it in STET, on Windows and on the Mac. Before, Windows could still ask "How do you want to open this file?" or open another app it remembered, and on a Mac nothing changed.
+- On Windows, STET is also listed under Settings → Apps → Default apps. If Windows keeps an earlier choice it protects, STET says so and opens Windows' own "Open with" window, so you can pick STET once.
+- The installer's "Open .stet screenplays with STET" box does the same.
+
 ## 0.23.1 · 22 Oct 2026
 
 - Help → Open .stet Files with STET works now. Before, clicking it did nothing.

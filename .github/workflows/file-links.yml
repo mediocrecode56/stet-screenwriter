@@ -35,11 +35,7 @@ jobs:
         run: node scripts/check-file-links.mjs installer
 
   mac:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, macos-14]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15 # as the release's Mac job
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
