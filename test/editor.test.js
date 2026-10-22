@@ -96,10 +96,80 @@ test('Tab never changes text already written: only the selection, or what is typ
   ed.setType('scene'); // the element shortcuts follow the same rule
   assert.deepEqual(ed.blocks.map((b) => b.type), ['scene', 'action']);
 
-  // An empty element still cycles its own type.
+  // An empty element still cycles its own type, in the toolbar's order (Dialogue, then Parenthetical).
   ed = new Editor([makeBlock('action')]);
   ed.tab(); ed.tab();
-  assert.deepEqual(ed.blocks.map((b) => b.type), ['transition']);
+  assert.deepEqual(ed.blocks.map((b) => b.type), ['dialogue']);
+  ed.tab();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['paren', '()']]);
+  ed.tab(true); ed.tab(true);
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['character', '']]);
+
+  // The element buttons and Ctrl+number work the same way.
+  ed = new Editor([makeBlock('action', 'She waits. He comes.')]);
+  ed.setSel(pos(0, 11));
+  ed.applyType('dialogue');
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['action', 'She waits.'], ['dialogue', ''], ['action', 'He comes.']]);
+  ed.applyType('dialogue'); // empty: already that type
+  ed.applyType('scene');
+  assert.deepEqual(ed.blocks[1].type, 'scene');
+  ed.setSel(pos(0, 4)); ed.applyType('action'); // the type it has: nothing to do
+  assert.equal(ed.blocks.length, 3);
+});
+
+test('Tab steps only through the element types kept in the cycle, in their order', () => {
+  const ed = new Editor([makeBlock('action')]);
+  ed.tabTypes = ['scene', 'action', 'dialogue', 'shot']; // apart from each other in the toolbar
+  const seen = [];
+  for (let i = 0; i < 5; i++) { ed.tab(); seen.push(ed.block.type); }
+  assert.deepEqual(seen, ['dialogue', 'shot', 'scene', 'action', 'dialogue']);
+  ed.tab(true);
+  assert.equal(ed.block.type, 'action');
+  // From a type outside the cycle, Tab goes to the next one kept.
+  ed.setType('character');
+  ed.tab();
+  assert.equal(ed.block.type, 'dialogue');
+  // A cycle of one type has nowhere to go.
+  ed.tabTypes = ['dialogue'];
+  ed.tab();
+  assert.equal(ed.block.type, 'dialogue');
+});
+
+test('alignment applies to the selected text, or to what is written next, never to other text', () => {
+  // A speech of two paragraphs: aligning the second leaves the first as it was.
+  let ed = new Editor([makeBlock('dialogue', 'First paragraph.\n\nSecond one.'), makeBlock('action', 'Below.')]);
+  ed.setSel(pos(0, 18), pos(0, 29));
+  ed.applyAlign('center');
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text, b.align]), [['dialogue', 'First paragraph.', undefined], ['dialogue', 'Second one.', 'center'], ['action', 'Below.', undefined]]);
+  ed.undo();
+  assert.deepEqual(ed.blocks.map((b) => b.text), ['First paragraph.\n\nSecond one.', 'Below.']);
+  // The caret in written text: an empty paragraph at the caret takes the alignment.
+  ed = new Editor([makeBlock('action', 'Rain hammers.'), makeBlock('action', 'Below.')]);
+  ed.setSel(pos(0, 13));
+  ed.applyAlign('right');
+  assert.deepEqual(ed.blocks.map((b) => [b.text, b.align]), [['Rain hammers.', undefined], ['', 'right'], ['Below.', undefined]]);
+  typeStr(ed, 'Thunder.');
+  assert.deepEqual(ed.blocks[1], { ...ed.blocks[1], text: 'Thunder.', align: 'right' });
+  // An empty paragraph takes it as it is; whole paragraphs selected change without splitting.
+  ed.setSel(pos(0, 0), pos(2, 6));
+  ed.applyAlign('justify');
+  assert.deepEqual(ed.blocks.map((b) => b.align), ['justify', 'justify', 'justify']);
+  // Asking for what the selected text already has splits nothing.
+  ed = new Editor([makeBlock('action', 'One two three')]);
+  ed.setSel(pos(0, 4), pos(0, 7));
+  ed.applyType('action'); ed.applyAlign('left');
+  assert.deepEqual(ed.blocks.map((b) => b.text), ['One two three']);
+  assert.equal(ed.undoStack.length, 0);
+  // A parenthetical is never cut in pieces: part of it selected changes all of it.
+  ed = new Editor([makeBlock('paren', '(quietly, then not)')]);
+  ed.setSel(pos(0, 1), pos(0, 8));
+  ed.applyAlign('center');
+  assert.deepEqual(ed.blocks.map((b) => [b.text, b.align]), [['(quietly, then not)', 'center']]);
+  // A paragraph's own alignment asked for again changes nothing.
+  ed = new Editor([makeBlock('transition', 'CUT TO:')]);
+  ed.setSel(pos(0, 3));
+  ed.applyAlign('right');
+  assert.equal(ed.blocks.length, 1);
 });
 
 test('changing to and from capitals keeps the text as it was written', () => {

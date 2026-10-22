@@ -86,11 +86,16 @@ function readRuns(p) {
   return { text, marks };
 }
 
-/** Tidy the text the way STET keeps it: no tabs, no stray line ends around the paragraph. */
-function tidy(text, marks) {
+/**
+ * Tidy the text the way STET keeps it: no tabs, no stray line ends before the paragraph. With
+ * `keepEnd`, line ends after the text stay: Final Draft shows them as empty lines, and they move
+ * its page breaks.
+ */
+function tidy(text, marks, keepEnd = false) {
   let t = text.replace(/\r\n?/g, '\n').replace(/[\t\u000b]/g, ' ');
   let cut = t.length - t.replace(/^[\s\n]+/, '').length;
-  t = t.slice(cut).replace(/[\s\n]+$/, '');
+  t = t.slice(cut).replace(keepEnd ? /[ \u00a0]+$/ : /[\s\n]+$/, '');
+  if (keepEnd && !t.trim()) t = '';
   marks = marks.map((m) => ({ ...m, s: Math.max(0, m.s - cut), e: Math.min(t.length, m.e - cut) })).filter((m) => m.e > m.s);
   // More than one empty line in a row inside a paragraph reads as a gap Final Draft never shows.
   for (let i; (i = t.indexOf('\n\n\n')) >= 0;) {
@@ -108,7 +113,9 @@ function toBlock(p, warnings) {
     if (raw) warnings.add(`"${raw}" paragraphs came in as Action.`);
   }
   const runs = readRuns(p);
-  let { text, marks } = tidy(runs.text, runs.marks);
+  // Action and dialogue keep the empty lines that end them (Final Draft shows them); cues, headings
+  // and parentheticals are one line of their own.
+  let { text, marks } = tidy(runs.text, runs.marks, type === 'action' || type === 'dialogue');
   if (!text) return null;
   if (UPPER_TYPES.has(type)) {
     const up = text.toUpperCase();
@@ -170,7 +177,7 @@ function readTitlePage(tp) {
 // ---- document ---------------------------------------------------------------------------
 
 /**
- * Final Draft XML -> { blocks, titlePage, cast, warnings }.
+ * Final Draft XML -> { blocks, titlePage, cast, settings, warnings }.
  * Throws FdxError when the file is not a Final Draft script.
  */
 export function parseFdx(xml) {
@@ -200,5 +207,17 @@ export function parseFdx(xml) {
     const n = blocks[i].type === 'character' ? cueName(blocks[i].text) : '';
     if (n && !cast.includes(n)) cast.push(n);
   }
-  return { blocks, titlePage, cast, warnings: [...warnings] };
+  return { blocks, titlePage, cast, settings: readSettings(fd), warnings: [...warnings] };
+}
+
+/** The layout settings STET shares with the file: the blank lines before scene headings. */
+function readSettings(fd) {
+  const out = {};
+  for (const es of kids(fd, 'ElementSettings')) {
+    if ((es.attrs.Type || '').trim().toLowerCase() !== 'scene heading') continue;
+    const before = parseFloat((child(es, 'ParagraphSpec') || { attrs: {} }).attrs.SpaceBefore);
+    // Final Draft counts the space in points: 12 is one blank line.
+    if (before >= 0) out.sceneSpacing = Math.min(2, Math.max(1, Math.round(before / 12)));
+  }
+  return out;
 }

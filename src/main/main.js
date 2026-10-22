@@ -383,12 +383,14 @@ function registerIpc() {
 
   handle('print:html', async ({ html }) => {
     const tmp = path.join(os.tmpdir(), `stet-print-${process.pid}-${Date.now()}.html`);
-    await fs.writeFile(tmp, html, 'utf8');
+    // The page names the script font's files bare; they are read from the app's own folder.
+    const fonts = pathToFileURL(path.join(SRC, 'fonts') + path.sep).href;
+    await fs.writeFile(tmp, html.replaceAll('url("STETCourier-', `url("${fonts}STETCourier-`), 'utf8');
     const pw = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } });
     try {
       await pw.loadFile(tmp);
       return await new Promise((resolve) => {
-        pw.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' }, pageSize: 'Letter' }, (success, reason) => {
+        pw.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' }, pageSize: 'A4' }, (success, reason) => {
           resolve({ ok: success, error: success ? null : reason });
         });
       });
@@ -423,9 +425,16 @@ function registerIpc() {
 }
 
 /** Generate a PDF on a worker thread so neither window nor main loop stalls. */
-function renderPdf(json, options) {
+let pdfFonts = null; // the script font's four faces, read once (src/fonts)
+async function scriptFonts() {
+  if (!pdfFonts) pdfFonts = await Promise.all(['Regular', 'Bold', 'Italic', 'BoldItalic'].map((f) => fs.readFile(path.join(SRC, 'fonts', `STETCourier-${f}.ttf`))));
+  return pdfFonts.map((b) => new Uint8Array(b));
+}
+
+async function renderPdf(json, options) {
+  const fonts = await scriptFonts();
   return new Promise((resolve, reject) => {
-    const w = new Worker(new URL('./pdf-worker.js', import.meta.url), { workerData: { json, options } });
+    const w = new Worker(new URL('./pdf-worker.js', import.meta.url), { workerData: { json, options, fonts } });
     w.once('message', (m) => { m.ok ? resolve(m.bytes) : reject(new Error(m.error)); w.terminate(); });
     w.once('error', reject);
     // A worker that dies without a word (out of memory) must not leave the export waiting forever.

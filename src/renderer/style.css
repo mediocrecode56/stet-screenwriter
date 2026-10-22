@@ -1,8 +1,14 @@
 /* STET — monochrome, typographic, deliberately unfinished. */
 
+/* The script font: Bitstream's Courier 10 Pitch (src/fonts), the Courier Final Draft prints with. */
+@font-face { font-family: "STET Courier"; src: url("../fonts/STETCourier-Regular.ttf"); font-weight: 400; font-style: normal; font-display: block; }
+@font-face { font-family: "STET Courier"; src: url("../fonts/STETCourier-Bold.ttf"); font-weight: 700; font-style: normal; font-display: block; }
+@font-face { font-family: "STET Courier"; src: url("../fonts/STETCourier-Italic.ttf"); font-weight: 400; font-style: italic; font-display: block; }
+@font-face { font-family: "STET Courier"; src: url("../fonts/STETCourier-BoldItalic.ttf"); font-weight: 700; font-style: italic; font-display: block; }
+
 :root {
   --ui: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, monospace;
-  --script: "Courier New", Courier, "Liberation Mono", monospace;
+  --script: "STET Courier", "Courier New", Courier, "Liberation Mono", monospace;
   --desk: #d9d9d5;
   --page: #ffffff;
   --ink: #000000;
@@ -155,6 +161,17 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 /* ---- element bar ----------------------------------------------------- */
 #elbar { height: 30px; flex: none; display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); background: var(--bar); padding: 0 6px; }
 #eltypes, #hlbar, #stbar, #albar { display: flex; }
+/* The Tab cycle: a box around each run of element types Tab steps through, with a grip at each end. */
+#eltypes { position: relative; }
+#tabcycle { position: absolute; inset: 0; pointer-events: none; }
+.cyc-box { position: absolute; top: -2px; bottom: -2px; box-shadow: inset 0 0 0 1px var(--ink-3); }
+.cyc-box.drag, #elbar:hover .cyc-box { box-shadow: inset 0 0 0 1px var(--ink-2); }
+.cyc-h { position: absolute; top: 0; bottom: 0; width: 7px; pointer-events: auto; cursor: ew-resize; }
+.cyc-h.l { left: -3px; } .cyc-h.r { right: -3px; }
+.cyc-h::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 2px; width: 3px; background: var(--ink-2); opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.cyc-h:hover::after, .cyc-box.drag .cyc-h::after { opacity: 1; }
+body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
+.tb[data-t]:not(.cyc):not(.on) { color: var(--ink-3); }
 .tb.mbtn { display: flex; align-items: center; gap: 4px; padding: 0 7px; }
 .tb.mbtn.open { color: var(--ink); background: var(--hover-on); }
 .tb.mbtn svg { display: block; }

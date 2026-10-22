@@ -93,8 +93,9 @@ test('launching opens the last screenplay, even after a new untitled one', async
   await sleep(200);
   await app.close();
   app = await App.launch({ userData: ud });
-  await sleep(900);
-  assert.equal(await app.eval(`__stet.session.path`), path.join(tmp, 'Final Cut.stet'), '…so the most recent one opens instead');
+  const want = path.join(tmp, 'Final Cut.stet');
+  for (let i = 0; i < 50 && (await app.eval(`__stet.session.path`)) !== want; i++) await sleep(100); // a busy machine opens it later
+  assert.equal(await app.eval(`__stet.session.path`), want, '…so the most recent one opens instead');
 });
 
 test('a "$" in a new name is kept in the backups\' names too', async () => {

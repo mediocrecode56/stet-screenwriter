@@ -55,6 +55,8 @@ test('typing a scene with keyboard-driven element flow', async () => {
 });
 
 test('Ctrl+number changes element type; undo/redo via keyboard', async () => {
+  await app.key('Home');
+  await app.key('Shift+End'); // the selected text changes element (the caret alone would start a new one)
   await app.key('Ctrl+6');
   assert.equal(await app.eval('__stet.editor.block.type'), 'transition');
   assert.equal(await app.eval('__stet.editor.block.text'), 'NOT ALWAYS.');

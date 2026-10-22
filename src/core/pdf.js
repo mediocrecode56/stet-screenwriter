@@ -1,15 +1,17 @@
 // Minimal PDF 1.4 writer for screenplay pages.
 //
-// Uses the standard Type 1 Courier family (among the 14 fonts every PDF reader
-// provides: regular, bold, oblique, bold oblique), so no font embedding is
-// needed and metrics are exact in every style: every glyph
-// is 600/1000 em wide, i.e. 7.2pt at 12pt = exactly 10 characters per inch.
-// Text is encoded as WinAnsi (cp1252); characters outside it become "?".
+// Text is set in STET Courier (src/fonts: Bitstream's Courier 10 Pitch, the Courier Final
+// Draft prints with), embedded as TrueType in regular, bold, italic and bold italic. Without
+// the font files (`fonts` not given) it falls back to the standard Type 1 Courier family that
+// every PDF reader provides. Either way every glyph is 600/1000 em wide, i.e. 7.2pt at 12pt =
+// exactly 10 characters per inch. Text is encoded as WinAnsi (cp1252); characters outside it
+// become "?", and the one cp1252 character STET Courier lacks (the euro sign) prints in Courier.
 
 const PT_COL = 7.2;   // 0.1in
 const PT_ROW = 12;    // 1/6in
-const PAGE_W = 612, PAGE_H = 792;
-const BASELINE = 9.2; // baseline offset inside a 12pt row, matches screen rendering
+export const PAPER = { w: 595.28, h: 841.89 }; // A4, as Final Draft prints
+const PAGE_W = PAPER.w, PAGE_H = PAPER.h;
+const BASELINE = 8.52; // baseline offset inside a 12pt row: 0.71em, where Final Draft prints it
 
 const HL_RGB = { blue: '0.784 0.871 0.984', yellow: '0.984 0.937 0.627', pink: '0.984 0.804 0.886' };
 
@@ -39,10 +41,12 @@ export function pdfString(text) {
 const n = (v) => (Math.round(v * 100) / 100).toString();
 
 const FONTS = ['Courier', 'Courier-Bold', 'Courier-Oblique', 'Courier-BoldOblique'];
+const EMBEDDED = ['STETCourier-Regular', 'STETCourier-Bold', 'STETCourier-Italic', 'STETCourier-BoldItalic'];
 const fontOf = (st = '') => (st.includes('b') ? 1 : 0) + (st.includes('i') ? 2 : 0);
+const MISSING = /\u20ac/; // in cp1252 but not in STET Courier
 const UNDER = -1.6, STRIKE = 3.2; // rule heights from the baseline, in pt
 
-function pageStream(page) {
+function pageStream(page, embedded, used) {
   let s = '';
   for (const r of page.rects) {
     const x = r.col * PT_COL, y = PAGE_H - (r.row + 1) * PT_ROW - 1;
@@ -62,9 +66,15 @@ function pageStream(page) {
   for (const l of page.lines) {
     const x = l.col * PT_COL, y = PAGE_H - l.row * PT_ROW - BASELINE;
     const f = fontOf(l.st);
-    if (f !== font) { s += `/F${f + 1} 12 Tf\n`; font = f; }
-    s += `${n(x - lx)} ${n(y - ly)} Td (${pdfString(l.text)}) Tj\n`;
-    lx = x; ly = y;
+    // Runs of characters STET Courier lacks print in the standard Courier of the same style.
+    const parts = embedded && MISSING.test(l.text) ? l.text.split(/(\u20ac+)/).filter(Boolean) : [l.text];
+    let px = x;
+    for (const t of parts) {
+      const id = embedded && MISSING.test(t) ? f + 4 : f;
+      if (id !== font) { s += `/F${id + 1} 12 Tf\n`; font = id; used.add(id); }
+      s += `${n(px - lx)} ${n(y - ly)} Td (${pdfString(t)}) Tj\n`;
+      lx = px; ly = y; px += [...t].length * PT_COL;
+    }
     if (l.st && l.st.includes('u')) rules.push([x, y + UNDER, l.text.length]);
     if (l.st && l.st.includes('s')) rules.push([x, y + STRIKE, l.text.length]);
   }
@@ -80,16 +90,19 @@ function pageStream(page) {
  * Build a PDF. `deflate` (optional) compresses content streams: (Uint8Array) => Uint8Array.
  * Returns a Uint8Array.
  */
-export function buildPdf(pages, { title = '', author = '', creator = 'STET', deflate = null, date = new Date() } = {}) {
+export function buildPdf(pages, { title = '', author = '', creator = 'STET', deflate = null, date = new Date(), fonts: files = null } = {}) {
   const objs = []; // index = object number - 1; each entry is a string (latin1)
   const add = (body) => { objs.push(body); return objs.length; };
   const catalogId = add(null);
   const pagesId = add(null);
-  const fontIds = FONTS.map((f) => add(`<< /Type /Font /Subtype /Type1 /BaseFont /${f} /Encoding /WinAnsiEncoding >>`));
+  const embedded = !!(files && files.length === 4);
+  // /F1-/F4: the script's faces; /F5-/F8: standard Courier (the fallback). Only faces used are written.
+  const fontIds = [...EMBEDDED, ...FONTS].map(() => add(null));
   const fonts = fontIds.map((id, i) => `/F${i + 1} ${id} 0 R`).join(' ');
+  const used = new Set();
   const kids = [];
   for (const p of pages) {
-    let data = pageStream(p);
+    let data = pageStream(p, embedded, used);
     let filter = '';
     if (deflate) {
       const bytes = deflate(latin1Bytes(data));
@@ -99,6 +112,23 @@ export function buildPdf(pages, { title = '', author = '', creator = 'STET', def
     const contentId = add(`<< /Length ${data.length}${filter} >>\nstream\n${data}\nendstream`);
     kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << ${fonts} >> >> /Contents ${contentId} 0 R >>`));
   }
+  fontIds.forEach((id, i) => {
+    const base = i < 4 ? EMBEDDED[i] : FONTS[i - 4];
+    if (i >= 4 || !embedded) {
+      objs[id - 1] = `<< /Type /Font /Subtype /Type1 /BaseFont /${FONTS[i % 4]} /Encoding /WinAnsiEncoding >>`;
+      return;
+    }
+    if (!used.has(i)) { objs[id - 1] = `<< /Type /Font /Subtype /Type1 /BaseFont /${FONTS[i]} /Encoding /WinAnsiEncoding >>`; return; }
+    let data = bytesToLatin1(files[i]);
+    let filter = '';
+    if (deflate) { data = bytesToLatin1(deflate(files[i])); filter = ' /Filter /FlateDecode'; }
+    const file = add(`<< /Length ${data.length} /Length1 ${files[i].length}${filter} >>\nstream\n${data}\nendstream`);
+    const bold = i & 1, italic = i & 2;
+    const desc = add(`<< /Type /FontDescriptor /FontName /${base} /Flags ${1 + 32 + (italic ? 64 : 0)} /FontBBox [-100 -310 700 880] ` +
+      `/ItalicAngle ${italic ? -12 : 0} /Ascent 710 /Descent -290 /CapHeight 579 /StemV ${bold ? 140 : 80} /FontFile2 ${file} 0 R >>`);
+    objs[id - 1] = `<< /Type /Font /Subtype /TrueType /BaseFont /${base} /FirstChar 32 /LastChar 255 ` +
+      `/Widths [${Array(224).fill(600).join(' ')}] /Encoding /WinAnsiEncoding /FontDescriptor ${desc} 0 R >>`;
+  });
   objs[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
   objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => k + ' 0 R').join(' ')}] /Count ${kids.length} >>`;
   const d = date;

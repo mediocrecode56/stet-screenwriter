@@ -69,7 +69,7 @@ export class View {
     this.caretEl = el('div', '');
     this.caretEl.id = 'caret';
     this.ghost = null;      // { b, o, text }: the rest of a character name, suggested after the caret
-    this.ghostEl = el('div', 'ghost');
+    this.ghostEl = el('div', 'ghost sb'); // suggested in a cue, which is bold
     this.ghostEl.setAttribute('aria-hidden', 'true');
     content.append(this.revLayer, this.findLayer, this.selLayer, this.ghostEl, this.caretEl);
     this.titleEl = null;
@@ -212,9 +212,9 @@ export class View {
     let h = '';
     if (pi > 0) {
       const label = `${pi + 1}.`;
-      h += `<div class="pn" style="left:${this.xAt(PAGE.rightCol - label.length, 0)}px;top:${PAGE.numberRow * row}px">${label}</div>`;
+      h += `<div class="pn" style="left:${this.xAt(PAGE.numberCol - label.length, 0)}px;top:${PAGE.numberRow * row}px">${label}</div>`;
     }
-    if (page.cont) h += `<div class="l" style="left:${this.xAt(ELEMENT.character.left, 0)}px;top:${top * row}px">${esc(page.cont)}</div>`;
+    if (page.cont) h += `<div class="l sb" style="left:${this.xAt(ELEMENT.character.left, 0)}px;top:${top * row}px">${esc(page.cont)}</div>`;
     const ticks = new Set();
     for (const it of page.items) {
       const b = blocks[it.bi];
@@ -224,7 +224,7 @@ export class View {
         const x0 = lineX(b, starts, l);
         const txt = lineText(b.text, starts, l);
         const gaps = lineGaps(b, starts, l);
-        if (txt) h += `<div class="l" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt, gaps)}</div>`;
+        if (txt) h += `<div class="l${ELEMENT[b.type].bold ? ' sb' : ''}" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt, gaps)}</div>`;
         if (!b.marks.length) continue;
         const ls = starts[l], le = ls + txt.length;
         for (const m of b.marks) {
@@ -498,8 +498,9 @@ export class View {
       const r0 = this.caretRect(a), r1 = this.caretRect(b);
       if (!r0) return sc.scrollTop;
       const mid = r1 && r1.y >= r0.y ? (r0.y + r1.y + r1.h) / 2 : r0.y + r0.h / 2;
-      const want = top ? r0.y - 2 * this.row : mid - sc.clientHeight / 2;
-      return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(want)));
+      // At the top: the target with the blank rows above it, and never a line of the text before it.
+      const want = top ? r0.y - this.blankAbove(a) * this.row : mid - sc.clientHeight / 2;
+      return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, top ? Math.ceil(want) : Math.round(want)));
     };
     const r = this.caretRect(a);
     if (r) { const lx = r.x - sc.scrollLeft; if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2; }
@@ -520,6 +521,26 @@ export class View {
     g.off = () => { sc.removeEventListener('wheel', takeOver); sc.removeEventListener('pointerdown', takeOver); };
     g.timer = setTimeout(() => { if (this.glide === g) { sc.scrollTop = goal(); this.stopGlide(); } }, dur + 200);
     g.raf = requestAnimationFrame(step);
+  }
+
+  /**
+   * Empty rows just above position p on its page (at most 2): the space before a scene heading.
+   * At the top of a page, one row of the top margin.
+   */
+  blankAbove(p) {
+    const b = this.editor.blocks[p.b];
+    if (!b) return 0;
+    const li = lineIndexOf(linesOf(b), p.o);
+    const page = this.pages[pageOf(this.pages, p.b, li)];
+    if (!page) return 0;
+    const r = rowOf(page, p.b, li);
+    if (r < 0) return 0;
+    let above = page.cont ? 1 : 0;
+    for (const it of page.items) {
+      const end = it.y + it.l1 - it.l0;
+      if (end <= r && end > above) above = end;
+    }
+    return r === 0 ? 1 : Math.min(2, r - above);
   }
 
   stopGlide() {

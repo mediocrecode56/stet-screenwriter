@@ -16,12 +16,12 @@ const refocus = () => app.eval('window.dispatchEvent(new Event("focus"))');
 before(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-theme-'));
   ud = path.join(tmp, 'ud');
-  app = await App.launch({ userData: ud });
+  app = await App.launch({ userData: ud, hidden: false }); // shown: the companion's animations need frames
 });
 after(async () => { if (app) await app.close(); await fs.rm(tmp, { recursive: true, force: true }).catch(() => {}); });
 
 test('toggle lives in the status bar and shows the active theme', async () => {
-  assert.equal(await app.eval('!!document.querySelector("#status #theme-seg")'), true);
+  assert.equal(await app.eval('!!document.querySelector("#status .seg #th-light")'), true);
   await click('th-light');
   assert.equal(await theme(), 'light');
   assert.equal(await app.eval('document.getElementById("th-light").classList.contains("on")'), true);
@@ -114,7 +114,7 @@ test('schedule persists across restarts and applies at launch', async () => {
   await app.eval(`window.stet.invoke('settings:set', { theme: 'light', schedule: ${JSON.stringify(sched)} })`);
   await sleep(700);
   await app.close();
-  app = await App.launch({ userData: ud });
+  app = await App.launch({ userData: ud, hidden: false });
   assert.equal(await theme(), 'dark');
   assert.equal(await app.eval('document.getElementById("th-auto").classList.contains("on")'), true);
   assert.equal((await settings()).theme, 'light', 'manual preference is kept for when AUTO is turned off');

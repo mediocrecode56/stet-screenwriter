@@ -2,9 +2,11 @@
 // inches on the same character grid as the PDF, independent of editor zoom.
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// The script font's faces, from `fonts` (a URL ending in /): file, weight, style.
+const FACES = [['Regular', 400, 'normal'], ['Bold', 700, 'normal'], ['Italic', 400, 'italic'], ['BoldItalic', 700, 'italic']];
 const HL = { blue: '#c8defb', yellow: '#fbefa0', pink: '#fbcde2' };
 
-export function printHTML(pages, title = 'Screenplay') {
+export function printHTML(pages, title = 'Screenplay', fonts = '') {
   let body = '';
   for (const p of pages) {
     body += '<div class="p">';
@@ -14,11 +16,12 @@ export function printHTML(pages, title = 'Screenplay') {
     body += '</div>';
   }
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
-@page { size: 8.5in 11in; margin: 0; }
+${FACES.map(([f, w, st]) => `@font-face { font-family: "STET Courier"; src: url("${fonts}STETCourier-${f}.ttf"); font-weight: ${w}; font-style: ${st}; }`).join('\n')}
+@page { size: 210mm 297mm; margin: 0; }
 html, body { margin: 0; padding: 0; background: #fff; }
-.p { position: relative; width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; }
+.p { position: relative; width: 210mm; height: 297mm; overflow: hidden; page-break-after: always; break-after: page; }
 .p:last-child { page-break-after: auto; break-after: auto; }
-b { position: absolute; font: 400 12pt/1 "Courier New", Courier, monospace; white-space: pre; color: #000; height: 12pt; }
+b { position: absolute; font: 400 12pt/1 "STET Courier", "Courier New", Courier, monospace; white-space: pre; color: #000; height: 12pt; }
 i { position: absolute; height: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 u { position: absolute; height: 12pt; border-bottom: 0.6pt dashed #000; }
 .sb { font-weight: 700; } .si { font-style: italic; }

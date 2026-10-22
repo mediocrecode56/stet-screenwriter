@@ -187,7 +187,7 @@ function renderStatus() {
     $('st-page').textContent = `PAGE ${page} / ${view.pages.length}`;
     $('st-scene').textContent = scene ? `SCENE ${scene}` : 'NO SCENE';
     $('st-words').textContent = `${editor.words.toLocaleString()} WORDS`;
-    for (const btn of $('eltypes').children) btn.classList.toggle('on', btn.dataset.t === b.type);
+    for (const btn of $('eltypes').querySelectorAll('.tb')) btn.classList.toggle('on', btn.dataset.t === b.type);
     for (const btn of $('stbar').children) btn.classList.toggle('on', styles.includes(btn.dataset.s));
     if (alignBtn.dataset.a !== align) { alignBtn.dataset.a = align; alignBtn.firstChild.outerHTML = alignIcon(align); }
   }
@@ -370,10 +370,87 @@ function renderTips() {
 for (const [i, t] of TYPES.entries()) {
   const short = { scene: 'SCENE', action: 'ACTION', character: 'CHARACTER', paren: 'PAREN', dialogue: 'DIALOGUE', transition: 'TRANS', shot: 'SHOT' }[t];
   const b = dlg.h('button', { class: 'tb', 'data-t': t }, short, dlg.h('sup', {}, String(i + 1)));
-  tip(b, TYPE_LABEL[t], 'type-' + t);
-  b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('type-' + t); });
+  tip(b, TYPE_LABEL[t], 'type-' + t, MAC ? ' · ⌘-click: in or out of the Tab cycle' : ' · Ctrl+click: in or out of the Tab cycle');
+  b.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (e.button !== 0) return;
+    if (e.ctrlKey || e.metaKey) toggleTabType(t); else cmd.run('type-' + t);
+  });
   $('eltypes').appendChild(b);
 }
+
+// ---- the Tab cycle ---------------------------------------------------------------------------
+//
+// The element types Tab steps through are outlined in the toolbar: one box around each run of
+// neighbouring types kept. Ctrl+click (⌘-click) takes a type in or out; dragging either end of
+// a box takes in or leaves out the types it passes over. All of them by default; at least one.
+
+const tabTypesEl = dlg.h('div', { id: 'tabcycle', 'aria-hidden': 'true' });
+$('eltypes').appendChild(tabTypesEl);
+const typeButtons = () => [...$('eltypes').querySelectorAll('.tb')];
+let tabDrag = null;
+
+function setTabTypes(list, save = true) {
+  const keep = TYPES.filter((t) => list.includes(t));
+  if (!keep.length) return;
+  editor.tabTypes = keep.length === TYPES.length ? null : keep;
+  renderTabTypes();
+  if (save) api.invoke('settings:set', { tabTypes: editor.tabTypes });
+}
+function toggleTabType(t) {
+  const cur = editor.tabTypes || TYPES;
+  setTabTypes(cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]);
+}
+function renderTabTypes() {
+  const keep = editor.tabTypes || TYPES;
+  const btns = typeButtons();
+  const runs = [];
+  btns.forEach((b, i) => {
+    b.classList.toggle('cyc', keep.includes(b.dataset.t));
+    if (!keep.includes(b.dataset.t)) return;
+    const last = runs[runs.length - 1];
+    if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]);
+  });
+  tabTypesEl.replaceChildren(...runs.map(([a, z]) => {
+    const l = btns[a].offsetLeft, r = btns[z].offsetLeft + btns[z].offsetWidth;
+    const box = dlg.h('div', { class: 'cyc-box' + (tabDrag ? ' drag' : ''), style: `left:${l}px;width:${r - l}px` },
+      dlg.h('i', { class: 'cyc-h l', 'data-a': a, 'data-z': z }), dlg.h('i', { class: 'cyc-h r', 'data-a': a, 'data-z': z }));
+    box.title = 'Tab steps through the outlined elements. Drag an end to take more in or leave some out.';
+    return box;
+  }));
+}
+tabTypesEl.addEventListener('mousedown', (e) => {
+  const h = e.target.closest('.cyc-h');
+  if (!h || e.button !== 0) return;
+  e.preventDefault();
+  const a = +h.dataset.a, z = +h.dataset.z, left = h.classList.contains('l');
+  const start = editor.tabTypes || TYPES;
+  const outside = start.filter((t) => { const i = TYPES.indexOf(t); return i < a || i > z; });
+  tabDrag = { a, z, left };
+  document.body.classList.add('cyc-dragging');
+  const at = (x) => {
+    // The type under the pointer, or the nearest one at either end.
+    const btns = typeButtons();
+    let best = 0, dist = Infinity;
+    btns.forEach((b, i) => { const r = b.getBoundingClientRect(); const d = x < r.left ? r.left - x : x > r.right ? x - r.right : 0; if (d < dist) { dist = d; best = i; } });
+    return best;
+  };
+  const move = (ev) => {
+    const i = at(ev.clientX);
+    const [na, nz] = left ? [Math.min(i, z), z] : [a, Math.max(i, a)];
+    setTabTypes([...outside, ...TYPES.slice(na, nz + 1)], false);
+  };
+  const up = () => {
+    removeEventListener('mousemove', move, true);
+    removeEventListener('mouseup', up, true);
+    tabDrag = null;
+    document.body.classList.remove('cyc-dragging');
+    setTabTypes(editor.tabTypes || TYPES);
+  };
+  addEventListener('mousemove', move, true);
+  addEventListener('mouseup', up, true);
+});
+addEventListener('resize', () => renderTabTypes());
 for (const c of HIGHLIGHT_COLORS) {
   const b = dlg.h('button', { class: 'tb' }, dlg.h('span', { class: 'sw ' + c }));
   tip(b, `Highlight ${c}`, 'hl-' + c);
@@ -661,6 +738,7 @@ async function importFdx(file = null) {
     doc.titlePage = fd.titlePage;
     if (!doc.titlePage.title) doc.titlePage.title = cfg.name.toUpperCase();
     doc.cast = fd.cast;
+    Object.assign(doc.settings, fd.settings);
     session.load(doc, null);
     const w = await session.saveTo(target);
     if (!w.ok) { await dlg.alertBox('COULD NOT CREATE FILE', 'The screenplay is imported and open but not saved yet.', w.error); return true; }
@@ -786,7 +864,7 @@ async function exportPdf(options = lastPrintOpts) {
 
 // ---- commands -----------------------------------------------------------------------------------
 
-const typeCmds = TYPES.map((t, i) => ({ id: 'type-' + t, cat: 'Element', label: TYPE_LABEL[t], keys: `Ctrl+${i + 1}`, run: () => { editor.setType(t); input.after(); input.focus(); } }));
+const typeCmds = TYPES.map((t, i) => ({ id: 'type-' + t, cat: 'Element', label: TYPE_LABEL[t], keys: `Ctrl+${i + 1}`, run: () => { editor.applyType(t); input.after(); input.focus(); } }));
 // A highlight with no selection covers the whole paragraph.
 function highlight(color) {
   if (!editor.hasSelection()) editor.setSel(pos(editor.caret.b, 0), pos(editor.caret.b, editor.block.text.length));
@@ -794,7 +872,7 @@ function highlight(color) {
 }
 const alignCmds = ALIGN_CMDS.map((x) => ({
   id: 'align-' + x.a, cat: 'Format', label: x.label, keys: x.keys, checked: () => alignOf(editor.block) === x.a,
-  run: () => { editor.setAlign(x.a); input.after(); input.focus(); },
+  run: () => { editor.applyAlign(x.a); input.after(); input.focus(); },
 }));
 const hlCmds = HIGHLIGHT_COLORS.map((c, i) => ({ id: 'hl-' + c, cat: 'Format', label: `Highlight ${c}`, keys: `Alt+${i + 1}`, run: () => highlight(c) }));
 // With a selection a style toggles across it; without one it applies to what is typed next.
@@ -1011,6 +1089,8 @@ session.autosaveDelay = settings.autosaveDelayMs;
 if (settings.zoom && settings.zoom !== 1) view.setZoom(settings.zoom);
 renderZoom();
 if (settings.panels?.scenes) showPanel('scenes', true);
+setTabTypes(Array.isArray(settings.tabTypes) ? settings.tabTypes : TYPES, false);
+if (document.fonts) document.fonts.ready.then(renderTabTypes);
 // The writing companion above TODAY: fed by trackWords() and the TODAY numbers.
 dino = new Dino({ anchor: $('st-goal'), area: $('scroller'), getProgress: () => goalState });
 // Dormant (deep asleep, the app long in the background): the app rests with it. CSS animations

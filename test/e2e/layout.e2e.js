@@ -51,7 +51,7 @@ before(async () => {
     recent.push({ path: f, name: n, opened: Date.now() - recent.length * 3600e3 });
   }
   await fs.writeFile(path.join(ud, 'settings.json'), JSON.stringify({ recent, goals: { daily: 1000, weekly: 6000 } }));
-  app = await App.launch({ userData: ud });
+  app = await App.launch({ userData: ud, hidden: false }); // shown: real animation frames for the slides it measures
   await sleep(600);
 });
 after(async () => { if (app) await app.close(); await fs.rm(tmp, { recursive: true, force: true }).catch(() => {}); });
@@ -202,7 +202,7 @@ test('every panel opens and closes with the same slide; Ctrl+F never delays typi
   // Closing and reopening during the slide reverses smoothly, no jump.
   await app.key('Escape');
   // (Sampled once the slide is under way: a busy machine may take a frame or two to start it.)
-  const mid = await app.eval(`new Promise((r) => { const t0 = performance.now(), m = () => parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop); const go = () => (m() < 0 || performance.now() - t0 > 400 ? r(m()) : setTimeout(go, 10)); setTimeout(go, 30); })`);
+  const mid = await app.eval(`new Promise((r) => { const t0 = performance.now(), m = () => parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop); const go = () => (m() < 0 || performance.now() - t0 > 1500 ? r(m()) : setTimeout(go, 10)); setTimeout(go, 30); })`);
   await app.key('Ctrl+F');
   const back = await app.eval(`parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop)`);
   assert.ok(mid < 0 && back <= 0 && back >= mid - 2, `reverses from where it was (${mid} → ${back})`);

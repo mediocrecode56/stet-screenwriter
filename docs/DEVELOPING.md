@@ -157,8 +157,9 @@ workflow would remove that warning.
 | command | what it does |
 |---|---|
 | `npm test` | unit and integration tests (about 200, in `test/*.test.js`): formatting and pagination, editing and undo, file format round-trips and repair, safe saving, backups and crash recovery, PDF output, word counting and writing statistics, the streak, updates and patches, packaging, file links, the writing companion. Each file says what it covers |
-| `npm run quick` | a fast check, under a minute: every unit test plus the core of the real-app tests (writing flow, text styles, caret alignment, themes) |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events (`test/e2e/*.e2e.js`): writing and element flow, styles, notes, find, zoom, themes, saving and recovery, PDF, the English revision against a mock API and a fake Claude Code, statistics and the streak, Open Recent, character completion, file links, updates, the companion, layout and caret alignment. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm run quick` | the routine check, about half a minute: every unit test plus the smoke test (`test/e2e/smoke.e2e.js`: one start of the real app, then writing, the Tab cycle, element and alignment changes, scene navigation, a changed shortcut, saving, reopening and the PDF). Run it before every push |
+| `npm run smoke` | the smoke test alone, about ten seconds |
+| `npm run e2e` | drives the real app over the DevTools protocol with real key events (`test/e2e/*.e2e.js`): writing and element flow, styles, notes, find, zoom, themes, saving and recovery, PDF, the English revision against a mock API and a fake Claude Code, statistics and the streak, Open Recent, character completion, file links, updates, the companion, layout and caret alignment. Three files run at a time (the performance probe alone, after them); the whole suite takes about two minutes. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
@@ -169,8 +170,9 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 | key | action |
 |---|---|
 | Enter | next element (scene → action, cue → dialogue, dialogue → action …); on an empty element, steps back to Action, then Scene Heading |
-| Tab / Shift+Tab | at the end of written text: start the usual follower (dialogue → parenthetical, action → cue); otherwise cycle the element type |
-| Ctrl+1 … 7 | Scene Heading · Action · Character · Parenthetical · Dialogue · Transition · Shot |
+| Tab / Shift+Tab | the next (previous) element type in the toolbar's order, among those outlined there (all by default: Ctrl+click a type, or drag an end of the outline, to choose). Like every change of element, it applies to the selection, or to what is written next: in written text a new element starts at the caret |
+| Ctrl+1 … 7 | Scene Heading · Action · Character · Dialogue · Parenthetical · Transition · Shot (the selection, or what is written next) |
+| Ctrl+L · E · R · J | align left · centre · right · justify (the selection, or what is written next) |
 | Shift+Enter | line break inside an element |
 | `(` on an empty dialogue line | starts a parenthetical |
 | `int.` / `ext.` in action | becomes a scene heading |
@@ -396,15 +398,18 @@ full path on hover), so the list never scrolls sideways. Missing files are marke
 
 ## Known limitations
 
-- **Dual dialogue, scene numbers, revision marks / colored pages, and
-  Final Draft (.fdx) or Fountain file import/export** are not implemented.
+- **Dual dialogue, scene numbers, revision marks / colored pages, Final Draft
+  (.fdx) export and Fountain import/export** are not implemented (.fdx import is).
   Plain-text paste does recover element types (Fountain-like heuristics).
-- Page layout is **US Letter only**; A4 is not offered.
-- Action and dialogue split across pages at line boundaries (with 2-line
-  widow/orphan control), not preferentially at sentence ends as Final Draft does.
-- PDF text uses the PDF base-14 Courier font with WinAnsi (cp1252) encoding:
+- Pages are **A4 only**, laid out as Final Draft lays out its pages (54 lines of body from 1in down, the page number 0.5in down ending 7.25in from the left).
+- A speech of several paragraphs breaks between them, without (MORE) / (CONT'D), as
+  Final Draft does; a paragraph too long to move whole, and action, split at line
+  boundaries (with 2-line widow/orphan control), not preferentially at sentence ends.
+- PDF text uses STET Courier (src/fonts: Bitstream's Courier 10 Pitch, made into
+  TrueType by scripts/make-fonts.py), embedded, with WinAnsi (cp1252) encoding:
   characters outside Western European scripts print as "?" in the PDF (the
-  editor and OS printing show them correctly).
+  editor and OS printing show them correctly), and the euro sign, which the font
+  lacks, prints in the standard Courier.
 - The OS print path (Ctrl+P → Print…) is exercised up to Electron's print
   call; driving the native print dialog is not covered by automated tests.
 - Builds made locally with `npm run exe` are portable and don't associate `.stet`

@@ -6,17 +6,14 @@
 // used by incremental pagination. Undo/redo replays those steps.
 
 import {
-  makeBlock, withText, withType, withTyped, withAlign, sliceBlock, UPPER_TYPES, cueName,
+  makeBlock, withText, withType, withTyped, withAlign, sliceBlock, UPPER_TYPES, TYPES, cueName,
   marksAfterInsert, marksAfterDelete, sliceMarks, concatMarks, setHighlight, removeCommentMarks, STYLES, setStyle, hasStyle,
 } from './model.js';
 import { blockWords, documentWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
 import { mergeDirty } from './layout.js';
-import { ELEMENT } from './format.js';
+import { ELEMENT, alignOf } from './format.js';
 
 export const NEXT_ON_ENTER = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'action', transition: 'scene', shot: 'action' };
-export const TAB_NEXT = { action: 'character', character: 'transition', transition: 'scene', scene: 'action', dialogue: 'paren', paren: 'dialogue', shot: 'action' };
-export const TAB_AFTER = { action: 'character', character: 'paren', paren: 'dialogue', dialogue: 'paren', scene: 'action', transition: 'scene', shot: 'action' };
-export const TAB_PREV = { action: 'scene', character: 'action', transition: 'character', scene: 'transition', dialogue: 'character', paren: 'dialogue', shot: 'scene' };
 
 const SCENE_PREFIX = /^(int|ext|est|i\/e|int\.?\s?\/\s?ext|ext\.?\s?\/\s?int)\.(\s|$)/i;
 const MERGE_WINDOW_MS = 1500;
@@ -58,6 +55,7 @@ export class Editor {
     this.rev = 0;          // increments on every committed change
     this.dirty = null;     // pending dirty range for pagination
     this.txn = null;
+    this.tabTypes = null;  // the element types Tab steps through (null: all)
     this.words = 0;
     for (const b of this.blocks) this.words += blockWords(b);
     this.namesRev = -1;
@@ -503,34 +501,74 @@ export class Editor {
   }
 
   /**
-   * Tab / Shift+Tab. A new element type only ever applies to what is selected or to what is
-   * written next, never to text already there:
-   *  - in an empty element it cycles that element's type;
-   *  - at the end of a written element, Tab starts the element that usually follows it
-   *    (dialogue -> parenthetical, cue -> parenthetical, parenthetical -> dialogue,
-   *    action -> character), Shift+Tab the one before it in the cycle;
-   *  - inside written text it starts an empty element of the next (or previous) type at the
-   *    caret, the text before and after it keeping theirs;
-   *  - with a selection, only the selected text changes type (split off from the rest).
+   * Tab / Shift+Tab step through the element types the writer keeps in the cycle (`tabTypes`,
+   * in TYPES order; all of them unless chosen otherwise), the way any change of element works
+   * (applyType): only what is selected, or what is written next, takes the new type.
    */
   tab(reverse = false) {
+    const from = this.hasSelection() ? this.blocks[this.ordered()[0].b].type : this.block.type;
+    const type = this.nextType(from, reverse);
+    if (type !== from) this.applyType(type);
+  }
+
+  /** The element type after (or before) `type` in the Tab cycle; `type` itself when it is alone there. */
+  nextType(type, reverse = false) {
+    const keep = TYPES.filter((t) => !this.tabTypes || this.tabTypes.includes(t));
+    if (!keep.length) return type;
+    const n = TYPES.length, at = TYPES.indexOf(type);
+    for (let k = 1; k <= n; k++) {
+      const t = TYPES[(at + (reverse ? n - k : k)) % n];
+      if (keep.includes(t)) return t;
+    }
+    return type;
+  }
+
+  /**
+   * Change of element type (Tab, the toolbar, Ctrl+number). A new type only ever applies to
+   * what is selected or to what is written next, never to other text already there:
+   *  - with a selection, only the selected text changes type (split off from the rest);
+   *  - an empty element changes type;
+   *  - in written text an empty element of the type starts at the caret: after the element
+   *    at its end, before it at its start, else between the text before and after the caret.
+   */
+  applyType(type) {
+    if (this.hasSelection()) {
+      // Already all of that type: nothing to change, nothing to split.
+      if (!this._touched().every((b) => b.type === type)) this.retypeSelection(type);
+      return;
+    }
+    const b = this.block;
+    if (b.text === '' || b.text === '()') return this.setType(type);
+    if (b.type !== type) this._startAt(type);
+  }
+
+  /** Alignment, the same way as a change of element (applyType): the selected text, or what is written next. */
+  applyAlign(align) {
+    if (this.hasSelection()) {
+      if (this._touched().every((b) => alignOf(b) === align)) return;
+      this.edit('mark', () => {
+        const [b0, b1] = this._isolate('mark');
+        this.setAlign(align);
+        this.sel = { a: pos(b0, 0), f: pos(b1, this.blocks[b1].text.length) };
+      }, { close: true });
+      return;
+    }
+    const b = this.block;
+    if (b.text === '' || b.text === '()') return this.setAlign(align);
+    if (alignOf(b) !== align) this._startAt(b.type, align);
+  }
+
+  /** Start an empty element of `type` at the caret (see applyType), aligned `align` (null: its own). */
+  _startAt(type, align = null) {
     const b = this.block;
     const p = this.caret;
-    const cycle = reverse ? TAB_PREV : TAB_NEXT;
-    if (this.hasSelection()) { this.retypeSelection(cycle[this.blocks[this.ordered()[0].b].type]); return; }
-    if (b.text === '' || b.text === '()') { this.setType(cycle[b.type]); return; }
     const atEnd = p.o === b.text.length || (b.type === 'paren' && p.o === b.text.length - 1 && b.text.endsWith(')'));
-    const type = atEnd && !reverse ? TAB_AFTER[b.type] : cycle[b.type];
     this.edit('enter', () => {
       let at = p.b + 1;
       if (!atEnd && p.o === 0) at = p.b;
-      else if (!atEnd) {
-        const head = b.text.slice(0, p.o).replace(/ +$/, '').length;
-        const rest = b.text.slice(p.o);
-        const from = p.o + rest.length - rest.replace(/^ +/, '').length;
-        this._splice(p.b, 1, [sliceBlock(b, 0, head, b.id), sliceBlock(b, from, b.text.length)]);
-      }
-      const nb = type === 'paren' ? makeBlock('paren', '()') : makeBlock(type, '');
+      else if (!atEnd) this._splitAt(p.b, p.o);
+      let nb = type === 'paren' ? makeBlock('paren', '()') : makeBlock(type, '');
+      if (align && align !== alignOf(nb)) nb = withAlign(nb, align);
       this._splice(at, 0, [nb]);
       const o = type === 'paren' ? 1 : 0;
       this.sel = { a: pos(at, o), f: pos(at, o) };
@@ -538,28 +576,57 @@ export class Editor {
   }
 
   /**
+   * Split block i at offset o into two blocks of its kind. The text on each side loses the
+   * spaces and line breaks at the cut, as with Enter: a paragraph of a speech becomes a
+   * paragraph of its own.
+   */
+  _splitAt(i, o) {
+    const b = this.blocks[i];
+    const head = b.text.slice(0, o).replace(/[ \n]+$/, '').length;
+    const rest = b.text.slice(o);
+    const from = o + rest.length - rest.replace(/^[ \n]+/, '').length;
+    this._splice(i, 1, [sliceBlock(b, 0, head, b.id), sliceBlock(b, from, b.text.length)]);
+  }
+
+  /** The selection's ends, leaving out a paragraph it only touches at its very start (or end). */
+  _span() {
+    let [s, e] = this.ordered();
+    if (e.b > s.b && e.o === 0) e = pos(e.b - 1, this.blocks[e.b - 1].text.length);
+    if (s.b < e.b && s.o === this.blocks[s.b].text.length) s = pos(s.b + 1, 0);
+    return [s, e];
+  }
+
+  /** The blocks the selection takes in. */
+  _touched() {
+    const [s, e] = this._span();
+    return this.blocks.slice(s.b, e.b + 1);
+  }
+
+  /**
+   * Make the selected text whole blocks of its own, splitting a paragraph partly selected where
+   * the selection begins or ends (a parenthetical is never split: it goes whole). Returns
+   * [first, last] block. Runs inside an edit of `kind`.
+   */
+  _isolate(kind) {
+    const [s, e] = this._span();
+    let b0 = s.b, b1 = e.b;
+    this.edit(kind, () => {
+      const last = this.blocks[e.b];
+      if (last.type !== 'paren' && e.o < last.text.length && e.o > (s.b === e.b ? s.o : 0)) this._splitAt(e.b, e.o);
+      const first = this.blocks[s.b];
+      if (first.type !== 'paren' && s.o > 0 && s.o < first.text.length) { this._splitAt(s.b, s.o); b0++; b1++; }
+      this.sel = { a: pos(b0, 0), f: pos(b1, this.blocks[b1].text.length) };
+    }, { close: true });
+    return [b0, b1];
+  }
+
+  /**
    * Change the element type of the selected text only: a paragraph partly selected is split
    * where the selection begins or ends, and only the selected part changes.
    */
   retypeSelection(type) {
-    let [s, e] = this.ordered();
-    // A selection ending at the very start of a paragraph doesn't take it in (nor one beginning at the very end).
-    if (e.b > s.b && e.o === 0) e = pos(e.b - 1, this.blocks[e.b - 1].text.length);
-    if (s.b < e.b && s.o === this.blocks[s.b].text.length) s = pos(s.b + 1, 0);
     this.edit('type-change', () => {
-      const last = this.blocks[e.b];
-      // The text left outside the selection loses the spaces at the cut, as with Enter.
-      if (e.o < last.text.length && e.o > (s.b === e.b ? s.o : 0)) {
-        const rest = last.text.slice(e.o);
-        this._splice(e.b, 1, [sliceBlock(last, 0, e.o, last.id), sliceBlock(last, e.o + rest.length - rest.replace(/^ +/, '').length, last.text.length)]);
-      }
-      let b0 = s.b, b1 = e.b;
-      const first = this.blocks[s.b];
-      if (s.o > 0 && s.o < first.text.length) {
-        this._splice(s.b, 1, [sliceBlock(first, 0, first.text.slice(0, s.o).replace(/ +$/, '').length, first.id), sliceBlock(first, s.o, first.text.length)]);
-        b0++; b1++;
-      }
-      this.sel = { a: pos(b0, 0), f: pos(b1, this.blocks[b1].text.length) };
+      const [b0, b1] = this._isolate('type-change');
       this.setType(type);
       this.sel = { a: pos(b0, 0), f: pos(b1, this.blocks[b1].text.length) };
     }, { close: true });

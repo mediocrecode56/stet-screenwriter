@@ -2,6 +2,20 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.25.0 · 22 Oct 2026
+
+- Pages print like Final Draft's. They are A4, in the Courier Final Draft uses (Bitstream's Courier 10 Pitch, now built into STET and embedded in every PDF), with scene headings, character names and shots in bold. The page number, the margins and where each line sits match a Final Draft PDF line for line. The screen shows the same font, the same bold and the same A4 page.
+- Lines break after a hyphen inside a word ("twenty-year-" / "old."), as in Final Draft.
+- A speech of several paragraphs breaks across pages between its paragraphs, without (MORE) and (CONT'D), as Final Draft does. A paragraph too long to move to the next page still splits with them.
+- New screenplays leave two blank lines before a scene heading, as Final Draft does (File → Preferences still offers one). Importing a Final Draft script takes the spacing it uses, and keeps the empty lines that end its paragraphs, which move its page breaks.
+- Dialogue that doesn't come under a character name (after a shot or action) starts with a blank line.
+- Parenthetical now comes after Dialogue everywhere: the toolbar, the Element menu, Ctrl+4 (Dialogue) and Ctrl+5 (Parenthetical).
+- Tab steps through the element types in the toolbar's order, only through the ones outlined there. All of them are outlined at first; Ctrl+click a type (⌘-click on a Mac) to take it out of the cycle or back in, or drag either end of an outline to take in or leave out the types it passes over.
+- Changing the element with the toolbar or Ctrl+number works like Tab: it changes the selected text, or starts a new element at the caret for what you write next. It no longer changes a paragraph you only had the caret in.
+- Alignment works the same way: it aligns the selected text, or what you write next, and never other text. Aligning one paragraph of a speech leaves the others as they were.
+- Scene navigation ends with the scene heading at the top of the view and no line of the scene before it showing.
+- A title page with nothing on it but "Written by" is no longer printed.
+
 ## 0.24.0 · 22 Oct 2026
 
 - Alignment: a small menu on the toolbar aligns a paragraph left, centred, right or justified, and Format has the same. Ctrl+L, Ctrl+E, Ctrl+R and Ctrl+J do it from the keyboard. It prints and exports as shown, and changes nothing else about the text.

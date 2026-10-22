@@ -8,10 +8,12 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 // STET_E2E_EXE runs the suite against a packaged build instead of the dev tree.
 const ELECTRON = process.env.STET_E2E_EXE || path.join(ROOT, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
-const APP_ARGS = process.env.STET_E2E_EXE ? [] : [ROOT];
+// Chromium refuses to run as root (a Linux container) without --no-sandbox.
+const APP_ARGS = [...(process.env.STET_E2E_EXE ? [] : [ROOT]), ...(process.getuid?.() === 0 ? ['--no-sandbox'] : [])];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // How long STET may take to start. A Mac checks a newly downloaded app once, on its first start (the release workflow).
 const START_MS = Number(process.env.STET_E2E_START_MS) || 15000;
+const SEND_MS = 30000;
 
 export class App {
   static async launch({ userData, port = 9300 + Math.floor(Math.random() * 500), args = [], hidden = true, env = {} }) {
@@ -66,7 +68,11 @@ export class App {
   send(method, params = {}) {
     const id = ++this.id;
     this.ws.send(JSON.stringify({ id, method, params }));
-    return new Promise((res, rej) => this.pending.set(id, { res, rej }));
+    // The timer also keeps the test process waiting for the answer (the socket alone doesn't).
+    return new Promise((res, rej) => {
+      const t = setTimeout(() => { this.pending.delete(id); rej(new Error(`${method}: no answer from the app in ${SEND_MS / 1000} s`)); }, SEND_MS);
+      this.pending.set(id, { res: (v) => { clearTimeout(t); res(v); }, rej: (e) => { clearTimeout(t); rej(e); } });
+    });
   }
 
   async eval(expr) {

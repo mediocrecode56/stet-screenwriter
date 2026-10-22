@@ -10,14 +10,14 @@
 // Mark   = { s, e, k, v }   k: 'hl' (v = color) | 'cm' (v = comment id)
 //                           | a text style in STYLES (v = 1)
 
-export const TYPES = ['scene', 'action', 'character', 'paren', 'dialogue', 'transition', 'shot'];
+export const TYPES = ['scene', 'action', 'character', 'dialogue', 'paren', 'transition', 'shot'];
 
 export const TYPE_LABEL = {
   scene: 'Scene Heading',
   action: 'Action',
   character: 'Character',
-  paren: 'Parenthetical',
   dialogue: 'Dialogue',
+  paren: 'Parenthetical',
   transition: 'Transition',
   shot: 'Shot',
 };
@@ -117,7 +117,7 @@ export function emptyTitlePage(title = '') {
 
 export function defaultDocSettings() {
   return {
-    sceneSpacing: 1, // blank lines before scene headings
+    sceneSpacing: 2, // blank lines before scene headings (Final Draft leaves two)
     autoCapitalize: true,
     backup: { enabled: true, intervalMin: 5, retentionDays: 30, dir: null },
   };

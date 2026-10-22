@@ -60,7 +60,7 @@ test('first page carries no number; later pages do, at the right margin', () => 
   assert.ok(!pages[0].lines.some((l) => l.row === 3));
   const n = pages[1].lines.find((l) => l.row === 3);
   assert.equal(n.text, '2.');
-  assert.equal(n.col + n.text.length, 75);
+  assert.equal(n.col + n.text.length, 72.5, 'ending 7.25in from the left edge, as Final Draft prints it');
 });
 
 test('PDF is structurally valid: header, page count, xref offsets', () => {
@@ -96,7 +96,7 @@ test('PDF strings escape parens/backslashes and map cp1252', () => {
 test('print HTML positions by inches, not screen pixels', () => {
   const { pages } = buildPrintPages(sampleDocument(), { titlePage: false });
   const html = printHTML(pages);
-  assert.match(html, /@page \{ size: 8.5in 11in; margin: 0; \}/);
+  assert.match(html, /@page \{ size: 210mm 297mm; margin: 0; \}/);
   assert.match(html, /left:1.5in;top:1in">INT. COFFEE SHOP - NIGHT/);
 });
 

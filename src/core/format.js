@@ -1,4 +1,4 @@
-// Screenplay page geometry (US Letter, Courier 12pt).
+// Screenplay page geometry (Courier 12pt, laid out as Final Draft does).
 //
 // Courier 12pt is exactly 10 characters per inch and 6 lines per inch, so the
 // whole layout is expressed on a character grid: 1 column = 0.1in, 1 row = 1/6in.
@@ -6,11 +6,12 @@
 // DOM measurement — this is the main reason layout is cheap.
 
 export const PAGE = {
-  cols: 85,          // 8.5in
-  rows: 66,          // 11in
+  cols: 82.68,       // A4: 210mm wide
+  rows: 70.16,       // 297mm tall
   topRows: 6,        // 1in top margin
-  bodyRows: 54,      // 9in of body text
+  bodyRows: 54,      // 9in of body text, as Final Draft sets an A4 page
   numberRow: 3,      // page number sits 0.5in from the top
+  numberCol: 72.5,   // and ends 7.25in from the left edge
   rightCol: 75,      // 7.5in: right margin edge
   leftCol: 15,       // 1.5in: binding margin
 };
@@ -26,21 +27,25 @@ const MARGINS = {
   transition: [5.5, 7.1],
   shot:       [1.5, 7.5],
 };
+// bold: the element is set in bold, as Final Draft prints scene headings, cues and shots.
 const STYLE = {
-  scene:      { before: 1, upper: true },
+  scene:      { before: 1, upper: true, bold: true },
   action:     { before: 1 },
-  character:  { before: 1, upper: true },
+  character:  { before: 1, upper: true, bold: true },
   paren:      { before: 0 },
   dialogue:   { before: 0 },
   transition: { before: 1, upper: true, right: true },
-  shot:       { before: 1, upper: true },
+  shot:       { before: 1, upper: true, bold: true },
 };
 // left: first column, width: whole characters that fit between the margins, before: blank rows above.
 export const ELEMENT = Object.fromEntries(Object.entries(MARGINS).map(([type, [l, r]]) =>
   [type, { left: Math.round(l * 10), width: Math.floor((r - l) * 10 + 1e-9), ...STYLE[type] }]));
 
-export function spaceBefore(type, settings) {
+/** Blank rows above an element of `type` that follows one of `prevType`. */
+export function spaceBefore(type, settings, prevType) {
   if (type === 'scene' && settings && settings.sceneSpacing) return settings.sceneSpacing;
+  // Dialogue that isn't under a cue or a parenthetical starts a paragraph of its own.
+  if (type === 'dialogue' && prevType && prevType !== 'character' && prevType !== 'paren') return 1;
   return ELEMENT[type].before;
 }
 
@@ -62,13 +67,18 @@ export function wrap(text, width) {
       starts.push(lineStart);
       continue;
     }
-    // Find the last space at or before lineStart + width.
+    // Find the last space at or before lineStart + width, or a hyphen inside a word that ends
+    // a line which fits (as Final Draft breaks "twenty-year-" / "old.").
     let brk = -1;
     for (let i = lineStart + width; i > lineStart; i--) {
-      if (text.charCodeAt(i) === 32) { brk = i; break; }
+      const c = text.charCodeAt(i);
+      if (c === 32) { brk = i; break; }
+      if (HYPHENS.has(c) && i < lineStart + width && i + 1 < hardEnd && isWordBreak(text, i)) { brk = i + 1; break; }
     }
     if (brk === -1) {
       lineStart += width; // a word longer than the line: hard break
+    } else if (text.charCodeAt(brk) !== 32) {
+      lineStart = brk; // after a hyphen: it stays on the line it ends
     } else {
       lineStart = brk + 1;
       // Absorb runs of spaces so a line never starts with one.
@@ -77,6 +87,15 @@ export function wrap(text, width) {
     starts.push(lineStart);
   }
   return starts;
+}
+
+const HYPHENS = new Set([0x2d, 0x2014]); // hyphen, em dash
+
+// A hyphen breaks a line only between two characters of text: never one that starts a word
+// ("- note", "-5"), ends one ("pre- and post-") or is part of a run ("--").
+function isWordBreak(text, i) {
+  const a = text.charCodeAt(i - 1), z = text.charCodeAt(i + 1);
+  return a !== 32 && a !== 10 && !HYPHENS.has(a) && z !== 32 && z !== 10 && !HYPHENS.has(z);
 }
 
 /** Visible text of a line: excludes the trailing break space / newline. */

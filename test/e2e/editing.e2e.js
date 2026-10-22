@@ -29,7 +29,7 @@ after(async () => { if (app) await app.close(); await fs.rm(tmp, { recursive: tr
 test('alignment: the toolbar menu and Ctrl+L / E / R / J; text, type and styles untouched; caret on the drawn letters', async () => {
   const long = 'The rain does not stop. It runs down the glass in long grey lines and nobody in the diner looks up from their plates.';
   await load([['action', long], ['transition', 'CUT TO:']]);
-  await app.eval(`(() => { const ed = __stet.editor; ed.setSel({ b: 0, o: 4 }, { b: 0, o: 8 }); ed.toggleStyle('b'); ed.setSel({ b: 0, o: 0 }); __stet.input.after(); })()`);
+  await app.eval(`(() => { const ed = __stet.editor; ed.setSel({ b: 0, o: 4 }, { b: 0, o: 8 }); ed.toggleStyle('b'); ed.setSel({ b: 0, o: 0 }, { b: 0, o: ed.blocks[0].text.length }); __stet.input.after(); })()`);
   // The menu: a click on the button opens it, a click on Center applies it and closes it.
   await app.eval(`(() => { const b = document.getElementById('btn-align'); b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })); })()`);
   await sleep(150);
@@ -48,6 +48,13 @@ test('alignment: the toolbar menu and Ctrl+L / E / R / J; text, type and styles 
   }
   await app.key('Ctrl+J');
   assert.deepEqual(await blocks(), [['action', long], ['transition', 'CUT TO:']], 'the words and elements are untouched');
+  // With the caret in the text, only what is written next takes the alignment: the paragraph
+  // is left as it was and a new one starts at the caret.
+  await caret(1, 7);
+  await app.key('Ctrl+E');
+  assert.deepEqual(await app.eval('__stet.editor.blocks.map((b) => [b.text, b.align || null])'), [[long, 'justify'], ['CUT TO:', null], ['', 'center']]);
+  await app.key('Ctrl+Z');
+  await caret(0, 0, long.length);
   assert.deepEqual(await app.eval('__stet.editor.blocks[0].marks'), [{ s: 4, e: 8, k: 'b', v: 1 }], 'and so are the styles');
   // Justified: the first line reaches the right margin, and the caret stands on the drawn letters.
   await sleep(100);
@@ -109,11 +116,13 @@ test('Tab inside written text starts a new element at the caret; the text around
 
 test('Dialogue to Character and back keeps the capitalisation it was written with', async () => {
   await load([['dialogue', 'You said eight, Mara.']]);
-  await caret(0, 21);
+  await caret(0, 0, 21); // the selected text changes element (the caret alone would start a new one)
   await app.key('Ctrl+3');
   assert.deepEqual(await blocks(), [['character', 'YOU SAID EIGHT, MARA.']]);
+  await caret(0, 21);
   await app.type(' Yes');
-  await app.key('Ctrl+5');
+  await caret(0, 0, 25);
+  await app.key('Ctrl+4');
   assert.deepEqual(await blocks(), [['dialogue', 'You said eight, Mara. Yes']]);
   // Saved and opened again, it still comes back.
   await app.key('Ctrl+3');
@@ -216,18 +225,31 @@ test('scene navigation glides, and ends with the scene heading at the top of the
   const steps = new Set(seen.map(Math.round));
   assert.ok(steps.size > 5, `it glides (${steps.size} positions)`);
   await sleep(400);
-  const r = await app.eval(`(() => { const { view, editor } = __stet; const c = view.caretRect(); return { b: editor.caret.b, text: editor.block.text, off: c.y - view.scroller.scrollTop, row: view.row }; })()`);
+  // The heading at the top: its two blank lines above it, and nothing of the scene before.
+  const atTop = `(() => { const { view, editor } = __stet; const c = view.caretRect(); const b = editor.caret.b;
+    const prev = view.caretRect({ b: b - 1, o: editor.blocks[b - 1].text.length });
+    return { text: editor.block.text, off: c.y - view.scroller.scrollTop, row: view.row, blank: view.blankAbove(editor.caret), prevBottom: prev.y + view.row - view.scroller.scrollTop }; })()`;
+  const r = await app.eval(atTop);
   assert.equal(r.text, 'INT. ROOM 5 - DAY');
-  assert.ok(Math.abs(r.off - 2 * r.row) <= 1, `heading at the top of the view (${r.off}px down)`);
+  assert.ok(Math.abs(r.off - r.blank * r.row) <= 1, `heading at the top of the view (${r.off}px down)`);
+  assert.ok(r.prevBottom <= 0, `no line of the scene before shows (${r.prevBottom}px)`);
   // The scene navigator does the same.
   await app.eval(`__stet.cmd.run('panel-scenes')`);
   await sleep(400);
   await app.eval(`(() => { const r = document.querySelector('#scenes .row[data-b="${7 * 20}"]'); r.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })); })()`);
   await sleep(1000);
-  const p = await app.eval(`(() => { const { view, editor } = __stet; const c = view.caretRect(); return { text: editor.block.text, off: c.y - view.scroller.scrollTop, row: view.row }; })()`);
+  const p = await app.eval(atTop);
   assert.equal(p.text, 'INT. ROOM 21 - DAY');
-  assert.ok(Math.abs(p.off - 2 * p.row) <= 1, `heading at the top of the view (${p.off}px down)`);
+  assert.ok(Math.abs(p.off - p.blank * p.row) <= 1, `heading at the top of the view (${p.off}px down)`);
+  assert.ok(p.prevBottom <= 0, `no line of the scene before shows (${p.prevBottom}px)`);
   await app.eval(`__stet.cmd.run('panel-scenes')`);
+  // One blank line before headings: the view starts on that line, not on the text above it.
+  await app.eval(`(async () => { __stet.session.doc.settings.sceneSpacing = 1; __stet.view.pages = []; __stet.view.relayout(); __stet.view.invalidate(); await new Promise((r) => setTimeout(r, 100)); })()`);
+  await app.key('Alt+ArrowDown');
+  await sleep(1100);
+  const q = await app.eval(atTop);
+  assert.equal(q.text, 'INT. ROOM 22 - DAY');
+  assert.ok(q.blank <= 1 && Math.abs(q.off - q.blank * q.row) <= 1 && q.prevBottom <= 0, `one blank line above, nothing before it (${q.off}px, ${q.prevBottom}px)`);
 });
 
 test('notes: a click on a note opens the panel with the same slide as NOTES, and the note is plain text to write in', async () => {

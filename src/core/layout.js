@@ -6,7 +6,7 @@
 // edit it restarts a few blocks before the change and stops as soon as a page
 // boundary lines up with the previous result ("resync"), reusing the rest.
 
-import { ELEMENT, PAGE, spaceBefore, wrap } from './format.js';
+import { ELEMENT, PAGE, spaceBefore, wrap, lineText } from './format.js';
 import { cueName } from './model.js';
 
 const cache = new WeakMap();
@@ -19,6 +19,18 @@ export function linesOf(block) {
     cache.set(block, l);
   }
   return l;
+}
+
+/** Whether visual line k of block b is an empty line: the gap between two paragraphs of a speech. */
+function blankLine(b, starts, k) {
+  return k > 0 && k < starts.length && b.text.charCodeAt(starts[k] - 1) === 10 && lineText(b.text, starts, k) === '';
+}
+
+/** Lines of the paragraph of b that starts at line k: up to its next empty line. */
+function paraLines(b, starts, k) {
+  let e = k;
+  while (e < starts.length && !blankLine(b, starts, e)) e++;
+  return e - k;
 }
 
 const BODY = PAGE.bodyRows;
@@ -39,11 +51,14 @@ function minNeed(blocks, bi, settings) {
   const n = linesOf(b).length;
   switch (b.type) {
     case 'action': return n < 4 ? n : 2;
-    case 'dialogue': return n < 4 ? n : 3; // 2 lines + (MORE)
+    case 'dialogue': { // its first paragraph, or 2 lines + (MORE)
+      const p = paraLines(b, linesOf(b), 0);
+      return p < 4 ? p : 3;
+    }
     case 'transition': return n;
     default: {
       const next = blocks[bi + 1];
-      if (next && chainNext(b.type, next.type)) return n + spaceBefore(next.type, settings) + minNeed(blocks, bi + 1, settings);
+      if (next && chainNext(b.type, next.type)) return n + spaceBefore(next.type, settings, b.type) + minNeed(blocks, bi + 1, settings);
       return n;
     }
   }
@@ -61,6 +76,8 @@ export function contCue(blocks, bi, line) {
   const t = blocks[bi].type;
   if (t !== 'paren' && t !== 'dialogue') return null;
   if (line === 0 && !inSpeech(blocks, bi)) return null;
+  // A page that starts with a new paragraph of the speech goes on without a cue, as Final Draft does.
+  if (line > 0 && blankLine(blocks[bi], linesOf(blocks[bi]), line - 1)) return null;
   for (let i = bi - 1; i >= 0; i--) {
     const b = blocks[i];
     if (b.type === 'character') {
@@ -147,7 +164,7 @@ export function paginate(blocks, settings, prev = null, dirty = null) {
     const b = blocks[bi];
     const L = linesOf(b);
     const n = L.length - line;
-    const sb = y === 0 || line > 0 || (page.cont && y === 1) ? 0 : spaceBefore(b.type, settings);
+    const sb = y === 0 || line > 0 || (page.cont && y === 1) ? 0 : spaceBefore(b.type, settings, bi > 0 ? blocks[bi - 1].type : null);
 
     if (line === 0 && y > 0) {
       const need = sb + minNeed(blocks, bi, settings);
@@ -163,6 +180,23 @@ export function paginate(blocks, settings, prev = null, dirty = null) {
       continue;
     }
     const isDlg = b.type === 'dialogue';
+    if (isDlg) {
+      // A speech of several paragraphs breaks between them, as Final Draft breaks its paragraphs:
+      // after the last one that fits, unless the paragraph that doesn't is long enough to split.
+      const room = BODY - y - sb;
+      let e = -1;
+      for (let k = line + 1; k - line <= room && k < L.length - 1; k++) if (blankLine(b, L, k)) e = k;
+      if (e > 0) {
+        const ps = e + 1, p = paraLines(b, L, ps);
+        const take = Math.min(room - (ps - line) - 1, p - 2);
+        const end = p >= 4 && take >= 2 ? ps + take : ps;
+        // The empty line may sit just below the last row: it prints nothing.
+        page.items.push({ bi, l0: line, l1: end, y: y + sb });
+        y += sb + end - line;
+        if (newPage(bi, end)) return pages;
+        continue;
+      }
+    }
     let avail = BODY - y - sb - (isDlg ? 1 : 0);
     const fresh = page.items.length === 0;
     if (!fresh) avail = Math.min(avail, n - 2); // leave at least two lines for the next page

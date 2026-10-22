@@ -53,7 +53,8 @@ DOM is a projection of the model, so selection, undo and pagination are exact.
 lines per inch. Every element is specified in columns (`format.js`): action
 at column 15 (1.5in) and 60 columns wide, dialogue at 25 and 35 wide,
 character cue at 37, parenthetical at 31 and 25 wide, transitions
-right-aligned to column 75. Wrapping is therefore integer arithmetic — no text
+right-aligned to column 75. Lines break at spaces, or after a hyphen inside a word
+("twenty-year-" / "old."), as Final Draft breaks them. Wrapping is therefore integer arithmetic — no text
 measurement, no reflow from fonts — and the PDF, print and screen layouts are
 the same computation.
 

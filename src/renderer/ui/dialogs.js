@@ -4,6 +4,7 @@ import { h, open, esc, alertBox } from './dialog.js';
 import { MAC, macKeys, comboOf, showKeys, unusable, MAX_STEPS, SEQ_MS } from '../../core/keys.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
 import { paginate } from '../../core/layout.js';
+import { PAGE } from '../../core/format.js';
 import { parseTime, formatTime, toAmPm, fromAmPm, label as timeLabel } from '../../core/schedule.js';
 import { fmtWords, weekScale } from '../../core/chart.js';
 
@@ -371,7 +372,7 @@ export async function previewDialog(doc, initial) {
       for (const u of p.notes) s += `<div class="mk" style="left:${u.col * col}px;top:${u.row * row}px;width:${u.w * col}px;height:${row}px;border-bottom:1px dashed #000"></div>`;
       for (const l of p.lines) s += `<div class="l${l.st ? [...l.st].map((k) => ' s' + k).join('') : ''}" style="left:${l.col * col}px;top:${l.row * row}px">${esc(l.text)}</div>`;
       const cap = p.kind === 'title' ? 'title' : p.kind === 'notes' ? 'notes' : 'p.' + p.number;
-      const sheet = h('div', { class: 'sheet', style: `width:${85 * col}px;height:${66 * row}px;font-size:${row}px`, html: s + `<div class="cap">${cap}</div>` });
+      const sheet = h('div', { class: 'sheet', style: `width:${PAGE.cols * col}px;height:${PAGE.rows * row}px;font-size:${row}px`, html: s + `<div class="cap">${cap}</div>` });
       frag.appendChild(sheet);
     }
     sheets.replaceChildren(frag);
@@ -391,7 +392,7 @@ export async function previewDialog(doc, initial) {
       h('div', { style: 'height:10px' }), msg),
     sheets);
   const v = await open({
-    title: 'PRINT / EXPORT', sub: `${total} script pages · US Letter · Courier 12`, cls: 'preview', body,
+    title: 'PRINT / EXPORT', sub: `${total} script pages · A4 · Courier 12`, cls: 'preview', body,
     buttons: [{ label: 'Cancel', value: null }, { label: 'Print…', value: 'print' }, { label: 'Export PDF…', value: 'pdf', primary: true }],
     init: (d, close, b) => { btns = b.slice(1); setTimeout(render, 0); },
   });

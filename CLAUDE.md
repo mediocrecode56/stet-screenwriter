@@ -11,5 +11,8 @@
   stands in). It is done when the release has all four files (STET-Windows.zip,
   STET-Setup.exe, STET-macOS.dmg, STET-Patch-electron-*.zip). Watch the run; if it fails,
   fix the cause and push to main (every push retries an unreleased version).
-- Run the unit tests and the quick e2e tests before pushing a version; a test must pass
-  on Windows and macOS too (no platform-specific paths in assertions).
+- Run `npm run quick` (the unit tests and the smoke test, about half a minute) before
+  pushing, and `npm run e2e` (the whole real-app suite, about two minutes) before a
+  version; a test must pass on Windows and macOS too (no platform-specific paths in
+  assertions). New behaviour gets a unit test, and a step in test/e2e/smoke.e2e.js when
+  it is a workflow a release must not break.

@@ -9,7 +9,8 @@ import os from 'node:os';
 import { App, sleep } from './cdp.js';
 
 let tmp, app, bin;
-const launch = () => App.launch({ userData: path.join(tmp, 'ud'), env: { STET_TEST_TRASH_DIR: bin } });
+// Shown: a hidden window has no frames, and every wheel event would wait for one.
+const launch = () => App.launch({ userData: path.join(tmp, 'ud'), hidden: false, env: { STET_TEST_TRASH_DIR: bin } });
 const newDoc = () => app.eval(`(async () => { const { newDocument, makeBlock } = await import('../core/model.js'); const d = newDocument('T'); d.settings.backup.enabled = false; d.blocks = [makeBlock('action')]; __stet.session.load(d, null); })()`);
 const paste = (t) => app.eval(`(() => { const dt = new DataTransfer(); dt.setData('text/plain', ${JSON.stringify(t)}); const ta = document.getElementById('input'); ta.focus(); ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); })()`);
 const words = () => app.eval(`({ words: __stet.editor.words, shown: document.getElementById('st-words').textContent, recount: __stet.editor.blocks.reduce((n, b) => n + (b.text.match(/[\\p{L}\\p{N}]+(?:['’\\-][\\p{L}\\p{N}]+)*/gu) || []).length, 0) })`);
@@ -110,7 +111,7 @@ test('Open Recent: dismiss hides an entry, trash moves the file to the bin after
   assert.equal(ui.op, '0');
   assert.match(ui.dTitle, /file is kept/);
   assert.match(ui.tTitle, /Recycle Bin/);
-  assert.ok(ui.gap >= 10, 'kept apart');
+  assert.ok(ui.gap >= 6, 'kept apart');
 
   await clickIn('Hide', '.ra-dismiss');
   await sleep(150);

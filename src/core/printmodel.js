@@ -30,7 +30,8 @@ export function parseRange(spec, max) {
 }
 
 export function hasTitlePage(tp) {
-  return TITLE_FIELDS_SPEC.some((f) => (tp[f.key] || '').trim());
+  // "Written by" on its own (every new screenplay has it) is no title page.
+  return TITLE_FIELDS_SPEC.some((f) => f.key !== 'credit' && (tp[f.key] || '').trim());
 }
 
 /**
@@ -54,9 +55,9 @@ export function buildPrintPages(doc, options = {}) {
     const number = pi + 1;
     if (!inRange(number)) return;
     const lines = [], rects = [], notes = [], markers = [];
-    if (pi > 0) { const label = `${number}.`; lines.push({ col: PAGE.rightCol - label.length, row: PAGE.numberRow, text: label }); }
+    if (pi > 0) { const label = `${number}.`; lines.push({ col: PAGE.numberCol - label.length, row: PAGE.numberRow, text: label }); }
     const top = PAGE.topRows;
-    if (page.cont) lines.push({ col: ELEMENT.character.left, row: top, text: page.cont });
+    if (page.cont) lines.push({ col: ELEMENT.character.left, row: top, text: page.cont, st: 'b' });
     for (const it of page.items) {
       const b = blocks[it.bi];
       const starts = linesOf(b);
@@ -69,9 +70,11 @@ export function buildPrintPages(doc, options = {}) {
         // Text styles always print; a styled line goes out as runs (st: e.g. 'bu').
         if (text) {
           const ls = starts[l];
+          const bold = ELEMENT[b.type].bold;
           for (const r of styleRuns(b.marks, ls, ls + text.length)) {
             const ln = { col: at(r.s - ls), row, text: setText(text, gaps, r.s - ls, r.e - ls) };
-            if (r.st) ln.st = r.st;
+            const st = bold && !(r.st || '').includes('b') ? 'b' + (r.st || '') : r.st;
+            if (st) ln.st = st;
             lines.push(ln);
           }
         }

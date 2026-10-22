@@ -94,7 +94,7 @@ until you accept.
 | Press | To |
 |---|---|
 | Enter | move on to the next line: after a character, their dialogue |
-| Tab | start a different kind of line, or change an empty one |
+| Tab | start a different kind of line, or change an empty one (the outlined ones in the toolbar; Ctrl+click one to leave it out) |
 | Ctrl+S | save (STET also saves by itself) |
 | Ctrl+F | find |
 | Ctrl+P | print or save as PDF |
@@ -107,7 +107,7 @@ until you accept.
 
 - Screenplays are saved as `.stet` files, in your **Documents\STET** folder
   unless you choose another place.
-- Pages are US Letter size.
+- Pages are A4 and look like Final Draft's: the same Courier, margins, bold headings and cues, and page breaks.
 - STET is young and improving often. See [what's new](CHANGELOG.md).
 
 ---
