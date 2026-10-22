@@ -45,9 +45,11 @@ export function windowsCommands(exe) {
   ];
 }
 
-/** Whether Windows' answer `opener` (the program a double-click starts) is `exe`. */
-export function opensWith(opener, exe) {
-  return !!opener && path.win32.resolve(opener.trim()).toLowerCase() === path.win32.resolve(exe).toLowerCase();
+/** Whether Windows' answer `command` (what a double-click runs) starts `exe`. */
+export function opensWith(command, exe) {
+  const c = String(command || '').trim();
+  const program = c.startsWith('"') ? c.slice(1, c.indexOf('"', 1)) : (/^.*?\.exe/i.exec(c) || [''])[0];
+  return !!program && path.win32.resolve(program).toLowerCase() === path.win32.resolve(exe).toLowerCase();
 }
 
 /**
@@ -60,14 +62,15 @@ export function windowsExe(env = process.env, execPath = process.execPath) {
 }
 
 // Tells Explorer that file types changed (SHChangeNotify), so the new icon shows now, then
-// prints the program a double-click on a .stet file starts (AssocQueryString, ASSOCSTR_EXECUTABLE):
-// Windows' own answer, which counts every choice it keeps ('OpenWith.exe' when it would ask).
+// prints the command a double-click on a .stet file runs (AssocQueryString, ASSOCSTR_COMMAND):
+// Windows' own answer, which counts every choice it keeps (OpenWith.exe when it would ask).
 export const NOTIFY_AND_ASK = `Add-Type -Namespace W -Name S -MemberDefinition '
 [DllImport("shell32.dll")] public static extern void SHChangeNotify(int e, int f, System.IntPtr a, System.IntPtr b);
 [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] public static extern int AssocQueryString(int f, int s, string a, string e, System.Text.StringBuilder o, ref int n);'
 [W.S]::SHChangeNotify(0x08000000, 0, [System.IntPtr]::Zero, [System.IntPtr]::Zero)
 $n = 1024; $b = New-Object System.Text.StringBuilder 1024
-if ([W.S]::AssocQueryString(0, 2, '.stet', $null, $b, [ref]$n) -eq 0) { $b.ToString() } else { '-' }`;
+$r = [W.S]::AssocQueryString(0, 1, '.stet', 'open', $b, [ref]$n)
+if ($r -eq 0) { $b.ToString() } else { 'none ' + $r.ToString('x') }`;
 
 // JavaScript for Automation: make the app at `app` the default for STET Screenplays, and read
 // which app is. NSWorkspace's way (macOS 12+) first, Launch Services' older call if that fails.

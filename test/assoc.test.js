@@ -31,7 +31,7 @@ const windows = (opener, calls = []) => async (f, a) => {
 
 test('Windows: linking writes the keys, clears what Explorer remembered, and checks with Windows', async () => {
   const calls = [];
-  const r = await linkFiles({ platform: 'win32', exe: EXE, exec: windows(EXE.toLowerCase(), calls), spawnDetached: () => assert.fail('no window') });
+  const r = await linkFiles({ platform: 'win32', exe: EXE, exec: windows(`"${EXE.toLowerCase()}" "%1"`, calls), spawnDetached: () => assert.fail('no window') });
   assert.equal(r.ok, true);
   assert.match(r.message, /now opens it in STET/);
   assert.equal(calls.filter(([, a]) => a[0] === 'add').length, windowsCommands(EXE).length);
@@ -43,10 +43,11 @@ test('Windows: linking writes the keys, clears what Explorer remembered, and che
 });
 
 test('Windows: if Windows would still not start STET, its own Open with window opens', async () => {
-  assert.equal(opensWith('C:\\USERS\\ann\\stet\\STET.exe\r\n', EXE), true);
-  assert.equal(opensWith('C:\\Windows\\system32\\OpenWith.exe', EXE), false);
+  assert.equal(opensWith('"C:\\USERS\\ann\\stet\\STET.exe" "%1"\r\n', EXE), true);
+  assert.equal(opensWith('C:\\Users\\Ann\\STET\\STET.exe %1', EXE), true);
+  assert.equal(opensWith('C:\\Windows\\system32\\OpenWith.exe "%1"', EXE), false);
   assert.equal(opensWith('', EXE), false);
-  for (const opener of ['C:\\Windows\\system32\\OpenWith.exe', 'C:\\Windows\\notepad.exe', '-']) {
+  for (const opener of ['C:\\Windows\\system32\\OpenWith.exe "%1"', '%SystemRoot%\\system32\\NOTEPAD.EXE %1', 'none 80070483']) {
     const spawned = [];
     const r = await linkFiles({ platform: 'win32', exe: EXE, file: 'C:\\Scripts\\Pilot.stet', exec: windows(opener), spawnDetached: (f, a) => spawned.push([f, a]) });
     assert.equal(r.ok, true);

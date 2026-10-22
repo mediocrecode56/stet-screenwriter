@@ -34,7 +34,7 @@ function winIcon() {
     $n = 2048; $b = New-Object System.Text.StringBuilder 2048
     if ([W.A]::AssocQueryString(0, 15, '.stet', $null, $b, [ref]$n) -eq 0) { $b.ToString() } else { '' }`); // ASSOCSTR_DEFAULTICON
 }
-/** The program Windows says a double-click on a .stet file starts ('-' when none). */
+/** The command Windows says a double-click on a .stet file runs. */
 const winOpener = () => ps(NOTIFY_AND_ASK);
 const regHas = (key) => spawnSync('reg', ['query', key], { stdio: 'ignore' }).status === 0;
 const KEY = `HKCU\\Software\\Classes\\${PROG_ID}`;
@@ -69,7 +69,7 @@ async function winHelper() {
   winUnlink();
   check(!regHas(KEY) && !winDoubleClick(tmp), 'before: nothing opens .stet files');
   const exe = fakeExe(path.join(tmp, 'Portable Folder'));
-  const r = await linkFiles({ platform: 'win32', exe });
+  const r = await linkFiles({ platform: 'win32', exe, spawnDetached: () => {} });
   check(r.ok && /now opens it in STET/.test(r.message), `Help > Open .stet Files: ${r.message || r.error}`);
   check(same(winDoubleClick(tmp), exe), 'a double-click starts this STET.exe');
   const icon = winIcon();
@@ -108,16 +108,22 @@ const REMEMBERED = {
   ],
 };
 // Explorer locks an "Always" choice: the user may not change its values, only delete it.
-const LOCK = (key) => `$k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('${key.replace(/^HKCU\\/, '')}', [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree, [System.Security.AccessControl.RegistryRights]::ChangePermissions -bor [System.Security.AccessControl.RegistryRights]::ReadKey)
+const LOCK = (key) => `$ErrorActionPreference = 'Stop'; $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('${key.replace(/^HKCU\\/, '')}', [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree, [System.Security.AccessControl.RegistryRights]::ChangePermissions -bor [System.Security.AccessControl.RegistryRights]::ReadKey)
 $a = $k.GetAccessControl(); $a.AddAccessRule((New-Object System.Security.AccessControl.RegistryAccessRule([System.Security.Principal.WindowsIdentity]::GetCurrent().User, 'SetValue', 'Deny'))); $k.SetAccessControl($a)`;
 
 async function winRemembered(exe) {
   for (const [what, adds] of Object.entries(REMEMBERED)) {
     winUnlink();
-    await linkFiles({ platform: 'win32', exe }); // linked once before
-    for (const args of adds) execFileSync('reg', args, { stdio: 'ignore' });
-    for (const k of new Set(adds.map((a) => a[1]).filter((k) => /UserChoice/.test(k)))) ps(LOCK(k));
-    console.log(`      with ${what}, Windows would start: ${winOpener()}`);
+    await linkFiles({ platform: 'win32', exe, spawnDetached: () => {} }); // linked once before
+    for (const args of adds) {
+      const r = spawnSync('reg', args, { encoding: 'utf8' });
+      if (r.status) console.log(`      (reg ${args.slice(0, 4).join(' ')}: ${(r.stderr || '').trim()})`);
+    }
+    for (const k of new Set(adds.map((a) => a[1]).filter((k) => /UserChoice/.test(k)))) {
+      try { ps(LOCK(k)); } catch (e) { console.log(`      (locking ${k}: ${String(e.stderr || e).trim().split('\n')[0]})`); }
+    }
+    const kept = spawnSync('reg', ['query', FILE_EXTS, '/s'], { encoding: 'utf8' }).stdout || '';
+    console.log(`      with ${what}, Windows would run: ${winOpener()}\n${kept.trim().split(/\r?\n/).map((l) => '        ' + l).join('\n')}`);
     const r = await linkFiles({ platform: 'win32', exe, spawnDetached: () => {} });
     check(r.ok && /now opens it in STET/.test(r.message), `${what}: Help > Open .stet Files: ${r.message || r.error}`);
     check(same(winDoubleClick(tmp), exe), `${what}: then a double-click starts this STET.exe (${winOpener()})`);
