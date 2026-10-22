@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.23.1 · 22 Oct 2026
+
+- Help → Open .stet Files with STET works now. Before, clicking it did nothing.
+- After it, double-clicking a screenplay opens it in STET, and screenplays show the STET icon right away. With the portable STET.exe, it's that STET.exe that opens them.
+- If you once told Windows to always open .stet files with another app, Windows doesn't let STET change that. STET now opens Windows' own "Open with" window, so you can pick STET.
+- On a Mac, STET becomes the app that opens .stet files.
+
 ## 0.23.0 · 22 Oct 2026
 
 - Character names complete as you type a cue. Once a character has been named in a screenplay, typing the first letters shows the rest of the name in grey. Enter, Tab or → takes it, and Escape or any other key ignores it. The names you used most recently come first, and the screenplay keeps them in its file.

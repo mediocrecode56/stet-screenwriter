@@ -15,11 +15,16 @@
 #   STET-Setup.exe     the installer (scripts/installer/STET.iss); it updates an
 #                      installed STET in place
 #   STET-macOS.dmg     STET.app for Macs with Apple silicon (scripts/build-mac.js), built and
-#                      tested on a Mac first
+#                      tested on a Mac
 #   STET-Patch-electron-<version>.zip
 #                      the in-app update for a STET running on that Electron: just
 #                      STET's own files, a megabyte or two (src/main/patch.js); the same
 #                      on Windows and the Mac
+#
+# The release never waits for a Mac: the Windows job publishes it (with the previous
+# release's STET-macOS.dmg, so the download link always works; that STET updates itself
+# when opened) and deletes the older releases. The Mac job then builds and tests this
+# version's STET-macOS.dmg and puts it in place whenever GitHub has a Mac free.
 #
 # Run by hand with "publish" unticked, it only builds and tests the Mac app, and keeps
 # STET-macOS.dmg with the run (Artifacts), to try a change to the Mac build.
@@ -85,65 +90,8 @@ jobs:
           echo "create=$create" >> "$GITHUB_OUTPUT"
           echo "Release $tag: build=$build, new tag=$create"
 
-  mac:
-    needs: check
-    if: needs.check.outputs.build == 'true'
-    runs-on: macos-15 # Apple silicon
-    env:
-      TAG: ${{ needs.check.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # build-mac.js builds from the tag via a git worktree
-          fetch-tags: true
-
-      - name: Tag the new version (here only; the release job pushes it)
-        if: needs.check.outputs.create == 'true'
-        run: git tag "$TAG" "$GITHUB_SHA"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - run: npm ci
-
-      - run: npm test
-
-      - name: Build STET.app and STET-macOS.dmg
-        env:
-          STET_DMG_OUT: ${{ github.workspace }}
-        run: node scripts/build-mac.js "$TAG"
-
-      # The disk image as it will be downloaded: it opens, holds a signed STET.app of this
-      # version, and that STET starts, works and updates itself with a patch.
-      - name: Check and test the app in the disk image
-        run: |
-          mnt=$(mktemp -d)
-          hdiutil attach STET-macOS.dmg -nobrowse -readonly -mountpoint "$mnt"
-          trap 'hdiutil detach "$mnt" -force' EXIT
-          app="$mnt/STET.app"
-          test -L "$mnt/Applications"
-          codesign --verify --deep --strict "$app"
-          built=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
-          [ "v$built" = "$TAG" ] || { echo "::error::STET.app reports version $built, expected $TAG"; exit 1; }
-          file "$app/Contents/MacOS/STET" | grep -q arm64
-          # Screenplays show STET's icon: the file the document type names is STET's icon.
-          docicon=$(/usr/libexec/PlistBuddy -c 'Print CFBundleDocumentTypes:0:CFBundleTypeIconFile' "$app/Contents/Info.plist")
-          cmp "$app/Contents/Resources/$docicon" build/icon.icns || { echo "::error::.stet files would not show STET's icon ($docicon)"; exit 1; }
-          STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test --test-concurrency=1 test/e2e/app.e2e.js test/e2e/patch.e2e.js
-          # Help > Open .stet Files with STET, for real: STET becomes the default app for them.
-          STET_E2E_LINK=1 STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test test/e2e/links.e2e.js
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: STET-macOS
-          path: STET-macOS.dmg
-          if-no-files-found: error
-          retention-days: 7
-
   release:
-    needs: [check, mac]
+    needs: check
     if: needs.check.outputs.build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish)
     runs-on: windows-latest
     defaults:
@@ -172,9 +120,14 @@ jobs:
 
       - run: npm test
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: STET-macOS
+      # Until the Mac job has built this version's disk image, the previous one stands in.
+      - name: The previous STET-macOS.dmg, for now
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $prev = gh release view --json tagName -q .tagName
+          if ($prev) { gh release download $prev -p STET-macOS.dmg --clobber }
+          if (-not (Test-Path STET-macOS.dmg)) { throw 'No STET-macOS.dmg in the previous release' }
 
       - name: Release notes from CHANGELOG.md
         shell: bash # a plain byte redirect, so the notes stay UTF-8
@@ -234,3 +187,77 @@ jobs:
             gh release create $env:TAG $where --latest --title "STET $($env:TAG.Substring(1))" --notes-file release-notes.md STET-Windows.zip STET-Setup.exe STET-macOS.dmg $env:PATCH
           }
           if ($LASTEXITCODE) { throw "Publishing the release failed ($LASTEXITCODE)" }
+
+      # Only the newest release is kept (their tags stay; the builds use them).
+      - name: Delete the older releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 1000 --json tagName -q '.[].tagName' | Where-Object { $_ -and $_ -ne $env:TAG } | ForEach-Object {
+            Write-Host "Deleting release $_"
+            gh release delete $_ --yes
+          }
+
+  mac:
+    needs: [check, release]
+    # After the release is out (or, publish unticked, on its own); it never holds it up.
+    if: always() && needs.check.outputs.build == 'true' && (needs.release.result == 'success' || needs.release.result == 'skipped')
+    runs-on: macos-15 # Apple silicon
+    timeout-minutes: 60
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # build-mac.js builds from the tag via a git worktree
+          fetch-tags: true
+
+      - name: Tag the new version here, unless the release already did
+        run: git rev-parse -q --verify "refs/tags/$TAG" > /dev/null || git tag "$TAG" "$GITHUB_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Build STET.app and STET-macOS.dmg
+        env:
+          STET_DMG_OUT: ${{ github.workspace }}
+        run: node scripts/build-mac.js "$TAG"
+
+      # The disk image as it will be downloaded: it opens, holds a signed STET.app of this
+      # version, and that STET starts, works and updates itself with a patch.
+      - name: Check and test the app in the disk image
+        run: |
+          mnt=$(mktemp -d)
+          hdiutil attach STET-macOS.dmg -nobrowse -readonly -mountpoint "$mnt"
+          trap 'hdiutil detach "$mnt" -force' EXIT
+          app="$mnt/STET.app"
+          test -L "$mnt/Applications"
+          codesign --verify --deep --strict "$app"
+          built=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
+          [ "v$built" = "$TAG" ] || { echo "::error::STET.app reports version $built, expected $TAG"; exit 1; }
+          file "$app/Contents/MacOS/STET" | grep -q arm64
+          # Screenplays show STET's icon: the file the document type names is STET's icon.
+          docicon=$(/usr/libexec/PlistBuddy -c 'Print CFBundleDocumentTypes:0:CFBundleTypeIconFile' "$app/Contents/Info.plist")
+          cmp "$app/Contents/Resources/$docicon" build/icon.icns || { echo "::error::.stet files would not show STET's icon ($docicon)"; exit 1; }
+          STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test --test-concurrency=1 test/e2e/app.e2e.js test/e2e/patch.e2e.js
+          # Help > Open .stet Files with STET, for real: STET becomes the default app for them.
+          STET_E2E_LINK=1 STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test test/e2e/links.e2e.js
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: STET-macOS
+          path: STET-macOS.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Put this version's STET-macOS.dmg in the release
+        if: needs.release.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$TAG" STET-macOS.dmg --clobber
