@@ -128,6 +128,17 @@ that can't be identified reliably is shown as not locatable rather than matched
 elsewhere. Entries with missing or invalid fields are dropped. Written only
 when a review exists; older builds ignore the field.
 
+### Cast (optional, since 0.23.0)
+
+```jsonc
+"cast": ["MARY", "JOHN", "DETECTIVE RUIZ"]
+```
+
+The script's character names, most recently used first. Typing a character cue
+suggests the first of them that starts with what was typed. Only names that
+appear in a cue of the script are written, and the field only when non-empty;
+older builds ignore it.
+
 ### Comments
 
 Only comments referenced by at least one anchor are written. Comment text is

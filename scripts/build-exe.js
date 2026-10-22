@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
-import { pruneModules, trimLocales, writePatch } from './package-tools.js';
+import { APP_IGNORE, pruneModules, trimLocales, writePatch } from './package-tools.js';
 import { patchAsset } from '../src/main/patch.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -69,7 +69,7 @@ for (const tag of targets) {
       prune: false, // node_modules holds production dependencies only (npm ci --omit=dev)
       overwrite: true,
       asar: true,
-      ignore: [/^\/(dist|bench|test|docs|scripts|\.perf|\.build)(\/|$)/, /^\/\.git/, /^\/build\/icon-\d+\.png$/, /^\/(README\.md|package-lock\.json)$/],
+      ignore: APP_IGNORE,
       afterExtract: [({ buildPath }) => { trimLocales(buildPath); }],
       afterCopy: [async ({ buildPath }) => {
         pruneModules(buildPath);

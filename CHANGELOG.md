@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.23.0 · 22 Oct 2026
+
+- Character names complete as you type a cue. Once a character has been named in a screenplay, typing the first letters shows the rest of the name in grey. Enter, Tab or → takes it, and Escape or any other key ignores it. The names you used most recently come first, and the screenplay keeps them in its file.
+- The zoom buttons and shortcuts now move in 5% steps, like the mouse wheel.
+- The icons in Open Recent are now the same size, evenly spaced and centred.
+- The installer has a box, ticked already, to open .stet screenplays with STET. Help → Open .stet Files with STET does the same later, for example for the portable STET.exe.
+- STET starts a little faster: the Claude connection only loads when you use the English revision. Downloads and updates are a little smaller.
+
 ## 0.22.0 · 21 Oct 2026
 
 - STET for the Mac: STET-macOS.dmg, for Macs with Apple silicon. Open it and drag STET to Applications.

@@ -4,13 +4,13 @@
 ;
 ; Installs for the current user only, so Windows never asks for an administrator:
 ; the program goes to %LOCALAPPDATA%\Programs\STET, with a Start menu shortcut, an
-; optional desktop shortcut, .stet files opening in STET, and an uninstaller in
-; Settings > Apps.
+; optional desktop shortcut, .stet files opening in STET (ticked; Help > Open .stet Files
+; with STET does the same later), and an uninstaller in Settings > Apps.
 ;
 ; It looks for an installed STET first:
-;   none            a normal install (one page: the desktop shortcut choice);
+;   none            a normal install (one page: the shortcut and .stet file choices);
 ;   older version   an update: one confirmation, then the program files are replaced
-;                   in the same folder, keeping the earlier shortcut choice;
+;                   in the same folder, keeping the earlier choices;
 ;   same version    offers to open STET instead (or reinstall it, to repair);
 ;   newer version   stops: it never downgrades.
 ; STET's own updater (src/main/update.js) runs it only when a release needs a new Electron
@@ -60,6 +60,7 @@ OutputBaseFilename=STET-Setup
 
 [Tasks]
 Name: desktopicon; Description: "Put a shortcut to STET on the desktop"
+Name: assoc; Description: "Open .stet screenplays with STET"
 
 [InstallDelete]
 ; An update replaces the program's files completely, so nothing from the previous version lingers.
@@ -75,12 +76,12 @@ Name: "{autoprograms}\STET"; Filename: "{app}\STET.exe"; AppUserModelID: "app.st
 Name: "{autodesktop}\STET"; Filename: "{app}\STET.exe"; AppUserModelID: "app.stet.screenwriting"; Tasks: desktopicon
 
 [Registry]
-; Double-clicking a .stet screenplay opens it in STET.
-Root: HKA; Subkey: "Software\Classes\.stet"; ValueType: string; ValueName: ""; ValueData: "STET.Screenplay"; Flags: uninsdeletevalue
-Root: HKA; Subkey: "Software\Classes\.stet\OpenWithProgids"; ValueType: string; ValueName: "STET.Screenplay"; ValueData: ""; Flags: uninsdeletevalue
-Root: HKA; Subkey: "Software\Classes\STET.Screenplay"; ValueType: string; ValueName: ""; ValueData: "STET Screenplay"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\STET.Screenplay\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\STET.exe,0"
-Root: HKA; Subkey: "Software\Classes\STET.Screenplay\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\STET.exe"" ""%1"""
+; Double-clicking a .stet screenplay opens it in STET (src/main/assoc.js writes the same keys).
+Root: HKA; Subkey: "Software\Classes\.stet"; ValueType: string; ValueName: ""; ValueData: "STET.Screenplay"; Flags: uninsdeletevalue; Tasks: assoc
+Root: HKA; Subkey: "Software\Classes\.stet\OpenWithProgids"; ValueType: string; ValueName: "STET.Screenplay"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assoc
+Root: HKA; Subkey: "Software\Classes\STET.Screenplay"; ValueType: string; ValueName: ""; ValueData: "STET Screenplay"; Flags: uninsdeletekey; Tasks: assoc
+Root: HKA; Subkey: "Software\Classes\STET.Screenplay\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\STET.exe,0"; Tasks: assoc
+Root: HKA; Subkey: "Software\Classes\STET.Screenplay\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\STET.exe"" ""%1"""; Tasks: assoc
 
 [Run]
 Filename: "{app}\STET.exe"; Description: "Open STET"; Flags: nowait postinstall skipifsilent
@@ -213,5 +214,23 @@ begin
     WizardForm.ReadyLabel.Caption := 'Your screenplays, settings and writing statistics stay exactly as they are. If STET is open, it closes first and saves your work, as it always does.';
     WizardForm.ReadyMemo.Visible := False;
     WizardForm.NextButton.Caption := 'Update';
+  end;
+end;
+
+// Uninstalling also removes a link made later from Help > Open .stet Files with STET, if it
+// points at this STET.exe (a portable copy's link is left alone).
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Command, Kind: String;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    Exit;
+  if RegQueryStringValue(HKCU, 'Software\Classes\STET.Screenplay\shell\open\command', '', Command) and
+     (Pos(Lowercase(ExpandConstant('{app}\STET.exe')), Lowercase(Command)) > 0) then
+  begin
+    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\STET.Screenplay');
+    RegDeleteValue(HKCU, 'Software\Classes\.stet\OpenWithProgids', 'STET.Screenplay');
+    if RegQueryStringValue(HKCU, 'Software\Classes\.stet', '', Kind) and (Kind = 'STET.Screenplay') then
+      RegDeleteValue(HKCU, 'Software\Classes\.stet', '');
   end;
 end;

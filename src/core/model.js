@@ -78,6 +78,7 @@ export function newDocument(title = '') {
     blocks: [makeBlock('scene', '')],
     comments: {},
     revision: { ignored: [] },
+    cast: [], // character names, most recently used first (core/cast.js)
   };
 }
 

@@ -11,6 +11,18 @@ import { makeZip, folderEntries } from '../src/main/zip.js';
 const DEAD_FILE = /\.(d\.ts|d\.mts|d\.cts|map|ts|mts|cts|md|markdown)$/i;
 const DEAD_DIR = new Set(['src', 'test', 'tests', 'docs', 'example', 'examples', '.github']);
 
+/**
+ * What never goes into the packaged app (@electron/packager `ignore`): development folders,
+ * git files, notes for contributors, and the icon sources (the window uses icon.ico on
+ * Windows and icon.png elsewhere; the Mac bundle icon is made from icon.icns separately).
+ */
+export const APP_IGNORE = [
+  /^\/(dist|bench|test|docs|scripts|\.perf|\.build|\.build-mac)(\/|$)/,
+  /^\/\.git/,
+  /^\/build\/(icon-\d+\.png|icon\.svg|icon\.icns)$/,
+  /^\/(README\.md|CLAUDE\.md|package-lock\.json)$/,
+];
+
 /** Removes from node_modules what is never run. Returns the bytes saved. */
 export function pruneModules(appDir) {
   const nm = path.join(appDir, 'node_modules');

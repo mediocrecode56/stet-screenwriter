@@ -11,7 +11,6 @@
 // A review never switches between them by itself: when the chosen way fails,
 // the error says what to do, and mentions the other way when it is set up.
 
-import Anthropic from '@anthropic-ai/sdk';
 import { safeStorage } from 'electron';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -21,6 +20,10 @@ import { findClaudeCode, signedIn, reviewChunkCli, NO_CLI } from './claude-code.
 import { MODEL, SYSTEM_PROMPT, FINDINGS_SCHEMA } from '../core/revision.js';
 
 const CONCURRENCY = 3;
+// The Claude SDK is loaded the first time a review needs it, not with every start of STET.
+let Anthropic = null;
+const sdk = async () => (Anthropic ||= (await import('@anthropic-ai/sdk')).default);
+
 const NO_KEY = 'Claude is not set up. Install Claude (the desktop app or Claude Code) and sign in, or add an Anthropic API key under Tools → Claude Connection….';
 const NO_API_KEY = 'No Anthropic API key is set up. Add one under Tools → Claude Connection….';
 const USE_KEY = ' Or choose the API key under Tools → Claude Connection….';
@@ -84,6 +87,7 @@ export class ClaudeService {
 
   async client() {
     const apiKey = (await this.savedKey()) || undefined; // undefined -> SDK's own credential chain (env, profile)
+    const Anthropic = await sdk();
     return new Anthropic({
       apiKey,
       baseURL: process.env.STET_ANTHROPIC_BASE_URL || undefined, // tests only
@@ -184,13 +188,15 @@ export class ClaudeService {
 }
 
 function describeError(e) {
-  if (e instanceof Anthropic.APIUserAbortError) return { code: 'cancelled', message: 'Cancelled.' };
-  if (e instanceof Anthropic.AuthenticationError) return { code: 'auth', message: 'The API key was rejected. Check it under Tools → Claude Connection….' };
-  if (e instanceof Anthropic.PermissionDeniedError) return { code: 'auth', message: 'This API key is not allowed to use ' + MODEL + '.' };
-  if (e instanceof Anthropic.RateLimitError) return { code: 'rate_limit', message: 'Rate limited by the API, even after retrying. Try the failed sections again in a minute.' };
-  if (e instanceof Anthropic.BadRequestError) return { code: 'bad_request', message: e.message };
-  if (e instanceof Anthropic.APIConnectionError) return { code: 'network', message: 'Could not reach the Claude API. Check the connection.' };
-  if (e instanceof Anthropic.APIError) return { code: 'api', message: `Claude API error ${e.status ?? ''}: ${e.message}` };
+  if (Anthropic) { // else nothing reached the SDK
+    if (e instanceof Anthropic.APIUserAbortError) return { code: 'cancelled', message: 'Cancelled.' };
+    if (e instanceof Anthropic.AuthenticationError) return { code: 'auth', message: 'The API key was rejected. Check it under Tools → Claude Connection….' };
+    if (e instanceof Anthropic.PermissionDeniedError) return { code: 'auth', message: 'This API key is not allowed to use ' + MODEL + '.' };
+    if (e instanceof Anthropic.RateLimitError) return { code: 'rate_limit', message: 'Rate limited by the API, even after retrying. Try the failed sections again in a minute.' };
+    if (e instanceof Anthropic.BadRequestError) return { code: 'bad_request', message: e.message };
+    if (e instanceof Anthropic.APIConnectionError) return { code: 'network', message: 'Could not reach the Claude API. Check the connection.' };
+    if (e instanceof Anthropic.APIError) return { code: 'api', message: `Claude API error ${e.status ?? ''}: ${e.message}` };
+  }
   if (/api.?key|credential|authentication/i.test(e?.message || '')) return { code: 'no_key', message: NO_KEY };
   return { code: 'unknown', message: e?.message || String(e) };
 }

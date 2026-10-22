@@ -8,6 +8,8 @@ import { wordAt } from '../core/text.js';
 import { toPlainText, parsePlainText } from '../core/plaintext.js';
 import { WheelZoom, stepZoom } from '../core/wheelzoom.js';
 import { MAC } from '../core/keys.js';
+import { cueName } from '../core/model.js';
+import { suggestCue } from '../core/cast.js';
 
 export class Input {
   constructor({ textarea, view, editor, onCommandKey, onCommentClick }) {
@@ -20,6 +22,8 @@ export class Input {
     this.composing = false;
     this.lastCopy = null;
     this.drag = null;
+    this.names = () => [];  // the cast in suggestion order (app.js)
+    this.onCue = null;      // a character cue was finished: its name
 
     const ta = textarea;
     ta.addEventListener('keydown', (e) => this.keydown(e));
@@ -75,7 +79,38 @@ export class Input {
   typed(text) {
     this.goalCol = null;
     this.ed.insertText(text);
+    this.suggest();
     this.after();
+  }
+
+  // ---- character cues ------------------------------------------------------------
+
+  /**
+   * While a character cue is typed at its end, the rest of the first matching name in
+   * the cast shows in grey after the caret (view.ghost). Enter, Tab or Right takes it;
+   * any other key or a click leaves it, and Escape just hides it.
+   */
+  suggest() {
+    const ed = this.ed, p = ed.caret, b = ed.block;
+    const ok = b.type === 'character' && !ed.hasSelection() && p.o === b.text.length;
+    const rest = ok ? suggestCue(b.text, this.names()) : '';
+    this.view.setGhost(rest ? { b: p.b, o: p.o, text: rest } : null);
+  }
+
+  /** The suggestion, if it is still where it was made. */
+  liveGhost() {
+    const g = this.view.ghost, ed = this.ed;
+    if (!g) return null;
+    const p = ed.caret, b = ed.blocks[g.b];
+    return !ed.hasSelection() && p.b === g.b && p.o === g.o && b && b.type === 'character' && b.text.length === g.o ? g : null;
+  }
+
+  /** A cue is finished (Enter, or a suggestion taken): its name becomes the most recent. */
+  cueDone() {
+    const b = this.ed.block;
+    if (b.type !== 'character' || !this.onCue) return;
+    const name = cueName(b.text);
+    if (name) this.onCue(name);
   }
 
   /** Common post-edit work: lay out, repaint and reveal the caret. */
@@ -93,6 +128,17 @@ export class Input {
     const ed = this.ed;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key;
+
+    if (k === 'Shift' || k === 'Control' || k === 'Alt' || k === 'Meta' || k === 'CapsLock') return;
+    const g = this.view.ghost && this.liveGhost();
+    if (this.view.ghost) this.view.setGhost(null);
+    if (g && !mod && !e.altKey) {
+      if (k === 'Escape') { e.preventDefault(); return; }
+      if ((k === 'Tab' || k === 'ArrowRight') && !e.shiftKey) {
+        ed.insertText(g.text); this.cueDone(); this.goalCol = null; this.after(); e.preventDefault(); return;
+      }
+      if (k === 'Enter' && !e.shiftKey) ed.insertText(g.text);
+    }
 
     // Commands (save, element types, find, ...) first.
     if (this.onCommandKey(e)) { e.preventDefault(); return; }
@@ -141,7 +187,7 @@ export class Input {
         ed.deleteForward(word); this.goalCol = null; this.after(); e.preventDefault(); return;
       case 'Enter':
         if (mod) return;
-        if (ext) ed.softBreak(); else ed.enter();
+        if (ext) ed.softBreak(); else { this.cueDone(); ed.enter(); }
         this.goalCol = null; this.after(); e.preventDefault(); return;
       case 'Tab':
         if (mod) return;
@@ -185,6 +231,7 @@ export class Input {
 
   mousedown(e) {
     if (e.button !== 0) return;
+    if (this.view.ghost) this.view.setGhost(null);
     const t = e.target;
     if (t.closest && t.closest('.tp-f')) return; // title page fields handle themselves
     if (t.classList && t.classList.contains('cmtick')) { e.preventDefault(); this.onCommentClick(t.dataset.c); return; }

@@ -64,3 +64,10 @@ test('on a Mac, only the English .lproj folders are kept, and framework links ar
   ]);
   assert.ok(fs.lstatSync(path.join(root, fw, 'Resources')).isSymbolicLink());
 });
+
+test('the packaged app leaves out development files and icon sources, never what runs', async () => {
+  const { APP_IGNORE } = await import('../scripts/package-tools.js');
+  const out = (p) => APP_IGNORE.some((re) => re.test(p));
+  for (const p of ['/test/x.js', '/docs/a.md', '/.github/workflows/r.yml', '/CLAUDE.md', '/README.md', '/build/icon.svg', '/build/icon.icns', '/build/icon-16.png', '/.build-mac/v1']) assert.ok(out(p), p);
+  for (const p of ['/src/main/main.js', '/build/icon.ico', '/build/icon.png', '/CHANGELOG.md', '/package.json', '/node_modules/x/index.js']) assert.ok(!out(p), p);
+});

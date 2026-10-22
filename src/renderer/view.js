@@ -68,7 +68,10 @@ export class View {
     this.revision = null; // { marks: [{b, s, e, cat, cur, hov}] } from the English revision panel
     this.caretEl = el('div', '');
     this.caretEl.id = 'caret';
-    content.append(this.revLayer, this.findLayer, this.selLayer, this.caretEl);
+    this.ghost = null;      // { b, o, text }: the rest of a character name, suggested after the caret
+    this.ghostEl = el('div', 'ghost');
+    this.ghostEl.setAttribute('aria-hidden', 'true');
+    content.append(this.revLayer, this.findLayer, this.selLayer, this.ghostEl, this.caretEl);
     this.titleEl = null;
 
     // Moving between monitors changes the display scale; web fonts may settle late.
@@ -384,6 +387,7 @@ export class View {
   paintCaret() {
     const c = this.caretEl;
     const r = this.caretRect();
+    this.paintGhost(r);
     if (!r || this.editor.hasSelection() || !this.focused) { c.style.display = 'none'; return; }
     c.style.display = '';
     const key = `${r.x},${r.y},${r.h},${devicePixelRatio}`;
@@ -404,6 +408,22 @@ export class View {
       c.classList.toggle('blink-a');
       c.classList.toggle('blink-b', !c.classList.contains('blink-a'));
     }
+  }
+
+  setGhost(g) {
+    this.ghost = g;
+    this.paintGhost(this.caretRect());
+  }
+
+  paintGhost(r) {
+    const g = this.ghost, n = this.ghostEl, p = this.editor.caret;
+    const text = g && r && this.focused && !this.editor.hasSelection() && p.b === g.b && p.o === g.o ? g.text : '';
+    const key = text && `${text}|${r.x},${r.y},${this.row}`;
+    if (n._k === key) return;
+    n._k = key;
+    n.textContent = text;
+    n.style.display = text ? '' : 'none';
+    if (text) Object.assign(n.style, { left: r.x + 'px', top: r.y + 'px', fontSize: this.row + 'px', height: this.row + 'px' });
   }
 
   // ---- hit testing & scrolling ---------------------------------------------------------

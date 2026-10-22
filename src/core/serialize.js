@@ -3,8 +3,9 @@
 // Serialization is deterministic (fixed key order, sorted comment ids, no
 // runtime ids), so save(load(save(doc))) is byte-identical to save(doc).
 
-import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, defaultDocSettings, emptyTitlePage, uuid } from './model.js';
+import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, defaultDocSettings, emptyTitlePage, uuid, cueName } from './model.js';
 import { reviewToJSON, reviewFromJSON } from './revision.js';
+import { readCast } from './cast.js';
 
 export const SCHEMA_VERSION = 1;
 
@@ -45,7 +46,17 @@ export function toPayload(doc, appVersion) {
     // Optional: English-revision passages ignored in this script (v0.4+) and the
     // latest review with its suggestions and decisions (v0.6+).
     ...revisionPayload(doc),
+    // Optional (v0.23+): the cast, most recently used first, for completing character cues.
+    ...castPayload(doc),
   };
+}
+
+function castPayload(doc) {
+  if (!doc.cast || !doc.cast.length) return {};
+  const used = new Set();
+  for (const b of doc.blocks) if (b.type === 'character' && b.text) used.add(cueName(b.text));
+  const cast = doc.cast.filter((n) => used.has(n));
+  return cast.length ? { cast } : {};
 }
 
 function revisionPayload(doc) {
@@ -150,6 +161,7 @@ export function deserialize(json) {
     meta: { id: str(meta.id) || uuid(), created: str(meta.created) || now, modified: str(meta.modified) || now },
     settings, titlePage, blocks, comments,
     revision: { ignored: [] },
+    cast: readCast(p.cast),
   };
   const rv = p.revision;
   if (rv && Array.isArray(rv.ignored)) {

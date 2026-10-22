@@ -21,6 +21,8 @@ import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { MAC, macKeys } from '../core/keys.js';
+import { stepZoom } from '../core/wheelzoom.js';
+import { castOrder, touchCast } from '../core/cast.js';
 
 const api = window.stet;
 // On a Mac the window buttons sit at the left of the top bar (style.css), and shortcuts read ⌘.
@@ -51,6 +53,9 @@ const input = new Input({
 });
 input.onEscape = () => { if (!find.open) return false; find.close(); return true; };
 input.onZoom = () => { renderZoom(); persistZoom(); };
+// Character cues complete from the script's cast, most recently used first (core/cast.js).
+input.names = () => castOrder(session.doc.cast, editor.characterNames());
+input.onCue = (name) => { session.doc.cast = touchCast(session.doc.cast, name); };
 
 const jump = (p, center = false, end = null, glide = false) => {
   editor.setSel(p, end || p);
@@ -788,8 +793,8 @@ cmd.register([
   { id: 'theme-dark', cat: 'View', label: 'Dark Mode (manual)', run: () => setManualTheme('dark') },
   { id: 'theme-auto', cat: 'View', label: () => (schedule().enabled ? 'Turn Off Automatic Theme' : 'Automatic Theme (Schedule)'), run: () => setAutoTheme(!schedule().enabled) },
   { id: 'theme-schedule', cat: 'View', label: 'Theme Schedule…', run: editSchedule },
-  { id: 'zoom-in', cat: 'View', label: 'Zoom In', keys: ['Ctrl+=', 'Ctrl+Shift+='], global: true, run: () => { view.setZoom(view.z + 0.1); renderZoom(); persistZoom(); } },
-  { id: 'zoom-out', cat: 'View', label: 'Zoom Out', keys: 'Ctrl+-', global: true, run: () => { view.setZoom(view.z - 0.1); renderZoom(); persistZoom(); } },
+  { id: 'zoom-in', cat: 'View', label: 'Zoom In', keys: ['Ctrl+=', 'Ctrl+Shift+='], global: true, run: () => { view.setZoom(stepZoom(view.z, 1)); renderZoom(); persistZoom(); } },
+  { id: 'zoom-out', cat: 'View', label: 'Zoom Out', keys: 'Ctrl+-', global: true, run: () => { view.setZoom(stepZoom(view.z, -1)); renderZoom(); persistZoom(); } },
   { id: 'zoom-reset', cat: 'View', label: 'Actual Size (100%)', keys: 'Ctrl+0', global: true, run: () => { view.setZoom(1); renderZoom(); persistZoom(); } },
   { id: 'panel-scenes', cat: 'View', label: 'Scene Navigator', keys: 'Ctrl+\\', global: true, run: () => showPanel('scenes') },
   { id: 'panel-notes', cat: 'View', label: 'Notes Panel', keys: 'Ctrl+Shift+\\', global: true, run: () => showPanel('notes') },
@@ -829,6 +834,10 @@ cmd.register([
   { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog(cmd.all()) },
   { id: 'changelog', cat: 'Help', label: 'Changelog', run: async () => dialogs.changelogDialog(await api.invoke('app:changelog'), info.version) },
   { id: 'check-updates', cat: 'Help', label: 'Check for Updates…', run: () => updates.check(true) },
+  { id: 'link-files', cat: 'Help', label: 'Open .stet Files with STET', run: async () => {
+    const r = await api.invoke('app:link-files');
+    dlg.alertBox('STET FILES', r.ok ? r.message : r.error);
+  } },
   { id: 'github', cat: 'Help', label: 'STET on GitHub', run: () => api.invoke('app:open-url', 'repo') },
   { id: 'about', cat: 'Help', label: 'About STET', run: () => dlg.alertBox('STET ' + info.version + ' β', 'A fast, minimal, dependable screenwriting instrument. Built on Electron ' + info.electron + '.', `Settings & recovery: ${info.userData}`) },
 ]);
@@ -840,7 +849,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
   { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
-  { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', 'github', '-', 'about'] },
+  { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
 ]);
 
 // Global shortcuts when focus is outside the editor (title page fields, notes, panels).

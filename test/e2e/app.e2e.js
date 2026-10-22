@@ -112,7 +112,7 @@ test('find bar counts matches', async () => {
 
 test('zoom and theme', async () => {
   await app.key('Ctrl+=');
-  assert.equal(await app.eval('document.getElementById("zoom-val").textContent'), '110%');
+  assert.equal(await app.eval('document.getElementById("zoom-val").textContent'), '105%');
   await app.key('Ctrl+0');
   assert.equal(await app.eval('document.getElementById("zoom-val").textContent'), '100%');
   if (SHOTS) await app.screenshot(path.join(SHOTS, 'e2e-dark.png'));

@@ -213,7 +213,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #content { position: relative; margin: 0 auto; }
 /* Script text is laid out on a character grid: nothing from the interface
    typography (letter-spacing, kerning, ligatures) may change glyph advances. */
-.page, .tp-f, #input, .sheet, .metric-probe {
+.page, .tp-f, #input, .sheet, .metric-probe, .ghost {
   letter-spacing: 0; word-spacing: 0; font-kerning: none; font-variant-ligatures: none;
   font-feature-settings: "kern" 0, "liga" 0, "calt" 0; text-rendering: optimizeSpeed;
 }
@@ -239,6 +239,8 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 .selr { position: absolute; background: var(--sel); }
 .findr { position: absolute; background: var(--find); }
 .findr.cur { background: var(--find-cur); }
+/* A suggested character name: the rest of it, in grey after the caret. */
+.ghost { position: absolute; white-space: pre; line-height: 1; font-family: var(--script); color: var(--ink-3); z-index: 5; pointer-events: none; }
 #caret { position: absolute; width: 1.5px; background: var(--caret); z-index: 5; pointer-events: none; }
 #caret.blink-a { animation: blink-a 1.06s steps(1) .5s infinite; }
 #caret.blink-b { animation: blink-b 1.06s steps(1) .5s infinite; }
@@ -347,8 +349,8 @@ table.t tr.pick:hover td { background: var(--hover); }
 table.t tr.on td, table.t tr.on:hover td { background: var(--hover-on); color: var(--ink); }
 /* Open Recent: a fixed-layout table that never grows past the dialog (no horizontal scrolling).
    The name keeps priority; a long path keeps its beginning and is cut at the end; the
-   actions keep their own column. They show while the row is hovered, focused or selected,
-   dismiss and trash kept apart. */
+   actions keep their own column. They show while the row is hovered, focused or selected:
+   three equal square buttons, evenly spaced, each icon centred in its button. */
 .recent-dlg { width: min(760px, 92vw); }
 .dlg .body.recent { overflow-x: hidden; }
 .recent-t tr:last-child td { border-bottom: 0; }
@@ -360,10 +362,9 @@ table.recent-t { table-layout: fixed; width: 100%; }
 .recent-t td.rc-name { padding-right: 12px; }
 .recent-t td.ra-cell { overflow: visible; }
 .ra-cell { width: 92px; text-align: right; white-space: nowrap; padding-right: 2px !important; }
-.ra { border: 0; background: none; color: var(--ink-3); width: 22px; height: 20px; padding: 0; cursor: default; opacity: 0; vertical-align: middle; line-height: 1; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
-.ra svg { display: block; margin: auto; }
-.ra-dismiss { margin-left: 4px; }
-.ra-trash { margin-left: 12px; }
+.ra { border: 0; background: none; color: var(--ink-3); width: 22px; height: 22px; padding: 0; cursor: default; opacity: 0; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; line-height: 1; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.ra svg { display: block; flex: none; }
+.ra + .ra { margin-left: 6px; }
 tr:hover .ra, tr.on .ra, tr:focus-within .ra, .ra:focus-visible { opacity: 1; }
 .ra:hover, .ra:focus-visible { color: var(--ink); background: var(--hover-on); }
 table.t tr.missing td:first-child { text-decoration: line-through; color: var(--ink-3); }

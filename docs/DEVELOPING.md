@@ -172,12 +172,13 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 | Shift+Enter | line break inside an element |
 | `(` on an empty dialogue line | starts a parenthetical |
 | `int.` / `ext.` in action | becomes a scene heading |
+| typing a character cue | the rest of a name already used in the script shows in grey (most recently used first, kept in the .stet file): Enter, Tab or → takes it, Escape hides it |
 | Ctrl+B · Ctrl+I · Ctrl+U · Ctrl+D | bold · italic · underline · strikethrough — on the selection, or with none for what you type next (also the B I U S buttons after the highlights, and the Format menu) |
 | Alt+1 / 2 / 3 / 0 | highlight blue / yellow / pink / remove |
 | Ctrl+Alt+M · F8 · Shift+F8 | add note · next · previous |
 | Ctrl+F · Ctrl+H · F3 | find · replace · next |
 | Alt+↑/↓ · Ctrl+G · PgUp/PgDn | previous/next scene · go to page · page |
-| Ctrl+wheel · Ctrl+= / − / 0 | zoom (the wheel moves in exact 5-point steps) |
+| Ctrl+wheel · Ctrl+= / − / 0 | zoom, in exact 5-point steps |
 | LIGHT · DARK · AUTO (bottom right) · Ctrl+Shift+L | theme; AUTO follows a schedule — right-click it to set the dark and light start times (AM/PM). Picking LIGHT or DARK turns the schedule off |
 | Ctrl+K | command palette — every command, searchable |
 | Ctrl+P · Ctrl+Shift+E | print preview · export PDF |
@@ -405,7 +406,10 @@ full path on hover), so the list never scrolls sideways. Missing files are marke
 - The OS print path (Ctrl+P → Print…) is exercised up to Electron's print
   call; driving the native print dialog is not covered by automated tests.
 - Builds made locally with `npm run exe` are portable and don't associate `.stet`
-  files with STET in Explorer; the installer from a release does.
+  files with STET in Explorer until Help → Open .stet Files with STET; the installer
+  from a release does (a task, ticked by default). Windows keeps a program someone
+  chose earlier with "Always use this app" (UserChoice), which no program may change:
+  STET then says how to change it.
 - Spell-checking is off (it would fight the custom renderer).
 - Writing statistics can't tell retyping from new writing: if you delete an old
   passage and type it again from memory, the retyped words count as written.

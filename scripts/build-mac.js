@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
-import { pruneModules, trimMacLocales } from './package-tools.js';
+import { APP_IGNORE, pruneModules, trimMacLocales } from './package-tools.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -69,7 +69,7 @@ try {
     prune: false, // node_modules holds production dependencies only (npm ci --omit=dev)
     overwrite: true,
     asar: true,
-    ignore: [/^\/(dist|bench|test|docs|scripts|\.perf|\.build|\.build-mac)(\/|$)/, /^\/\.git/, /^\/build\/icon-\d+\.png$/, /^\/(README\.md|package-lock\.json)$/],
+    ignore: APP_IGNORE,
     afterExtract: [({ buildPath }) => { trimMacLocales(buildPath); }],
     afterCopy: [({ buildPath }) => { pruneModules(buildPath); }],
     quiet: true,

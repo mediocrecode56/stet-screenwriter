@@ -19,6 +19,7 @@ import {
 } from './files.js';
 import { Updater, installKind, cleanupPortable, UpdateError, REPO_URL, RELEASES_URL } from './update.js';
 import { patchRoot, confirmLaunch, cleanupPatches } from './patch.js';
+import { linkFiles } from './assoc.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
@@ -153,6 +154,7 @@ function registerIpc() {
     // A packaged STET checks for updates when it starts (unless turned off in Preferences); tests point it at a mock.
     updateCheck: (app.isPackaged || !!process.env.STET_UPDATE_URL) && !PERF && !SHOT && !SAMPLE,
   }));
+  handle('app:link-files', () => (E2E ? { ok: true, message: 'e2e' } : linkFiles()));
   handle('app:open-url', (which) => shell.openExternal(which === 'releases' ? RELEASES_URL : REPO_URL));
 
   handle('update:check', () => updater.check());
