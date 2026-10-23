@@ -104,7 +104,7 @@ test('scene navigation glides to the heading, nothing of the scene before it in 
     for (let i = 0; i < 4; i++) await app.key('Alt+ArrowDown');
     // It glides there (a few frames in between), then stops on the heading.
     const seen = await app.eval(`new Promise((done) => { const s = document.getElementById('scroller'), out = []; const tick = () => { out.push(Math.round(s.scrollTop)); __stet.view.glide ? requestAnimationFrame(tick) : done(out); }; tick(); })`);
-    assert.ok(new Set(seen).size > 3, `it glides (${new Set(seen).size} positions)`);
+    if (!(await app.eval(`matchMedia('(prefers-reduced-motion: reduce)').matches`))) assert.ok(new Set(seen).size > 3, `it glides (${new Set(seen).size} positions)`); // (with motion reduced it goes straight there)
     await glided();
     const r = await app.eval(`(() => { const { view, editor } = __stet; const s = view.scroller.scrollTop, b = editor.caret.b;
       const end = view.caretRect({ b: b - 1, o: editor.blocks[b - 1].text.length });
@@ -130,6 +130,7 @@ test('scene navigation glides to the heading, nothing of the scene before it in 
 
 const lbl = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, p2 = (n) => String(n).padStart(2, '0'); return h ? `${h}:${p2(m)}:${p2(sec % 60)}` : `${m}:${p2(sec % 60)}`; };
 const hms = (sec) => [Math.floor(sec / 3600), Math.floor(sec / 60) % 60, sec % 60].map((n) => String(n).padStart(2, '0')).join(':');
+const LOCKS = process.platform === 'linux';
 const caretB = () => app.eval('__stet.editor.caret.b');
 const tl = (expr) => app.eval(`(() => { const t = __stet.timeline; return ${expr}; })()`);
 
@@ -182,11 +183,14 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   // Ctrl pressed with the pointer resting on the bar: the line shows, the pointer is locked to the
   // bar, and the caret stays put until the line moves (Ctrl+S and the like leave it alone).
   await app.down('Mod');
-  await app.until('!!__stet.timeline.stepping && document.pointerLockElement === __stet.timeline.inner', { what: 'stepping, the pointer locked to the bar' });
+  await app.until('!!__stet.timeline.stepping', { what: 'stepping' });
+  // The system grants the lock only to the window with the focus, which a writer's always is; so is
+  // each one here on Linux (a display of its own). A CI Mac's may not be: there the cover stands in.
+  if (LOCKS) await app.until('document.pointerLockElement === __stet.timeline.inner', { what: 'the pointer locked to the bar' });
   assert.equal(await caretB(), before, 'Ctrl alone moves nothing');
   // The mouse wanders up over the toolbar while it moves 120px: ten seconds on, wherever it goes up or down.
-  for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 9);
-  assert.equal(await tl('t.stepping.t'), t0 + 10, '120px with Ctrl held is ten seconds on ' + JSON.stringify(await tl('[t.drawn, t.fit, t.ppp, t.stepping.px, t.stepping.t0]')));
+  for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 4); // (up into the toolbar, within the window)
+  assert.equal(await tl('t.stepping.t'), t0 + 10, '120px with Ctrl held is ten seconds on');
   assert.ok(await caretB() > before, 'the caret follows');
   assert.equal(await tl('t.drawn'), await tl('t.fit'), 'Ctrl steps, it does not zoom');
   // Nothing outside the bar lights up or takes the click: no hover, no Ctrl+click on an element type.
@@ -279,9 +283,9 @@ test('a changed shortcut works, and the old keys no longer do', async () => {
   await app.load([['action', 'Text.']]);
   await app.caret(0, 0, 5);
   await app.eval(`__stet.cmd.setShortcuts({ 'type-character': ['Ctrl+M C'] })`);
-  await app.key('Ctrl+3');
+  await app.key('Mod+3');
   assert.equal(await app.eval('__stet.editor.block.type'), 'action', 'Ctrl+3 is free now');
-  await app.key('Ctrl+M'); await app.key('C');
+  await app.key('Mod+M'); await app.key('C'); // (shortcuts written with Ctrl are Cmd on a Mac)
   assert.deepEqual(await app.blocks(), [['character', 'TEXT.']]);
   await app.eval(`__stet.cmd.setShortcuts({})`);
 });

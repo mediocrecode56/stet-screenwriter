@@ -206,7 +206,7 @@ test('shortcuts can be changed in Help > Keyboard Shortcuts: a clash is named fi
   // Zoom In on Ctrl+J, which Justify has: nothing changes until Replace is clicked.
   await app.eval(`${row('zoom-in')}.click()`);
   assert.match(await cell('zoom-in'), /press the keys/);
-  await app.key('Ctrl+J');
+  await app.key('Mod+J');
   await app.until(async () => /already used by Justify/.test(await foot()), { what: 'the clash named' });
   assert.equal(await keyText('align-justify'), 'Ctrl+J', 'not replaced yet');
   await app.eval(`[...${row('zoom-in')}.querySelectorAll('button')].find((b) => b.textContent === 'replace').click()`);
@@ -214,7 +214,7 @@ test('shortcuts can be changed in Help > Keyboard Shortcuts: a clash is named fi
   assert.equal(await keyText('align-justify'), '', 'Justify gave it up');
   // Find & Replace on a sequence of two: Ctrl+M, then H.
   await app.eval(`${row('replace')}.click()`);
-  await app.key('Ctrl+M'); await app.key('H');
+  await app.key('Mod+M'); await app.key('H');
   await app.until(async () => { const c = await cell('replace'); return /M H/.test(c) && !c.includes('…'); }, { what: 'the sequence recorded (no “…” waiting for a third key)' });
   // A key that would get in the way of typing is refused; Escape while recording cancels.
   await app.eval(`${row('find')}.click()`);
@@ -230,11 +230,11 @@ test('shortcuts can be changed in Help > Keyboard Shortcuts: a clash is named fi
   // In the script: the new keys run, the old ones no longer do, and the tooltips say so.
   await app.eval('__stet.input.focus()');
   const z = await app.eval('__stet.view.z');
-  await app.key('Ctrl+J');
+  await app.key('Mod+J');
   assert.equal(await app.eval('__stet.editor.blocks[0].align'), undefined, 'Ctrl+J no longer justifies');
   assert.ok(await app.eval('__stet.view.z') > z, 'it zooms in');
   await app.eval(`__stet.cmd.run('zoom-reset')`);
-  await app.key('Ctrl+M'); await app.key('H');
+  await app.key('Mod+M'); await app.key('H');
   await app.until(`!document.getElementById('findbar').hidden`, { what: 'Ctrl+M H to open Find & Replace' });
   assert.equal(await app.eval(`__stet.editor.blocks[0].text`), 'One.', 'and typed nothing');
   await app.key('Escape');
