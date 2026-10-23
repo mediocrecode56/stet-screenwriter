@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.29.0 · 23 Oct 2026
+
+- Timeline: drag sideways anywhere on it to zoom around that point (right to zoom in, left to zoom out). It now zooms in about ten times further, down to single seconds. A small button in the right corner shows the whole script again.
+- Hold Ctrl (Cmd on a Mac) and drag to move through the script second by second, with the exact time shown as you go.
+- The pointer is drawn slightly to scenes, notes, highlights and timecodes as it passes them. A click there goes to that scene's heading or opens that note.
+- The pointer shows left and right arrows on the ruler and while dragging, instead of a magnifier.
+
 ## 0.28.0 · 23 Oct 2026
 
 - **Timeline** (*View → Timeline*, Ctrl+Shift+T): the whole script as a strip under the toolbar, page by page. Highlights show in their colour on the script line, each scene has a small tick and each note an icon. A soft band marks the part of the script on screen. It's off until you turn it on.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, SEC_PER_PAGE } from '../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, SEC_PER_PAGE } from '../src/core/timeline.js';
 import { paginate } from '../src/core/layout.js';
 import { newDocument, makeBlock } from '../src/core/model.js';
 import { serialize, deserialize } from '../src/core/serialize.js';
@@ -104,4 +104,12 @@ test('timecodes are saved with the script and come back on their lines', () => {
   doc.timecodes = [];
   assert.ok(!serialize(doc, 'test').includes('timecodes'));
   assert.deepEqual(deserialize(serialize(doc, 'test')).doc.timecodes, []);
+});
+
+test('the pointer is drawn to the nearest mark within reach, and to none further off', () => {
+  const marks = [{ x: 1, kind: 'scene' }, { x: 1.04, kind: 'note' }, { x: 3, kind: 'hl' }];
+  assert.equal(snapTo(marks, 1.03, 0.05).kind, 'note');
+  assert.equal(snapTo(marks, 0.99, 0.05).kind, 'scene');
+  assert.equal(snapTo(marks, 2, 0.05), null);
+  assert.equal(snapTo([], 1, 1), null);
 });

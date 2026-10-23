@@ -1,17 +1,19 @@
 // The timeline bar under the toolbar (View > Timeline): the script from left to right, a tick
 // for each scene, the highlights in their colours, the notes, and a time ruler that counts a
 // minute a page until timecodes are pinned to it (right-click). Clicking goes there; dragging
-// scrubs, moves the window (the band) or, on the ruler, scrolls and zooms.
+// sideways zooms, dragging the band moves the window, and Ctrl+dragging scrubs second by second.
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep } from '../core/timeline.js';
-import { esc } from './ui/dialog.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo } from '../core/timeline.js';
 import * as dlg from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
 
-const PPP_MAX = 600; // most pixels a page
+const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a page
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
+const SNAP_PX = 6; // how near a scene, note, highlight or timecode draws the pointer to it
+const FINE_PX = 8; // pixels a second when Ctrl+dragging
+const RESET_ICON = '<svg width="11" height="9" viewBox="0 0 11 9" aria-hidden="true"><path d="M0.5 4.5h3.5M2.5 2.5l2 2-2 2M10.5 4.5H7M8.5 2.5l-2 2 2 2M5.5 0.5v8" fill="none" stroke="currentColor"/></svg>';
 const NOTE_ICON = '<svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0.5 0.5h8v5.5H4L1.8 8.2V6H0.5z" fill="currentColor"/></svg>';
 
 export class Timeline {
@@ -24,7 +26,8 @@ export class Timeline {
     this.bandA = this.bandB = 0; // the part of the script in the window
     this.key = '';
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
-      + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>';
+      + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
+      + `<button class="tl-reset" hidden title="Whole script">${RESET_ICON}</button>`;
     this.scroll = host.querySelector('.tl-scroll');
     this.inner = host.querySelector('.tl-inner');
     this.grid = host.querySelector('.tl-grid');
@@ -33,17 +36,22 @@ export class Timeline {
     this.hover = host.querySelector('.tl-hover');
     this.head = host.querySelector('.tl-head');
     this.band = host.querySelector('.tl-view');
+    this.reset = host.querySelector('.tl-reset');
+    this.reset.addEventListener('click', () => { this.ppp = 0; this.update(true); });
+    this.targets = []; // what the pointer is drawn to: { x, kind, el, ... }
 
-    // One gesture, read the way Ableton reads its arrangement: a click goes there; a drag on the
-    // ruler scrolls sideways and zooms up and down; a drag of the band (the part of the script in
-    // the window) moves the window over the script; a drag anywhere else scrubs through it.
+    // One gesture: a click goes there (drawn to a scene, note or highlight close by); a drag
+    // sideways zooms around the point pressed (right to zoom in); a drag of the band (the part of
+    // the script in the window) moves the window over the script; Ctrl+drag scrubs second by second.
     this.inner.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
       const x0 = e.clientX, y0 = e.clientY;
-      const where = this.zone(e);
+      const where = e.ctrlKey || e.metaKey ? 'fine' : this.zone(e);
       const at0 = this.posAt(x0), ppp0 = this.drawn, top0 = this.view.scroller.scrollTop;
       const px0 = x0 - this.scroll.getBoundingClientRect().left;
+      const near = this.snap(at0);
+      const t0 = this.time ? Math.round(this.time.at(near ? near.x : at0)) : 0;
       let mode = null; // set by the first real movement
       const move = (ev) => {
         const dx = ev.clientX - x0, dy = ev.clientY - y0;
@@ -53,35 +61,45 @@ export class Timeline {
           document.body.classList.add('tl-dragging', 'tl-drag-' + mode);
           this.hover.hidden = true;
         }
-        if (mode === 'ruler') this.setScale(ppp0 * 2 ** (dy / 80), at0, px0 + dx);
+        if (mode === 'zoom') this.setScale(ppp0 * 2 ** (dx / 50), at0, px0);
         else if (mode === 'band') { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); }
-        else this.scrub(this.posAt(ev.clientX));
+        else {
+          const t = Math.max(0, Math.min(this.time.at(this.length), t0 + Math.round(dx / FINE_PX)));
+          const x = Math.min(this.length, this.time.pos(t));
+          this.scrub(x);
+          this.readout(x, t);
+        }
       };
       const up = () => {
         removeEventListener('mousemove', move, true);
         removeEventListener('mouseup', up, true);
-        document.body.classList.remove('tl-dragging', 'tl-drag-ruler', 'tl-drag-band', 'tl-drag-scrub');
-        if (mode === 'scrub') this.scrub(null);
+        document.body.classList.remove('tl-dragging', 'tl-drag-zoom', 'tl-drag-band', 'tl-drag-fine');
+        if (mode === 'fine') { this.scrub(null); this.hover.hidden = true; }
         if (mode) return;
-        const note = e.target.closest('.tl-note');
-        if (note) return this.openNote(note.dataset.id, +note.dataset.b, +note.dataset.s, +note.dataset.e);
-        const scene = e.target.closest('.tl-scene'); // a scene's tick goes to its heading, however near the click
-        if (scene) return this.jump(pos(+scene.dataset.b, 0), false, null, 'top');
-        this.go(at0);
+        const note = e.target.closest('.tl-note') ? this.tl.notes[+e.target.closest('.tl-note').dataset.i] : near && near.kind === 'note' ? near : null;
+        if (note) return this.openNote(note.id, note.b, note.s, note.e);
+        if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, 'top'); // to its heading
+        this.go(near ? near.x : at0);
       };
       addEventListener('mousemove', move, true);
       addEventListener('mouseup', up, true);
     });
     // Double-click on the ruler or the band: the whole script, as in Ableton.
-    this.inner.addEventListener('dblclick', (e) => { if (this.zone(e) !== 'scrub') { this.ppp = 0; this.update(true); } });
+    this.inner.addEventListener('dblclick', (e) => { if (this.zone(e) !== 'zoom' || e.clientY >= this.inner.getBoundingClientRect().bottom - 15) { this.ppp = 0; this.update(true); } });
     this.inner.addEventListener('contextmenu', (e) => { e.preventDefault(); this.menu(e); });
     this.inner.addEventListener('mousemove', (e) => { if (!document.body.classList.contains('tl-dragging')) this.showHover(e); });
-    this.inner.addEventListener('mouseleave', () => { this.hover.hidden = true; this.band.classList.remove('hot'); });
+    this.inner.addEventListener('mouseleave', () => { this.hover.hidden = true; this.band.classList.remove('hot'); this.mark(null); });
     this.scroll.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) this.zoom(2 ** (-Math.max(-200, Math.min(200, e.deltaY)) / 200), e.clientX); // in step with the wheel or a pinch
       else this.scroll.scrollLeft += e.deltaX || e.deltaY;
     }, { passive: false });
+    // The ruler and grid are drawn around the part in view; scrolling far draws the next part.
+    this.scroll.addEventListener('scroll', () => {
+      if (!this.time) return;
+      const l = this.scroll.scrollLeft - PADX, w = this.scroll.clientWidth;
+      if ((l < this.rulerA && this.rulerA > 0) || (l + w > this.rulerB && this.rulerB < this.length * this.drawn)) this.paintRuler();
+    });
     new ResizeObserver(() => { if (this.visible) this.update(true); }).observe(host);
   }
 
@@ -124,15 +142,27 @@ export class Timeline {
     this.scroll.scrollLeft = at * this.drawn + PADX - px;
   }
 
-  /** Where a pointer event is: on the ruler, on the band, or on the rest of the strip. */
+  /** What a drag from a pointer event does: move the band (above the ruler, on it) or zoom. */
   zone(e) {
     const r = this.inner.getBoundingClientRect();
-    if (e.clientY >= r.bottom - 15) return 'ruler';
+    if (e.clientY >= r.bottom - 15) return 'zoom';
     const x = this.posAt(e.clientX);
-    return x >= this.bandA && x <= this.bandB && this.bandB - this.bandA < this.length * 0.98 ? 'band' : 'scrub';
+    return x >= this.bandA && x <= this.bandB && this.bandB - this.bandA < this.length * 0.98 ? 'band' : 'zoom';
   }
 
-  /** Scrubbing: the caret and the window follow the pointer at once; null when it lets go. */
+  /** The scene, note, highlight or timecode close enough to x to draw the pointer to it. */
+  snap(x) { return snapTo(this.targets, x, SNAP_PX / this.drawn); }
+
+  /** Light up the mark the pointer is drawn to (null: none). */
+  mark(t) {
+    const el = t && t.el;
+    if (el === this.marked) return;
+    if (this.marked) this.marked.classList.remove('near');
+    if (el) el.classList.add('near');
+    this.marked = el;
+  }
+
+  /** Scrubbing: the caret and the window follow at once; null when it lets go. */
   scrub(x) {
     if (x == null) { const c = this.ed.caret; return this.jump(pos(c.b, c.o)); }
     const { bi, line } = placeAt(this.view.pages, x);
@@ -204,54 +234,80 @@ export class Timeline {
     this.inner.style.width = w + 'px';
     const tl = this.tl = timelineOf(this.ed.blocks, this.view.pages);
     const anchors = this.anchors();
-    const time = this.time = timeScale(anchors);
-    const total = time.at(len);
+    this.time = timeScale(anchors);
 
-    // The ruler: a label every so often, well apart; the grid (a faint line at each, shown while
-    // the pointer is on the bar) carries the finer steps.
-    const pxPerSec = s / time.pace; // after the last timecode; close enough before it to space the labels
-    const step = rulerStep(pxPerSec, 110), minor = minorStep(step, pxPerSec, 18);
-    let ruler = '', grid = '';
-    for (let t = 0; t <= total + 0.5; t += minor || step) {
-      const x = time.pos(t) * s;
-      if (x > len * s + 0.5) break;
-      const major = Math.round(t) % step === 0;
-      if (t) grid += `<i${major ? ' class="mj"' : ''} style="left:${x}px"></i>`;
-      // A pinned timecode is labelled in its own place; the regular labels give way around it.
-      if (major && x <= len * s - 70 && !anchors.some((a) => x > a.x * s - 52 && x < a.x * s + 64)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
-    }
-    // The end of the script: its estimated length.
-    ruler += `<span class="tl-lb tl-end" style="left:${len * s}px">${rulerLabel(total)}</span>`;
-    for (const a of anchors) ruler += `<span class="tl-lb tl-tc" style="left:${a.x * s}px">${rulerLabel(a.t)}</span>`;
-    this.ruler.innerHTML = ruler;
-    this.grid.innerHTML = grid;
+    this.anchorsDrawn = anchors;
+    this.paintRuler();
+    this.reset.hidden = !this.ppp;
 
     // The script as a line, coloured where it is highlighted; a quiet tick for each scene; the notes under the line.
     let m = `<div class="tl-line" style="width:${len * s}px"></div>`;
     for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
     for (const sc of tl.scenes) m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px"></div>`;
-    for (const n of tl.notes) {
-      const text = (this.session.doc.comments[n.id] || {}).text || 'Note';
-      m += `<div class="tl-note" data-id="${esc(n.id)}" data-b="${n.b}" data-s="${n.s}" data-e="${n.e}" style="left:${n.x * s}px" title="${esc(text.slice(0, 200))}">${NOTE_ICON}</div>`;
-    }
+    tl.notes.forEach((n, i) => { m += `<div class="tl-note" data-i="${i}" style="left:${n.x * s}px">${NOTE_ICON}</div>`; });
     this.marks.innerHTML = m;
+    const els = this.marks.children; // in the order drawn: the line, the highlights, the scenes, the notes
+    const nh = tl.highlights.length, ns = tl.scenes.length;
+    this.targets = [
+      ...tl.highlights.map((h, i) => ({ x: h.x0, kind: 'hl', el: els[1 + i] })),
+      ...tl.scenes.map((sc, i) => ({ ...sc, kind: 'scene', el: els[1 + nh + i] })),
+      ...tl.notes.map((n, i) => ({ ...n, kind: 'note', el: els[1 + nh + ns + i] })),
+      ...anchors.map((a) => ({ x: a.x, kind: 'tc', el: null })),
+    ];
+    this.marked = null;
   }
 
-  /** The time and scene under the pointer. */
+  /** The ruler and the grid, for the part of the bar in view and a screen either side. */
+  paintRuler() {
+    const s = this.drawn, len = this.length, time = this.time, anchors = this.anchorsDrawn, total = time.at(len);
+    const w = this.scroll.clientWidth, l = this.scroll.scrollLeft - PADX;
+    const a = this.rulerA = Math.max(0, l - w), b = this.rulerB = Math.min(len * s, l + 2 * w);
+    // A label every so often, well apart; the grid (a faint line at each, shown while the pointer
+    // is on the bar) carries the finer steps.
+    const pxPerSec = s / time.pace; // after the last timecode; close enough before it to space the labels
+    const step = rulerStep(pxPerSec, 110), minor = minorStep(step, pxPerSec, 18), inc = minor || step;
+    let ruler = '', grid = '';
+    for (let t = Math.floor(time.at(a / s) / inc) * inc; t <= total + 0.5; t += inc) {
+      const x = time.pos(t) * s;
+      if (x > b + 0.5) break;
+      const major = Math.round(t) % step === 0;
+      if (t) grid += `<i${major ? ' class="mj"' : ''} style="left:${x}px"></i>`;
+      // A pinned timecode is labelled in its own place; the regular labels give way around it.
+      if (major && x <= len * s - 70 && !anchors.some((p) => x > p.x * s - 52 && x < p.x * s + 64)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
+    }
+    // The end of the script: its estimated length.
+    ruler += `<span class="tl-lb tl-end" style="left:${len * s}px">${rulerLabel(total)}</span>`;
+    for (const p of anchors) ruler += `<span class="tl-lb tl-tc" style="left:${p.x * s}px">${rulerLabel(p.t)}</span>`;
+    this.ruler.innerHTML = ruler;
+    this.grid.innerHTML = grid;
+  }
+
+  /** The time and scene under the pointer, drawn to a mark close by. */
   showHover(e) {
     if (!this.time) return;
     const where = this.zone(e);
-    const x = this.posAt(e.clientX);
     this.band.classList.toggle('hot', where === 'band');
-    this.inner.dataset.zone = where;
-    let sc = -1;
-    for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
-    const text = formatTime(this.time.at(x)) + (sc >= 0 ? '   ' + (this.tl.scenes[sc].text || 'SCENE') : '');
+    this.inner.dataset.zone = e.clientY >= this.inner.getBoundingClientRect().bottom - 15 ? 'ruler' : where;
+    const at = this.posAt(e.clientX), near = this.snap(at);
+    this.mark(near);
+    this.readout(near ? near.x : at, null, near);
+  }
+
+  /** The line and readout at x: the time (t, or the time there), and the note or scene. */
+  readout(x, t = null, near = null) {
+    let text = formatTime(t ?? this.time.at(x));
+    if (near && near.kind === 'note') text += '   ' + ((this.session.doc.comments[near.id] || {}).text || 'Note').replace(/\s+/g, ' ').slice(0, 60);
+    else {
+      let sc = -1;
+      for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
+      if (sc >= 0) text += '   ' + (this.tl.scenes[sc].text || 'SCENE');
+    }
     this.hover.hidden = false;
+    this.hover.classList.toggle('snap', !!near);
     this.hover.style.left = x * this.drawn + 'px';
     this.hover.firstChild.textContent = text;
     // The readout flips to the left of the line in the right half, so it stays in the bar.
-    this.hover.classList.toggle('flip', x * this.drawn > this.inner.offsetWidth / 2);
+    this.hover.classList.toggle('flip', x * this.drawn - this.scroll.scrollLeft + PADX > this.scroll.clientWidth / 2);
   }
 
   // ---- timecodes ------------------------------------------------------------------------

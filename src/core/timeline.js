@@ -72,6 +72,16 @@ export function timelineOf(blocks, pages) {
   return { scenes, highlights, notes };
 }
 
+/** The target nearest x within `tol` (all in pages), or null: what the pointer is drawn to. */
+export function snapTo(targets, x, tol) {
+  let best = null;
+  for (const t of targets) {
+    const d = Math.abs(t.x - x);
+    if (d <= tol) { tol = d; best = t; }
+  }
+  return best;
+}
+
 /** Timecodes pinned in the script, as positions: [{ x, t, id }] in script order, unusable ones left out. */
 export function anchorsOf(timecodes, blocks, pages) {
   if (!timecodes || !timecodes.length) return [];

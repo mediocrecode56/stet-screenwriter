@@ -200,13 +200,15 @@ shows the script as a white line (grey in light mode), coloured where passages a
 highlighted, a small tick for each scene, an icon for each note, a time ruler that ends in the
 estimated length, the caret (the line with a cap) and a soft band for the part of the script
 in the window. With the pointer on it, the grid comes in and a small readout gives the time
-and scene under the pointer. Clicking goes to the line drawn there (a scene tick to its
-heading, a note to its passage, with the note open). Dragging works the way Ableton Live's
-arrangement does: on the ruler (magnifier cursor), sideways scrolls and up and down zooms
-(down zooms in); the band (hand cursor; its edges show) moves the window over the script;
-anywhere else scrubs, the caret and the page following the pointer. A double-click on the
-ruler or the band shows the whole script. The wheel scrolls it and Ctrl+wheel zooms; the grid
-steps between 1 second and an hour so it stays readable.
+and scene under the pointer. The pointer is drawn to a scene, note, highlight or timecode within a few pixels
+(`snapTo`), and the mark lights up. Clicking goes to the line drawn there (a scene to its
+heading, a note to its passage, with the note open). Dragging sideways anywhere zooms around
+the point pressed (right zooms in, down to about 100 pixels a second; left-right arrow
+cursor); the band (hand cursor; its edges show) moves the window over the script; Ctrl+drag
+(Cmd on a Mac) scrubs second by second, 8 pixels a second, with the time shown. The small
+button in the right corner, or a double-click on the ruler or the band, shows the whole script.
+The wheel scrolls it and Ctrl+wheel zooms; the grid steps between 1 second and an hour so it
+stays readable, and the ruler is drawn only around the part in view.
 
 The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time,
 as HH:MM:SS, at the start of the line there: between two timecodes the time is spread evenly,

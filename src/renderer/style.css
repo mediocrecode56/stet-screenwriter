@@ -231,10 +231,9 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 /* The band can be dragged, like the outline in Ableton's overview: it shows its edges when it can. */
 .tl-view.hot, .tl-drag-band .tl-view { box-shadow: inset 0 0 0 1px var(--ink-3); }
 .tl-inner[data-zone="band"] { cursor: grab; }
-.tl-inner[data-zone="ruler"] { cursor: zoom-in; }
+.tl-inner[data-zone="ruler"] { cursor: ew-resize; }
 body.tl-drag-band, body.tl-drag-band * { cursor: grabbing !important; }
-body.tl-drag-ruler, body.tl-drag-ruler * { cursor: zoom-in !important; }
-body.tl-drag-scrub, body.tl-drag-scrub * { cursor: ew-resize !important; }
+body.tl-drag-zoom, body.tl-drag-zoom *, body.tl-drag-fine, body.tl-drag-fine * { cursor: ew-resize !important; }
 .tl-grid { opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
 #timeline:hover .tl-grid { opacity: 1; }
 .tl-grid i { position: absolute; top: 13px; bottom: 15px; width: 1px; background: var(--rule); opacity: .4; }
@@ -243,10 +242,10 @@ body.tl-drag-scrub, body.tl-drag-scrub * { cursor: ew-resize !important; }
 .tl-hl { position: absolute; top: 17px; height: 6px; border-radius: 1px; }
 .tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }
 .tl-scene { position: absolute; top: 13px; height: 6px; width: 1px; background: var(--ink-3); }
-.tl-scene::before { content: ''; position: absolute; top: -6px; bottom: -3px; left: -4px; right: -4px; } /* easy to hit */
-.tl-scene:hover { background: var(--ink); }
+.tl-scene.near { background: var(--ink); box-shadow: 0 0 0 .5px var(--ink); }
 .tl-note { position: absolute; top: 25px; margin-left: -1px; color: var(--ink-3); line-height: 0; }
-.tl-note:hover { color: var(--ink); }
+.tl-note.near { color: var(--ink); }
+.tl-hl.near { filter: brightness(1.15); }
 .tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 15px; }
 .tl-lb { position: absolute; top: 2px; padding-left: 4px; border-left: 1px solid var(--rule); font-size: 9px; line-height: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
 .tl-lb.tl-end { border-left: 0; border-right: 1px solid var(--rule); padding: 0 4px 0 0; transform: translateX(-100%); color: var(--ink-2); }
@@ -257,6 +256,10 @@ body.tl-drag-scrub, body.tl-drag-scrub * { cursor: ew-resize !important; }
 .tl-hover { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); pointer-events: none; }
 .tl-hover span { position: absolute; bottom: 1px; left: 4px; padding: 0 5px; font-size: 9px; line-height: 13px; letter-spacing: .06em; white-space: pre; background: var(--bar); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); font-variant-numeric: tabular-nums; }
 .tl-hover.flip span { left: auto; right: 4px; }
+.tl-hover.snap { background: var(--ink-2); }
+.tl-reset { position: absolute; right: 6px; top: 4px; width: 20px; height: 16px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 3px; background: var(--bar); color: var(--ink-3); box-shadow: 0 0 0 1px var(--rule); cursor: pointer; }
+.tl-reset[hidden] { display: none; }
+.tl-reset:hover { color: var(--ink); }
 
 /* ---- main area ------------------------------------------------------- */
 #main { flex: 1; display: flex; min-height: 0; overflow: hidden; }

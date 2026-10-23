@@ -141,23 +141,34 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
     dispatchEvent(new MouseEvent('mouseup', { clientX: l.left + ${dx}, clientY: l.top + 10 })); })()`);
   await click('#timeline .tl-scene', 8);
   assert.equal(await app.eval('__stet.editor.block.text'), 'INT. ROOM 9 - DAY');
-  // Anywhere else: the line drawn there.
+  // The pointer is drawn to a scene a few pixels off: the tick lights up and the line sits on it.
+  const snapped = await app.eval(`(() => { const t = __stet.timeline, el = document.querySelectorAll('#timeline .tl-scene')[4], l = el.getBoundingClientRect();
+    t.inner.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: l.left + 4, clientY: l.top + 10 }));
+    return { near: el.classList.contains('near'), off: Math.abs(t.hover.getBoundingClientRect().left - l.left) }; })()`);
+  assert.ok(snapped.near && snapped.off < 1, `drawn to the scene (${JSON.stringify(snapped)})`);
+  // Zoomed in (so no mark is near), anywhere else: the line drawn there; the corner button shows the whole script again.
+  const fit = await app.eval('__stet.timeline.drawn');
+  assert.equal(await app.eval('document.querySelector("#timeline .tl-reset").hidden'), true, 'no reset while it all fits');
+  await app.eval('__stet.timeline.setScale(3000, 2.5, 300)');
   const x = await app.eval(`__stet.timeline.drawn * (2 + 30 / 54)`);
   await click('#timeline .tl-inner', 0, x);
   const want = await app.eval(`[...__stet.view.pages[2].items].reverse().find((it) => it.y <= 30.5).bi`);
   assert.equal(await app.eval('__stet.editor.caret.b'), want, 'the line on page 3, row 31');
-  // Ableton's gestures: drag the ruler down to zoom in, double-click it for the whole script;
-  // drag the band to move the window; drag elsewhere to scrub.
-  const drag = (zone, dx, dy) => app.eval(`(() => {
+  await app.eval('document.querySelector("#timeline .tl-reset").click()');
+  assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'reset: the whole script again');
+  // The gestures: drag sideways to zoom, double-click the ruler for the whole script;
+  // drag the band to move the window; Ctrl+drag to scrub second by second.
+  const drag = (zone, dx, dy, ctrl = false) => app.eval(`(() => {
     const t = __stet.timeline, r = t.inner.getBoundingClientRect();
     const x = ${zone === 'band' ? '(t.bandA + t.bandB) / 2 * t.drawn + r.left' : 'r.left + r.width * 0.3'}, y = ${zone === 'ruler' ? 'r.bottom - 5' : 'r.top + 20'};
-    t.inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: x, clientY: y }));
-    for (let i = 1; i <= 4; i++) dispatchEvent(new MouseEvent('mousemove', { clientX: x + ${dx} * i / 4, clientY: y + ${dy} * i / 4 }));
+    t.inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: x, clientY: y, ctrlKey: ${ctrl} }));
+    for (let i = 1; i <= 4; i++) dispatchEvent(new MouseEvent('mousemove', { clientX: x + ${dx} * i / 4, clientY: y + ${dy} * i / 4, ctrlKey: ${ctrl} }));
+    const read = t.hover.textContent;
     dispatchEvent(new MouseEvent('mouseup', { clientX: x + ${dx}, clientY: y + ${dy} }));
+    return read;
   })()`);
-  const fit = await app.eval('__stet.timeline.drawn');
-  await drag('ruler', 0, 80);
-  assert.ok(await app.eval('__stet.timeline.drawn') > fit * 1.9, 'dragging the ruler down zooms in');
+  await drag('ruler', 60, 0);
+  assert.ok(await app.eval('__stet.timeline.drawn') > fit * 1.9, 'dragging right zooms in');
   await app.eval(`__stet.timeline.inner.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: __stet.timeline.inner.getBoundingClientRect().left + 50, clientY: __stet.timeline.inner.getBoundingClientRect().bottom - 5 }))`);
   assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'double-click: the whole script again');
   await app.eval('__stet.view.scroller.scrollTop = 0');
@@ -168,8 +179,12 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await app.eval('__stet.view.scroller.scrollTop = 0');
   await sleep(50);
   const before = await app.eval('__stet.editor.caret.b');
-  await drag('scrub', 200, 0); // from a third of the way along, clear of the band at the start
+  const t0 = await app.eval('Math.round(__stet.timeline.time.at(__stet.timeline.posAt(__stet.timeline.inner.getBoundingClientRect().left + __stet.timeline.inner.getBoundingClientRect().width * 0.3)))');
+  const read = await drag('scrub', 80, 0, true); // from a third of the way along, clear of the band at the start
   assert.ok(await app.eval('__stet.editor.caret.b') > before, 'scrubbing moves the caret');
+  const secs = read.trim().slice(0, 8).split(':').reduce((n, v) => n * 60 + +v, 0);
+  assert.ok(Math.abs(secs - (t0 + 10)) <= 1, `80px with Ctrl held is ten seconds on (${read}, from ${t0})`);
+  assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'Ctrl+drag scrubs, it does not zoom');
   // A timecode at the start of the last page at twice its minutes doubles the pace: the script comes to twice its pages in minutes.
   const hms = (sec) => [sec / 3600, (sec / 60) % 60, sec % 60].map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
   await app.eval(`void __stet.timeline.addTimecode(__stet.view.pages.length - 1)`);
