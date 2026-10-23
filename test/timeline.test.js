@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, makeTimecode, cleanTag, SEC_PER_PAGE } from '../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE } from '../src/core/timeline.js';
 import { paginate } from '../src/core/layout.js';
 import { newDocument, makeBlock } from '../src/core/model.js';
 import { serialize, deserialize } from '../src/core/serialize.js';
@@ -142,4 +142,14 @@ test('fineTime: a second every so many pixels from where Ctrl was pressed, never
   assert.equal(fineTime(30, -1000, 8, 600), 0);
   assert.equal(fineTime(595, 1000, 8, 600.7), 600);
   assert.equal(fineTime(30, 100, 50, 600), 32); // zoomed in, a second is wider
+});
+
+test('timecode labels too close together: the newest keeps its label, the older ones just their line', () => {
+  const placed = [[900, 940]]; // the end of the script
+  const labels = [{ x0: 100, x1: 160, rank: 0 }, { x0: 150, x1: 190, rank: 2 }, { x0: 195, x1: 240, rank: 1 }, { x0: 400, x1: 460, rank: 3 }, { x0: 880, x1: 920, rank: 4 }];
+  assert.deepEqual(placeLabels(labels, placed), [false, true, false, true, false]);
+  assert.deepEqual(placed.slice(1), [[400, 460], [150, 190]]);
+  assert.equal(clearOf(placed, 300, 330), true); // a regular label between them
+  assert.equal(clearOf(placed, 185, 215), false);
+  assert.equal(clearOf(placed, 195, 230, 0), true);
 });

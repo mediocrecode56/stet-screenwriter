@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.32.0 · 23 Oct 2026
+
+- Timeline: with Ctrl (Cmd on a Mac) held, the mouse pointer hides and the line moves in its place at a slower, steadier pace, a second at a time, so landing on the exact second for a timecode is easy. Nothing pulls it towards scenes or notes while Ctrl is held.
+- Timecodes close together no longer pile up: the newest keeps its time and tag on the ruler, older ones show just their line (point at one to read it).
+- The pointer is drawn a third more strongly to scenes, notes, highlights and timecodes.
+- Over a timecode the pointer turns into a pencil, and a plain click opens its editor.
+- Timeline polish: the line under the pointer while stepping has a cap like the caret, and the timecode you point at stands out more.
+
 ## 0.31.0 · 23 Oct 2026
 
 - Timeline: while holding Ctrl (Cmd on a Mac) over it, a right-click pins a timecode at that exact second straight away, no menu.

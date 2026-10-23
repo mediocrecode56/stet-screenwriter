@@ -2,19 +2,19 @@
 // for each scene, the highlights in their colours, the notes, and a time ruler that counts a
 // minute a page until timecodes are pinned to it (right-click). Clicking goes there; dragging
 // sideways zooms, dragging the band moves the window, and moving with Ctrl held steps second by second
-// (a right-click then pins a timecode at that second).
+// (a right-click then pins a timecode at that second). A click on a timecode edits it.
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
 
 const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a page
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
-const SNAP_PX = 6; // how near a scene, note, highlight or timecode draws the pointer to it
-const FINE_PX = 8; // fewest pixels a second with Ctrl held
+const SNAP_PX = 8; // how near a scene, note, highlight or timecode draws the pointer to it (none with Ctrl held)
+const FINE_PX = 12; // fewest pixels of mouse travel a second with Ctrl held
 const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.6 5.2A5 5 0 1 1 2 7.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M1.2 1.8v4h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const NOTE_ICON = '<svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0.5 0.5h8v5.5H4L1.8 8.2V6H0.5z" fill="currentColor"/></svg>';
@@ -75,6 +75,7 @@ export class Timeline {
         const note = e.target.closest('.tl-note') ? this.tl.notes[+e.target.closest('.tl-note').dataset.i] : near && near.kind === 'note' ? near : null;
         if (note) return this.openNote(note.id, note.b, note.s, note.e);
         if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, 'top'); // to its heading
+        if (near && near.kind === 'tc') { this.go(near.x); return this.editTimecode(near.x, near); }
         this.go(near ? near.x : at0);
       };
       addEventListener('mousemove', move, true);
@@ -167,15 +168,15 @@ export class Timeline {
   }
 
   /** Moving over the bar with Ctrl (Cmd) held steps through the script a whole second at a time,
-   *  at least FINE_PX pixels a second from where it started, whatever the zoom; the caret and the
-   *  window follow, and a right-click pins a timecode at that second. Letting go of Ctrl leaves the
-   *  caret there. */
+   *  at least FINE_PX pixels a second from where it started, whatever the zoom: the pointer is
+   *  hidden and the line moves in its place, slower than the mouse, drawn to nothing. The caret and
+   *  the window follow, and a right-click pins a timecode at that second. Letting go of Ctrl leaves
+   *  the caret there. */
   fine(e) {
     if (!this.time) return;
     let f = this.stepping;
     if (!f) {
-      const at = this.posAt(e.clientX), near = this.snap(at);
-      const t0 = Math.round(this.time.at(near ? near.x : at));
+      const t0 = Math.round(this.time.at(this.posAt(e.clientX)));
       const px = Math.max(FINE_PX, (this.time.pos(t0 + 1) - this.time.pos(t0)) * this.drawn);
       f = this.stepping = { x0: e.clientX, t0, px, t: null, x: 0 };
       document.body.classList.add('tl-fine');
@@ -309,19 +310,25 @@ export class Timeline {
     // is on the bar) carries the finer steps.
     const pxPerSec = s / time.pace; // after the last timecode; close enough before it to space the labels
     const step = rulerStep(pxPerSec, 110), minor = minorStep(step, pxPerSec, 18), inc = minor || step;
+    // The end of the script (its estimated length) and the pinned timecodes are labelled in their
+    // own places, the newest timecode first; one that would run into a label already placed keeps
+    // just its line. The regular labels give way around them.
+    const order = this.tcs().map((tc) => tc.id + ':' + tc.line);
+    this.ruler.innerHTML = `<span class="tl-lb tl-end" style="left:${len * s}px">${rulerLabel(total)}</span>`
+      + anchors.map((p) => `<span class="tl-lb tl-tc${p.color ? ' c-' + p.color : ''}" style="left:${p.x * s}px">${rulerLabel(p.t)}${p.tag ? `<b>${esc(p.tag)}</b>` : ''}</span>`).join('');
+    const [end, ...labels] = this.ruler.children;
+    const placed = [[len * s - end.offsetWidth, len * s]];
+    const shown = placeLabels(anchors.map((p, i) => ({ x0: p.x * s, x1: p.x * s + labels[i].offsetWidth, rank: order.indexOf(p.id + ':' + p.line) })), placed);
+    labels.forEach((el, i) => { if (!shown[i]) el.classList.add('mute'); });
     let ruler = '', grid = '';
     for (let t = Math.floor(time.at(a / s) / inc) * inc; t <= total + 0.5; t += inc) {
       const x = time.pos(t) * s;
       if (x > b + 0.5) break;
       const major = Math.round(t) % step === 0;
       if (t) grid += `<i${major ? ' class="mj"' : ''} style="left:${x}px"></i>`;
-      // A pinned timecode is labelled in its own place; the regular labels give way around it.
-      if (major && x <= len * s - 70 && !anchors.some((p) => x > p.x * s - 52 && x < p.x * s + 64 + p.tag.length * 5.5)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
+      if (major && clearOf(placed, x, x + 10 + rulerLabel(t).length * 5.5)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
     }
-    // The end of the script: its estimated length.
-    ruler += `<span class="tl-lb tl-end" style="left:${len * s}px">${rulerLabel(total)}</span>`;
-    for (const p of anchors) ruler += `<span class="tl-lb tl-tc${p.color ? ' c-' + p.color : ''}" style="left:${p.x * s}px">${rulerLabel(p.t)}${p.tag ? `<b>${esc(p.tag)}</b>` : ''}</span>`;
-    this.ruler.innerHTML = ruler;
+    this.ruler.insertAdjacentHTML('afterbegin', ruler);
     this.grid.innerHTML = grid;
   }
 
@@ -332,6 +339,7 @@ export class Timeline {
     this.band.classList.toggle('hot', where === 'band');
     this.inner.dataset.zone = e.clientY >= this.inner.getBoundingClientRect().bottom - 15 ? 'ruler' : where;
     const at = this.posAt(e.clientX), near = this.snap(at);
+    if (near && near.kind === 'tc') this.inner.dataset.zone = 'tc'; // a click edits it
     this.mark(near);
     this.readout(near ? near.x : at, null, near);
   }

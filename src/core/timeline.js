@@ -83,6 +83,22 @@ export function snapTo(targets, x, tol) {
   return best;
 }
 
+/** Whether [x0, x1] keeps `gap` clear of every [a, b] in `placed`. */
+export function clearOf(placed, x0, x1, gap = 8) {
+  return !placed.some(([a, b]) => x0 < b + gap && x1 > a - gap);
+}
+
+/** Which labels fit on one row, the highest `rank` first: each { x0, x1, rank } is shown unless it
+ *  would come within `gap` of one already placed (`placed`, [x0, x1] pairs it adds the shown ones to). */
+export function placeLabels(labels, placed = [], gap = 8) {
+  const shown = labels.map(() => false);
+  labels.map((l, i) => i).sort((i, j) => labels[j].rank - labels[i].rank).forEach((i) => {
+    const { x0, x1 } = labels[i];
+    if (clearOf(placed, x0, x1, gap)) { placed.push([x0, x1]); shown[i] = true; }
+  });
+  return shown;
+}
+
 /** Fine scrubbing: the whole second `dx` pixels on from second t0, a second every `px` pixels, kept within 0..total. */
 export function fineTime(t0, dx, px, total) {
   return Math.max(0, Math.min(Math.floor(total), Math.round(t0 + dx / px)));
