@@ -136,7 +136,8 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   assert.equal(r.end, `00:${String(r.pages).padStart(2, '0')}:00`, 'a minute a page');
   // Click the line for scene 9: the caret goes there.
   const click = (sel, i, dx = 0) => app.eval(`(() => { const el = document.querySelectorAll(${JSON.stringify(sel)})[${i}], l = el.getBoundingClientRect();
-    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: l.left + ${dx}, clientY: l.top + 10 })); })()`);
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: l.left + ${dx}, clientY: l.top + 10 }));
+    dispatchEvent(new MouseEvent('mouseup', { clientX: l.left + ${dx}, clientY: l.top + 10 })); })()`);
   await click('#timeline .tl-scene', 8);
   assert.equal(await app.eval('__stet.editor.block.text'), 'INT. ROOM 9 - DAY');
   // Anywhere else: the line drawn there.
@@ -144,6 +145,30 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await click('#timeline .tl-inner', 0, x);
   const want = await app.eval(`[...__stet.view.pages[2].items].reverse().find((it) => it.y <= 30.5).bi`);
   assert.equal(await app.eval('__stet.editor.caret.b'), want, 'the line on page 3, row 31');
+  // Ableton's gestures: drag the ruler down to zoom in, double-click it for the whole script;
+  // drag the band to move the window; drag elsewhere to scrub.
+  const drag = (zone, dx, dy) => app.eval(`(() => {
+    const t = __stet.timeline, r = t.inner.getBoundingClientRect();
+    const x = ${zone === 'band' ? '(t.bandA + t.bandB) / 2 * t.drawn + r.left' : 'r.left + r.width * 0.3'}, y = ${zone === 'ruler' ? 'r.bottom - 5' : 'r.top + 20'};
+    t.inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: x, clientY: y }));
+    for (let i = 1; i <= 4; i++) dispatchEvent(new MouseEvent('mousemove', { clientX: x + ${dx} * i / 4, clientY: y + ${dy} * i / 4 }));
+    dispatchEvent(new MouseEvent('mouseup', { clientX: x + ${dx}, clientY: y + ${dy} }));
+  })()`);
+  const fit = await app.eval('__stet.timeline.drawn');
+  await drag('ruler', 0, 80);
+  assert.ok(await app.eval('__stet.timeline.drawn') > fit * 1.9, 'dragging the ruler down zooms in');
+  await app.eval(`__stet.timeline.inner.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: __stet.timeline.inner.getBoundingClientRect().left + 50, clientY: __stet.timeline.inner.getBoundingClientRect().bottom - 5 }))`);
+  assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'double-click: the whole script again');
+  await app.eval('__stet.view.scroller.scrollTop = 0');
+  await sleep(50);
+  await drag('band', 120, 0);
+  assert.ok(await app.eval('__stet.view.scroller.scrollTop') > 300, 'dragging the band moves the window');
+  await caret(0, 0);
+  await app.eval('__stet.view.scroller.scrollTop = 0');
+  await sleep(50);
+  const before = await app.eval('__stet.editor.caret.b');
+  await drag('scrub', 200, 0); // from a third of the way along, clear of the band at the start
+  assert.ok(await app.eval('__stet.editor.caret.b') > before, 'scrubbing moves the caret');
   // A timecode at the start of the last page at twice its minutes doubles the pace: the script comes to twice its pages in minutes.
   const hms = (sec) => [sec / 3600, (sec / 60) % 60, sec % 60].map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
   await app.eval(`void __stet.timeline.addTimecode(__stet.view.pages.length - 1)`);

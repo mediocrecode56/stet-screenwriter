@@ -21,6 +21,7 @@ export class Timeline {
     this.jump = jump; this.openNote = openNote; this.onToggle = onToggle;
     this.ppp = 0; // pixels a page; 0 fits the whole script in the bar
     this.drawn = 1; // pixels a page as last painted
+    this.bandA = this.bandB = 0; // the part of the script in the window
     this.key = '';
     host.innerHTML = '<div class="tl-side" title="Estimated length of the script"><span class="tl-len"></span></div>'
       + '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
@@ -37,18 +38,49 @@ export class Timeline {
     this.band = host.querySelector('.tl-view');
     this.len = host.querySelector('.tl-len');
 
+    // One gesture, read the way Ableton reads its arrangement: a click goes there; a drag on the
+    // ruler scrolls sideways and zooms up and down; a drag of the band (the part of the script in
+    // the window) moves the window over the script; a drag anywhere else scrubs through it.
     this.inner.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
-      const note = e.target.closest('.tl-note');
-      if (note) return this.openNote(note.dataset.id, +note.dataset.b, +note.dataset.s, +note.dataset.e);
-      const scene = e.target.closest('.tl-scene'); // a scene's line goes to its heading, however near the click
-      if (scene) return this.jump(pos(+scene.dataset.b, 0), false, null, 'top');
-      this.go(this.posAt(e.clientX));
+      const x0 = e.clientX, y0 = e.clientY;
+      const where = this.zone(e);
+      const at0 = this.posAt(x0), ppp0 = this.drawn, top0 = this.view.scroller.scrollTop;
+      const px0 = x0 - this.scroll.getBoundingClientRect().left;
+      let mode = null; // set by the first real movement
+      const move = (ev) => {
+        const dx = ev.clientX - x0, dy = ev.clientY - y0;
+        if (!mode) {
+          if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+          mode = where;
+          document.body.classList.add('tl-dragging', 'tl-drag-' + mode);
+          this.hover.hidden = true;
+        }
+        if (mode === 'ruler') this.setScale(ppp0 * 2 ** (dy / 80), at0, px0 + dx);
+        else if (mode === 'band') { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); }
+        else this.scrub(this.posAt(ev.clientX));
+      };
+      const up = () => {
+        removeEventListener('mousemove', move, true);
+        removeEventListener('mouseup', up, true);
+        document.body.classList.remove('tl-dragging', 'tl-drag-ruler', 'tl-drag-band', 'tl-drag-scrub');
+        if (mode === 'scrub') this.scrub(null);
+        if (mode) return;
+        const note = e.target.closest('.tl-note');
+        if (note) return this.openNote(note.dataset.id, +note.dataset.b, +note.dataset.s, +note.dataset.e);
+        const scene = e.target.closest('.tl-scene'); // a scene's tick goes to its heading, however near the click
+        if (scene) return this.jump(pos(+scene.dataset.b, 0), false, null, 'top');
+        this.go(at0);
+      };
+      addEventListener('mousemove', move, true);
+      addEventListener('mouseup', up, true);
     });
+    // Double-click on the ruler: the whole script, as double-clicking Ableton's ruler shows the whole arrangement.
+    this.inner.addEventListener('dblclick', (e) => { if (this.zone(e) === 'ruler') { this.ppp = 0; this.update(true); } });
     this.inner.addEventListener('contextmenu', (e) => { e.preventDefault(); this.menu(e); });
-    this.inner.addEventListener('mousemove', (e) => this.showHover(e.clientX));
-    this.inner.addEventListener('mouseleave', () => { this.hover.hidden = true; });
+    this.inner.addEventListener('mousemove', (e) => { if (!document.body.classList.contains('tl-dragging')) this.showHover(e); });
+    this.inner.addEventListener('mouseleave', () => { this.hover.hidden = true; this.band.classList.remove('hot'); });
     this.scroll.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) this.zoom(e.deltaY < 0 ? 1.25 : 0.8, e.clientX);
@@ -92,11 +124,39 @@ export class Timeline {
   zoom(f, clientX) {
     const r = this.scroll.getBoundingClientRect();
     const px = clientX == null ? r.width / 2 : clientX - r.left;
-    const at = (this.scroll.scrollLeft + px) / this.drawn;
-    const ppp = Math.min(PPP_MAX, this.scale * f);
+    this.setScale(this.drawn * f, (this.scroll.scrollLeft + px - PADX) / this.drawn, px);
+  }
+
+  /** Draw at `ppp` pixels a page (down to fitting the script), with position `at` at `px` in the bar. */
+  setScale(ppp, at, px) {
+    ppp = Math.min(PPP_MAX, ppp);
     this.ppp = ppp <= this.fit ? 0 : ppp;
     this.update(true);
-    this.scroll.scrollLeft = at * this.scale - px;
+    this.scroll.scrollLeft = at * this.drawn + PADX - px;
+  }
+
+  /** Where a pointer event is: on the ruler, on the band, or on the rest of the strip. */
+  zone(e) {
+    const r = this.inner.getBoundingClientRect();
+    if (e.clientY >= r.bottom - 15) return 'ruler';
+    const x = this.posAt(e.clientX);
+    return x >= this.bandA && x <= this.bandB && this.bandB - this.bandA < this.length * 0.98 ? 'band' : 'scrub';
+  }
+
+  /** Scrubbing: the caret and the window follow the pointer at once; null when it lets go. */
+  scrub(x) {
+    if (x == null) { const c = this.ed.caret; return this.jump(pos(c.b, c.o)); }
+    const { bi, line } = placeAt(this.view.pages, x);
+    const b = this.ed.blocks[bi];
+    if (!b) return;
+    const p = pos(bi, linesOf(b)[line] || 0);
+    const v = this.view;
+    this.ed.setSel(p, p);
+    v.stopGlide();
+    v.relayout();
+    const r = v.caretRect(p);
+    if (r) v.scroller.scrollTop = r.y - v.scroller.clientHeight / 3;
+    v.frame();
   }
 
   anchors() { return anchorsOf(this.session.doc.timecodes, this.ed.blocks, this.view.pages); }
@@ -136,6 +196,7 @@ export class Timeline {
     const top = v.pageTop(0), span = v.pageTop(1) - top;
     const at = (y) => Math.max(0, Math.min(this.length, (y - top) / span - v.offset));
     const a = at(sc.scrollTop), b = at(sc.scrollTop + sc.clientHeight);
+    this.bandA = a; this.bandB = b;
     this.band.style.left = a * this.drawn + 'px';
     this.band.style.width = Math.max(2, (b - a) * this.drawn) + 'px';
   }
@@ -191,16 +252,24 @@ export class Timeline {
     this.marks.innerHTML = m;
   }
 
-  /** The line under the pointer, with its page, time and scene. */
-  showHover(clientX) {
+  /** The line under the pointer, with its page, time and scene; on the ruler, what dragging it does. */
+  showHover(e) {
     if (!this.time) return;
-    const x = this.posAt(clientX);
-    let sc = -1;
-    for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
-    const scene = sc >= 0 ? `   ${sc + 1}  ${this.tl.scenes[sc].text || 'SCENE'}` : '';
+    const where = this.zone(e);
+    const x = this.posAt(e.clientX);
+    this.band.classList.toggle('hot', where === 'band');
+    this.inner.dataset.zone = where;
+    let text;
+    if (where === 'ruler') text = '↔ SCROLL   ↕ ZOOM   DOUBLE-CLICK: ALL';
+    else {
+      let sc = -1;
+      for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
+      const scene = sc >= 0 ? `   ${sc + 1}  ${this.tl.scenes[sc].text || 'SCENE'}` : '';
+      text = `${formatTime(this.time.at(x))}   P. ${Math.min(this.length, Math.floor(x) + 1)}${scene}`;
+    }
     this.hover.hidden = false;
     this.hover.style.left = x * this.drawn + 'px';
-    this.hover.firstChild.textContent = `${formatTime(this.time.at(x))}   P. ${Math.min(this.length, Math.floor(x) + 1)}${scene}`;
+    this.hover.firstChild.textContent = text;
     // The readout flips to the left of the line in the right half, so it stays in the bar.
     this.hover.classList.toggle('flip', x * this.drawn > this.inner.offsetWidth / 2);
   }

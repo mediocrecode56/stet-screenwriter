@@ -201,9 +201,13 @@ icon for each note, a time label every so often, the caret (the line with a cap)
 for the part of the script in the window, and the estimated length at the left. Hovering adds
 the grid, the scene numbers (when zoomed in enough for all of them to fit), the zoom buttons
 and a readout of the time, page and scene under the pointer. Clicking goes to the line drawn
-there (a scene tick to its heading, a note to its passage, with the note open). The wheel
-scrolls it; Ctrl+wheel or **−** / **+** zoom in (the grid steps between 1 second and an hour
-so it stays readable), **FIT** shows it all.
+there (a scene tick to its heading, a note to its passage, with the note open). Dragging
+works the way Ableton Live's arrangement does: on the ruler, sideways scrolls and up and down
+zooms (down zooms in), and a double-click shows the whole script; dragging the band (it shows
+its edges under the pointer, like Ableton's overview outline) moves the window over the
+script; dragging anywhere else scrubs, the caret and the page following the pointer. The
+wheel scrolls it; Ctrl+wheel or **−** / **+** zoom too (the grid steps between 1 second and
+an hour so it stays readable), and **FIT** shows it all.
 
 The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time,
 as HH:MM:SS, at the start of the line there: between two timecodes the time is spread evenly,
