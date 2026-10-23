@@ -871,7 +871,7 @@ export const ACTIVITIES = {
       const plan = d.pick({ nibble: d.focused ? 2 : 0, lieBy: 1.2, sniff: 0.8 }); // it eats only while you're here
       if (plan === 'nibble') {
         for (let i = 0; i < 3; i++) { yield { f: 'chomp', t: 220 }; yield { f: 'sniff', t: 220 }; }
-        yield { f: 'sniff', t: 200, do: () => { p.cut = 1; } }; // a bite taken out of it
+        yield { f: 'sniff', t: 200, do: (c) => { p.cut = 1; c.fed = c.now; } }; // a bite taken out of it
         yield* d.getTo('sit');
         for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'sitChew' : 'sit', t: 260 };
         yield { f: 'sitBlink', t: 400, fx: 'heart' };
@@ -883,6 +883,89 @@ export const ACTIVITIES = {
     }
     yield { f: d.sitting() ? 'sit' : postureOf(d.frame) === 'lie' ? 'lie' : 'stand', t: 400 };
     if (d.away() && d.chance(0.7)) yield* d.walkTo(d.spot(), 1, { max: 600 }); // and back home
+  },
+  // -- shameless --
+  *backScratch(d) {
+    // An itch it can't reach: it flops onto its back in the dust and wriggles, feet paddling the air,
+    // with a happy sigh now and then. Sometimes it gets stuck and has to rock to roll back over. Then up,
+    // a good shake to get the dust off, and a look round in case anyone saw. (Wet from the rain, all the more.)
+    yield* d.getTo('sit');
+    for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'sitScratch2' : 'sitScratch1', t: 130 }; // can't reach it
+    yield { f: 'sitBlink', t: 300, fx: d.chance(0.4) ? 'hash' : null };
+    yield { f: 'lie', t: 250 };
+    yield { f: 'fallen', t: 300, fx: '!' }; // flop
+    for (let i = 0, n = d.rint(5, 9); i < n; i++) {
+      yield { f: 'fallen', t: d.rnd(150, 220), face: -d.face, do: (c) => c.dirt(1) }; // a wriggle one way…
+      yield { f: 'fallen', t: d.rnd(150, 220), face: -d.face, fx: i === 2 && d.chance(0.6) ? 'heart' : null }; // …and the other
+      if (d.chance(0.15)) yield { f: 'fallen', t: d.rnd(600, 1000), fx: 'dots' }; // bliss
+    }
+    if (d.chance(0.3)) { // stuck: a rock or two to get over
+      for (let k = 0; k < 3; k++) { yield { f: 'fallen', t: 200, face: -d.face }; yield { f: 'lie', t: 160 }; }
+      yield { f: 'fallen', t: 300, fx: '?' };
+    }
+    yield { f: 'lie', t: 300 };
+    yield* d.getTo('stand');
+    for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'hunch' : 'stand', t: 110, do: k === 1 ? (c) => { c.puffAt(c.center() - 3, 3); c.wetUntil = 0; } : undefined }; // shakes off the dust
+    yield { f: 'up', t: 600, face: -d.face, fx: d.chance(0.5) ? '?' : null }; // anyone see that?
+    yield { f: 'blink', t: 200 };
+  },
+  *strut(d) {
+    // Showing off, without a shred of modesty: chest out, chin up, a slow swagger with a proud pause on
+    // every other step, and a pose at the end of its little catwalk (arms up, a star), then a look round
+    // to see who saw. Nobody clapped? Back the other way, bigger. More of a swagger once today's goal is met.
+    yield* d.getTo('stand');
+    const { today = 0, goal = 0 } = d.getProgress() || {};
+    const proud = goal > 0 && today >= goal;
+    let dir = d.inward() || (d.chance(0.5) ? 1 : -1);
+    yield { f: 'stretch', t: 500, face: dir }; // chest out
+    for (let lap = 0, laps = proud || d.chance(0.35) ? 2 : 1; lap < laps; lap++) {
+      for (let i = 0, n = d.rint(5, 8) + 2 * lap; i < n; i++) {
+        yield { f: i % 2 ? 'walk2' : 'walk1', t: d.rnd(300, 380), dx: dir * 2.2 * d.du }; // a big, slow stride
+        if (i % 2) yield { f: 'up', t: d.rnd(200, 320) }; // chin up
+      }
+      yield { f: 'armsUp', t: 600, fx: 'star' }; // ta-da
+      yield { f: 'up', t: 700, face: -dir, fx: lap ? 'heart' : '?' }; // well? did you see?
+      dir = -dir;
+    }
+    yield { f: 'blink', t: 250 };
+  },
+  *burp(d) {
+    // Something it ate repeats on it. A pause, a pat of the tummy, a breath in, and a burp that rocks it
+    // back on its heels. Then it looks pleased with itself, or sheepish, or a second, smaller one escapes.
+    const sit = postureOf(d.frame) !== 'stand';
+    yield* d.getTo(sit ? 'sit' : 'stand');
+    d.fed = -Infinity; // out it comes: one a meal
+    yield { f: sit ? 'sitBlink' : 'blink', t: 450 };
+    for (let k = 0; k < 2; k++) { yield { f: sit ? 'sitTap1' : 'hunch', t: 260 }; yield { f: sit ? 'sitTap2' : 'stand', t: 260 }; } // pats its tummy
+    yield { f: sit ? 'sitUp' : 'up', t: 380 }; // a breath in…
+    yield { f: sit ? 'sitHowl' : 'roar', t: 480, fx: 'puff', do: (c) => c.puffAt(c.nose() - 3, c.height() - 4) }; // …BURP
+    yield { f: sit ? 'sit' : 'crouch', t: 200 };
+    const after = d.pick({ proud: 1.4, sheepish: 1, again: 0.6 });
+    if (after === 'proud') { yield { f: sit ? 'sitUp' : 'up', t: 650, fx: 'star' }; yield { f: sit ? 'sitBlink' : 'blink', t: 250 }; }
+    else if (after === 'sheepish') { yield { f: sit ? 'sitBlink' : 'sniffBlink', t: 700, face: -d.face, fx: 'dots' }; yield { f: sit ? 'sit' : 'stand', t: 300, face: -d.face }; }
+    else { yield { f: sit ? 'sit' : 'stand', t: 500 }; yield { f: sit ? 'sitChew' : 'yawn', t: 260, fx: 'puff' }; yield { f: sit ? 'sitUp' : 'up', t: 500, fx: '?' }; } // a little one
+    yield { f: sit ? 'sit' : 'stand', t: 300 };
+  },
+  *photobomb(d) {
+    // Something worth a look stands nearby (a palm, a flower, a rainbow, its sandcastle…): it trots over,
+    // plants itself right in front of it and strikes a pose, grinning, arms up, with a flash. A glance
+    // along the strip (still watching?), a cheekier pose, maybe one in the air, and it saunters off as if
+    // nothing had happened.
+    const p = d.sight();
+    if (!p) return yield* ACTIVITIES.look(d);
+    yield* d.getTo('stand');
+    yield { f: 'up', t: 400, face: d.dirTo(p), fx: '!' };
+    yield* d.walkTo(() => (d.has(p) ? d.centreOn(p) : null), d.gap(p) > 120 ? 1.8 : 1.2, { max: 400 });
+    if (!d.has(p)) return;
+    yield { f: 'stand', t: 200, face: d.chance(0.5) ? 1 : -1 };
+    yield { f: 'armsUp', t: 700, fx: 'star' }; // cheese!
+    yield { f: 'armsUp', t: 300, do: (c) => c.spark(c.center(), c.height() + 2, 5) }; // the flash
+    yield { f: 'up', t: 500, face: -d.face, fx: '?' };
+    yield { f: d.pick({ oneLeg: 1, wag: 1, stretch: 1 }), t: 700, fx: d.pick({ heart: 1, note: 1, star: 0.6 }) };
+    if (d.chance(0.4)) { yield { f: 'crouch', t: 120 }; yield { f: 'jump', t: 380, jump: 5, fx: 'star' }; yield { f: 'crouch', t: 120 }; } // and one in the air
+    yield { f: 'stand', t: 300 };
+    yield { f: 'blink', t: 200, face: -d.face };
+    yield* d.walkTo(d.clampX(d.x + d.face * d.rnd(25, 50)), 0.8, { max: 40 }); // nothing to see here
   },
   // -- longer routines --
   *settleIn(d) {
@@ -1053,7 +1136,7 @@ export const ACTIVITIES = {
       yield { f: 'stand', t: 600, fx: 'dots' };
       d.expire(fl, 15000);
     } else if (plan === 'eat') {
-      for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'sniff' : 'chomp', t: 220, do: i === 3 ? (c) => c.remove(fl) : undefined };
+      for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'sniff' : 'chomp', t: 220, do: i === 3 ? (c) => { c.remove(fl); c.fed = c.now; } : undefined };
       yield { f: 'blink', t: 400, fx: 'heart' };
       yield { f: 'stand', t: 400 };
     } else if (plan === 'admire') {
@@ -1906,6 +1989,13 @@ export const REACTIONS = {
     yield { f: 'sniff', t: 300, do: (c) => { if (p && c.has(p)) c.pickUp(p); } };
     yield { f: 'stand', t: 200 };
   } },
+  encore: { cat: 'context', w: 1, ctx: (k) => (k.activity === 'strut' || k.activity === 'photobomb' ? 5 : 0), *fn(d) {
+    // Showing off and somebody noticed: a deep bow, a twirl, and a star for its audience.
+    yield { f: 'stand', t: 150, face: d.towardCursor() };
+    yield { f: 'sniff', t: 600, fx: 'heart' }; yield { f: 'sniffBlink', t: 250 };
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'walk1' : 'walk2', t: 110, face: -d.face };
+    yield { f: 'armsUp', t: 550, fx: 'star' }; yield { f: 'stand', t: 250 };
+  } },
   scootOver: { cat: 'context', w: 1, stay: true, ctx: (k) => (k.posture === 'sit' && !k.asleep ? 3 : 0), *fn(d) {
     const dir = -d.towardCursor();
     yield* d.getTo('sit');
@@ -2168,11 +2258,11 @@ export const CATEGORY = {
 // Moods drift every several minutes and tilt the odds.
 export const MOODS = {
   content: { act: {}, react: {} },
-  playful: { act: { doodle: 1.3, tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
+  playful: { act: { photobomb: 1.6, backScratch: 1.3, doodle: 1.3, tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
   curious: { act: { doodle: 1.6, sniffTrail: 2, explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
-  sleepy: { act: { doodle: 0.6, groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
-  grumpy: { act: { roar: 2.5, look: 1.3, dance: 0.3, rest: 1.2, scratch: 1.5, wag: 0.3, sing: 0.4 }, react: { normal: 1.2, none: 1.6, big: 0.8 } },
-  silly: { act: { tightrope: 2, trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 2.5, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
+  sleepy: { act: { backScratch: 1.3, strut: 0.4, doodle: 0.6, groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
+  grumpy: { act: { strut: 0.5, photobomb: 0.4, roar: 2.5, look: 1.3, dance: 0.3, rest: 1.2, scratch: 1.5, wag: 0.3, sing: 0.4 }, react: { normal: 1.2, none: 1.6, big: 0.8 } },
+  silly: { act: { strut: 2.2, photobomb: 2, burp: 1.5, backScratch: 1.5, tightrope: 2, trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 2.5, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
 };
 
 /** The audit baseline: what 0.8.0 had (activities + click reactions + the cursor glance). */

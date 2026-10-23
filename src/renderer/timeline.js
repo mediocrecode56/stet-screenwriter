@@ -25,10 +25,10 @@ const mod = (e) => (MAC ? e.metaKey : e.ctrlKey);
 const isMod = (key) => key === (MAC ? 'Meta' : 'Control');
 
 export class Timeline {
-  constructor(host, { editor, view, session, jump, openNote, onToggle }) {
+  constructor(host, { editor, view, session, jump, openNote, onToggle, lockPointer }) {
     this.host = host;
     this.ed = editor; this.view = view; this.session = session;
-    this.jump = jump; this.openNote = openNote; this.onToggle = onToggle;
+    this.jump = jump; this.openNote = openNote; this.onToggle = onToggle; this.lockPointer = lockPointer;
     this.ppp = 0; // pixels a page; 0 fits the whole script in the bar
     this.drawn = 1; // pixels a page as last painted
     this.bandA = this.bandB = 0; // the part of the script in the window
@@ -37,6 +37,7 @@ export class Timeline {
     this.pointer = null; // clientX of the pointer while it is over the bar
     this.dragging = false; // a press on the bar, until it lets go
     this.stepping = null; // see startStep()
+    this.cancelled = false; // Esc pressed while stepping, Ctrl still held
     this.editing = null; // see editTimecode()
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
@@ -62,13 +63,25 @@ export class Timeline {
       if (this.zone(e) !== 'zoom' || this.onRuler(e)) { this.ppp = 0; this.update(true); }
     });
     // Ctrl pressed with the pointer on the bar starts stepping right there; letting go ends it,
-    // and Esc puts the caret back where it was.
+    // and Esc puts the caret back where it was (and no more stepping until Ctrl is pressed again).
     addEventListener('keydown', (e) => {
-      if (this.stepping && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return this.endStep(false); }
-      if (isMod(e.key) && !e.repeat && this.pointer != null) this.startStep(this.pointer);
+      if (this.stepping && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return this.cancelStep(); }
+      if (isMod(e.key) && !e.repeat && this.pointer != null) { this.cancelled = false; this.startStep(this.pointer); }
     }, true);
-    addEventListener('keyup', (e) => { if (isMod(e.key)) this.endStep(); });
-    addEventListener('blur', () => this.endStep());
+    addEventListener('keyup', (e) => { if (isMod(e.key)) { this.cancelled = false; this.endStep(); } });
+    addEventListener('blur', () => { this.cancelled = false; this.endStep(); });
+    // The pointer is locked while stepping (see startStep()); the main process asks for it, as a
+    // modifier key alone is no user gesture. Chromium lets go of it itself on Esc (and the page never
+    // sees that key), so losing it while the window has the focus is an Esc; without the focus, the
+    // writer switched windows, which keeps the caret where it stepped to.
+    window.__stetPointerLock = () => this.lock();
+    addEventListener('blur', () => L('blur'), true); document.addEventListener('pointerlockchange', () => L('plc'), true); addEventListener('keydown', (e) => L('kd ' + e.key), true);
+    document.addEventListener('pointerlockchange', () => {
+      const f = this.stepping;
+      if (!f) return;
+      if (document.pointerLockElement === this.inner) f.locked = true;
+      else if (f.locked) document.hasFocus() ? this.cancelStep() : this.endStep();
+    });
     this.scroll.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     // The ruler and grid are drawn around the part in view; scrolling far draws the next part.
     this.scroll.addEventListener('scroll', () => {
@@ -188,10 +201,9 @@ export class Timeline {
 
   /** The pointer moving over the bar: the time and scene under it, or a step with Ctrl held. */
   over(e) {
-    if (this.dragging) return;
+    if (this.dragging || this.stepping) return;
     this.pointer = e.clientX;
-    if (mod(e)) return this.stepping ? this.step(e.clientX) : this.startStep(e.clientX);
-    this.endStep();
+    if (mod(e)) return this.cancelled ? undefined : this.startStep(e.clientX); // (only Ctrl's own key events clear `cancelled`: letting go of the lock sends a move without it)
     this.showHover(e);
   }
 
@@ -213,29 +225,50 @@ export class Timeline {
 
   /** Holding Ctrl (Cmd) over the bar steps through the script a whole second at a time, at least
    *  FINE_PX pixels of mouse travel a second from where it started, whatever the zoom, drawn to
-   *  nothing. The pointer is hidden and the line moves in its place, slower than the mouse. A cover
-   *  over the whole window takes the pointer meanwhile, so wherever it wanders (the toolbar, the
-   *  script) nothing there reacts: no hover, no click, no selection. The caret and the window
-   *  follow; a right-click pins a timecode at that second; letting go of Ctrl leaves the caret
-   *  there, Esc puts it back. */
+   *  nothing. The line moves slower than the mouse, so the pointer is locked where stepping began
+   *  and only its movement counts: it can't wander off over the toolbar or the script, nothing there
+   *  lights up or takes a click, and when Ctrl is let go it is back on the bar where it was. (Should
+   *  the lock be refused, a cover over the window takes the pointer instead.) The caret and the
+   *  window follow; a right-click pins a timecode at that second; letting go of Ctrl leaves the
+   *  caret there, Esc puts it back. */
   startStep(clientX) {
     if (!this.time || !this.visible || this.stepping || this.editing || this.dragging) return;
     const c = this.ed.caret, t0 = Math.round(this.time.at(this.posAt(clientX)));
     // The line shows at once; the caret moves only once the line does, so a shortcut pressed with
     // the pointer resting on the bar leaves it where it is.
-    this.stepping = { caret: { b: c.b, o: c.o }, t: t0, x: Math.min(this.length, this.time.pos(t0)), moved: false };
+    this.stepping = { caret: { b: c.b, o: c.o }, t: t0, x: Math.min(this.length, this.time.pos(t0)), at: clientX, moved: false, locked: false };
     this.rebase(clientX, t0);
-    const cover = this.cover = h('div', { class: 'tl-cover' });
-    cover.addEventListener('mousemove', (e) => (mod(e) ? this.step(e.clientX) : this.endStep()));
-    cover.addEventListener('mousedown', (e) => e.preventDefault());
-    cover.addEventListener('contextmenu', (e) => { e.preventDefault(); this.pinStep(); });
-    cover.addEventListener('wheel', (e) => { this.wheel(e); if (this.stepping) this.rebase(e.clientX, this.stepping.t); }, { passive: false });
-    document.body.appendChild(cover);
+    // Every pointer event is the stepping's until it ends, wherever it lands.
+    const off = this.stepOff = new AbortController(), opts = { capture: true, signal: off.signal };
+    const take = (e) => { e.preventDefault(); e.stopPropagation(); };
+    addEventListener('mousemove', (e) => { e.stopPropagation(); this.move(e); }, opts);
+    for (const type of ['mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu']) addEventListener(type, take, opts);
+    // A right-click pins on the press: with the pointer locked there is no context menu event.
+    addEventListener('mousedown', (e) => { take(e); if (e.button === 2) this.pinStep(); }, opts);
+    addEventListener('wheel', (e) => { take(e); this.wheel(e); if (this.stepping) this.rebase(this.stepping.at, this.stepping.t); }, { ...opts, passive: false });
+    this.cover = document.body.appendChild(h('div', { class: 'tl-cover' }));
     document.body.classList.add('tl-fine');
     this.hover.classList.add('fine');
     this.band.classList.remove('hot');
     this.mark(null);
     this.readout(this.stepping.x, t0);
+    this.lockPointer?.();
+  }
+
+  /** Lock the pointer to the bar while stepping (called back from the main process). */
+  lock() {
+    if (!this.stepping || document.pointerLockElement === this.inner) return;
+    return this.inner.requestPointerLock()?.catch(() => {}); // refused: the cover stands in
+  }
+
+  /** The mouse moving while stepping: by how much when the pointer is locked, else to where. */
+  move(e) {
+    const f = this.stepping;
+    // Ctrl let go where its key up didn't reach us; only without the lock, as letting go of the
+    // lock (Esc) can send a move without Ctrl before it says the lock is gone.
+    if (!mod(e)) return f.locked ? undefined : this.endStep();
+    f.at = document.pointerLockElement === this.inner ? f.at + e.movementX : e.clientX;
+    this.step(f.at);
   }
 
   /** Step from second t0 with the pointer at clientX (at the start, and after a zoom). */
@@ -248,7 +281,11 @@ export class Timeline {
   step(clientX) {
     const f = this.stepping;
     if (!f || !this.time) return;
-    const t = fineTime(f.t0, clientX - f.x0, f.px, this.time.at(this.length));
+    // Past either end the line stops, and coming back moves it again at once.
+    const total = Math.floor(this.time.at(this.length)), raw = f.t0 + (clientX - f.x0) / f.px;
+    if (raw < 0) f.x0 = clientX + f.t0 * f.px;
+    else if (raw > total) f.x0 = clientX - (total - f.t0) * f.px;
+    const t = fineTime(f.t0, clientX - f.x0, f.px, total);
     if (t === f.t) return;
     f.t = t;
     f.x = Math.min(this.length, this.time.pos(t));
@@ -262,6 +299,8 @@ export class Timeline {
     const f = this.stepping;
     if (!f) return;
     this.stepping = null;
+    this.stepOff.abort();
+    if (document.pointerLockElement) document.exitPointerLock();
     this.cover.remove();
     this.cover = null;
     document.body.classList.remove('tl-fine');
@@ -271,6 +310,12 @@ export class Timeline {
     if (!keep) this.ed.setSel(f.caret, f.caret);
     const c = this.ed.caret;
     this.jump(pos(c.b, c.o));
+  }
+
+  /** Esc: stop stepping and put the caret back; Ctrl has to be let go and pressed again to step on. */
+  cancelStep() {
+    this.cancelled = true;
+    this.endStep(false);
   }
 
   /** The caret and the window follow the line at once. */

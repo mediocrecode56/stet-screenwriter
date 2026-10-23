@@ -70,8 +70,12 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
     }
     active = { close, dlg, buttons: btns };
     if (init) init(dlg, close, btns);
-    const first = dlg.querySelector('input, select, textarea') || btns.find((b) => b.classList.contains('primary')) || btns[0];
+    // The focus moves into the dialog (a disabled button can't take it, and the script behind must
+    // never keep it: Escape and typing would go there).
+    const live = btns.filter((b) => !b.disabled);
+    const first = dlg.querySelector('input, select, textarea') || live.find((b) => b.classList.contains('primary')) || live[0];
     if (first) first.focus();
+    else { dlg.tabIndex = -1; dlg.focus(); }
   });
 }
 

@@ -47,6 +47,10 @@
 // natural end; only one event runs at a time, and one starts only when the
 // dinosaur can take part.
 //
+// It has no shame, either: now and then it flops on its back to scratch an itch (all the more after
+// the rain), swaggers up and down showing off (all the more once today's goal is met), burps after a
+// meal, and poses in front of anything worth a look, a palm or a rainbow or its own sandcastle.
+//
 // How lively it is follows the words you actually write, smoothed over minutes
 // so it warms up and calms down gradually. Time passing alone never makes it
 // busier, and it never nags: an idle writer just gets a dinosaur having a nap.
@@ -69,6 +73,8 @@ const CALM = new Set(['rest', 'look', 'sleep', 'stargaze', 'watchWriter', 'readS
 const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800], cactus: [2, 1400], grass: [2, 900] };
 // The large plants: they last a good while, and their time stands still while the window is in the background.
 const LARGE = new Set(['cactus', 'palm']);
+// What it will pose in front of (photobomb): grown plants, a rainbow, its own handiwork.
+const SIGHTS = new Set(['palm', 'flower', 'cactus', 'mushroom', 'rainbow', 'mound', 'doodle']);
 // While the window is in the background (another application has the focus) small tufts of grass creep
 // up, slowly and only so many, and after a long while it falls into a deep sleep; back at work, it wakes
 // and in its own time eats the grass. All in ms; Critter's `timing` option overrides any of them.
@@ -160,6 +166,7 @@ export class Critter {
     this.lastRare = 0;      // when the last rare surprise (an egg, a UFO) came along
     this.lastCorner = 0;    // when it last went all the way to the corner
     this.lastDone = {};     // activity → when it last began (for the rarer ones' cooldowns)
+    this.fed = -Infinity;   // when it last ate something (a burp may follow)
     // The window in the background.
     this.focused = true;
     this.blurAt = null;     // when the window lost the focus
@@ -263,6 +270,12 @@ export class Critter {
   /** The plant it has noticed and not yet been to see, once it has let it be a while. */
   plantToVisit() { return this.props.find((p) => p.wild && p.noticed && !p.visited && this.now >= p.visitAt && (this.focused || !p.tuft && p.kind !== 'grass') && p.life - (this.now - p.born) > 30000 + 80 * this.gapTo(p)) || null; } // time to get there and back; small plants only while you're here
   night() { const h = new Date(this.clock()).getHours(); return h >= 21 || h < 6; }
+  /** Something nearby worth posing in front of: full grown, whole on the strip, staying a while yet. */
+  sight() {
+    return this.props.find((p) => SIGHTS.has(p.kind) && !p.carried && !p.withering && p.fadeOutAt == null && (p.alpha ?? 1) >= 1
+      && (!GROW[p.kind] || p.frame === GROW[p.kind][0]) && p.x >= 0 && p.x + this.propW(p) <= this.stripW
+      && this.gapTo(p) < 400 && p.life - (this.now - p.born) > 20000) || null;
+  }
 
   /** What it is doing right now — the context a click or an event is answered in. */
   context() {
@@ -341,6 +354,8 @@ export class Critter {
     const calmSky = this.floating() < 2;
     const roomOut = this.zone(0) > 60 || this.zone(1) < this.maxX - 60; // somewhere beyond its home stretch to explore
     const plant = this.plantToVisit();
+    const { today = 0, goal = 0 } = this.getProgress() || {};
+    const goalMet = goal > 0 && today >= goal;
     const w = {
       sleep: e < 0.15 ? (idle > 240 ? 6 : 0.8) : 0,
       rest: 4 * (1 - e) + 0.4,
@@ -399,6 +414,12 @@ export class Critter {
       tightrope: this.since('tightrope') > 35 * MIN ? 0.05 + 0.05 * e : 0, // less common: a balancing act on the line
       plantSeed: this.focused && free && !this.find('flower') && this.since('plantSeed') > 35 * MIN ? 0.06 : 0, // less common: it plants a flower
       graze: tuft ? 1.4 + 0.25 * this.tufts().length : 0,
+      // Shameless: a roll on its back (the more after the rain), a swagger (the more once today's goal is
+      // met), a burp after a meal, and posing in front of whatever is worth a look.
+      backScratch: 0.15 + 0.25 * (1 - e) + (now < this.wetUntil ? 0.8 : 0),
+      strut: 0.08 + 0.3 * e + (goalMet ? 0.45 : 0),
+      burp: now - this.fed < 2 * MIN ? 2.4 : 0,
+      photobomb: this.since('photobomb') > 5 * MIN && this.sight() ? 0.5 : 0,
       // The environment: new things now and then, and what it does with them while they last.
       palmTree: !this.find('palm') && this.envOk('palm', 6 * MIN) ? 0.12 : 0,
       treeShade: tree ? 1.1 : 0,
@@ -545,6 +566,7 @@ export class Critter {
   /** A bite out of a tuft (a stage shorter); the last bite takes it. */
   bite(p) {
     if (!this.has(p)) return;
+    this.fed = this.now;
     if (p.frame <= 0) { this.remove(p); return; }
     p.frame -= 1;
     p.cut = GROW.grass[0] - p.frame;

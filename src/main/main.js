@@ -154,6 +154,7 @@ function registerIpc() {
     defaultDir: defaultDir(), userData: app.getPath('userData'), electron: process.versions.electron,
     // A packaged STET checks for updates when it starts (unless turned off in Preferences); tests point it at a mock.
     updateCheck: (app.isPackaged || !!process.env.STET_UPDATE_URL) && !PERF && !SHOT && !SAMPLE,
+    updateDelay: E2E && Number(process.env.STET_UPDATE_DELAY_MS) || 3000, // a few seconds after starting (tests: sooner)
   }));
   handle('app:link-files', (file) => (E2E && !process.env.STET_E2E_LINK ? { ok: true, message: 'e2e' } : linkFiles({ file: typeof file === 'string' && /\.stet$/i.test(file) ? file : null })));
   handle('app:open-url', (which) => shell.openExternal(which === 'releases' ? RELEASES_URL : REPO_URL));
@@ -347,6 +348,9 @@ function registerIpc() {
   handle('review:cancel', (id) => claude.cancel(id));
 
   // Test driver only: close the window the way its X button does.
+  // Stepping on the timeline locks the pointer; a modifier key held is no user gesture, so the
+  // page can't ask for the lock itself. The code is fixed: nothing from the page runs here.
+  ipcMain.handle('pointer:lock', (e) => e.sender.executeJavaScript('window.__stetPointerLock?.()', true).then(() => true, () => false));
   handle('e2e:close-window', () => { if (E2E && win) setImmediate(() => win && win.close()); return E2E; });
   handle('stats:get', () => stats.state());
   handle('stats:add', (batch) => stats.add(batch));

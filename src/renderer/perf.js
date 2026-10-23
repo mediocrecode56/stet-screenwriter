@@ -174,7 +174,8 @@ async function probeCase({ pages, editor, view, input, session, scratch }) {
   return r;
 }
 
-export async function runPerfProbe({ editor, view, input, session, writing, api, report }) {
+/** Measures a 120- and a 400-page script (the tests pass smaller `sizes`: the same steps, sooner). */
+export async function runPerfProbe({ editor, view, input, session, writing, api, report, sizes = [120, 400] }) {
   // Put the open screenplay aside (saved first, as on any switch) and silence everything that
   // would otherwise remember the probe's scripts.
   await session.flushAll();
@@ -187,8 +188,8 @@ export async function runPerfProbe({ editor, view, input, session, writing, api,
   const results = { when: new Date().toISOString(), cases: {} };
   try {
     const frame = await frameTime();
-    for (const pages of [120, 400]) results.cases[`${pages}p`] = await probeCase({ pages, editor, view, input, session, scratch });
-    Object.assign(results, scoreOf(results.cases['400p'], frame), { frameMs: +frame.toFixed(1) });
+    for (const pages of sizes) results.cases[`${pages}p`] = await probeCase({ pages, editor, view, input, session, scratch });
+    Object.assign(results, scoreOf(results.cases[`${sizes.at(-1)}p`], frame), { frameMs: +frame.toFixed(1) });
     results.ui = { devicePixelRatio, viewport: `${innerWidth}x${innerHeight}` };
   } finally {
     await api.invoke('perf:cleanup');
@@ -211,7 +212,7 @@ function showResults(r) {
   const fmt = (v) => (v < 10 ? v.toFixed(1) : Math.round(v).toLocaleString());
   const rows = r.items.map((i) => h('tr', {},
     h('td', {}, i.label), h('td', { class: 'pf-n' }, `${fmt(i.value)} ms`), h('td', { class: 'pf-n pf-dim' }, `≤ ${fmt(i.budget)}`), h('td', { class: 'pf-n' }, String(i.score))));
-  const big = r.cases['400p'];
+  const big = Object.values(r.cases).at(-1);
   const body = h('div', { class: 'body pf' },
     h('div', { class: 'pf-head' }, h('div', { class: 'pf-score' }, String(r.score)), h('div', {}, h('div', { class: 'pf-grade' }, grade(r.score)), h('div', { class: 'pf-dim' }, `out of 100 · ${big.pages} pages · display ${fmt(r.frameMs)} ms per frame`))),
     h('table', { class: 't pf-t' }, h('thead', {}, h('tr', {}, h('th', {}, 'Measured on the large script'), h('th', { class: 'pf-n' }, 'Time'), h('th', { class: 'pf-n' }, 'Budget'), h('th', { class: 'pf-n' }, 'Score'))), h('tbody', {}, ...rows)),

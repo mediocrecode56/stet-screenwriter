@@ -200,6 +200,7 @@ export class Revision {
     if (!this.findings.length) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
+      this.timer = 0;
       const seen = () => this.findings.map((f) => f.id + (this.located(f) ? 1 : 0)).join();
       const before = seen();
       this.relocate();

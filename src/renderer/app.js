@@ -87,6 +87,7 @@ const timeline = new Timeline($('timeline'), {
   editor, view, session, jump,
   openNote: (id, b, s, e) => { jump(pos(b, s), true, pos(b, e), true); view.activeComment = id; openNote(id); view.invalidate(); },
   onToggle: (on) => api.invoke('settings:set', { timeline: on }),
+  lockPointer: () => api.invoke('pointer:lock'),
 });
 
 view.onTitleInput = () => session.touch();
@@ -661,10 +662,14 @@ async function saveAs() {
 }
 
 /** Opens a screenplay; true once it is open. `quiet`: a file that can't be read is skipped without a word. */
-async function openPath(file, { quiet = false } = {}) {
+/** Open a screenplay. `quiet`: no message if it can't be read. `onlyOver`: only in place of that
+ *  document, untouched (the reopening on launch gives way to anything the writer does meanwhile). */
+async function openPath(file, { quiet = false, onlyOver = null } = {}) {
+  const movedOn = () => onlyOver && (session.doc !== onlyOver || session.dirty);
   if (/\.fdx$/i.test(file)) return importFdx(file);
   if (!(await releaseCurrent())) return false;
   const r = await Session.readFile(file);
+  if (movedOn()) return false;
   if (!r.ok) {
     if (quiet) return false;
     const v = await dlg.choose('CANNOT OPEN', `${file}\n\n${r.error}`, [{ label: 'Close', value: null }, { label: 'Look for backups…', value: 'backups', primary: true }]);
@@ -692,6 +697,7 @@ async function openPath(file, { quiet = false } = {}) {
       await api.invoke('recovery:clear', pending.id);
     }
   }
+  if (movedOn()) return false;
   session.load(r.doc, file);
   if (r.warnings.length) dlg.alertBox('OPENED WITH WARNINGS', 'The document was opened, but some parts needed repair:', [...new Set(r.warnings)].join('\n'));
   return true;
@@ -1001,7 +1007,7 @@ cmd.register([
   { id: 'revise-prev', cat: 'Tools', label: 'Previous Suggestion', keys: 'Shift+F7', global: true, run: () => revision.step(-1) },
   { id: 'revise-dict', cat: 'Tools', label: 'Dictionary & Ignored…', run: () => dictionaryDialog(revision) },
   { id: 'claude-key', cat: 'Tools', label: 'Claude Connection…', run: () => keyDialog() },
-  { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, writing, api, report: false }) },
+  { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, writing, api, report: false, ...(info.e2e && window.__stetPerfSizes ? { sizes: window.__stetPerfSizes } : {}) }) },
 
   { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog({
     cmds: cmd.all(), keymap: cmd.keymap,
@@ -1125,10 +1131,12 @@ if (info.sample) {
     // A file STET was launched with, or else the last screenplay edited (then the newest entry in
     // Open Recent) that can still be opened.
     const pending = await api.invoke('app:pending-open');
+    const blank = session.doc;
     if (pending) await openPath(pending);
-    else for (const p of launchOrder(settings.recent, settings.lastEdited)) if (await openPath(p, { quiet: true })) break;
+    else for (const p of launchOrder(settings.recent, settings.lastEdited)) if (session.doc !== blank || await openPath(p, { quiet: true, onlyOver: blank })) break;
   }
 }
+if (info.e2e) window.__stet.started = true; // the tests begin once STET has finished starting
 if (info.run) setTimeout(() => cmd.run(info.run), 300);
-if (info.updateCheck && settings.updateCheck !== false) setTimeout(() => updates.check(false), 3000);
+if (info.updateCheck && settings.updateCheck !== false) setTimeout(() => updates.check(false), info.updateDelay);
 
