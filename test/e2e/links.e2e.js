@@ -37,7 +37,9 @@ test('Help > Open .stet Files with STET answers with a message', async () => {
     await app.eval(`__stet.cmd.run('link-files')`);
   }
   let text = '';
-  for (let i = 0; i < 100 && !text; i++) { await sleep(100); text = await app.eval(`(document.querySelector('.dlg') || {}).textContent || ''`); }
+  // For real (STET_E2E_LINK), the system registers STET first: on a fresh Mac that takes a while.
+  const wait = process.env.STET_E2E_LINK ? 600 : 100;
+  for (let i = 0; i < wait && !text; i++) { await sleep(100); text = await app.eval(`(document.querySelector('.dlg') || {}).textContent || ''`); }
   assert.match(text, /STET FILES/);
   if (process.env.STET_E2E_LINK) {
     assert.match(text, /Done\. Double-clicking a \.stet screenplay now opens it in STET/);
