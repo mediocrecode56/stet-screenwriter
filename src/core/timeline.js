@@ -82,6 +82,11 @@ export function snapTo(targets, x, tol) {
   return best;
 }
 
+/** Fine scrubbing: the whole second `dx` pixels on from second t0, a second every `px` pixels, kept within 0..total. */
+export function fineTime(t0, dx, px, total) {
+  return Math.max(0, Math.min(Math.floor(total), Math.round(t0 + dx / px)));
+}
+
 /** Timecodes pinned in the script, as positions: [{ x, t, id }] in script order, unusable ones left out. */
 export function anchorsOf(timecodes, blocks, pages) {
   if (!timecodes || !timecodes.length) return [];

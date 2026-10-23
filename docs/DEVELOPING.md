@@ -204,9 +204,12 @@ and scene under the pointer. The pointer is drawn to a scene, note, highlight or
 (`snapTo`), and the mark lights up. Clicking goes to the line drawn there (a scene to its
 heading, a note to its passage, with the note open). Dragging sideways anywhere zooms around
 the point pressed (right zooms in, down to about 100 pixels a second; left-right arrow
-cursor); the band (hand cursor; its edges show) moves the window over the script; Ctrl+drag
-(Cmd on a Mac) scrubs second by second, 8 pixels a second, with the time shown. The small
-button in the right corner, or a double-click on the ruler or the band, shows the whole script.
+cursor); the band (hand cursor; its edges show) moves the window over the script. Moving
+over the bar with Ctrl held (Cmd on a Mac), no click needed, steps a whole second at a time
+from where Ctrl was first held (`fineTime`; at least 8 pixels a second, wider when zoomed in):
+the caret and the window follow, the readout shows the exact second, a right-click there offers
+that second for a timecode, and letting go of Ctrl leaves the caret there. The round button
+centred on the right, or a double-click on the ruler or the band, shows the whole script.
 The wheel scrolls it and Ctrl+wheel zooms; the grid steps between 1 second and an hour so it
 stays readable, and the ruler is drawn only around the part in view.
 

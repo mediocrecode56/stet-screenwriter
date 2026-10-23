@@ -1,19 +1,19 @@
 // The timeline bar under the toolbar (View > Timeline): the script from left to right, a tick
 // for each scene, the highlights in their colours, the notes, and a time ruler that counts a
 // minute a page until timecodes are pinned to it (right-click). Clicking goes there; dragging
-// sideways zooms, dragging the band moves the window, and Ctrl+dragging scrubs second by second.
+// sideways zooms, dragging the band moves the window, and moving with Ctrl held steps second by second.
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime } from '../core/timeline.js';
 import * as dlg from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
 
 const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a page
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const SNAP_PX = 6; // how near a scene, note, highlight or timecode draws the pointer to it
-const FINE_PX = 8; // pixels a second when Ctrl+dragging
-const RESET_ICON = '<svg width="11" height="9" viewBox="0 0 11 9" aria-hidden="true"><path d="M0.5 4.5h3.5M2.5 2.5l2 2-2 2M10.5 4.5H7M8.5 2.5l-2 2 2 2M5.5 0.5v8" fill="none" stroke="currentColor"/></svg>';
+const FINE_PX = 8; // fewest pixels a second with Ctrl held
+const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.6 5.2A5 5 0 1 1 2 7.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M1.2 1.8v4h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const NOTE_ICON = '<svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0.5 0.5h8v5.5H4L1.8 8.2V6H0.5z" fill="currentColor"/></svg>';
 
 export class Timeline {
@@ -27,7 +27,7 @@ export class Timeline {
     this.key = '';
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
-      + `<button class="tl-reset" hidden title="Whole script">${RESET_ICON}</button>`;
+      + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
     this.scroll = host.querySelector('.tl-scroll');
     this.inner = host.querySelector('.tl-inner');
     this.grid = host.querySelector('.tl-grid');
@@ -42,16 +42,16 @@ export class Timeline {
 
     // One gesture: a click goes there (drawn to a scene, note or highlight close by); a drag
     // sideways zooms around the point pressed (right to zoom in); a drag of the band (the part of
-    // the script in the window) moves the window over the script; Ctrl+drag scrubs second by second.
+    // the script in the window) moves the window over the script. With Ctrl held, see fine().
     this.inner.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
+      if (e.ctrlKey || e.metaKey) return this.fine(e);
       const x0 = e.clientX, y0 = e.clientY;
-      const where = e.ctrlKey || e.metaKey ? 'fine' : this.zone(e);
+      const where = this.zone(e);
       const at0 = this.posAt(x0), ppp0 = this.drawn, top0 = this.view.scroller.scrollTop;
       const px0 = x0 - this.scroll.getBoundingClientRect().left;
       const near = this.snap(at0);
-      const t0 = this.time ? Math.round(this.time.at(near ? near.x : at0)) : 0;
       let mode = null; // set by the first real movement
       const move = (ev) => {
         const dx = ev.clientX - x0, dy = ev.clientY - y0;
@@ -62,19 +62,12 @@ export class Timeline {
           this.hover.hidden = true;
         }
         if (mode === 'zoom') this.setScale(ppp0 * 2 ** (dx / 50), at0, px0);
-        else if (mode === 'band') { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); }
-        else {
-          const t = Math.max(0, Math.min(this.time.at(this.length), t0 + Math.round(dx / FINE_PX)));
-          const x = Math.min(this.length, this.time.pos(t));
-          this.scrub(x);
-          this.readout(x, t);
-        }
+        else { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); }
       };
       const up = () => {
         removeEventListener('mousemove', move, true);
         removeEventListener('mouseup', up, true);
-        document.body.classList.remove('tl-dragging', 'tl-drag-zoom', 'tl-drag-band', 'tl-drag-fine');
-        if (mode === 'fine') { this.scrub(null); this.hover.hidden = true; }
+        document.body.classList.remove('tl-dragging', 'tl-drag-zoom', 'tl-drag-band');
         if (mode) return;
         const note = e.target.closest('.tl-note') ? this.tl.notes[+e.target.closest('.tl-note').dataset.i] : near && near.kind === 'note' ? near : null;
         if (note) return this.openNote(note.id, note.b, note.s, note.e);
@@ -87,8 +80,15 @@ export class Timeline {
     // Double-click on the ruler or the band: the whole script, as in Ableton.
     this.inner.addEventListener('dblclick', (e) => { if (this.zone(e) !== 'zoom' || e.clientY >= this.inner.getBoundingClientRect().bottom - 15) { this.ppp = 0; this.update(true); } });
     this.inner.addEventListener('contextmenu', (e) => { e.preventDefault(); this.menu(e); });
-    this.inner.addEventListener('mousemove', (e) => { if (!document.body.classList.contains('tl-dragging')) this.showHover(e); });
-    this.inner.addEventListener('mouseleave', () => { this.hover.hidden = true; this.band.classList.remove('hot'); this.mark(null); });
+    this.inner.addEventListener('mousemove', (e) => {
+      if (document.body.classList.contains('tl-dragging')) return;
+      if (e.ctrlKey || e.metaKey) return this.fine(e);
+      this.endFine();
+      this.showHover(e);
+    });
+    this.inner.addEventListener('mouseleave', () => { this.endFine(); this.hover.hidden = true; this.band.classList.remove('hot'); this.mark(null); });
+    addEventListener('keyup', (e) => { if (e.key === 'Control' || e.key === 'Meta') this.endFine(); });
+    addEventListener('blur', () => this.endFine());
     this.scroll.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) this.zoom(2 ** (-Math.max(-200, Math.min(200, e.deltaY)) / 200), e.clientX); // in step with the wheel or a pinch
@@ -106,6 +106,7 @@ export class Timeline {
   get visible() { return !this.host.hidden; }
 
   show(on = !this.visible) {
+    if (!on) this.endFine();
     this.host.hidden = !on;
     if (on) this.update(true);
     this.onToggle(on);
@@ -162,6 +163,39 @@ export class Timeline {
     this.marked = el;
   }
 
+  /** Moving over the bar with Ctrl (Cmd) held steps through the script a whole second at a time,
+   *  at least FINE_PX pixels a second from where it started, whatever the zoom; the caret and the
+   *  window follow, and a right-click pins a timecode at that second. Letting go of Ctrl leaves the
+   *  caret there. */
+  fine(e) {
+    if (!this.time) return;
+    let f = this.stepping;
+    if (!f) {
+      const at = this.posAt(e.clientX), near = this.snap(at);
+      const t0 = Math.round(this.time.at(near ? near.x : at));
+      const px = Math.max(FINE_PX, (this.time.pos(t0 + 1) - this.time.pos(t0)) * this.drawn);
+      f = this.stepping = { x0: e.clientX, t0, px, t: null, x: 0 };
+      document.body.classList.add('tl-fine');
+      this.hover.classList.add('fine');
+      this.band.classList.remove('hot');
+      this.mark(null);
+    }
+    const t = fineTime(f.t0, e.clientX - f.x0, f.px, this.time.at(this.length));
+    if (t === f.t) return;
+    f.t = t;
+    f.x = Math.min(this.length, this.time.pos(t));
+    this.scrub(f.x);
+    this.readout(f.x, t);
+  }
+
+  endFine() {
+    if (!this.stepping) return;
+    this.stepping = null;
+    document.body.classList.remove('tl-fine');
+    this.hover.classList.remove('fine');
+    this.scrub(null);
+  }
+
   /** Scrubbing: the caret and the window follow at once; null when it lets go. */
   scrub(x) {
     if (x == null) { const c = this.ed.caret; return this.jump(pos(c.b, c.o)); }
@@ -186,7 +220,8 @@ export class Timeline {
     const pages = this.view.pages;
     const tcs = this.session.doc.timecodes || [];
     const key = `${this.ed.rev}|${pages.length}|${this.scale}|${tcs.map((t) => t.id + ':' + t.line + ':' + t.t).join(',')}`;
-    if (force || this.drawn !== this.scale) this.repaint(key);
+    // Another script, or one laid out to more or fewer pages: at once.
+    if (force || this.drawn !== this.scale || this.session.doc !== this.docSeen || pages.length !== this.drawnPages) this.repaint(key);
     else if (key !== this.key || pages !== this.pagesSeen) {
       // While typing, the bar catches up a moment after the last key rather than on every one.
       clearTimeout(this.later);
@@ -225,6 +260,8 @@ export class Timeline {
     clearTimeout(this.later);
     this.key = key;
     this.pagesSeen = this.view.pages;
+    this.docSeen = this.session.doc;
+    this.drawnPages = this.view.pages.length;
     this.paint();
   }
 
@@ -313,9 +350,10 @@ export class Timeline {
   // ---- timecodes ------------------------------------------------------------------------
 
   menu(e) {
-    const x = this.posAt(e.clientX);
+    const f = this.stepping && this.stepping.t != null ? this.stepping : null; // with Ctrl held: the second stepped to
+    const x = f ? f.x : this.posAt(e.clientX);
     const near = this.anchors().find((a) => Math.abs(a.x - x) * this.drawn < 6);
-    const items = [{ label: near ? 'Change Timecode…' : 'Add Timecode Here…', run: () => this.addTimecode(near ? near.x : x, near) }];
+    const items = [{ label: near ? 'Change Timecode…' : 'Add Timecode Here…', run: () => this.addTimecode(near ? near.x : x, near, f && !near ? f.t : null) }];
     if (near) items.push({ label: 'Remove Timecode', run: () => this.setTimecodes(this.tcs().filter((t) => !(t.id === near.id && t.line === near.line))) });
     if (this.tcs().length) items.push('-', { label: 'Remove All Timecodes', run: () => this.setTimecodes([]) });
     menuAt(e.clientX, e.clientY, items);
@@ -329,13 +367,14 @@ export class Timeline {
     this.update(true);
   }
 
-  /** Pin the time at position x (the start of the line there), asking for it as HH:MM:SS. */
-  async addTimecode(x, existing) {
+  /** Pin the time at position x (the start of the line there), asking for it as HH:MM:SS
+   *  (offering `t`, or the time there now). */
+  async addTimecode(x, existing, t0 = null) {
     const { bi, line } = existing ? { bi: this.ed.blocks.findIndex((b) => b.id === existing.id), line: existing.line } : placeAt(this.view.pages, x);
     const b = this.ed.blocks[bi];
     if (!b) return;
     const here = scriptPos(this.view.pages, bi, line);
-    const v = await dlg.prompt('TIMECODE', 'Time at this point (HH:MM:SS)', formatTime(this.time ? this.time.at(here) : here * 60),
+    const v = await dlg.prompt('TIMECODE', 'Time at this point (HH:MM:SS)', formatTime(t0 ?? (this.time ? this.time.at(here) : here * 60)),
       'The rest of the timeline is estimated from it: evenly between timecodes, and at the pace so far after the last one.');
     if (v == null) return;
     const t = parseTime(v);

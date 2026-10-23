@@ -157,12 +157,12 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await app.eval('document.querySelector("#timeline .tl-reset").click()');
   assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'reset: the whole script again');
   // The gestures: drag sideways to zoom, double-click the ruler for the whole script;
-  // drag the band to move the window; Ctrl+drag to scrub second by second.
-  const drag = (zone, dx, dy, ctrl = false) => app.eval(`(() => {
+  // drag the band to move the window; move with Ctrl held to step second by second.
+  const drag = (zone, dx, dy) => app.eval(`(() => {
     const t = __stet.timeline, r = t.inner.getBoundingClientRect();
     const x = ${zone === 'band' ? '(t.bandA + t.bandB) / 2 * t.drawn + r.left' : 'r.left + r.width * 0.3'}, y = ${zone === 'ruler' ? 'r.bottom - 5' : 'r.top + 20'};
-    t.inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: x, clientY: y, ctrlKey: ${ctrl} }));
-    for (let i = 1; i <= 4; i++) dispatchEvent(new MouseEvent('mousemove', { clientX: x + ${dx} * i / 4, clientY: y + ${dy} * i / 4, ctrlKey: ${ctrl} }));
+    t.inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: x, clientY: y }));
+    for (let i = 1; i <= 4; i++) dispatchEvent(new MouseEvent('mousemove', { clientX: x + ${dx} * i / 4, clientY: y + ${dy} * i / 4 }));
     const read = t.hover.textContent;
     dispatchEvent(new MouseEvent('mouseup', { clientX: x + ${dx}, clientY: y + ${dy} }));
     return read;
@@ -180,11 +180,20 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await sleep(50);
   const before = await app.eval('__stet.editor.caret.b');
   const t0 = await app.eval('Math.round(__stet.timeline.time.at(__stet.timeline.posAt(__stet.timeline.inner.getBoundingClientRect().left + __stet.timeline.inner.getBoundingClientRect().width * 0.3)))');
-  const read = await drag('scrub', 80, 0, true); // from a third of the way along, clear of the band at the start
-  assert.ok(await app.eval('__stet.editor.caret.b') > before, 'scrubbing moves the caret');
+  // Just moving over it with Ctrl held, no click: from a third of the way along, clear of the band at the start.
+  const read = await app.eval(`(() => {
+    const t = __stet.timeline, r = t.inner.getBoundingClientRect(), x = r.left + r.width * 0.3, y = r.top + 20;
+    for (let i = 0; i <= 8; i++) t.inner.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x + i * 10, clientY: y, ctrlKey: true }));
+    return t.hover.textContent;
+  })()`);
+  assert.ok(await app.eval('__stet.editor.caret.b') > before, 'stepping moves the caret');
   const secs = read.trim().slice(0, 8).split(':').reduce((n, v) => n * 60 + +v, 0);
-  assert.ok(Math.abs(secs - (t0 + 10)) <= 1, `80px with Ctrl held is ten seconds on (${read}, from ${t0})`);
-  assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'Ctrl+drag scrubs, it does not zoom');
+  assert.equal(secs, t0 + 10, `80px with Ctrl held is ten seconds on (${read}, from ${t0})`);
+  assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'Ctrl steps, it does not zoom');
+  const stepped = await app.eval('__stet.editor.caret.b');
+  await app.eval(`dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }))`);
+  assert.equal(await app.eval('!!__stet.timeline.stepping || document.body.classList.contains("tl-fine")'), false, 'letting go of Ctrl ends it');
+  assert.equal(await app.eval('__stet.editor.caret.b'), stepped, 'and the caret stays where it stepped to');
   // A timecode at the start of the last page at twice its minutes doubles the pace: the script comes to twice its pages in minutes.
   const hms = (sec) => [sec / 3600, (sec / 60) % 60, sec % 60].map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
   await app.eval(`void __stet.timeline.addTimecode(__stet.view.pages.length - 1)`);

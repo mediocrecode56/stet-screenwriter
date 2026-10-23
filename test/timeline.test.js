@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, SEC_PER_PAGE } from '../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, SEC_PER_PAGE } from '../src/core/timeline.js';
 import { paginate } from '../src/core/layout.js';
 import { newDocument, makeBlock } from '../src/core/model.js';
 import { serialize, deserialize } from '../src/core/serialize.js';
@@ -112,4 +112,14 @@ test('the pointer is drawn to the nearest mark within reach, and to none further
   assert.equal(snapTo(marks, 0.99, 0.05).kind, 'scene');
   assert.equal(snapTo(marks, 2, 0.05), null);
   assert.equal(snapTo([], 1, 1), null);
+});
+
+test('fineTime: a second every so many pixels from where Ctrl was pressed, never past either end', () => {
+  assert.equal(fineTime(30, 0, 8, 600), 30);
+  assert.equal(fineTime(30, 80, 8, 600), 40);
+  assert.equal(fineTime(30, 83, 8, 600), 40);
+  assert.equal(fineTime(30, -85, 8, 600), 19);
+  assert.equal(fineTime(30, -1000, 8, 600), 0);
+  assert.equal(fineTime(595, 1000, 8, 600.7), 600);
+  assert.equal(fineTime(30, 100, 50, 600), 32); // zoomed in, a second is wider
 });
