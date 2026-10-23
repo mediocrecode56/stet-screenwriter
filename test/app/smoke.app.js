@@ -282,10 +282,10 @@ test('the timeline: a timecode sets the pace of the ruler; crowded labels give w
 test('a changed shortcut works, and the old keys no longer do', async () => {
   await app.load([['action', 'Text.']]);
   await app.caret(0, 0, 5);
-  await app.eval(`__stet.cmd.setShortcuts({ 'type-character': ['Ctrl+M C'] })`);
+  await app.eval(`__stet.cmd.setShortcuts({ 'type-character': ['Ctrl+T C'] })`);
   await app.key('Mod+3');
   assert.equal(await app.eval('__stet.editor.block.type'), 'action', 'Ctrl+3 is free now');
-  await app.key('Mod+M'); await app.key('C'); // (shortcuts written with Ctrl are Cmd on a Mac)
+  await app.key('Mod+T'); await app.key('C'); // (shortcuts written with Ctrl are Cmd on a Mac; Cmd+M would be the Mac's Minimize)
   assert.deepEqual(await app.blocks(), [['character', 'TEXT.']]);
   await app.eval(`__stet.cmd.setShortcuts({})`);
 });

@@ -212,10 +212,10 @@ test('shortcuts can be changed in Help > Keyboard Shortcuts: a clash is named fi
   await app.eval(`[...${row('zoom-in')}.querySelectorAll('button')].find((b) => b.textContent === 'replace').click()`);
   assert.equal(await keyText('zoom-in'), 'Ctrl+J');
   assert.equal(await keyText('align-justify'), '', 'Justify gave it up');
-  // Find & Replace on a sequence of two: Ctrl+M, then H.
+  // Find & Replace on a sequence of two: Ctrl+T, then H (not M: on a Mac Cmd+M minimizes the window).
   await app.eval(`${row('replace')}.click()`);
-  await app.key('Mod+M'); await app.key('H');
-  await app.until(async () => { const c = await cell('replace'); return /M H/.test(c) && !c.includes('…'); }, { what: 'the sequence recorded (no “…” waiting for a third key)' });
+  await app.key('Mod+T'); await app.key('H');
+  await app.until(async () => { const c = await cell('replace'); return /T H/.test(c) && !c.includes('…'); }, { what: 'the sequence recorded (no “…” waiting for a third key)' });
   // A key that would get in the way of typing is refused; Escape while recording cancels.
   await app.eval(`${row('find')}.click()`);
   await app.key('K');
@@ -234,13 +234,13 @@ test('shortcuts can be changed in Help > Keyboard Shortcuts: a clash is named fi
   assert.equal(await app.eval('__stet.editor.blocks[0].align'), undefined, 'Ctrl+J no longer justifies');
   assert.ok(await app.eval('__stet.view.z') > z, 'it zooms in');
   await app.eval(`__stet.cmd.run('zoom-reset')`);
-  await app.key('Mod+M'); await app.key('H');
-  await app.until(`!document.getElementById('findbar').hidden`, { what: 'Ctrl+M H to open Find & Replace' });
+  await app.key('Mod+T'); await app.key('H');
+  await app.until(`!document.getElementById('findbar').hidden`, { what: 'Ctrl+T H to open Find & Replace' });
   assert.equal(await app.eval(`__stet.editor.blocks[0].text`), 'One.', 'and typed nothing');
   await app.key('Escape');
   assert.match(await app.eval(`document.getElementById('btn-notes').title`), /^Comments \(/);
   const saved = await app.until(`window.stet.invoke('settings:get').then((s) => s.shortcuts.replace && s.shortcuts)`);
-  assert.deepEqual([saved['zoom-in'], saved['align-justify'], saved.replace], [['Ctrl+J'], [], ['Ctrl+M H']], 'saved in the settings');
+  assert.deepEqual([saved['zoom-in'], saved['align-justify'], saved.replace], [['Ctrl+J'], [], ['Ctrl+T H']], 'saved in the settings');
   await app.eval(`__stet.cmd.run('keys')`);
   await app.until(dialogOpen);
   await app.press('Reset All');
