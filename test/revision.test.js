@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChunks, chunkPrompt, validateFindings, findWhole, minimalEdit, locate, locateAll, planApply, afterApply, isApplied, sortByText, FINDINGS_SCHEMA, REVIEWABLE } from '../src/core/revision.js';
+import { buildChunks, chunkPrompt, validateFindings, findWhole, minimalEdit, locate, locateAll, planApply, afterApply, isApplied, sortByText, FINDINGS_SCHEMA, REVIEWABLE, SYSTEM_PROMPT } from '../src/core/revision.js';
 import { Editor, pos } from '../src/core/editor.js';
 import { makeBlock } from '../src/core/model.js';
 import { generateScript } from './fixtures.js';
@@ -140,6 +140,30 @@ test('reopening an accepted suggestion keeps its place, so accepting it again on
   assert.equal(planApply([f], ed.blocks).applied.length, 1);
 });
 
+test('a reopened suggestion keeps its place when another one in the same element is accepted', () => {
+  const ed = new Editor(script());
+  const [c] = buildChunks(ed.blocks);
+  const { findings } = validateFindings(c, [
+    { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enters', explanation: '', confidence: 'high' },
+    { element: 'e1', category: 'grammar', original: 'make a coffee', replacement: 'makes coffee', explanation: '', confidence: 'medium' },
+  ], refs(ed.blocks));
+  const [a, b] = findings;
+  const p1 = planApply([b], ed.blocks);
+  ed.replaceRanges(p1.matches, p1.replacements);
+  afterApply(findings, p1, ed.blocks);
+  b.decision = null; // reopened, its change still in the script
+  const p2 = planApply([a], ed.blocks); // an edit before it, in the same element
+  ed.replaceRanges(p2.matches, p2.replacements);
+  afterApply(findings, p2, ed.blocks);
+  assert.equal(ed.blocks[1].text, 'Mara enters the kitchen and makes coffee.');
+  assert.equal(b.ref, ed.blocks[1], 'moved exactly past the edit, not left for the context search');
+  assert.equal(ed.blocks[1].text.slice(b.s, b.e), 'makes');
+  const at = locate(b, ed.blocks);
+  assert.ok(at, 'still located');
+  assert.equal(ed.blocks[1].text.slice(at.s, at.e), 'makes');
+  assert.ok(isApplied(b, at, ed.blocks));
+});
+
 test('suggestions are sorted as their passages appear in the script', () => {
   const ed = new Editor(script());
   const [c] = buildChunks(ed.blocks);
@@ -230,6 +254,13 @@ test('a review and its decisions round-trip through the .stet payload', async ()
   const p = JSON.parse(json);
   p.revision.review.findings.push({ id: 'x', category: 'nonsense' }, { nope: 1 });
   assert.equal(deserialize(JSON.stringify(p)).doc.revision.review.findings.length, 2);
+});
+
+test('the review checks the English, not how clear or complete the story is', () => {
+  assert.match(SYSTEM_PROMPT, /checking the English, not editing the story/);
+  assert.match(SYSTEM_PROMPT, /Do not flag a passage because it could be clearer, simpler, shorter or easier to follow, because it lacks context/);
+  assert.ok(!/unclear or needlessly complicated/.test(SYSTEM_PROMPT), 'awkward no longer covers "unclear"');
+  for (const k of ['grammar:', 'non_native:', 'awkward:', 'Protect the writer\'s voice']) assert.ok(SYSTEM_PROMPT.includes(k), k + ' kept');
 });
 
 test('structured-output schema is strict', () => {

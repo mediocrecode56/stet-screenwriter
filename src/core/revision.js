@@ -31,13 +31,14 @@ export const SYSTEM_PROMPT = `You are a line editor reviewing a screenplay for E
 Report three kinds of issues:
 - grammar: errors in grammar, verb tense, subject–verb agreement, articles, prepositions, pronouns or word forms, and punctuation that affects grammatical correctness.
 - non_native: grammatically possible but unnatural English that a fluent native writer would not produce — non-idiomatic collocations, literal translations, unnatural prepositions or word order.
-- awkward: clumsy, unclear or needlessly complicated wording, unidiomatic expressions, or unusual word choices that weaken the intended meaning.
+- awkward: clumsy or tangled wording, unidiomatic expressions, or word choices that misfire in English (a word that does not mean what the writer evidently intends, or that no fluent writer would pick for it).
 
 Protect the writer's voice:
 - Dialogue is how characters speak. Slang, dialect, contractions, fragments, run-ons, profanity, verbal tics, deliberate errors and informal grammar are usually intentional characterization. Never make dialogue more formal. Flag dialogue only when the wording reads as the writer's English mistake rather than the character's voice, and then usually with low or medium confidence.
 - Action lines follow screenplay convention: present tense, terse, sentence fragments are normal ("Rain. Silence."), character names in capitals when introduced, sound cues in capitals. Do not flag these conventions.
 - Do not change meaning, tone, emotional intention or a character's personality. Do not flatten distinctive prose into generic English. Unusual is not the same as wrong.
 - When a phrase could be a deliberate stylistic choice, either leave it alone or flag it with low confidence and say in the explanation that it may be intentional.
+- You are checking the English, not editing the story. Do not flag a passage because it could be clearer, simpler, shorter or easier to follow, because it lacks context or explanation, or because you would phrase it differently. A screenplay leaves things unsaid on purpose, and the reader is not expected to understand every line out of context. Flag clarity only when the English itself makes the meaning come out wrong (a misplaced modifier, an ambiguous pronoun that a grammatical fix resolves).
 - If a passage is correct and natural, report nothing for it. An empty list is the right answer for clean text.
 
 For each issue give:
@@ -418,7 +419,10 @@ export function afterApply(findings, plan, blocks) {
         f.ref = block;
       } else if (!broken) {
         f.s += shift; f.e += shift;
-        if (block.text.substr(f.s, anchorText(f).length) === anchorText(f)) f.ref = block;
+        // A reopened one may hold its accepted change or, after an undo, the original.
+        const texts = !f.decision && f.appliedText != null ? [f.appliedText, f.original] : [anchorText(f)];
+        const t = texts.find((x) => block.text.substr(f.s, x.length) === x);
+        if (t != null) { f.e = f.s + t.length; f.ref = block; }
       }
     }
   }

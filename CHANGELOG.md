@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.27.0 · 23 Oct 2026
+
+- English Revision lists its suggestions in the order they appear in the script, and keeps that order as you edit. Each one says what kind it is. The decided ones are in script order too.
+- *Accept all…* asks whether to accept every open suggestion or only one kind.
+- A suggestion you reopen after accepting it can be accepted again: it goes back to Decided, and the script is not changed a second time.
+- Reviews stick to the English: grammar, unnatural English and clumsy wording. Claude no longer flags a line because it could be clearer, simpler or easier to follow, or because it lacks context.
+- Near the lower end of the list, a floating **DECIDED** button takes you to the decided suggestions while they are out of sight.
+
 ## 0.26.0 · 23 Oct 2026
 
 - STET no longer makes scene headings, character names or shots bold, and no longer adds blank lines of its own: none before dialogue, and new screenplays are back to one blank line before a scene heading. Bold and extra blank lines are yours to add.

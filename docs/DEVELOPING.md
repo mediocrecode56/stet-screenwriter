@@ -193,16 +193,19 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 
 *Tools → English Revision* (Ctrl+Shift+R, or **REVISE** in the toolbar) reviews
 the action, dialogue and parentheticals with Claude (`claude-opus-5-5`) and
-lists findings in three groups — **Grammar Error**, **Non-Native Construction**,
-**Awkward Phrasing** — each with the original, a minimal replacement, a short
-explanation and a confidence level. Flagged passages are underlined in the
+lists findings in the order their passages appear in the script, each named as a
+**Grammar Error**, **Non-Native Construction** or **Awkward Phrasing**, with the
+original, a minimal replacement, a short explanation and a confidence level. Flagged passages are underlined in the
 script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
 
 - Per suggestion: **Accept** (one undo step), **Discard**, **Ignore**
   (remembered in this screenplay's .stet file — never flagged again here) and
-  **+Dictionary** (shared by every screenplay). *Accept all* per category or
-  overall asks first and is a single undo step. Decided suggestions move to a
-  folded *Decided* group; **Reopen** makes one undecided again.
+  **+Dictionary** (shared by every screenplay). *Accept all…* (all, or one kind)
+  asks first and is a single undo step. Decided suggestions move to a folded
+  *Decided* group, also in script order; near the lower end of the list a floating
+  **DECIDED** button goes there while it is out of sight. **Reopen** makes one
+  undecided again; one reopened after accepting keeps pointing at its change, and
+  accepting it again only records the decision.
 - **Suggestions stay until you decide.** Their text, replacement, explanation,
   category and decision never change because you edited the script. Hover a
   suggestion to highlight exactly its passage; if edits make the passage
