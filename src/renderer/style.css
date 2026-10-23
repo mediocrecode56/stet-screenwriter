@@ -24,10 +24,10 @@
   --hl-blue: #c8defb;
   --hl-yellow: #fbefa0;
   --hl-pink: #fbcde2;
-  --tl-line: #fff;
-  --tl-blue: #3d84e6;
-  --tl-yellow: #e0b800;
-  --tl-pink: #e0559a;
+  --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
+  --tl-blue: #4a8ee8;
+  --tl-yellow: #e5be14;
+  --tl-pink: #e2609f;
   --find: rgba(0, 0, 0, .10);
   --find-cur: rgba(0, 0, 0, .32);
   --note-line: #000;
@@ -217,31 +217,43 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 .chk { display: flex; align-items: center; gap: 3px; color: var(--ink-2); }
 #find-count { color: var(--ink-3); min-width: 70px; }
 
-/* ---- timeline (View > Timeline) ---------------------------------------- */
-#timeline { position: relative; flex: none; height: 62px; display: flex; border-bottom: 1px solid var(--rule); background: var(--bar); user-select: none; }
+/* ---- timeline (View > Timeline) ----------------------------------------
+   The script as a strip: numbered scene ticks above the line, the line coloured where it is
+   highlighted, notes below it, a time ruler at the foot. Monochrome like the rest; colour only
+   for highlights. */
+#timeline { position: relative; flex: none; height: 58px; display: flex; border-bottom: 1px solid var(--rule); background: var(--bar); color: var(--ink-3); }
 #timeline[hidden] { display: none; }
-.tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-.tl-inner { position: relative; height: 100%; cursor: pointer; }
-.tl-gl { position: absolute; top: 0; bottom: 18px; width: 1px; background: var(--rule); opacity: .35; }
-/* The script: a line, white where nothing is highlighted, in the highlight's colour where it is. */
-.tl-line { position: absolute; left: 0; top: 30px; height: 4px; background: var(--tl-line); box-shadow: 0 0 0 1px var(--rule); }
-.tl-hl { position: absolute; top: 28px; height: 8px; }
+.tl-side { flex: none; width: 92px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 12px; box-shadow: 1px 0 0 var(--rule); }
+.tl-name { font-size: 9px; letter-spacing: .2em; color: var(--ink-3); }
+.tl-len { font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tl-scroll::-webkit-scrollbar { display: none; }
+.tl-inner { position: relative; height: 100%; margin: 0 14px; cursor: pointer; }
+.tl-view { position: absolute; top: 0; bottom: 0; background: var(--hover); box-shadow: inset 1px 0 0 var(--rule), inset -1px 0 0 var(--rule); pointer-events: none; }
+.tl-grid i { position: absolute; top: 14px; bottom: 15px; width: 1px; background: var(--rule); opacity: .45; }
+.tl-line { position: absolute; left: 0; top: 25px; height: 2px; background: var(--tl-line); }
+.tl-hl { position: absolute; top: 23px; height: 6px; border-radius: 1px; }
 .tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }
-.tl-scene { position: absolute; top: 4px; bottom: 18px; width: 1px; margin-left: -0.5px; background: var(--ink); opacity: .75; }
-.tl-scene::before { content: ''; position: absolute; top: 0; bottom: 0; left: -3px; right: -3px; } /* easier to hit */
-.tl-scene:hover { opacity: 1; box-shadow: 0 0 0 1px var(--ink); }
-.tl-note { position: absolute; top: 5px; margin-left: -5px; color: var(--ink); line-height: 0; }
-.tl-note:hover { color: var(--tl-blue); }
-.tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; border-top: 1px solid var(--rule); }
-.tl-tick { position: absolute; top: 0; height: 5px; border-left: 1px solid var(--ink-3); }
-.tl-tick span { position: absolute; top: 4px; left: 3px; font-size: 10px; line-height: 12px; color: var(--ink-3); white-space: nowrap; }
-.tl-tc { position: absolute; top: -1px; width: 0; height: 0; margin-left: -4px; border: 4px solid transparent; border-top: 6px solid var(--tl-yellow); }
-.tl-end { position: absolute; top: 3px; padding-left: 4px; font-size: 10px; line-height: 12px; color: var(--ink-2); white-space: nowrap; transform: translateX(-100%); padding-right: 3px; }
-.tl-head { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -0.5px; background: var(--tl-pink); pointer-events: none; }
-.tl-hover { position: absolute; top: 0; bottom: 18px; border-left: 1px dashed var(--ink-3); pointer-events: none; }
-.tl-hover { font-size: 10px; color: var(--ink-2); padding-left: 4px; white-space: nowrap; line-height: 14px; }
-.tl-zoom { flex: none; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid var(--rule); padding: 0 2px; }
-.tl-zoom .tb { padding: 1px 6px; font-size: 10px; }
+.tl-scene { position: absolute; top: 15px; height: 17px; width: 1px; background: var(--ink-3); }
+.tl-scene::before { content: ''; position: absolute; top: -15px; bottom: 0; left: -4px; right: -4px; } /* easy to hit, number included */
+.tl-scene span { position: absolute; top: -13px; left: 0; transform: translateX(-50%); font-size: 9px; line-height: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; pointer-events: none; }
+.tl-scene:hover { background: var(--ink); }
+.tl-scene:hover span { color: var(--ink); }
+.tl-note { position: absolute; top: 31px; margin-left: -1px; color: var(--ink-2); line-height: 0; }
+.tl-note:hover { color: var(--ink); }
+.tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 15px; }
+.tl-ruler i { position: absolute; top: 0; width: 1px; background: var(--ink-3); }
+.tl-mn { height: 3px; opacity: .5; }
+.tl-mj { height: 6px; }
+.tl-lb { position: absolute; top: 3px; margin-left: 4px; font-size: 9px; line-height: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
+.tl-ruler i.tl-tc { top: -3px; width: 7px; height: 7px; margin-left: -3px; background: var(--ink); transform: rotate(45deg); }
+.tl-head { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
+.tl-head::before { content: ''; position: absolute; top: 0; left: -3px; border: 3.5px solid transparent; border-top: 4px solid var(--ink); }
+.tl-hover { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); pointer-events: none; }
+.tl-hover span { position: absolute; top: 2px; left: 5px; padding: 1px 5px; font-size: 9px; line-height: 12px; letter-spacing: .08em; white-space: pre; background: var(--inv-bg); color: var(--inv-fg); font-variant-numeric: tabular-nums; }
+.tl-hover.flip span { left: auto; right: 5px; }
+.tl-zoom { flex: none; display: flex; align-items: center; padding: 0 4px; box-shadow: -1px 0 0 var(--rule); }
+.tl-zoom .tb { height: 22px; padding: 0 7px; font-size: 10px; }
 
 /* ---- main area ------------------------------------------------------- */
 #main { flex: 1; display: flex; min-height: 0; overflow: hidden; }

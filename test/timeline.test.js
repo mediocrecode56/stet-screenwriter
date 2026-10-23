@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, SEC_PER_PAGE } from '../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, SEC_PER_PAGE } from '../src/core/timeline.js';
 import { paginate } from '../src/core/layout.js';
 import { newDocument, makeBlock } from '../src/core/model.js';
 import { serialize, deserialize } from '../src/core/serialize.js';
@@ -91,6 +91,9 @@ test('the ruler steps out as the bar zooms out', () => {
   assert.equal(rulerStep(100), 1);
   assert.equal(rulerStep(1), 60);
   assert.ok(rulerStep(0.05) >= 600);
+  assert.equal(minorStep(300, 0.24), 60);  // 5:00 labels, a tick a minute
+  assert.equal(minorStep(60, 1), 10);
+  assert.equal(minorStep(1, 100), 0);      // nothing finer than a second
 });
 
 test('timecodes are saved with the script and come back on their lines', () => {

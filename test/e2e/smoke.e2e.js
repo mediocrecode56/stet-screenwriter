@@ -130,7 +130,7 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await sleep(80);
   const r = await app.eval(`(() => { const q = (s) => document.querySelectorAll('#timeline ' + s).length;
     return { hidden: document.getElementById('timeline').hidden, scenes: q('.tl-scene'), notes: q('.tl-note'), pink: q('.tl-hl.hl-pink'),
-      end: document.querySelector('#timeline .tl-end').textContent, pages: __stet.view.pages.length, saved: null }; })()`);
+      end: document.querySelector('#timeline .tl-len').textContent, pages: __stet.view.pages.length, saved: null }; })()`);
   assert.equal(r.hidden, false);
   assert.deepEqual([r.scenes, r.notes, r.pink], [12, 1, 1]);
   assert.equal(r.end, `00:${String(r.pages).padStart(2, '0')}:00`, 'a minute a page');
@@ -150,7 +150,7 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await sleep(50);
   await app.eval(`(() => { const d = document.querySelector('.dlg'); d.querySelector('input').value = '${hms(120 * (r.pages - 1))}'; d.querySelector('.btn.primary').click(); })()`);
   await sleep(50);
-  assert.equal(await app.eval(`document.querySelector('#timeline .tl-end').textContent`), hms(120 * r.pages));
+  assert.equal(await app.eval(`document.querySelector('#timeline .tl-len').textContent`), hms(120 * r.pages));
   assert.equal(await app.eval(`document.querySelectorAll('#timeline .tl-tc').length`), 1);
   assert.match(await app.eval('__stet.session.serialize()'), /"timecodes"/, 'saved with the script');
   await app.key('Ctrl+Shift+T');

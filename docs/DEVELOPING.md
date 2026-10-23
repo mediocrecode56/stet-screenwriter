@@ -195,9 +195,10 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 *View → Timeline* (Ctrl+Shift+T; off until turned on, and remembered) is a strip under the
 toolbar with the whole script from left to right, a page to a unit, like a track in a
 sequencer (`src/core/timeline.js` for the arithmetic, `src/renderer/timeline.js` for the bar).
-The script is a white line; highlighted passages show in their colour over it. Each scene is a
-thin vertical line (its heading on hover), each note a small icon above. The pink line is the
-caret. Clicking goes to the line drawn there (a scene line to its heading, a note to its
+The script is a white line (grey in light mode); highlighted passages show in their colour
+over it. Each scene is a thin tick, numbered where there is room (its heading on hover), each
+note a small icon under the line. The line with a cap is the caret, and the soft band is the
+part of the script in the window; the estimated length is at the left. Clicking goes to the line drawn there (a scene line to its heading, a note to its
 passage, with the note open). The wheel scrolls it; Ctrl+wheel or **−** / **+** zoom in (the
 grid steps between 1 second and an hour so its ticks stay readable), **FIT** shows it all.
 

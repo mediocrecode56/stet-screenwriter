@@ -147,6 +147,12 @@ export function rulerStep(pxPerSec, minPx = 56) {
   return STEPS[STEPS.length - 1];
 }
 
+/** Unlabelled ticks between the ruler's labelled ones: the finest even division at least `minPx` apart, or none (0). */
+export function minorStep(step, pxPerSec, minPx = 10) {
+  for (const n of [6, 5, 4, 3, 2]) if (step % n === 0 && (step / n) * pxPerSec >= minPx) return step / n;
+  return 0;
+}
+
 /** Timecodes as saved: block index, line and seconds; ones whose block is gone are dropped. */
 export function timecodesToJSON(timecodes, blocks) {
   if (!timecodes || !timecodes.length) return null;

@@ -4,14 +4,15 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep } from '../core/timeline.js';
 import { esc } from './ui/dialog.js';
 import * as dlg from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
 import { MAC, macKeys } from '../core/keys.js';
 
 const PPP_MAX = 600; // most pixels a page
-const NOTE_ICON = '<svg width="11" height="10" viewBox="0 0 11 10" aria-hidden="true"><path d="M1 1h9v6H5l-2.5 2.2V7H1z" fill="currentColor"/></svg>';
+const PADX = 14; // room at either end of the strip (style.css .tl-inner)
+const NOTE_ICON = '<svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0.5 0.5h8v5.5H4L1.8 8.2V6H0.5z" fill="currentColor"/></svg>';
 
 export class Timeline {
   constructor(host, { editor, view, session, jump, openNote, onToggle }) {
@@ -21,8 +22,10 @@ export class Timeline {
     this.ppp = 0; // pixels a page; 0 fits the whole script in the bar
     this.drawn = 1; // pixels a page as last painted
     this.key = '';
-    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div><div class="tl-hover" hidden></div><div class="tl-head"></div></div></div>'
-      + '<div class="tl-zoom"><button class="tb" data-z="-1" title="Zoom out (Ctrl+wheel)">−</button><button class="tb" data-z="0" title="Fit the script">FIT</button><button class="tb" data-z="1" title="Zoom in (Ctrl+wheel)">+</button></div>';
+    host.innerHTML = '<div class="tl-side"><span class="tl-name">TIMELINE</span><span class="tl-len" title="Estimated length"></span></div>'
+      + '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
+      + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
+      + '<div class="tl-zoom"><button class="tb" data-z="-1" title="Zoom out (Ctrl+wheel)">−</button><button class="tb" data-z="0" title="Show the whole script">FIT</button><button class="tb" data-z="1" title="Zoom in (Ctrl+wheel)">+</button></div>';
     if (MAC) for (const b of host.querySelectorAll('[title]')) b.title = macKeys(b.title);
     this.scroll = host.querySelector('.tl-scroll');
     this.inner = host.querySelector('.tl-inner');
@@ -31,6 +34,8 @@ export class Timeline {
     this.ruler = host.querySelector('.tl-ruler');
     this.hover = host.querySelector('.tl-hover');
     this.head = host.querySelector('.tl-head');
+    this.band = host.querySelector('.tl-view');
+    this.len = host.querySelector('.tl-len');
 
     this.inner.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
@@ -68,7 +73,7 @@ export class Timeline {
   }
 
   get length() { return Math.max(1, this.view.pages.length); }
-  get fit() { return Math.max(1, this.scroll.clientWidth - 2) / this.length; }
+  get fit() { return Math.max(1, this.scroll.clientWidth - PADX * 2) / this.length; }
   get scale() { return this.ppp || this.fit; }
 
   posAt(clientX) {
@@ -115,6 +120,7 @@ export class Timeline {
     while (l + 1 < lines.length && lines[l + 1] <= c.o) l++;
     const x = scriptPos(pages, c.b, l) * this.drawn;
     this.head.style.left = x + 'px';
+    this.showBand();
     // Zoomed in, the bar follows the caret when it leaves the part in view.
     const at = c.b + ':' + l;
     if (at !== this.caretSeen) {
@@ -122,6 +128,16 @@ export class Timeline {
       const sc = this.scroll;
       if (x < sc.scrollLeft || x > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = x - sc.clientWidth / 3;
     }
+  }
+
+  /** The part of the script in the window, as a soft band. */
+  showBand() {
+    const v = this.view, sc = v.scroller;
+    const top = v.pageTop(0), span = v.pageTop(1) - top;
+    const at = (y) => Math.max(0, Math.min(this.length, (y - top) / span - v.offset));
+    const a = at(sc.scrollTop), b = at(sc.scrollTop + sc.clientHeight);
+    this.band.style.left = a * this.drawn + 'px';
+    this.band.style.width = Math.max(2, (b - a) * this.drawn) + 'px';
   }
 
   repaint(key) {
@@ -133,33 +149,41 @@ export class Timeline {
 
   paint() {
     const s = this.drawn = this.scale, len = this.length; // positions are read back at the scale they were drawn
-    const w = Math.max(this.scroll.clientWidth - 2, len * s);
+    const w = Math.max(this.scroll.clientWidth - PADX * 2, len * s);
     this.inner.style.width = w + 'px';
     const tl = timelineOf(this.ed.blocks, this.view.pages);
     const anchors = this.anchors();
-    const time = timeScale(anchors);
-    this.time = time;
-
-    // The ruler and its grid: a tick every `step` seconds, close enough to read and no closer.
+    const time = this.time = timeScale(anchors);
     const total = time.at(len);
-    const step = rulerStep(s / (time.pace || 60));
+    this.len.textContent = formatTime(total);
+
+    // The ruler: labelled ticks far enough apart to read, finer ones between, a faint grid line at each label.
+    const pxPerSec = s / time.pace; // after the last timecode; close enough before it to space the ticks
+    const step = rulerStep(pxPerSec, 72), minor = minorStep(step, pxPerSec);
     let ruler = '', grid = '';
-    for (let t = 0; t <= total + 0.5; t += step) {
+    for (let t = 0; t <= total + 0.5; t += minor || step) {
       const x = time.pos(t) * s;
-      if (x > w) break;
-      const label = x < len * s - 90 ? `<span>${rulerLabel(t)}</span>` : ''; // clear of the length at the end
-      ruler += `<div class="tl-tick" style="left:${x}px">${label}</div>`;
-      grid += `<div class="tl-gl" style="left:${x}px"></div>`;
+      if (x > len * s + 0.5) break;
+      if (Math.round(t) % step) { ruler += `<i class="tl-mn" style="left:${x}px"></i>`; continue; }
+      ruler += `<i class="tl-mj" style="left:${x}px"></i>`;
+      if (x <= len * s - 44) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
+      if (t) grid += `<i style="left:${x}px"></i>`;
     }
-    for (const a of anchors) ruler += `<div class="tl-tc" style="left:${a.x * s}px" title="Timecode ${formatTime(a.t)}"></div>`;
-    ruler += `<div class="tl-end" style="left:${len * s}px" title="Estimated length">${formatTime(total)}</div>`;
+    for (const a of anchors) ruler += `<i class="tl-tc" style="left:${a.x * s}px" title="Timecode ${formatTime(a.t)}"></i>`;
     this.ruler.innerHTML = ruler;
     this.grid.innerHTML = grid;
 
-    // The script as a line, its highlights over it, a thin line for each scene and the notes above.
+    // The script as a line, coloured where it is highlighted; a tick for each scene, numbered where
+    // there is room; the notes under the line.
     let m = `<div class="tl-line" style="width:${len * s}px"></div>`;
-    for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(2, (hl.x1 - hl.x0) * s)}px"></div>`;
-    tl.scenes.forEach((sc, i) => { m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px" title="${i + 1}. ${esc(sc.text || 'Scene')}"></div>`; });
+    for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
+    let lastLabel = -Infinity;
+    tl.scenes.forEach((sc, i) => {
+      const x = sc.x * s;
+      const num = x - lastLabel >= 22 ? `<span>${i + 1}</span>` : '';
+      if (num) lastLabel = x;
+      m += `<div class="tl-scene" data-b="${sc.b}" style="left:${x}px" title="${i + 1}  ${esc(sc.text || 'Scene')}">${num}</div>`;
+    });
     for (const n of tl.notes) {
       const text = (this.session.doc.comments[n.id] || {}).text || 'Note';
       m += `<div class="tl-note" data-id="${esc(n.id)}" data-b="${n.b}" data-s="${n.s}" data-e="${n.e}" style="left:${n.x * s}px" title="${esc(text.slice(0, 200))}">${NOTE_ICON}</div>`;
@@ -172,7 +196,9 @@ export class Timeline {
     const x = this.posAt(clientX);
     this.hover.hidden = false;
     this.hover.style.left = x * this.drawn + 'px';
-    this.hover.textContent = `p. ${Math.min(this.length, Math.floor(x) + 1)} · ${formatTime(this.time.at(x))}`;
+    this.hover.firstChild.textContent = `P. ${Math.min(this.length, Math.floor(x) + 1)}  ${formatTime(this.time.at(x))}`;
+    // The readout flips to the left of the line near the right end, so it stays in the bar.
+    this.hover.classList.toggle('flip', x * this.drawn > this.inner.offsetWidth - 110);
   }
 
   // ---- timecodes ------------------------------------------------------------------------
