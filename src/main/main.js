@@ -129,8 +129,9 @@ function saveBounds() {
 
 let probeDir = null; // the performance probe's scratch folder while it runs
 
-function addRecent(file) {
+function addRecent(file, edited = false) {
   const s = settings.get();
+  if (edited && s.lastEdited !== file) settings.set({ lastEdited: file }); // the one launch reopens
   // Autosave calls this every few seconds: only touch settings.json when the list changes.
   if (s.recent && s.recent[0] && s.recent[0].path === file) return;
   const recent = (s.recent || []).filter((r) => r.path !== file);
@@ -243,7 +244,7 @@ function registerIpc() {
   });
   handle('doc:save', async ({ path: file, rev, json, force }) => {
     const r = await queue.save(file, rev, json, { force });
-    if (r.ok && !r.skipped && !(probeDir && path.dirname(file) === probeDir)) addRecent(file);
+    if (r.ok && !r.skipped && !(probeDir && path.dirname(file) === probeDir)) addRecent(file, true);
     return r;
   });
   handle('doc:known', (file, mtimeMs) => queue.known(file, mtimeMs));
@@ -273,7 +274,7 @@ function registerIpc() {
       const st = await fs.stat(target);
       queue.known(target, st.mtimeMs);
       const s = settings.get();
-      settings.set({ recent: (s.recent || []).map((r) => (r.path === file ? { ...r, path: target, name: clean } : r)) });
+      settings.set({ recent: (s.recent || []).map((r) => (r.path === file ? { ...r, path: target, name: clean } : r)), ...(s.lastEdited === file ? { lastEdited: target } : {}) });
       return { ok: true, path: target };
     } catch (e) {
       return { ok: false, error: e.message };
@@ -463,9 +464,11 @@ app.whenReady().then(async () => {
   const ud = app.getPath('userData');
   settings = new JsonStore(path.join(ud, 'settings.json'), {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
-    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], reviewConsent: false, showTitlePage: true, timeline: false, panels: { scenes: false, notes: false },
+    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], reviewConsent: false, showTitlePage: true, timeline: true, panels: { scenes: false, notes: false },
     updateCheck: true, updateNotified: null,
   });
+  // 0.33 shows the timeline by default: once, also for those whose settings still hold the old default.
+  if (!settings.get().timelineDefault) settings.set({ timeline: true, timelineDefault: true });
   stats = new StatsStore(ud);
   recovery = new Recovery(path.join(ud, 'recovery'));
   claude = new ClaudeService(ud, (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });

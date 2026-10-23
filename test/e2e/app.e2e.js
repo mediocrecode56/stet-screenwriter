@@ -108,8 +108,9 @@ test('find bar counts matches', async () => {
   assert.match(await app.eval('document.getElementById("find-count").textContent'), /\/ 4$/);
   await app.key('Escape');
   assert.equal(await app.eval('document.getElementById("findbar").dataset.open'), '0', 'closing at once');
-  await sleep(300);
-  assert.equal(await app.eval('document.getElementById("findbar").hidden'), true, 'gone after sliding away');
+  let gone = false;
+  for (let i = 0; i < 40 && !gone; i++) { await sleep(50); gone = await app.eval('document.getElementById("findbar").hidden'); } // a busy machine slides later
+  assert.equal(gone, true, 'gone after sliding away');
 });
 
 test('zoom and theme', async () => {

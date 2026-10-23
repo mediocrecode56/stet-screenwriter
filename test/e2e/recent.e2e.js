@@ -63,8 +63,8 @@ test('a click anywhere outside the title ends the rename and its highlight; no f
 });
 
 test('status bar: a plain clock and no save text; the square beside the title is the only save sign', async () => {
-  const v = await app.eval(`({ clock: document.getElementById('st-clock').textContent, now: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), save: !!document.getElementById('st-save'), dot: document.getElementById('docdot').title })`);
-  assert.equal(v.clock, v.now, 'the time now, in this computer’s format');
+  const v = await app.eval(`(() => { const t = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); return { clock: document.getElementById('st-clock').textContent, now: [t(Date.now() - 5000), t(Date.now())], save: !!document.getElementById('st-save'), dot: document.getElementById('docdot').title }; })()`);
+  assert.ok(v.now.includes(v.clock), `the time now, in this computer’s format (${v.clock}, ${v.now})`); // the clock may be a moment behind a new minute
   assert.equal(v.save, false);
   assert.match(v.dot, /Saved/);
 });
@@ -108,4 +108,17 @@ test('a "$" in a new name is kept in the backups\' names too', async () => {
   const names = await fs.readdir(path.join(tmp, 'Cost $& More Backups'));
   assert.equal(names.length, 1);
   assert.ok(names[0].startsWith('Cost $& More '), names[0]);
+});
+
+test('launching opens the last screenplay edited, not one only looked at since', async () => {
+  const edited = path.join(tmp, 'Edited.stet'), looked = path.join(tmp, 'Looked At.stet');
+  assert.equal((await app.eval(`__stet.session.saveTo(${JSON.stringify(looked)})`)).ok, true);
+  await app.eval(`__stet.session.newUntitled()`);
+  assert.equal((await app.eval(`__stet.session.saveTo(${JSON.stringify(edited)})`)).ok, true);
+  assert.equal(await app.eval(`__stet.openPath(${JSON.stringify(looked)})`), true);
+  assert.equal((await app.eval(`__stet.api.invoke('recent:list')`))[0].path, looked, 'the one opened last heads Open Recent');
+  await app.close();
+  app = await App.launch({ userData: ud });
+  for (let i = 0; i < 50 && (await app.eval(`__stet.session.path`)) !== edited; i++) await sleep(100);
+  assert.equal(await app.eval(`__stet.session.path`), edited);
 });

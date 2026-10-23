@@ -202,9 +202,9 @@ test('every panel opens and closes with the same slide; Ctrl+F never delays typi
   // Closing and reopening during the slide reverses smoothly, no jump.
   await app.key('Escape');
   // (Sampled once the slide is under way: a busy machine may take a frame or two to start it.)
-  const mid = await app.eval(`new Promise((r) => { const t0 = performance.now(), m = () => parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop); const go = () => (m() < 0 || performance.now() - t0 > 1500 ? r(m()) : setTimeout(go, 10)); setTimeout(go, 30); })`);
-  await app.key('Ctrl+F');
-  const back = await app.eval(`parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop)`);
+  // Reopened in the same moment it is sampled, so a slow machine can't move it on in between.
+  const [mid, back] = await app.eval(`new Promise((r) => { const t0 = performance.now(), m = () => parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop);
+    const go = () => { if (!(m() < 0) && performance.now() - t0 <= 1500) return setTimeout(go, 10); const was = m(); __stet.cmd.run('find'); r([was, m()]); }; setTimeout(go, 30); })`);
   assert.ok(mid < 0 && back <= 0 && back >= mid - 2, `reverses from where it was (${mid} → ${back})`);
   await sleep(300);
   assert.equal(await app.eval(`parseFloat(getComputedStyle(document.getElementById('findbar')).marginTop)`), 0);

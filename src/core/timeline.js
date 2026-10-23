@@ -124,6 +124,21 @@ export function anchorsOf(timecodes, blocks, pages) {
   return ok;
 }
 
+/** Whether a timecode is a scene's own: pinned to the first line of a scene heading. */
+export function isSceneTimecode(tc, blocks, at = null) {
+  if ((tc.line || 0) !== 0) return false;
+  const b = at ? blocks[at.get(tc.id)] : blocks.find((x) => x.id === tc.id);
+  return !!b && b.type === 'scene';
+}
+
+/** The scenes' own timecodes that hold (see anchorsOf), by block id: what the script shows beside each heading. */
+export function sceneTimecodes(timecodes, blocks, pages) {
+  const at = new Map(blocks.map((b, i) => [b.id, i]));
+  const out = new Map();
+  for (const a of anchorsOf(timecodes, blocks, pages)) if (isSceneTimecode(a, blocks, at)) out.set(a.id, a);
+  return out;
+}
+
 /** Time at position x and position at time t, through the anchors. */
 export function timeScale(anchors) {
   const pts = [{ x: 0, t: 0 }, ...anchors];

@@ -89,6 +89,30 @@ page and bold, italic, underline and strikeout come across as they were.
 your dialogue and action and suggest fixes to the English. Nothing changes
 until you accept.
 
+## The timeline
+
+![The timeline above the script, with two scene timecodes and the time under the pointer](docs/images/timeline.png)
+
+The strip under the toolbar is your whole screenplay from left to right, like a track
+in a video editor: a tick for each scene, your highlights in their colours, a small
+icon for each note, and a time ruler with the script's estimated running time at the
+right end. The shaded band is the part you're looking at, and the line with the little
+cap is where you're typing. Hide or show it with **Ctrl+Shift+T**.
+
+- **Point** at it to see the time and the scene there. **Click** to go there; a click
+  near a scene, note or highlight lands right on it.
+- **Drag sideways** to zoom in and out around that point. **Drag the shaded band** to
+  scroll the script. **Double-click the ruler** to see the whole script again.
+- **Timecodes** set the clock: the ruler counts a minute a page until you pin real
+  times to it, then spreads the time evenly between them and estimates the rest.
+  **Right-click a scene** to give it its own timecode: it shows beside the scene
+  heading in your script. Right-click anywhere else to add one there, or click a
+  timecode to change its time, give it a tag and a colour, or remove it.
+- **Hold Ctrl** (**Cmd** on a Mac) over the strip to move through the script a second
+  at a time, slower than the mouse so you can land on the exact second. While Ctrl
+  is held, a **right-click** pins a timecode at that second. Let go to stay there, or
+  press **Esc** to go back.
+
 ## Handy keys
 
 | Press | To |
@@ -100,7 +124,7 @@ until you accept.
 | Ctrl+P | print or save as PDF |
 | F9 | see your writing week |
 | Ctrl+K | search every command |
-| Ctrl+Shift+T | show or hide the timeline: the whole script as a strip, click anywhere to go there |
+| Ctrl+Shift+T | show or hide the timeline (above) |
 | Ctrl+L, E, R, J | align left, centre, right, or justify |
 | F1 | see all the keys, and change any of them |
 

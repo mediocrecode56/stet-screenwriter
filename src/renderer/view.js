@@ -14,12 +14,14 @@ import { cmp, pos } from '../core/editor.js';
 import { TITLE_FIELDS_SPEC } from '../core/titlepage.js';
 import { styleRuns } from '../core/model.js';
 import { reducedMotion } from './ui/motion.js';
+import { sceneTimecodes, formatTime } from '../core/timeline.js';
 
 const PX_COL = 9.6;   // 0.1in at 96dpi
 const PX_ROW = 16;    // 1/6in at 96dpi (Courier 12pt line)
 const PAD = 28;
 const GAP = 22;
 const BUFFER_PAGES = 1;
+const NONE = new Map(); // no scene timecodes
 
 const versions = new WeakMap();
 let versionSeq = 0;
@@ -186,7 +188,12 @@ export class View {
     const page = this.pages[pi];
     const blocks = this.editor.blocks;
     let sig = `${pi}|${page.more}|${page.cont}|${this.z}|${left}|`;
-    for (const it of page.items) sig += `${ver(blocks[it.bi])}.${it.l0}.${it.l1}.${it.y}.${it.bi},`;
+    const times = this.sceneTimes();
+    for (const it of page.items) {
+      sig += `${ver(blocks[it.bi])}.${it.l0}.${it.l1}.${it.y}.${it.bi},`;
+      const tc = times.get(blocks[it.bi].id);
+      if (tc) sig += `${tc.t}.${tc.tag},`;
+    }
     if (this.activeComment) sig += '|' + this.activeComment;
     let node = this.els.get(vi);
     if (node && node._sig === sig) return;
@@ -203,10 +210,20 @@ export class View {
     s.width = this.PW + 'px';
     s.height = this.PH + 'px';
     s.fontSize = this.row + 'px';
-    node.innerHTML = this.pageHTML(page, pi, blocks);
+    node.innerHTML = this.pageHTML(page, pi, blocks, times);
   }
 
-  pageHTML(page, pi, blocks) {
+  /** The scenes' own timecodes (core/timeline.js), shown beside their headings: by block id. */
+  sceneTimes() {
+    const tcs = this.doc && this.doc.timecodes;
+    if (!tcs || !tcs.length) return NONE;
+    const c = this._times;
+    if (c && c.tcs === tcs && c.rev === this.editor.rev && c.pages === this.pages) return c.map;
+    this._times = { tcs, rev: this.editor.rev, pages: this.pages, map: sceneTimecodes(tcs, this.editor.blocks, this.pages) };
+    return this._times.map;
+  }
+
+  pageHTML(page, pi, blocks, times = NONE) {
     const { row } = this;
     const top = PAGE.topRows;
     let h = '';
@@ -225,6 +242,8 @@ export class View {
         const txt = lineText(b.text, starts, l);
         const gaps = lineGaps(b, starts, l);
         if (txt) h += `<div class="l" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt, gaps)}</div>`;
+        const tc = l === 0 && times.get(b.id);
+        if (tc) h += `<div class="sctc" style="left:${this.xAt(x0, colIn(gaps, txt.length) + 2)}px;top:${y}px" title="Scene timecode (right-click the scene on the timeline to change it)">${formatTime(tc.t)}${tc.tag ? ` · ${esc(tc.tag)}` : ''}</div>`;
         if (!b.marks.length) continue;
         const ls = starts[l], le = ls + txt.length;
         for (const m of b.marks) {

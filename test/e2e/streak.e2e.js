@@ -27,7 +27,8 @@ async function seed(ud, n, endAgo = 1, { record = true, words = 10, goal = 1000 
   await fs.writeFile(path.join(ud, 'stats.json'), JSON.stringify(data));
   await fs.writeFile(path.join(ud, 'settings.json'), JSON.stringify({ goals: { daily: goal, weekly: 6000 } }));
 }
-const launch = (ud) => App.launch({ userData: ud });
+/** A new app on `ud`; one a failed test left open is closed first. */
+const launch = async (ud) => { if (app) { await app.close(); app = null; } return App.launch({ userData: ud }); };
 /** Quit with everything written saved (the window's credits sent, the main process's copy on disk). */
 const closeApp = async () => {
   await app.eval('__stet.writing.flush()');
@@ -59,11 +60,11 @@ test('the streak beside TODAY: 0, 1, 2, 3, 4, 7, 8, 15, 16, 31 and 32 days, and 
   await seed(ud, 0);
   app = await launch(ud);
   await sleep(500);
-  const where = await app.eval(`(() => { const r = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; }; const s = document.getElementById('st-streak'); return { streak: r(s), meter: r(document.querySelector('#st-goal .meter')), status: r(document.getElementById('status')), inGoal: s.parentElement.id, win: innerWidth }; })()`);
+  const where = await app.eval(`(() => { const r = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; }; const s = document.getElementById('st-streak'); return { streak: r(s), meter: r(document.querySelector('#st-goal .meter')), status: r(document.getElementById('status')), inGoal: s.parentElement.id, clock: document.getElementById('st-clock').getBoundingClientRect().left }; })()`);
   assert.equal(where.inGoal, 'st-goal', 'part of TODAY, in the status bar');
   assert.ok(where.streak.l >= where.meter.r && where.streak.l - where.meter.r < 14, 'right beside the day’s count');
   assert.ok(where.streak.t >= where.status.t && where.streak.b <= where.status.b, 'inside the status bar');
-  assert.ok(where.streak.r < where.win / 2, 'in its left half');
+  assert.ok(where.streak.r < where.clock, 'with the day’s numbers on the left, clear of the clock');
   const want = { 0: [0, 0], 1: [1, 0], 2: [2, 1], 3: [2, 1], 4: [3, 1], 7: [3, 1], 8: [4, 2], 15: [4, 2], 16: [5, 2], 31: [5, 2], 32: [6, 3] };
   const base = await measure();
   for (const [n, [g, u]] of Object.entries(want)) {
@@ -164,7 +165,7 @@ test('one streak day for several screenplays; opening and pasting text never cou
   assert.equal(s.data.last, dayAgo(0));
   await app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.envDue = null; c.inReaction = null; c.paused = null; c.held = []; c.gen = null; })()`);
   let grew = false;
-  for (let i = 0; i < 80 && !grew; i++) { await sleep(150); grew = await app.eval('__stet.dino.c.g === 2'); }
+  for (let i = 0; i < 200 && !grew; i++) { await sleep(150); grew = await app.eval('__stet.dino.c.g === 2'); } // done as soon as it has grown; a loaded machine animates slower
   assert.ok(grew, 'grew: ' + JSON.stringify(await app.eval('(() => { const c = __stet.dino.c; return { g: c.g, t: c.targetG, a: c.activity }; })()')));
   // More writing in two other screenplays the same day: still one day.
   await newDoc('Pilot');

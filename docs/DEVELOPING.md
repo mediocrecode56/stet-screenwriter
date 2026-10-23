@@ -157,9 +157,9 @@ workflow would remove that warning.
 | command | what it does |
 |---|---|
 | `npm test` | unit and integration tests (about 200, in `test/*.test.js`): formatting and pagination, editing and undo, file format round-trips and repair, safe saving, backups and crash recovery, PDF output, word counting and writing statistics, the streak, updates and patches, packaging, file links, the writing companion. Each file says what it covers |
-| `npm run quick` | the routine check, about half a minute: every unit test plus the smoke test (`test/e2e/smoke.e2e.js`: one start of the real app, then writing, the Tab cycle, element and alignment changes, scene navigation, a changed shortcut, saving, reopening and the PDF). Run it before every push |
+| `npm run quick` | the routine check, about half a minute: every unit test plus the smoke test (`test/e2e/smoke.e2e.js`: one start of the real app, then writing, the Tab cycle, element and alignment changes, scene navigation, a changed shortcut, saving, reopening and the PDF, and the timeline: stepping with Ctrl, timecodes and a scene's own). Run it before every push |
 | `npm run smoke` | the smoke test alone, about ten seconds |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events (`test/e2e/*.e2e.js`): writing and element flow, styles, notes, find, zoom, themes, saving and recovery, PDF, the English revision against a mock API and a fake Claude Code, statistics and the streak, Open Recent, character completion, file links, updates, the companion, layout and caret alignment. Three files run at a time (the performance probe alone, after them); the whole suite takes about two minutes. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm run e2e` | drives the real app over the DevTools protocol with real key events (`test/e2e/*.e2e.js`): writing and element flow, styles, notes, find, zoom, themes, saving and recovery, PDF, the English revision against a mock API and a fake Claude Code, statistics and the streak, Open Recent, character completion, file links, updates, the companion, layout and caret alignment. Three files run at a time (the performance probe alone, after them); the whole suite takes about a minute and a half. Every test run stops when its tests are done (`--test-force-exit`), and `test/e2e/cdp.js` stops any app a failed test left running, so a failure never leaves the run hanging. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
@@ -192,24 +192,28 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 
 ## Timeline
 
-*View → Timeline* (Ctrl+Shift+T; off until turned on, and remembered) is a strip under the
+*View → Timeline* (Ctrl+Shift+T; on by default, and remembered) is a strip under the
 toolbar with the whole script from left to right, a page to a unit, like a track in a
 sequencer (`src/core/timeline.js` for the arithmetic, `src/renderer/timeline.js` for the bar).
 The bar stays quiet and explains nothing in words: the cursor says what a drag will do. It
 shows the script as a white line (grey in light mode), coloured where passages are
-highlighted, a small tick for each scene, an icon for each note, a time ruler that ends in the
+highlighted, a small tick across it for each scene, an icon for each note, a time ruler that ends in the
 estimated length, the caret (the line with a cap) and a soft band for the part of the script
 in the window. With the pointer on it, the grid comes in and a small readout gives the time
-and scene under the pointer. The pointer is drawn to a scene, note, highlight or timecode within 8 pixels
+and scene under the pointer. The pointer is drawn to a scene, note, highlight or timecode within 10 pixels
 (`snapTo`), and the mark lights up. Clicking goes to the line drawn there (a scene to its
 heading, a note to its passage, with the note open). Dragging sideways anywhere zooms around
 the point pressed (right zooms in, down to about 100 pixels a second; left-right arrow
-cursor); the band (hand cursor; its edges show) moves the window over the script. Moving
-over the bar with Ctrl held (Cmd on a Mac), no click needed, steps a whole second at a time
-from where Ctrl was first held (`fineTime`; at least 12 pixels a second, wider when zoomed in):
-the system pointer is hidden and the line moves in its place, slower than the mouse and drawn to
-no mark; the caret and the window follow, the readout shows the exact second, a right-click there pins
-a timecode at that second at once, and letting go of Ctrl leaves the caret there. The round button
+cursor); the band (hand cursor; its edges show) moves the window over the script. Holding
+Ctrl (Cmd on a Mac, where Ctrl + click is a right-click) with the pointer on the bar steps a
+whole second at a time from where it was (`fineTime`; at least 12 pixels a second, wider when
+zoomed in): the system pointer is hidden and the line moves in its place, slower than the mouse
+and drawn to no mark. A cover over the whole window (`.tl-cover`) takes the pointer meanwhile, so
+wherever the hidden pointer wanders nothing else reacts (no toolbar hover or Ctrl + click, no
+selection in the script). The caret moves only once the line does (a shortcut pressed with the
+pointer resting on the bar leaves it alone), then the caret and the window follow, the readout
+shows the exact second, a right-click pins a timecode at that second at once, letting go of
+Ctrl leaves the caret there and Esc puts it back. The round button
 centred on the right, or a double-click on the ruler or the band, shows the whole script.
 The wheel scrolls it and Ctrl+wheel zooms; the grid steps between 1 second and an hour so it
 stays readable, and the ruler is drawn only around the part in view.
@@ -217,16 +221,20 @@ stays readable, and the ruler is drawn only around the part in view.
 The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time
 at the start of the line there: between two timecodes the time is spread evenly, and after
 the last one the rest of the script runs at the pace measured up to it (its time over its
-pages), so the length at the right end is the estimate. A click or right-click on a timecode (the
+pages), so the length at the right end is the estimate. A right-click on a scene gives it its
+own timecode, pinned to the first line of its heading (`isSceneTimecode`); the script shows it
+beside the heading (`sceneTimecodes`, `.sctc` in view.js, on screen only, never printed) and the
+editor names the scene. A click or right-click on a timecode (the
 pointer turns into a pencil over one) opens the
 same small editor under the bar (`editTimecode`): the exact time as HH:MM:SS (Up and Down nudge
 it a second, ten with Shift), an optional tag shown beside it on the ruler, one of the
 highlight colours, and a bin to remove it; Enter or a click away keeps it, Esc doesn't. A
 timecode has to be later than the ones before it and earlier than the ones after; the editor
-says so under the time when it isn't. Each timecode is drawn as a faint line the height of the
-bar, in its colour, and draws the pointer like the other marks. Labels on the ruler never overlap
-(`placeLabels`): the end of the script comes first, then the timecodes newest first (the last
-pinned or edited), and one that would run into a label already placed keeps just its line; its
+says so under the time when it isn't. Each timecode is drawn as a line the height of the
+bar, in its colour, and draws the pointer like the other marks; one outside a scene heading is
+quieter (a faint line, a hollow marker). Labels on the ruler never overlap
+(`placeLabels`): the end of the script comes first, then the scenes' timecodes, then the others,
+each newest first (the last pinned or edited), and one that would run into a label already placed keeps just its line; its
 time and tag still show in the readout when the pointer is on it. Timecodes are kept with their
 line as you edit and saved in the .stet file (with `n`, the tag, and `c`, the colour).
 
@@ -419,6 +427,10 @@ Click *Open Recent…* itself for the full window.
 to Recycle Bin*) moves the file to the Recycle Bin after a confirmation (never a
 permanent delete). Long paths are shortened from the start ("…\Drafts\Film.stet",
 full path on hover), so the list never scrolls sideways. Missing files are marked.
+
+On launch STET opens the screenplay last edited (`lastEdited` in settings, set when a save
+writes changes; `src/core/recent.js`), then the newest entry in Open Recent that still opens, so
+one only looked at since doesn't take its place.
 
 ## Your work is safe because
 

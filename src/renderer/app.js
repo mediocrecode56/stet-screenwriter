@@ -20,6 +20,7 @@ import { initUpdates } from './ui/update.js';
 import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
 import { Timeline } from './timeline.js';
+import { launchOrder } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { MAC, macKeys } from '../core/keys.js';
 import { stepZoom } from '../core/wheelzoom.js';
@@ -1121,11 +1122,11 @@ if (info.sample) {
 } else if (!info.perf && !info.shot) {
   const recovered = await checkRecovery(true);
   if (!recovered) {
-    // A file STET was launched with, or else the last screenplay worked on: the newest entry in
-    // Open Recent that can still be opened.
+    // A file STET was launched with, or else the last screenplay edited (then the newest entry in
+    // Open Recent) that can still be opened.
     const pending = await api.invoke('app:pending-open');
     if (pending) await openPath(pending);
-    else for (const r of settings.recent || []) if (await openPath(r.path, { quiet: true })) break;
+    else for (const p of launchOrder(settings.recent, settings.lastEdited)) if (await openPath(p, { quiet: true })) break;
   }
 }
 if (info.run) setTimeout(() => cmd.run(info.run), 300);

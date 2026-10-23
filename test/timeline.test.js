@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE } from '../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../src/core/timeline.js';
 import { paginate } from '../src/core/layout.js';
 import { newDocument, makeBlock } from '../src/core/model.js';
 import { serialize, deserialize } from '../src/core/serialize.js';
@@ -152,4 +152,20 @@ test('timecode labels too close together: the newest keeps its label, the older 
   assert.equal(clearOf(placed, 300, 330), true); // a regular label between them
   assert.equal(clearOf(placed, 185, 215), false);
   assert.equal(clearOf(placed, 195, 230, 0), true);
+});
+
+test("a scene's own timecode: on the first line of its heading, shown by block id, and only while it holds", () => {
+  const { blocks, pages } = script(4, 12);
+  const s1 = blocks[13], s2 = blocks[26];
+  assert.equal(s1.type, 'scene');
+  assert.equal(isSceneTimecode({ id: s1.id, line: 0 }, blocks), true);
+  assert.equal(isSceneTimecode({ id: blocks[14].id, line: 0 }, blocks), false, 'an action line is not a scene');
+  const tcs = [makeTimecode(s1.id, 0, 90, 'Hook'), makeTimecode(blocks[20].id, 0, 120), makeTimecode(s2.id, 0, 100)];
+  const m = sceneTimecodes(tcs, blocks, pages);
+  assert.deepEqual([...m.keys()], [s1.id], 'the loose one is no scene\'s; the one out of order does not hold');
+  assert.equal(m.get(s1.id).t, 90);
+  assert.equal(m.get(s1.id).tag, 'Hook');
+  // It sets the ruler like any other timecode.
+  const time = timeScale(anchorsOf(tcs, blocks, pages));
+  assert.equal(Math.round(time.at(scriptPos(pages, 13))), 90);
 });

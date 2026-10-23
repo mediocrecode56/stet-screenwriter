@@ -2,6 +2,16 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.33.0 · 23 Oct 2026
+
+- Timeline: right-click a scene to give it its own timecode. It shows beside the scene heading in the script, and the timeline's clock adjusts around it like any other timecode.
+- The timeline is on by default (Ctrl+Shift+T still hides it), with a short guide to it on the download page.
+- Holding Ctrl over the timeline no longer reaches anything else: wherever the hidden pointer wanders, the toolbar above and the script below stay untouched, nothing gets selected, and the caret moves only once the line does. Esc puts the caret back where it was.
+- Timecodes outside scene headings are quieter on the timeline (a hollow marker and a faint line); scene ticks now cross the script line.
+- The pointer is drawn a little more strongly to scenes, notes, highlights and timecodes.
+- STET opens the screenplay you last edited, not just the last one you opened.
+- Fix: with the timeline on, STET could fail to start before a screenplay was open.
+
 ## 0.32.0 · 23 Oct 2026
 
 - Timeline: with Ctrl (Cmd on a Mac) held, the mouse pointer hides and the line moves in its place at a slower, steadier pace, a second at a time, so landing on the exact second for a timecode is easy. Nothing pulls it towards scenes or notes while Ctrl is held.

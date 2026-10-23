@@ -18,6 +18,8 @@ const load = (list, settings = {}) => app.eval(`(async () => {
   await new Promise((r) => setTimeout(r, 60));
   __stet.input.focus();
 })()`);
+// Stepping on the timeline is held with Ctrl, or Cmd on a Mac.
+const MOD = process.platform === 'darwin' ? 'metaKey' : 'ctrlKey', MOD_KEY = process.platform === 'darwin' ? 'Meta' : 'Control';
 const caret = (b, o, f = o) => app.eval(`(() => { __stet.editor.setSel({ b: ${b}, o: ${o} }, { b: ${b}, o: ${f} }); __stet.input.after(); })()`);
 const press = (sel, init = {}) => app.eval(`document.querySelector(${JSON.stringify(sel)}).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, ...${JSON.stringify(init)} }))`);
 
@@ -117,7 +119,7 @@ test('scene navigation lands on the heading, nothing of the scene before it in v
   }
 });
 
-test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note and highlight, a click goes there, a timecode sets the ruler', async () => {
+test('the timeline: on at first with each scene, note and highlight, a click goes there, Ctrl steps, a timecode sets the ruler, a scene gets its own', async () => {
   const list = [];
   for (let i = 1; i <= 12; i++) {
     list.push(['scene', `INT. ROOM ${i} - DAY`]);
@@ -125,9 +127,8 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   }
   await load(list);
   await app.eval(`(() => { const ed = __stet.editor; ed.setSel({ b: 1, o: 0 }, { b: 1, o: 5 }); ed.highlight('pink'); __stet.session.doc.comments.n1 = { text: 'Why?', created: '', modified: '' }; ed.setSel({ b: 8, o: 0 }, { b: 8, o: 5 }); ed.attachComment('n1'); })()`);
-  assert.equal(await app.eval('document.getElementById("timeline").hidden'), true, 'off by default');
-  await app.key('Ctrl+Shift+T');
-  await sleep(80);
+  assert.equal(await app.eval('document.getElementById("timeline").hidden'), false, 'on by default');
+  await sleep(250); // it catches up a moment after the last change
   const r = await app.eval(`(() => { const q = (s) => document.querySelectorAll('#timeline ' + s).length;
     return { hidden: document.getElementById('timeline').hidden, scenes: q('.tl-scene'), notes: q('.tl-note'), pink: q('.tl-hl.hl-pink'),
       end: document.querySelector('#timeline .tl-end').textContent, pages: __stet.view.pages.length, saved: null }; })()`);
@@ -181,38 +182,80 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   const before = await app.eval('__stet.editor.caret.b');
   const t0 = await app.eval('Math.round(__stet.timeline.time.at(__stet.timeline.posAt(__stet.timeline.inner.getBoundingClientRect().left + __stet.timeline.inner.getBoundingClientRect().width * 0.3)))');
   // Just moving over it with Ctrl held, no click: from a third of the way along, clear of the band at the start.
+  // The first move starts stepping; a cover over the whole window then takes the pointer.
   const read = await app.eval(`(() => {
     const t = __stet.timeline, r = t.inner.getBoundingClientRect(), x = r.left + r.width * 0.3, y = r.top + 20;
-    for (let i = 0; i <= 10; i++) t.inner.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x + i * 12, clientY: y, ctrlKey: true }));
+    t.inner.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y, ${MOD}: true }));
+    const cover = document.querySelector('.tl-cover');
+    for (let i = 1; i <= 10; i++) cover.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x + i * 12, clientY: y + i * 9, ${MOD}: true }));
     return t.hover.textContent;
   })()`);
   assert.ok(await app.eval('__stet.editor.caret.b') > before, 'stepping moves the caret');
   const secs = read.trim().slice(0, 8).split(':').reduce((n, v) => n * 60 + +v, 0);
-  assert.equal(secs, t0 + 10, `120px with Ctrl held is ten seconds on (${read}, from ${t0})`);
+  assert.equal(secs, t0 + 10, `120px with Ctrl held is ten seconds on, wherever the pointer wanders up or down (${read}, from ${t0})`);
   assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'Ctrl steps, it does not zoom');
+  // Meanwhile the toolbar above and the script below are out of reach: a Ctrl + click there does nothing.
+  const reach = await app.eval(`(() => { const b = document.querySelector('#eltypes .tb'), r = b.getBoundingClientRect(), s = document.getElementById('scroller').getBoundingClientRect();
+    const over = [document.elementFromPoint(r.left + 5, r.top + 5), document.elementFromPoint(s.left + 200, s.top + 200)].map((e) => e.className);
+    const tab = JSON.stringify(__stet.editor.tabTypes), sel = JSON.stringify(__stet.editor.caret);
+    document.elementFromPoint(r.left + 5, r.top + 5).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, clientX: r.left + 5, clientY: r.top + 5, ${MOD}: true }));
+    return { over, same: JSON.stringify(__stet.editor.tabTypes) === tab && JSON.stringify(__stet.editor.caret) === sel, cursor: getComputedStyle(document.querySelector('.tl-cover')).cursor }; })()`);
+  assert.deepEqual(reach, { over: ['tl-cover', 'tl-cover'], same: true, cursor: 'none' });
   const stepped = await app.eval('__stet.editor.caret.b');
   // A right-click while stepping pins a timecode at that second, at once.
   const hms = (sec) => [sec / 3600, (sec / 60) % 60, sec % 60].map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
-  await app.eval(`__stet.timeline.inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5, ctrlKey: true }))`);
+  await app.eval(`document.querySelector('.tl-cover').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5, ${MOD}: true }))`);
   assert.deepEqual(await app.eval('__stet.session.doc.timecodes.map((t) => t.t)'), [t0 + 10], 'Ctrl + right-click pins the second stepped to');
   assert.equal(await app.eval('!!document.querySelector(".menu, .tc-pop")'), false, 'without a menu or the editor');
-  await app.eval(`dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }))`);
-  assert.equal(await app.eval('!!__stet.timeline.stepping || document.body.classList.contains("tl-fine")'), false, 'letting go of Ctrl ends it');
+  assert.equal(await app.eval('document.querySelector("#timeline .tl-tcm").className'), 'tl-tcm loose new', 'off a scene heading: a quiet line');
+  await app.eval(`dispatchEvent(new KeyboardEvent('keyup', { key: '${MOD_KEY}' }))`);
+  assert.equal(await app.eval('!!__stet.timeline.stepping || document.body.classList.contains("tl-fine") || !!document.querySelector(".tl-cover")'), false, 'letting go of Ctrl ends it');
   assert.equal(await app.eval('__stet.editor.caret.b'), stepped, 'and the caret stays where it stepped to');
+  // Ctrl pressed with the pointer resting on the bar: the line shows, the caret moves only once the
+  // line does, and Esc puts it back.
+  const esc = await app.eval(`(() => { const t = __stet.timeline, r = t.inner.getBoundingClientRect(), x = r.left + r.width * 0.6, y = r.top + 20;
+    t.inner.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
+    dispatchEvent(new KeyboardEvent('keydown', { key: '${MOD_KEY}', ${MOD}: true }));
+    const still = !!t.stepping && __stet.editor.caret.b === ${stepped};
+    document.querySelector('.tl-cover').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x + 60, clientY: y, ${MOD}: true }));
+    const moved = __stet.editor.caret.b !== ${stepped};
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', ${MOD}: true }));
+    const back = __stet.editor.caret.b === ${stepped} && !t.stepping;
+    dispatchEvent(new KeyboardEvent('keyup', { key: '${MOD_KEY}' }));
+    t.inner.dispatchEvent(new MouseEvent('mouseleave'));
+    return { still, moved, back }; })()`);
+  assert.deepEqual(esc, { still: true, moved: true, back: true });
   // With Ctrl held nothing draws the pointer: stepping from right beside the timecode starts where the pointer is.
   assert.equal(await app.eval(`(() => { const t = __stet.timeline, l = document.querySelector('#timeline .tl-tcm').getBoundingClientRect(), x = l.left - 5;
-    t.inner.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: l.top + 20, ctrlKey: true }));
+    t.inner.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: l.top + 20, ${MOD}: true }));
     const ok = t.stepping.t0 === Math.round(t.time.at(t.posAt(x))) && t.stepping.t0 !== ${t0 + 10};
-    dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' })); return ok; })()`), true, 'no magnetism with Ctrl held');
+    dispatchEvent(new KeyboardEvent('keyup', { key: '${MOD_KEY}' })); return ok; })()`), true, 'no magnetism with Ctrl held');
   // Over a timecode the pointer shows it can be edited, and a click opens its editor, with its time; the bin removes it.
-  await app.eval(`(() => { const t = __stet.timeline, l = document.querySelector('#timeline .tl-tcm').getBoundingClientRect(), o = { bubbles: true, clientX: l.left + 6, clientY: l.top + 20 };
+  await app.eval(`(() => { const t = __stet.timeline, l = document.querySelector('#timeline .tl-tcm').getBoundingClientRect(), o = { bubbles: true, clientX: l.left + 9, clientY: l.top + 20 };
     t.inner.dispatchEvent(new MouseEvent('mousemove', o)); })()`);
-  assert.equal(await app.eval('__stet.timeline.inner.dataset.zone'), 'tc', 'drawn to it from 6px off, with the edit pointer');
-  await app.eval(`(() => { const t = __stet.timeline, l = document.querySelector('#timeline .tl-tcm').getBoundingClientRect(), o = { bubbles: true, clientX: l.left + 6, clientY: l.top + 20 };
+  assert.equal(await app.eval('__stet.timeline.inner.dataset.zone'), 'tc', 'drawn to it from 9px off, with the edit pointer');
+  await app.eval(`(() => { const t = __stet.timeline, l = document.querySelector('#timeline .tl-tcm').getBoundingClientRect(), o = { bubbles: true, clientX: l.left + 9, clientY: l.top + 20 };
     t.inner.dispatchEvent(new MouseEvent('mousedown', o)); dispatchEvent(new MouseEvent('mouseup', o)); })()`);
   assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-time').value`), hms(t0 + 10));
   await app.eval(`document.querySelector('.tc-pop .tc-del').click()`);
   assert.equal(await app.eval('__stet.session.doc.timecodes.length + document.querySelectorAll(".tc-pop, #timeline .tl-tcm").length'), 0, 'removed');
+  // A right-click on a scene gives it its own timecode: the editor names the scene; the script shows it beside the heading.
+  await app.eval(`(() => { const el = document.querySelectorAll('#timeline .tl-scene')[3], l = el.getBoundingClientRect();
+    __stet.timeline.inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: l.left + 3, clientY: l.top + 4 })); })()`);
+  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-head').textContent`), 'INT. ROOM 4 - DAY');
+  await app.eval(`(() => { const p = document.querySelector('.tc-pop'); p.querySelector('.tc-time').value = '00:09:00'; p.querySelector('.tc-tag').value = 'Turn';
+    p.querySelector('.tc-time').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+  assert.deepEqual(await app.eval(`(() => { const b = __stet.editor.blocks; return __stet.session.doc.timecodes.map((t) => [b.find((x) => x.id === t.id).text, t.line, t.t, t.tag]); })()`), [['INT. ROOM 4 - DAY', 0, 540, 'Turn']]);
+  assert.equal(await app.eval('document.querySelector("#timeline .tl-tcm").className'), 'tl-tcm sc', 'on a scene: the stronger line');
+  await caret(18, 0);
+  await sleep(150);
+  assert.equal(await app.eval(`[...document.querySelectorAll('#content .sctc')].map((e) => e.textContent).join()`), '00:09:00 · Turn', 'beside the heading in the script');
+  const beside = await app.eval(`(() => { const t = document.querySelector('#content .sctc'), h = [...document.querySelectorAll('#content .l')].find((e) => e.textContent === 'INT. ROOM 4 - DAY');
+    const a = t.getBoundingClientRect(), b = h.getBoundingClientRect(); return a.left > b.right && a.left - b.right < 40 && Math.abs(a.top - b.top) < 6; })()`);
+  assert.equal(beside, true, 'on the heading’s line, just after it');
+  // Each scene before it now runs to nine minutes in all: the ruler there reads 9:00.
+  assert.equal(await app.eval(`Math.round(__stet.timeline.time.at(__stet.timeline.tl.scenes[3].x))`), 540);
+  await app.eval('__stet.timeline.setTimecodes([])');
   // A timecode at the start of the last page at twice its minutes doubles the pace: the script comes to twice its pages in minutes.
   // Typed in the editor, with a tag and a colour; Enter keeps it.
   await app.eval(`__stet.timeline.editTimecode(__stet.view.pages.length - 1)`);

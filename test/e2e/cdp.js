@@ -14,6 +14,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // How long STET may take to start. A Mac checks a newly downloaded app once, on its first start (the release workflow).
 const START_MS = Number(process.env.STET_E2E_START_MS) || 15000;
 const SEND_MS = 30000;
+// Every app still running when the test process ends is stopped with it, so a test that failed
+// before closing its app can't leave one behind (or keep the run waiting on it).
+const live = new Set();
+process.on('exit', () => { for (const c of live) try { c.kill('SIGKILL'); } catch { /* gone */ } });
 
 export class App {
   static async launch({ userData, port = 9300 + Math.floor(Math.random() * 500), args = [], hidden = true, env = {} }) {
@@ -22,6 +26,8 @@ export class App {
       env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    live.add(child);
+    child.once('exit', () => live.delete(child));
     child.stdout.on('data', () => {});
     let err = '';
     child.stderr.on('data', (d) => { err = (err + d).slice(-2000); });
@@ -115,14 +121,20 @@ export class App {
     await fs.writeFile(file, Buffer.from(r.data, 'base64'));
   }
 
+  get exited() { return this.child.exitCode !== null || this.child.signalCode !== null; }
+
   async close() {
-    try { await Promise.race([this.eval('window.stet.invoke("app:close-ready")'), sleep(3000)]); } catch { /* gone */ }
-    await Promise.race([new Promise((r) => this.child.once('exit', r)), sleep(5000)]);
-    if (this.child.exitCode === null) this.kill();
+    if (!this.exited) {
+      try { await Promise.race([this.eval('window.stet.invoke("app:close-ready")'), sleep(3000)]); } catch { /* gone */ }
+      await Promise.race([new Promise((r) => this.child.once('exit', r)), sleep(5000)]);
+      if (!this.exited) await this.kill();
+    }
+    try { this.ws.close(); } catch { /* closed */ }
   }
 
   /** Simulate a crash / power loss: no shutdown handlers run. */
   kill() {
+    if (this.exited) return Promise.resolve();
     if (process.platform === 'win32') spawn('taskkill', ['/PID', String(this.child.pid), '/T', '/F'], { stdio: 'ignore' });
     else this.child.kill('SIGKILL');
     return new Promise((r) => this.child.once('exit', r));
