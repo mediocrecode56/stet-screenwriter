@@ -19,6 +19,7 @@ import * as dialogs from './ui/dialogs.js';
 import { initUpdates } from './ui/update.js';
 import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
+import { Timeline } from './timeline.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { MAC, macKeys } from '../core/keys.js';
 import { stepZoom } from '../core/wheelzoom.js';
@@ -81,6 +82,12 @@ const revision = new Revision({
   onShow: (on) => { $('btn-rev').classList.toggle('on', on); view.layoutDirty = true; view.schedule(); },
 });
 
+const timeline = new Timeline($('timeline'), {
+  editor, view, session, jump,
+  openNote: (id, b, s, e) => { jump(pos(b, s), true, pos(b, e), true); view.activeComment = id; openNote(id); view.invalidate(); },
+  onToggle: (on) => api.invoke('settings:set', { timeline: on }),
+});
+
 view.onTitleInput = () => session.touch();
 view.showTitle = settings.showTitlePage !== false;
 
@@ -109,7 +116,7 @@ editor.onChange = () => {
   if (scenes.visible) scenes.refresh();
 };
 
-view.onFrame = () => renderStatus();
+view.onFrame = () => { renderStatus(); timeline.update(); };
 
 function onDocLoaded(s) {
   view.doc = s.doc;
@@ -961,6 +968,7 @@ cmd.register([
   { id: 'zoom-reset', cat: 'View', label: 'Actual Size (100%)', keys: 'Ctrl+0', global: true, run: () => { view.setZoom(1); renderZoom(); persistZoom(); } },
   { id: 'panel-scenes', cat: 'View', label: 'Scene Navigator', keys: 'Ctrl+\\', global: true, run: () => showPanel('scenes') },
   { id: 'panel-notes', cat: 'View', label: 'Notes Panel', keys: 'Ctrl+Shift+\\', global: true, run: () => showPanel('notes') },
+  { id: 'timeline', cat: 'View', label: () => (timeline.visible ? 'Hide Timeline' : 'Timeline'), keys: 'Ctrl+Shift+T', global: true, run: () => timeline.show() },
   { id: 'companion', cat: 'View', label: () => (dino && dino.enabled ? 'Hide Writing Companion' : 'Show Writing Companion'), run: () => { dino.setEnabled(!dino.enabled); api.invoke('settings:set', { companion: dino.enabled }); } },
   { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => { view.showTitle = !view.showTitle; api.invoke('settings:set', { showTitlePage: view.showTitle }); view.invalidate(); view.revealCaret(); } },
   { id: 'title-edit', cat: 'View', label: 'Edit Title Page', run: () => { if (!view.showTitle) { view.showTitle = true; view.invalidate(); } view.scroller.scrollTop = 0; view.frame(); setTimeout(() => { const f = document.querySelector('.tp-f'); if (f) f.focus(); }, 30); } },
@@ -1018,7 +1026,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
-  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
+  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'timeline', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
 ]);
@@ -1078,7 +1086,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, timeline, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 
@@ -1101,6 +1109,7 @@ dino.onDormant = (on) => {
 };
 dino.setEnabled(settings.companion !== false);
 if (settings.panels?.notes) showPanel('notes', true);
+if (settings.timeline) timeline.show(true);
 
 session.newUntitled();
 renderGoal();

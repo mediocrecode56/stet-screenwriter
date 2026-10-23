@@ -7,6 +7,7 @@ import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, withAlign, writtenText, def
 import { ALIGNS } from './format.js';
 import { reviewToJSON, reviewFromJSON } from './revision.js';
 import { readCast } from './cast.js';
+import { timecodesToJSON, timecodesFromJSON } from './timeline.js';
 
 export const SCHEMA_VERSION = 1;
 
@@ -49,7 +50,14 @@ export function toPayload(doc, appVersion) {
     ...revisionPayload(doc),
     // Optional (v0.23+): the cast, most recently used first, for completing character cues.
     ...castPayload(doc),
+    // Optional (v0.28+): timecodes pinned on the timeline.
+    ...timecodesPayload(doc),
   };
+}
+
+function timecodesPayload(doc) {
+  const tc = timecodesToJSON(doc.timecodes, doc.blocks);
+  return tc ? { timecodes: tc } : {};
 }
 
 // A block: t type, x text; optional m marks, a alignment (v0.24+), c the text as written when it
@@ -177,6 +185,7 @@ export function deserialize(json) {
     settings, titlePage, blocks, comments,
     revision: { ignored: [] },
     cast: readCast(p.cast),
+    timecodes: timecodesFromJSON(p.timecodes, blocks),
   };
   const rv = p.revision;
   if (rv && Array.isArray(rv.ignored)) {

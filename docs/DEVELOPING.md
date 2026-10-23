@@ -183,11 +183,30 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 | Ctrl+F · Ctrl+H · F3 | find · replace · next |
 | Alt+↑/↓ · Ctrl+G · PgUp/PgDn | previous/next scene · go to page · page |
 | Ctrl+wheel · Ctrl+= / − / 0 | zoom, in exact 5-point steps |
+| Ctrl+Shift+T | the timeline (below) |
 | LIGHT · DARK · AUTO (bottom right) · Ctrl+Shift+L | theme; AUTO follows a schedule — right-click it to set the dark and light start times (AM/PM). Picking LIGHT or DARK turns the schedule off |
 | Ctrl+K | command palette — every command, searchable |
 | Ctrl+P · Ctrl+Shift+E | print preview · export PDF |
 | F9 | your writing week: progress, goals, statistics |
 | F1 | all shortcuts |
+
+## Timeline
+
+*View → Timeline* (Ctrl+Shift+T; off until turned on, and remembered) is a strip under the
+toolbar with the whole script from left to right, a page to a unit, like a track in a
+sequencer (`src/core/timeline.js` for the arithmetic, `src/renderer/timeline.js` for the bar).
+The script is a white line; highlighted passages show in their colour over it. Each scene is a
+thin vertical line (its heading on hover), each note a small icon above. The pink line is the
+caret. Clicking goes to the line drawn there (a scene line to its heading, a note to its
+passage, with the note open). The wheel scrolls it; Ctrl+wheel or **−** / **+** zoom in (the
+grid steps between 1 second and an hour so its ticks stay readable), **FIT** shows it all.
+
+The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time,
+as HH:MM:SS, at the start of the line there: between two timecodes the time is spread evenly,
+and after the last one the rest of the script runs at the pace measured up to it (its time
+over its pages), so the length at the right end is the estimate. A timecode has to be later
+than the ones before it and earlier than the ones after; right-click it to change or remove
+it. Timecodes are kept with their line as you edit and saved in the .stet file.
 
 ## English revision (Claude)
 

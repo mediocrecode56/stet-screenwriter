@@ -100,6 +100,7 @@ until you accept.
 | Ctrl+P | print or save as PDF |
 | F9 | see your writing week |
 | Ctrl+K | search every command |
+| Ctrl+Shift+T | show or hide the timeline: the whole script as a strip, click anywhere to go there |
 | Ctrl+L, E, R, J | align left, centre, right, or justify |
 | F1 | see all the keys, and change any of them |
 

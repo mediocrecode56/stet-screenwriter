@@ -133,6 +133,7 @@ export function newDocument(title = '') {
     comments: {},
     revision: { ignored: [] },
     cast: [], // character names, most recently used first (core/cast.js)
+    timecodes: [], // [{ id: block id, line, t: seconds }] pinned on the timeline (core/timeline.js)
   };
 }
 

@@ -149,6 +149,16 @@ suggests the first of them that starts with what was typed. Only names that
 appear in a cue of the script are written, and the field only when non-empty;
 older builds ignore it.
 
+### Timecodes (optional, since 0.28.0)
+
+```jsonc
+"timecodes": [{ "b": 120, "l": 0, "t": 1500 }]
+```
+
+Times pinned on the timeline: `t` seconds at the start of line `l` of element `b`
+(its index in `blocks`), in script order. Entries with an invalid element or time are
+dropped. Written only when there are any; older builds ignore it.
+
 ### Comments
 
 Only comments referenced by at least one anchor are written. Comment text is

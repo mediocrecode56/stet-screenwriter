@@ -117,6 +117,46 @@ test('scene navigation lands on the heading, nothing of the scene before it in v
   }
 });
 
+test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note and highlight, a click goes there, a timecode sets the ruler', async () => {
+  const list = [];
+  for (let i = 1; i <= 12; i++) {
+    list.push(['scene', `INT. ROOM ${i} - DAY`]);
+    for (let j = 0; j < 5; j++) list.push(['action', `Scene ${i}, line ${j}. Something happens here that takes a little room.`]);
+  }
+  await load(list);
+  await app.eval(`(() => { const ed = __stet.editor; ed.setSel({ b: 1, o: 0 }, { b: 1, o: 5 }); ed.highlight('pink'); __stet.session.doc.comments.n1 = { text: 'Why?', created: '', modified: '' }; ed.setSel({ b: 8, o: 0 }, { b: 8, o: 5 }); ed.attachComment('n1'); })()`);
+  assert.equal(await app.eval('document.getElementById("timeline").hidden'), true, 'off by default');
+  await app.key('Ctrl+Shift+T');
+  await sleep(80);
+  const r = await app.eval(`(() => { const q = (s) => document.querySelectorAll('#timeline ' + s).length;
+    return { hidden: document.getElementById('timeline').hidden, scenes: q('.tl-scene'), notes: q('.tl-note'), pink: q('.tl-hl.hl-pink'),
+      end: document.querySelector('#timeline .tl-end').textContent, pages: __stet.view.pages.length, saved: null }; })()`);
+  assert.equal(r.hidden, false);
+  assert.deepEqual([r.scenes, r.notes, r.pink], [12, 1, 1]);
+  assert.equal(r.end, `00:${String(r.pages).padStart(2, '0')}:00`, 'a minute a page');
+  // Click the line for scene 9: the caret goes there.
+  const click = (sel, i, dx = 0) => app.eval(`(() => { const el = document.querySelectorAll(${JSON.stringify(sel)})[${i}], l = el.getBoundingClientRect();
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: l.left + ${dx}, clientY: l.top + 10 })); })()`);
+  await click('#timeline .tl-scene', 8);
+  assert.equal(await app.eval('__stet.editor.block.text'), 'INT. ROOM 9 - DAY');
+  // Anywhere else: the line drawn there.
+  const x = await app.eval(`__stet.timeline.drawn * (2 + 30 / 54)`);
+  await click('#timeline .tl-inner', 0, x);
+  const want = await app.eval(`[...__stet.view.pages[2].items].reverse().find((it) => it.y <= 30.5).bi`);
+  assert.equal(await app.eval('__stet.editor.caret.b'), want, 'the line on page 3, row 31');
+  // A timecode at the start of the last page at twice its minutes doubles the pace: the script comes to twice its pages in minutes.
+  const hms = (sec) => [sec / 3600, (sec / 60) % 60, sec % 60].map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
+  await app.eval(`void __stet.timeline.addTimecode(__stet.view.pages.length - 1)`);
+  await sleep(50);
+  await app.eval(`(() => { const d = document.querySelector('.dlg'); d.querySelector('input').value = '${hms(120 * (r.pages - 1))}'; d.querySelector('.btn.primary').click(); })()`);
+  await sleep(50);
+  assert.equal(await app.eval(`document.querySelector('#timeline .tl-end').textContent`), hms(120 * r.pages));
+  assert.equal(await app.eval(`document.querySelectorAll('#timeline .tl-tc').length`), 1);
+  assert.match(await app.eval('__stet.session.serialize()'), /"timecodes"/, 'saved with the script');
+  await app.key('Ctrl+Shift+T');
+  assert.equal(await app.eval('document.getElementById("timeline").hidden'), true);
+});
+
 test('a changed shortcut works, and the old keys no longer do', async () => {
   await load([['action', 'Text.']]);
   await caret(0, 0, 5);

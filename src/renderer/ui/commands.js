@@ -96,6 +96,16 @@ export function popup(btn, items) {
   showMenu(btn, items);
 }
 
+/** A context menu at a point in the window. */
+export function menuAt(x, y, items) {
+  const at = { getBoundingClientRect: () => ({ left: x, bottom: y }), classList: { add() {}, remove() {} } };
+  showMenu(at, items);
+  // Kept inside the window.
+  const el = openMenu.el;
+  el.style.left = Math.max(0, Math.min(x, window.innerWidth - el.offsetWidth)) + 'px';
+  el.style.top = Math.max(0, Math.min(y, window.innerHeight - el.offsetHeight)) + 'px';
+}
+
 function showMenu(btn, items) {
   const switching = !!openMenu; // moving along the menu bar: the next menu is simply there
   closeMenu(false);

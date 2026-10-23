@@ -463,7 +463,7 @@ app.whenReady().then(async () => {
   const ud = app.getPath('userData');
   settings = new JsonStore(path.join(ud, 'settings.json'), {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
-    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], reviewConsent: false, showTitlePage: true, panels: { scenes: false, notes: false },
+    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], reviewConsent: false, showTitlePage: true, timeline: false, panels: { scenes: false, notes: false },
     updateCheck: true, updateNotified: null,
   });
   stats = new StatsStore(ud);

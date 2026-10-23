@@ -24,6 +24,10 @@
   --hl-blue: #c8defb;
   --hl-yellow: #fbefa0;
   --hl-pink: #fbcde2;
+  --tl-line: #fff;
+  --tl-blue: #3d84e6;
+  --tl-yellow: #e0b800;
+  --tl-pink: #e0559a;
   --find: rgba(0, 0, 0, .10);
   --find-cur: rgba(0, 0, 0, .32);
   --note-line: #000;
@@ -62,6 +66,10 @@
   --hl-blue: #24456e;
   --hl-yellow: #564a08;
   --hl-pink: #66284a;
+  --tl-line: #f0f0ed;
+  --tl-blue: #5b9cf0;
+  --tl-yellow: #f2d33a;
+  --tl-pink: #ef6fae;
   --find: rgba(255, 255, 255, .12);
   --find-cur: rgba(255, 255, 255, .34);
   --note-line: #f0f0ed;
@@ -208,6 +216,32 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 #findbar input:focus { border-color: var(--rule-strong); }
 .chk { display: flex; align-items: center; gap: 3px; color: var(--ink-2); }
 #find-count { color: var(--ink-3); min-width: 70px; }
+
+/* ---- timeline (View > Timeline) ---------------------------------------- */
+#timeline { position: relative; flex: none; height: 62px; display: flex; border-bottom: 1px solid var(--rule); background: var(--bar); user-select: none; }
+#timeline[hidden] { display: none; }
+.tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.tl-inner { position: relative; height: 100%; cursor: pointer; }
+.tl-gl { position: absolute; top: 0; bottom: 18px; width: 1px; background: var(--rule); opacity: .35; }
+/* The script: a line, white where nothing is highlighted, in the highlight's colour where it is. */
+.tl-line { position: absolute; left: 0; top: 30px; height: 4px; background: var(--tl-line); box-shadow: 0 0 0 1px var(--rule); }
+.tl-hl { position: absolute; top: 28px; height: 8px; }
+.tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }
+.tl-scene { position: absolute; top: 4px; bottom: 18px; width: 1px; margin-left: -0.5px; background: var(--ink); opacity: .75; }
+.tl-scene::before { content: ''; position: absolute; top: 0; bottom: 0; left: -3px; right: -3px; } /* easier to hit */
+.tl-scene:hover { opacity: 1; box-shadow: 0 0 0 1px var(--ink); }
+.tl-note { position: absolute; top: 5px; margin-left: -5px; color: var(--ink); line-height: 0; }
+.tl-note:hover { color: var(--tl-blue); }
+.tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; border-top: 1px solid var(--rule); }
+.tl-tick { position: absolute; top: 0; height: 5px; border-left: 1px solid var(--ink-3); }
+.tl-tick span { position: absolute; top: 4px; left: 3px; font-size: 10px; line-height: 12px; color: var(--ink-3); white-space: nowrap; }
+.tl-tc { position: absolute; top: -1px; width: 0; height: 0; margin-left: -4px; border: 4px solid transparent; border-top: 6px solid var(--tl-yellow); }
+.tl-end { position: absolute; top: 3px; padding-left: 4px; font-size: 10px; line-height: 12px; color: var(--ink-2); white-space: nowrap; transform: translateX(-100%); padding-right: 3px; }
+.tl-head { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -0.5px; background: var(--tl-pink); pointer-events: none; }
+.tl-hover { position: absolute; top: 0; bottom: 18px; border-left: 1px dashed var(--ink-3); pointer-events: none; }
+.tl-hover { font-size: 10px; color: var(--ink-2); padding-left: 4px; white-space: nowrap; line-height: 14px; }
+.tl-zoom { flex: none; display: flex; flex-direction: column; justify-content: center; border-left: 1px solid var(--rule); padding: 0 2px; }
+.tl-zoom .tb { padding: 1px 6px; font-size: 10px; }
 
 /* ---- main area ------------------------------------------------------- */
 #main { flex: 1; display: flex; min-height: 0; overflow: hidden; }
