@@ -445,7 +445,12 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-acts .tb[data-act="accept"] { border-color: var(--ink); color: var(--ink); }
 .rv-acts .hint { margin-right: 6px; }
 .rv-foot { display: flex; align-items: center; border-top: 1px solid var(--rule); padding: 4px 6px; min-height: 28px; }
+.rv-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .rv-list { flex: 1; }
+.rv-kind { font: 9px var(--ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin-left: 6px; vertical-align: 1px; }
+.rv-jump { position: absolute; left: 50%; bottom: 10px; transform: translate(-50%, 6px); opacity: 0; pointer-events: none; border: 0; padding: 4px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 10px; letter-spacing: .14em; cursor: default; box-shadow: 0 2px 8px rgba(0, 0, 0, .18); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.rv-jump.on { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.rv-jump:hover { opacity: .85; }
 
 /* Writing week (F9). Monochrome: solid ink = goal met, grey = written, dotted = still to come.
    Compact: numbers first, one chart, a line of facts. The chart's scale adapts

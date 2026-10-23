@@ -85,7 +85,9 @@ test('review sends a structured request; a progress indicator shows while waitin
   assert.deepEqual(fs_.map((f) => f.cat).sort(), ['awkward', 'awkward', 'grammar', 'non_native']);
   assert.ok(fs_.every((f) => f.decision === null && f.at));
   assert.equal(await app.eval('__stet.revision.run.rejected'), 1, 'hallucinated element discarded');
-  assert.equal(await app.eval('document.querySelectorAll(".rv-group").length'), 3, 'grouped by category');
+  const shown = await app.eval('[...document.querySelectorAll("#rev .rv-item")].map(n => n.dataset.id)');
+  assert.deepEqual(shown, fs_.map((f) => f.id), 'one list, in script order');
+  assert.deepEqual(fs_.map((f) => f.at.b), [1, 3, 4, 5]);
   await app.eval('__stet.view.frame()');
   assert.ok(await app.eval('document.querySelectorAll(".revr").length') >= 4, 'flagged passages marked in the script');
   assert.equal(await app.eval('__stet.editor.blocks[1].text'), 'Mara enter in the kitchen and sits.', 'reviewing changes nothing');
@@ -124,6 +126,46 @@ test('decisions are explicit and permanent: accept, undo, discard, reopen', asyn
   const after = (await findings()).find((f) => f.id === aw.id);
   assert.equal(after.decision, 'discarded', 'discarded suggestions are kept, with their decision');
   assert.equal((await texts())[5], 'Teo made a decision of leaving.');
+});
+
+test('accept, reopen, accept again: decided again, the text changed once; decided ones stay in script order', async () => {
+  await loadScript();
+  await startReview(); await waitDone();
+  const f0 = await findings();
+  const g = f0.find((f) => f.cat === 'grammar'), aw = f0.find((f) => f.o === 'made a decision of leaving');
+  await app.eval(`__stet.revision.accept(['${aw.id}'])`);
+  await app.eval(`__stet.revision.accept(['${g.id}'])`);
+  await app.eval(`__stet.revision.reopen('${g.id}')`);
+  const re = (await findings()).find((f) => f.id === g.id);
+  assert.equal(re.decision, null);
+  assert.ok(re.at, 'still finds its passage (the change it made)');
+  assert.match(await app.eval(`document.querySelector('#rev .rv-item[data-id="${g.id}"]').textContent`), /still in the script/);
+  assert.equal(await app.eval(`document.querySelector('#rev .rv-item[data-id="${g.id}"] [data-act="accept"]').disabled`), false, 'ACCEPT works');
+  await app.eval(`document.querySelector('#rev .rv-item[data-id="${g.id}"] [data-act="accept"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`);
+  assert.equal((await findings()).find((f) => f.id === g.id).decision, 'accepted', 'decided again');
+  assert.equal((await texts())[1], 'Mara enters the kitchen and sits.', 'changed once, not twice');
+  await app.eval(`(() => { const r = __stet.revision; if (!r.showDecided) { r.showDecided = true; r.render(); } })()`);
+  const decided = await app.eval('[...document.querySelectorAll("#rev .rv-decided .rv-item")].map(n => n.dataset.id)');
+  assert.deepEqual(decided, [g.id, aw.id], 'decided in script order, not the order decided');
+});
+
+test('near the lower end of the list, a floating DECIDED button takes you to the decided ones', async () => {
+  await loadScript();
+  await startReview(); await waitDone();
+  const f0 = await findings();
+  await app.eval(`__stet.revision.discard('${f0[3].id}')`);
+  await app.eval(`(() => { const r = __stet.revision; r.showDecided = false; document.getElementById('rev').style.height = '300px'; r.render(); document.querySelector('#rev .rv-list').scrollTop = 0; })()`);
+  const move = (dy) => app.eval(`(() => { const l = document.querySelector('#rev .rv-list').getBoundingClientRect(); document.querySelector('#rev .rv-list').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: l.left + 20, clientY: ${dy} < 0 ? l.bottom + ${dy} : l.top + ${dy} })); return document.querySelector('#rev .rv-jump').classList.contains('on'); })()`);
+  assert.equal(await move(10), false, 'not near the top');
+  assert.equal(await move(-10), true, 'shown near the lower end while the decided ones are below');
+  assert.match(await app.eval(`document.querySelector('#rev .rv-jump').textContent`), /DECIDED · 1/);
+  await app.eval(`document.querySelector('#rev .rv-jump').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`);
+  await sleep(50);
+  assert.equal(await app.eval('__stet.revision.showDecided'), true, 'unfolded');
+  const vis = await app.eval(`(() => { const l = document.querySelector('#rev .rv-list').getBoundingClientRect(), h = document.querySelector('#rev .rv-decided').getBoundingClientRect(); return h.top >= l.top - 1 && h.top < l.bottom; })()`);
+  assert.ok(vis, 'scrolled to them');
+  assert.equal(await move(-10), false, 'no button once they are in sight');
+  await app.eval(`document.getElementById('rev').style.height = ''`);
 });
 
 test('accept-all in a category is one undo step', async () => {

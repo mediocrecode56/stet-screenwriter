@@ -287,7 +287,12 @@ function diffRegion(a, b) {
  *  6. the same text with its surrounding context, once in the whole script.
  */
 export function locate(f, blocks, idx = indexById(blocks)) {
-  const anchor = anchorText(f);
+  // Reopened after it was accepted: the script normally still holds the change; after an undo, the original.
+  if (!f.decision && f.appliedText != null) return locateText(f, blocks, idx, f.appliedText) || locateText(f, blocks, idx, f.original);
+  return locateText(f, blocks, idx, anchorText(f));
+}
+
+function locateText(f, blocks, idx, anchor) {
   if (!anchor) return null;
   const found = (i, s) => {
     f.blockId = blocks[i].id; f.s = s; f.e = s + anchor.length; f.ref = blocks[i];
@@ -334,6 +339,17 @@ export function shownRange(f, at, blocks) {
   if (!at || f.decision === 'accepted') return at;
   const t = blocks[at.b].text, s = at.s - (f.padL || 0), e = at.e + (f.padR || 0);
   return s >= 0 && t.slice(s, e) === f.shownOriginal ? { b: at.b, s, e } : at;
+}
+
+/** A reopened suggestion whose change is still in the script: accepting it again only records the decision. */
+export function isApplied(f, at, blocks) {
+  return !!at && !f.decision && f.appliedText != null && blocks[at.b].text.slice(at.s, at.e) === f.appliedText;
+}
+
+/** Sort suggestions in place as their passages appear in the script (last known place for lost ones). */
+export function sortByText(findings, blocks) {
+  const idx = indexById(blocks);
+  return findings.sort((a, b) => ((idx.get(a.blockId) ?? 1e9) - (idx.get(b.blockId) ?? 1e9)) || (a.s - b.s));
 }
 
 /** Locate every suggestion; returns Map(id -> {b, s, e} | null). */

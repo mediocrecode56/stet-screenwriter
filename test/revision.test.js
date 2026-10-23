@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChunks, chunkPrompt, validateFindings, findWhole, minimalEdit, locate, locateAll, planApply, afterApply, FINDINGS_SCHEMA, REVIEWABLE } from '../src/core/revision.js';
+import { buildChunks, chunkPrompt, validateFindings, findWhole, minimalEdit, locate, locateAll, planApply, afterApply, isApplied, sortByText, FINDINGS_SCHEMA, REVIEWABLE } from '../src/core/revision.js';
 import { Editor, pos } from '../src/core/editor.js';
 import { makeBlock } from '../src/core/model.js';
 import { generateScript } from './fixtures.js';
@@ -115,6 +115,46 @@ test('accepting records the decision; undo/redo never change decisions', () => {
   findings.forEach((f, i) => {
     for (const k of ['original', 'replacement', 'shownOriginal', 'shownReplacement', 'explanation', 'category', 'confidence']) assert.equal(f[k], kept[i][k], k + ' unchanged');
   });
+});
+
+test('reopening an accepted suggestion keeps its place, so accepting it again only records the decision', () => {
+  const ed = new Editor(script());
+  const [c] = buildChunks(ed.blocks);
+  const { findings } = validateFindings(c, [
+    { element: 'e1', category: 'grammar', original: 'enter in', replacement: 'enters', explanation: '', confidence: 'high' },
+  ], refs(ed.blocks));
+  const [f] = findings;
+  const plan = planApply([f], ed.blocks);
+  ed.replaceRanges(plan.matches, plan.replacements);
+  afterApply(findings, plan, ed.blocks);
+  f.decision = null; // reopened: the change stays in the script
+  const at = locate(f, ed.blocks);
+  assert.equal(ed.blocks[at.b].text.slice(at.s, at.e), 'enters', 'found at the change it made');
+  assert.ok(isApplied(f, at, ed.blocks), 'accepting again needs no edit');
+  assert.equal(planApply([f], ed.blocks).applied.length, 0, 'and never edits the text twice');
+  // After undoing the text, it is the original passage again, and applies as usual.
+  ed.undo();
+  const back = locate(f, ed.blocks);
+  assert.equal(ed.blocks[back.b].text.slice(back.s, back.e), 'enter in');
+  assert.ok(!isApplied(f, back, ed.blocks));
+  assert.equal(planApply([f], ed.blocks).applied.length, 1);
+});
+
+test('suggestions are sorted as their passages appear in the script', () => {
+  const ed = new Editor(script());
+  const [c] = buildChunks(ed.blocks);
+  const { findings } = validateFindings(c, [
+    { element: 'e3', category: 'non_native', original: 'looking to him since five minutes', replacement: 'staring at him for five minutes', explanation: '', confidence: 'medium' },
+    { element: 'e1', category: 'grammar', original: 'make a coffee', replacement: 'makes coffee', explanation: '', confidence: 'medium' },
+    { element: 'e1', category: 'awkward', original: 'enter in', replacement: 'enters', explanation: '', confidence: 'high' },
+  ], refs(ed.blocks));
+  const order = () => sortByText(findings, ed.blocks).map((f) => f.original.split(' ')[0]);
+  assert.deepEqual(order(), ['enter', 'make', 'looking'], 'by element, then by position, whatever the kind');
+  // Moving the last action to the top moves its suggestion first.
+  const last = ed.blocks[4];
+  ed.blocks.splice(4, 1); ed.blocks.unshift(last);
+  locateAll(findings, ed.blocks);
+  assert.deepEqual(order(), ['looking', 'enter', 'make']);
 });
 
 test('suggestions survive edits during a review; lost passages are never guessed', () => {

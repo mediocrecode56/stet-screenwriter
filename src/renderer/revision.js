@@ -9,7 +9,7 @@
 
 import {
   buildChunks, chunkPrompt, validateFindings, planApply, afterApply, locateAll, shownRange,
-  applyUserLists, listsPrompt, estimate, normalize, ignoreEntry,
+  applyUserLists, listsPrompt, estimate, normalize, ignoreEntry, isApplied, sortByText,
   CATEGORIES, CATEGORY_LABEL, DECISION_LABEL, MODEL,
 } from '../core/revision.js';
 import { pos } from '../core/editor.js';
@@ -38,7 +38,9 @@ export class Revision {
     this.ticker = 0;
     host.addEventListener('mousedown', (e) => this.onClick(e));
     host.addEventListener('mouseover', (e) => this.setHover(e.target.closest('.rv-item')?.dataset.id || null));
-    host.addEventListener('mouseleave', () => this.setHover(null));
+    host.addEventListener('mouseleave', () => { this.setHover(null); this.nearEnd(false); });
+    host.addEventListener('mousemove', (e) => this.nearEnd(this.atListEnd(e)));
+    host.addEventListener('scroll', () => this.nearEnd(this.near), true);
     api.on('review:chunk', (m) => this.onChunk(m));
     api.on('review:done', (m) => this.onDone(m));
     this.render();
@@ -64,7 +66,11 @@ export class Revision {
     this.paint();
   }
 
-  relocate() { this.locs = locateAll(this.findings, this.editor.blocks); }
+  /** Find every passage again, and keep the list in script order. */
+  relocate() {
+    this.locs = locateAll(this.findings, this.editor.blocks);
+    sortByText(this.findings, this.editor.blocks);
+  }
   located(f) { return this.locs.get(f.id) || null; }
 
   // ---- running a review ------------------------------------------------------------
@@ -162,7 +168,6 @@ export class Revision {
     }
     if (r.done >= r.chunks.length && !r.cancelled) r.stage = 'processing';
     this.relocate();
-    this.sortFindings();
     this.render();
     this.paint();
   }
@@ -188,11 +193,6 @@ export class Revision {
     if (el && this.run) el.textContent = elapsed(this.run.started);
   }
 
-  sortFindings() {
-    const idx = new Map(this.editor.blocks.map((b, i) => [b.id, i]));
-    this.findings.sort((a, b) => ((idx.get(a.blockId) ?? 1e9) - (idx.get(b.blockId) ?? 1e9)) || (a.s - b.s));
-  }
-
   // ---- edits made elsewhere ----------------------------------------------------------
 
   /** Called after every document change: re-find passages when idle. Never changes a suggestion. */
@@ -200,9 +200,10 @@ export class Revision {
     if (!this.findings.length) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
-      const before = [...this.locs.values()].map((l) => (l ? 1 : 0)).join('');
+      const seen = () => this.findings.map((f) => f.id + (this.located(f) ? 1 : 0)).join();
+      const before = seen();
       this.relocate();
-      const after = [...this.locs.values()].map((l) => (l ? 1 : 0)).join('');
+      const after = seen();
       if (before !== after) this.render();
       this.paint();
     }, 120);
@@ -214,7 +215,8 @@ export class Revision {
 
   decide(f, decision) {
     f.decision = decision;
-    if (decision !== 'accepted') f.appliedText = null;
+    // Reopening keeps what accepting put in, so the suggestion still finds its passage and can be accepted again.
+    if (decision && decision !== 'accepted') f.appliedText = null;
     this.session.touch();
     this.relocate();
     this.render();
@@ -223,29 +225,46 @@ export class Revision {
 
   accept(ids) {
     const list = ids.map((id) => this.byId(id)).filter((f) => f && !f.decision);
-    const plan = planApply(list, this.editor.blocks);
-    if (!plan.applied.length) { this.render(); return 0; }
-    this.editor.replaceRanges(plan.matches, plan.replacements); // one undo step
-    afterApply(this.findings, plan, this.editor.blocks);
+    // Reopened ones whose change is still in the script: nothing to edit, only the decision.
+    const already = list.filter((f) => isApplied(f, this.located(f), this.editor.blocks));
+    for (const f of already) f.decision = 'accepted';
+    const plan = planApply(list.filter((f) => !already.includes(f)), this.editor.blocks);
+    if (!plan.applied.length && !already.length) { this.render(); return 0; }
+    if (plan.applied.length) {
+      this.editor.replaceRanges(plan.matches, plan.replacements); // one undo step
+      afterApply(this.findings, plan, this.editor.blocks);
+    }
     this.session.touch();
     this.relocate();
     this.render();
     this.paint();
-    return plan.applied.length;
+    return plan.applied.length + already.length;
   }
 
+  /** Accept every open suggestion that can be applied, or only those of one kind: the dialog offers the kinds. */
   async acceptAll(category) {
     const open = this.open().filter((f) => (!category || f.category === category) && this.canApply(f));
     if (!open.length) return;
-    const what = category ? `all ${open.length} ${CATEGORY_LABEL[category]} suggestion${open.length === 1 ? '' : 's'}` : `all ${open.length} open suggestions`;
-    if (!(await dlg.confirm('ACCEPT SUGGESTIONS', `Apply ${what}? You can undo the text change in one step (Ctrl+Z).`, 'Accept'))) return;
-    this.accept(open.map((f) => f.id));
+    let pick = category || 'all';
+    if (category) {
+      if (!(await dlg.confirm('ACCEPT SUGGESTIONS', `Apply all ${open.length} ${CATEGORY_LABEL[category]} suggestion${open.length === 1 ? '' : 's'}? You can undo the text change in one step (Ctrl+Z).`, 'Accept'))) return;
+    } else {
+      const kinds = CATEGORIES.map((c) => [c, open.filter((f) => f.category === c).length]).filter(([, n]) => n);
+      pick = await dlg.open({
+        title: 'ACCEPT SUGGESTIONS',
+        body: dlg.h('div', { class: 'body', style: 'max-width:520px' },
+          dlg.h('p', {}, `Apply all ${open.length} open suggestions, or only one kind? You can undo the text change in one step (Ctrl+Z).`)),
+        buttons: [{ label: 'Cancel', value: null }, ...(kinds.length > 1 ? kinds.map(([c, n]) => ({ label: `${CATEGORY_LABEL[c]} · ${n}`, value: c })) : []), { label: `All · ${open.length}`, value: 'all', primary: true }],
+      });
+      if (!pick) return;
+    }
+    this.accept(open.filter((f) => pick === 'all' || f.category === pick).map((f) => f.id));
   }
 
-  /** The original passage is where the suggestion says, unchanged. */
+  /** The original passage is where the suggestion says, unchanged (or, reopened, still holds the accepted change). */
   canApply(f) {
     const at = this.located(f);
-    return !!at && !f.decision && this.editor.blocks[at.b].text.slice(at.s, at.e) === f.original;
+    return !!at && !f.decision && (this.editor.blocks[at.b].text.slice(at.s, at.e) === f.original || isApplied(f, at, this.editor.blocks));
   }
 
   discard(id) { const f = this.byId(id); if (f && !f.decision) this.decide(f, 'discarded'); }
@@ -307,6 +326,31 @@ export class Revision {
 
   // ---- marks in the script -------------------------------------------------------------
 
+  /** The pointer is over the lower end of the list. */
+  atListEnd(e) {
+    const list = this.host.querySelector('.rv-list');
+    if (!list) return false;
+    const r = list.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY <= r.bottom && e.clientY >= r.bottom - Math.min(96, r.height / 3);
+  }
+
+  /** Near the lower end, a floating DECIDED button while the decided ones are out of sight below. */
+  nearEnd(on) {
+    this.near = on;
+    const btn = this.host.querySelector('.rv-jump'), head = this.host.querySelector('.rv-decided'), list = this.host.querySelector('.rv-list');
+    if (!btn) return;
+    const below = !!head && !!list && head.getBoundingClientRect().top > list.getBoundingClientRect().bottom - 8;
+    btn.classList.toggle('on', !!on && below);
+  }
+
+  /** Scroll the decided suggestions into view, unfolded. */
+  toDecided() {
+    if (!this.showDecided) { this.showDecided = true; this.render(); }
+    const list = this.host.querySelector('.rv-list'), head = this.host.querySelector('.rv-decided');
+    if (list && head) list.scrollTop += head.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    this.nearEnd(false);
+  }
+
   setHover(id) {
     if (id === this.hover) return;
     this.hover = id;
@@ -349,9 +393,9 @@ export class Revision {
       case 'reopen': return this.reopen(id);
       case 'ignore': return this.ignore(id);
       case 'dictadd': return this.addToDictionary(id);
-      case 'cat-all': return this.acceptAll(t.dataset.cat);
       case 'all': return this.acceptAll(null);
       case 'fold': this.showDecided = !this.showDecided; return this.render();
+      case 'to-decided': return this.toDecided();
     }
   }
 
@@ -392,16 +436,14 @@ export class Revision {
     const open = this.open();
     const decided = this.findings.filter((f) => f.decision);
     let body = '';
-    for (const cat of CATEGORIES) {
-      const items = open.filter((f) => f.category === cat);
-      if (!items.length) continue;
-      const nApply = items.filter((f) => this.canApply(f)).length;
-      body += `<div class="rv-group"><div class="rv-gh"><span>${CATEGORY_LABEL[cat].toUpperCase()} · ${items.length}</span>${nApply > 1 ? `<button class="tb" data-act="cat-all" data-cat="${cat}" title="Accept every suggestion in this group">ACCEPT ALL</button>` : ''}</div>`;
-      for (const f of items) body += this.item(f);
+    // One list in script order; each card names its kind.
+    if (open.length) {
+      body += '<div class="rv-group">';
+      for (const f of open) body += this.item(f);
       body += '</div>';
     }
     if (decided.length) {
-      body += `<div class="rv-group"><div class="rv-gh"><button class="tb" data-act="fold">${this.showDecided ? '▾' : '▸'} DECIDED · ${decided.length}</button></div>`;
+      body += `<div class="rv-group rv-decided"><div class="rv-gh"><button class="tb" data-act="fold">${this.showDecided ? '▾' : '▸'} DECIDED · ${decided.length}</button></div>`;
       if (this.showDecided) for (const f of decided) body += this.item(f);
       body += '</div>';
     }
@@ -411,19 +453,22 @@ export class Revision {
     const foot = `<div class="rv-foot">${nApply > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="dict">DICTIONARY</button><button class="tb" data-act="key">CONNECTION</button></div>`;
     const list = this.host.querySelector('.rv-list');
     const scroll = list ? list.scrollTop : 0;
-    this.host.innerHTML = `<div class="panel-head">ENGLISH REVISION <span>${open.length ? '· ' + open.length : ''}</span></div><div class="rv-head">${this.statusHTML()}</div><div class="list rv-list">${body}</div>${foot}`;
+    const jump = decided.length ? `<button class="rv-jump" data-act="to-decided" title="Go to the decided suggestions">DECIDED · ${decided.length} ↓</button>` : '';
+    this.host.innerHTML = `<div class="panel-head">ENGLISH REVISION <span>${open.length ? '· ' + open.length : ''}</span></div><div class="rv-head">${this.statusHTML()}</div><div class="rv-wrap"><div class="list rv-list">${body}</div>${jump}</div>${foot}`;
     this.host.querySelector('.rv-list').scrollTop = scroll;
+    if (this.near) this.nearEnd(true);
   }
 
   item(f) {
     const cls = [f.id === this.cur ? 'cur' : '', f.id === this.hover ? 'hov' : '', f.decision ? 'decided' : ''].join(' ');
     const at = this.located(f);
-    const conf = `<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span>`;
+    const conf = `<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span><span class="rv-kind">${CATEGORY_LABEL[f.category]}</span>`;
     const diff = `<span class="rv-old">${esc(f.shownOriginal)}</span> <span class="rv-arrow">→</span> <span class="rv-new">${esc(f.shownReplacement)}</span>`;
     let actions, note = '';
     if (!f.decision) {
       const ok = this.canApply(f);
       if (!at) note = '<div class="rv-lost">The original passage can no longer be located in the script.</div>';
+      else if (isApplied(f, at, this.editor.blocks)) note = '<div class="rv-lost">The change is still in the script; accepting keeps it.</div>';
       else if (!ok) note = '<div class="rv-lost">The passage has been edited since the review.</div>';
       actions = `<button class="tb" data-act="accept"${ok ? '' : ' disabled title="The original text is no longer there to replace"'}>ACCEPT</button><button class="tb" data-act="discard" title="Keep your text; drop this suggestion">DISCARD</button><button class="tb" data-act="ignore" title="Keep your text and never flag this passage again in this screenplay">IGNORE</button><button class="tb" data-act="dictadd" title="Correct in every screenplay: add to your dictionary">+DICTIONARY</button>`;
     } else {
