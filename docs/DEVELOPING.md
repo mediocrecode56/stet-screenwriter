@@ -156,14 +156,36 @@ workflow would remove that warning.
 
 | command | what it does |
 |---|---|
-| `npm test` | unit and integration tests (about 200, in `test/*.test.js`): formatting and pagination, editing and undo, file format round-trips and repair, safe saving, backups and crash recovery, PDF output, word counting and writing statistics, the streak, updates and patches, packaging, file links, the writing companion. Each file says what it covers |
-| `npm run quick` | the routine check, about half a minute: every unit test plus the smoke test (`test/e2e/smoke.e2e.js`: one start of the real app, then writing, the Tab cycle, element and alignment changes, scene navigation, a changed shortcut, saving, reopening and the PDF, and the timeline: stepping with Ctrl, timecodes and a scene's own). Run it before every push |
-| `npm run smoke` | the smoke test alone, about ten seconds |
-| `npm run e2e` | drives the real app over the DevTools protocol with real key events (`test/e2e/*.e2e.js`): writing and element flow, styles, notes, find, zoom, themes, saving and recovery, PDF, the English revision against a mock API and a fake Claude Code, statistics and the streak, Open Recent, character completion, file links, updates, the companion, layout and caret alignment. Three files run at a time (the performance probe alone, after them); the whole suite takes about a minute and a half. Every test run stops when its tests are done (`--test-force-exit`), and `test/e2e/cdp.js` stops any app a failed test left running, so a failure never leaves the run hanging. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm test` | the unit tests (`test/unit/*.test.js`, about 240, six seconds): formatting and pagination, editing and undo, file format round-trips and repair, safe saving, backups and crash recovery, PDF output, word counting and writing statistics, the streak, updates and patches, packaging, file links, the writing companion. Each file says what it covers |
+| `npm run quick` | the routine check, about ten seconds: every unit test, then the smoke test (`test/app/smoke.app.js`: one start of the real app, then writing, the Tab cycle, element and alignment changes, scene navigation, the timeline with Ctrl held, timecodes and a scene's own, a changed shortcut, saving, reopening and the PDF). Run it before every push |
+| `npm run smoke` | the smoke test alone, about four seconds |
+| `npm run e2e` | the real app, every area (`test/app/*.app.js`), about half a minute: the smoke test, then four files at a time: writing (completion, styles, alignment, shortcuts, notes, the caret at every scale, zoom, the word count), files (saving, autosave, backups, Final Draft, renaming, Open Recent, the performance probe, reopening on launch, crash recovery), statistics and the streak, the companion, the look (header, status bar, themes and their schedule, slides and easing), the English review (a mock API and a fake Claude Code), updates and patches, file links. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
 Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
+
+How the tests stay fast and dependable:
+
+- **One start per file, and no sleeping.** Each `test/app` file starts STET once (again only
+  where a restart is the point) and every wait ends the moment what it waits for is true
+  (`app.until`, in `test/app/harness.js`). Delays that are only there for the writer's sake are
+  shortened through the hooks STET already has (the autosave debounce, the check for updates on
+  start, the sizes the performance probe measures); the code they run is the same.
+- **Real input.** Keys and the mouse go through Chromium's own input pipeline (the DevTools
+  protocol), modifiers held and all, so a test sees what a writer's hands would: hover, focus,
+  pointer lock, which element takes a click.
+- **Each app on its own screen.** On Linux every app gets its own virtual display (Xvfb), so
+  files running side by side never share the focus. Every app and folder a test left behind is
+  removed when the test process ends, so a failure never leaves the run hanging.
+- **Simulate once, check everything.** The companion's hours of life are simulated once
+  (`test/unit/dino-life.test.js`) with every rule checked on every frame, and the tests read what
+  happened from it; how often something happens is read from its choices directly rather than
+  waited for. `test/helpers/dino-sim.js` has the shared simulation.
+- **Broken on purpose.** The suite was checked by breaking STET in turn (no pointer lock while
+  stepping, Esc keeping the caret, a dialog leaving the focus behind it, a routine sliding instead
+  of walking, autosave off, an undo keeping its word credit, a streak day counted twice, a burp
+  without a meal, Save As during an autosave): each made the tests that cover it fail, and only those.
 
 ## Writing
 

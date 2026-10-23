@@ -177,6 +177,9 @@ export class App {
     await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: this.mods });
   }
 
+  /** Let go of every modifier still held (a failed test must not leave Ctrl down for the next). */
+  async releaseAll() { for (const [name, bit] of [['Control', 2], ['Meta', 4], ['Shift', 8], ['Alt', 1]]) if (this.mods & bit) await this.up(name); }
+
   // ---- the mouse (with whatever modifiers are held) ----
 
   mouse(type, x, y, { button = 'none', buttons = 0, clickCount = 0, ...rest } = {}) {

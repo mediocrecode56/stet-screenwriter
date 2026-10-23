@@ -4,7 +4,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
-import { App, sleep } from '../test/e2e/cdp.js';
+import { App, sleep } from '../test/app/harness.js';
 
 const app = await App.launch({ userData: path.join(os.tmpdir(), 'stet-tb-' + process.pid), hidden: false });
 await app.eval(`(async () => {

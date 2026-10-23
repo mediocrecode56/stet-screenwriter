@@ -9,12 +9,12 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node --test \"test/unit/*.test.js\"",
     "bench": "node bench/core-bench.js",
     "perf": "electron . --perf-probe",
-    "smoke": "node --test --test-force-exit test/e2e/smoke.e2e.js",
-    "quick": "node --test \"test/*.test.js\" && node --test --test-force-exit test/e2e/smoke.e2e.js",
-    "e2e": "node --test --test-force-exit --test-timeout=300000 --test-concurrency=3 \"test/e2e/!(perf).e2e.js\" && node --test --test-force-exit test/e2e/perf.e2e.js",
+    "smoke": "node --test --test-force-exit test/app/smoke.app.js",
+    "quick": "node --test \"test/unit/*.test.js\" && node --test --test-force-exit test/app/smoke.app.js",
+    "e2e": "node --test --test-force-exit test/app/smoke.app.js && node --test --test-force-exit --test-timeout=120000 --test-concurrency=4 \"test/app/!(smoke).app.js\"",
     "postinstall": "node node_modules/electron/install.js",
     "exe": "node scripts/build-exe.js",
     "mac": "node scripts/build-mac.js"

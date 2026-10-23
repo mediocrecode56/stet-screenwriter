@@ -2,7 +2,7 @@
 // second: writing from the keyboard, element and alignment changes, the Tab cycle, scene
 // navigation, the timeline (stepping with Ctrl held, timecodes, a scene's own), a changed
 // shortcut, saving, reopening and the PDF. `npm run quick` runs it after the unit tests.
-import { test, before, after } from 'node:test';
+import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -15,6 +15,7 @@ before(async () => {
   await app.eval('__stet.input.focus()');
 });
 after(() => app?.close());
+afterEach(() => app?.releaseAll()); // a failure while Ctrl is held must not spill into the next test
 
 test('starts with the script font, the elements in their order, the timeline on', async () => {
   const r = await app.eval(`(async () => { await document.fonts.ready; return {
@@ -226,6 +227,8 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
 });
 
 test('the timeline: a click on a timecode edits it; a right-click on a scene gives it its own, shown beside the heading', async () => {
+  if (!(await app.eval('__stet.session.doc.timecodes?.length'))) await tl(`t.setTimecodes([{ id: __stet.editor.blocks[2].id, line: 0, t: 100 }])`);
+  await app.frame();
   const t0 = await app.eval('__stet.session.doc.timecodes[0].t');
   const tc = await app.rect('#timeline .tl-tcm');
   await app.move(tc.left + 9, tc.top + 20);

@@ -1,8 +1,7 @@
 // Updates in the real app, against a local stand-in for GitHub: the check on start (the UPDATE
 // button and its window, once per version), downloading with progress, the restart prompt and the
-// portable STET.exe swapped on disk; Help > Check for Updates up to date or unable to reach GitHub;
-// and a patch: offered with its small size, unpacked, run on the next start and not offered again,
-// and one that can't start set aside. (The check on start comes sooner here: STET_UPDATE_DELAY_MS.)
+// portable STET.exe swapped on disk; Help > Check for Updates up to date or unable to reach GitHub.
+// (The check on start comes sooner here: STET_UPDATE_DELAY_MS.) Patches: patch.app.js.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -10,25 +9,18 @@ import http from 'node:http';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { App, scratch, userData, ROOT, sleep } from './harness.js';
-import { makeZip, folderEntries } from '../../src/main/zip.js';
-import { patchAsset } from '../../src/main/patch.js';
+import { makeZip } from '../../src/main/zip.js';
 
 const pkg = JSON.parse(await fs.readFile(path.join(ROOT, 'package.json'), 'utf8'));
-const CURRENT = pkg.version, ELECTRON = pkg.devDependencies.electron.replace(/^[^\d]*/, '');
+const CURRENT = pkg.version;
 const EXE = Buffer.concat([Buffer.from('MZ'), randomBytes(2_000_000)]); // incompressible, so the download has a real size
 const ZIP = makeZip([{ name: 'STET.exe', data: EXE }]);
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
-let tmp, server, base, latest, app, PATCH, checks = 0;
+let tmp, server, base, latest, app, checks = 0;
 const release = (version, assets) => ({ tag_name: 'v' + version, draft: false, prerelease: false, html_url: 'https://example.invalid', body: '**To get STET, download STET-Windows.zip below.**\n\n- Something new.\n- Something fixed.', assets });
 before(async () => {
   tmp = await scratch('stet-update');
-  // The patch: this very app as 99.0.0 (node_modules is linked in after unpacking, to keep it small).
-  const src = path.join(tmp, 'src-99');
-  await fs.cp(path.join(ROOT, 'src'), path.join(src, 'src'), { recursive: true });
-  await fs.writeFile(path.join(src, 'package.json'), JSON.stringify({ ...pkg, version: '99.0.0' }));
-  await fs.writeFile(path.join(src, 'CHANGELOG.md'), '# What\'s new\n');
-  PATCH = makeZip(await folderEntries(src));
   server = http.createServer((req, res) => {
     if (req.url === '/latest') {
       checks++;
@@ -42,7 +34,6 @@ before(async () => {
       const t = setInterval(() => { res.write(ZIP.subarray(i, i + 200_000)); i += 200_000; if (i >= ZIP.length) { clearInterval(t); res.end(); } }, 40);
       return;
     }
-    if (req.url === '/patch') { res.writeHead(200, { 'content-length': PATCH.length }); return res.end(PATCH); }
     res.writeHead(404); res.end();
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -51,7 +42,6 @@ before(async () => {
 after(async () => { await app?.close(); server?.closeAllConnections(); server?.close(); });
 
 const env = (o = {}) => ({ STET_UPDATE_URL: base + '/latest', STET_UPDATE_DELAY_MS: '100', ...o });
-const version = () => app.eval(`document.getElementById('ver').textContent`);
 /** The check on start has been made and answered (whatever it found). */
 const checked = async (n) => { await app.until(() => checks >= n, { what: 'the check on start' }); await sleep(150); };
 
@@ -121,40 +111,4 @@ test('Help > Check for Updates: up to date, or GitHub unreachable; the quiet che
   await app.dialogMatching(/Couldn't check for updates\.[\s\S]*error \(500\)/);
   await app.press('Close');
   await app.close(); app = null;
-});
-
-test('a patch: offered with its small size, unpacked, then run on the next start, kept, and not offered again', async () => {
-  const ud = await userData(), patches = path.join(tmp, 'app');
-  latest = release('99.0.0', [{ name: patchAsset(ELECTRON), browser_download_url: '/patch', size: PATCH.length, digest: 'sha256:' + sha(PATCH) }]);
-  app = await App.launch({ userData: ud, env: env({ STET_PATCH_DIR: patches }) });
-  assert.equal(await version(), `${CURRENT} β`);
-  await app.dialogMatching(/99\.0\.0 is available[\s\S]*A \d\.\d MB download\./);
-  await app.press('Update now');
-  await app.dialogMatching(/99\.0\.0 is ready[\s\S]*STET restarts with the new version/);
-  const unpacked = path.join(patches, '99.0.0');
-  assert.equal(JSON.parse(await fs.readFile(path.join(unpacked, 'package.json'), 'utf8')).version, '99.0.0');
-  await app.press('Restart now');
-  await app.dialogMatching(/Restarting…/);
-  await app.close();
-  await fs.symlink(path.join(ROOT, 'node_modules'), path.join(unpacked, 'node_modules'), 'junction');
-  const n = checks;
-  app = await App.launch({ userData: ud, env: env({ STET_PATCH_DIR: patches }) });
-  assert.equal(await version(), '99.0.0 β', 'the new version runs');
-  await checked(n + 1);
-  assert.equal(await app.dialog(), '', 'no update window');
-  assert.equal(await app.eval(`document.getElementById('st-update').hidden`), true, 'no UPDATE button');
-  await app.until(() => fs.access(path.join(unpacked, '.ok')).then(() => true, () => false), { what: 'marked as working' });
-  await app.close();
-  // A patch that cannot start is set aside, and STET starts all the same, from then on with the last good one.
-  const broken = path.join(patches, '99.0.1');
-  await fs.cp(unpacked, broken, { recursive: true, verbatimSymlinks: true });
-  await fs.rm(path.join(broken, '.ok'), { force: true });
-  await fs.writeFile(path.join(broken, '.stet-patch.json'), JSON.stringify({ version: '99.0.1', electron: ELECTRON }));
-  await fs.writeFile(path.join(broken, 'src', 'main', 'main.js'), 'this is not JavaScript (');
-  app = await App.launch({ userData: ud, env: env({ STET_PATCH_DIR: patches }) });
-  assert.match(await version(), /β$/, 'STET is up');
-  await fs.access(path.join(broken, '.failed'));
-  await app.close();
-  app = await App.launch({ userData: ud, env: env({ STET_PATCH_DIR: patches }) });
-  assert.equal(await version(), '99.0.0 β', 'the last good version from then on');
 });

@@ -4,7 +4,7 @@
 // it uses the API instead. `node bench/revision-live.js`
 import path from 'node:path';
 import os from 'node:os';
-import { App, sleep } from '../test/e2e/cdp.js';
+import { App, sleep } from '../test/app/harness.js';
 
 const ud = process.env.STET_USE_APP_PROFILE ? path.join(process.env.APPDATA, 'stet') : path.join(os.tmpdir(), 'stet-live');
 const app = await App.launch({ userData: ud });
