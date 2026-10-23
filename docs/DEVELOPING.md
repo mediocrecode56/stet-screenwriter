@@ -195,12 +195,15 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 *View → Timeline* (Ctrl+Shift+T; off until turned on, and remembered) is a strip under the
 toolbar with the whole script from left to right, a page to a unit, like a track in a
 sequencer (`src/core/timeline.js` for the arithmetic, `src/renderer/timeline.js` for the bar).
-The script is a white line (grey in light mode); highlighted passages show in their colour
-over it. Each scene is a thin tick, numbered where there is room (its heading on hover), each
-note a small icon under the line. The line with a cap is the caret, and the soft band is the
-part of the script in the window; the estimated length is at the left. Clicking goes to the line drawn there (a scene line to its heading, a note to its
-passage, with the note open). The wheel scrolls it; Ctrl+wheel or **−** / **+** zoom in (the
-grid steps between 1 second and an hour so its ticks stay readable), **FIT** shows it all.
+The bar stays quiet until the pointer is on it. At rest it shows the script as a white line
+(grey in light mode), coloured where passages are highlighted, a small tick for each scene, an
+icon for each note, a time label every so often, the caret (the line with a cap), a soft band
+for the part of the script in the window, and the estimated length at the left. Hovering adds
+the grid, the scene numbers (when zoomed in enough for all of them to fit), the zoom buttons
+and a readout of the time, page and scene under the pointer. Clicking goes to the line drawn
+there (a scene tick to its heading, a note to its passage, with the note open). The wheel
+scrolls it; Ctrl+wheel or **−** / **+** zoom in (the grid steps between 1 second and an hour
+so it stays readable), **FIT** shows it all.
 
 The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time,
 as HH:MM:SS, at the start of the line there: between two timecodes the time is spread evenly,

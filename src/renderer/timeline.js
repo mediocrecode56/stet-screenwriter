@@ -22,7 +22,7 @@ export class Timeline {
     this.ppp = 0; // pixels a page; 0 fits the whole script in the bar
     this.drawn = 1; // pixels a page as last painted
     this.key = '';
-    host.innerHTML = '<div class="tl-side"><span class="tl-name">TIMELINE</span><span class="tl-len" title="Estimated length"></span></div>'
+    host.innerHTML = '<div class="tl-side" title="Estimated length of the script"><span class="tl-len"></span></div>'
       + '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
       + '<div class="tl-zoom"><button class="tb" data-z="-1" title="Zoom out (Ctrl+wheel)">−</button><button class="tb" data-z="0" title="Show the whole script">FIT</button><button class="tb" data-z="1" title="Zoom in (Ctrl+wheel)">+</button></div>';
@@ -151,38 +151,38 @@ export class Timeline {
     const s = this.drawn = this.scale, len = this.length; // positions are read back at the scale they were drawn
     const w = Math.max(this.scroll.clientWidth - PADX * 2, len * s);
     this.inner.style.width = w + 'px';
-    const tl = timelineOf(this.ed.blocks, this.view.pages);
+    const tl = this.tl = timelineOf(this.ed.blocks, this.view.pages);
     const anchors = this.anchors();
     const time = this.time = timeScale(anchors);
     const total = time.at(len);
     this.len.textContent = formatTime(total);
 
-    // The ruler: labelled ticks far enough apart to read, finer ones between, a faint grid line at each label.
-    const pxPerSec = s / time.pace; // after the last timecode; close enough before it to space the ticks
-    const step = rulerStep(pxPerSec, 72), minor = minorStep(step, pxPerSec);
+    // The ruler: a label every so often, well apart; the grid (a faint line at each, shown while
+    // the pointer is on the bar) carries the finer steps.
+    const pxPerSec = s / time.pace; // after the last timecode; close enough before it to space the labels
+    const step = rulerStep(pxPerSec, 110), minor = minorStep(step, pxPerSec, 18);
     let ruler = '', grid = '';
     for (let t = 0; t <= total + 0.5; t += minor || step) {
       const x = time.pos(t) * s;
       if (x > len * s + 0.5) break;
-      if (Math.round(t) % step) { ruler += `<i class="tl-mn" style="left:${x}px"></i>`; continue; }
-      ruler += `<i class="tl-mj" style="left:${x}px"></i>`;
-      if (x <= len * s - 44) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
-      if (t) grid += `<i style="left:${x}px"></i>`;
+      const major = Math.round(t) % step === 0;
+      if (t) grid += `<i${major ? ' class="mj"' : ''} style="left:${x}px"></i>`;
+      // A pinned timecode is labelled in its own place; the regular labels give way around it.
+      if (major && x <= len * s - 40 && !anchors.some((a) => x > a.x * s - 52 && x < a.x * s + 64)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
     }
-    for (const a of anchors) ruler += `<i class="tl-tc" style="left:${a.x * s}px" title="Timecode ${formatTime(a.t)}"></i>`;
+    for (const a of anchors) ruler += `<span class="tl-lb tl-tc" style="left:${a.x * s}px" title="Timecode, pinned (right-click to change)">${rulerLabel(a.t)}</span>`;
     this.ruler.innerHTML = ruler;
     this.grid.innerHTML = grid;
 
-    // The script as a line, coloured where it is highlighted; a tick for each scene, numbered where
-    // there is room; the notes under the line.
+    // The script as a line, coloured where it is highlighted; a quiet tick for each scene, numbered
+    // (while the pointer is on the bar) only when every number fits; the notes under the line.
     let m = `<div class="tl-line" style="width:${len * s}px"></div>`;
     for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
-    let lastLabel = -Infinity;
+    let room = Infinity;
+    for (let i = 1; i < tl.scenes.length; i++) room = Math.min(room, (tl.scenes[i].x - tl.scenes[i - 1].x) * s);
+    const numbered = room >= 34;
     tl.scenes.forEach((sc, i) => {
-      const x = sc.x * s;
-      const num = x - lastLabel >= 22 ? `<span>${i + 1}</span>` : '';
-      if (num) lastLabel = x;
-      m += `<div class="tl-scene" data-b="${sc.b}" style="left:${x}px" title="${i + 1}  ${esc(sc.text || 'Scene')}">${num}</div>`;
+      m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px">${numbered ? `<span>${i + 1}</span>` : ''}</div>`;
     });
     for (const n of tl.notes) {
       const text = (this.session.doc.comments[n.id] || {}).text || 'Note';
@@ -191,14 +191,18 @@ export class Timeline {
     this.marks.innerHTML = m;
   }
 
+  /** The line under the pointer, with its page, time and scene. */
   showHover(clientX) {
     if (!this.time) return;
     const x = this.posAt(clientX);
+    let sc = -1;
+    for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
+    const scene = sc >= 0 ? `   ${sc + 1}  ${this.tl.scenes[sc].text || 'SCENE'}` : '';
     this.hover.hidden = false;
     this.hover.style.left = x * this.drawn + 'px';
-    this.hover.firstChild.textContent = `P. ${Math.min(this.length, Math.floor(x) + 1)}  ${formatTime(this.time.at(x))}`;
-    // The readout flips to the left of the line near the right end, so it stays in the bar.
-    this.hover.classList.toggle('flip', x * this.drawn > this.inner.offsetWidth - 110);
+    this.hover.firstChild.textContent = `${formatTime(this.time.at(x))}   P. ${Math.min(this.length, Math.floor(x) + 1)}${scene}`;
+    // The readout flips to the left of the line in the right half, so it stays in the bar.
+    this.hover.classList.toggle('flip', x * this.drawn > this.inner.offsetWidth / 2);
   }
 
   // ---- timecodes ------------------------------------------------------------------------
