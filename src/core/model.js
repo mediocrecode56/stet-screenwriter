@@ -117,7 +117,7 @@ export function emptyTitlePage(title = '') {
 
 export function defaultDocSettings() {
   return {
-    sceneSpacing: 2, // blank lines before scene headings (Final Draft leaves two)
+    sceneSpacing: 1, // blank lines before scene headings
     autoCapitalize: true,
     backup: { enabled: true, intervalMin: 5, retentionDays: 30, dir: null },
   };

@@ -48,15 +48,6 @@ export function scheduledTheme(schedule, now = new Date()) {
   return dark ? 'dark' : 'light';
 }
 
-/** Minutes from `now` until the next scheduled switch (1…1440). */
-export function minutesToNextSwitch(schedule, now = new Date()) {
-  const d = parseTime(schedule.darkAt), l = parseTime(schedule.lightAt);
-  if (d == null || l == null || d === l) return 1440;
-  const m = now.getHours() * 60 + now.getMinutes();
-  const until = (t) => ((t - m + 1440) % 1440) || 1440;
-  return Math.min(until(d), until(l));
-}
-
 /**
  * The theme to show. With scheduling on, the schedule decides; with it off,
  * the user's manual choice stands and is never changed by the clock.

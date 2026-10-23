@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scheduledTheme, minutesToNextSwitch, effectiveTheme, toAmPm, fromAmPm, label, parseTime } from '../src/core/schedule.js';
+import { scheduledTheme, effectiveTheme, toAmPm, fromAmPm, label, parseTime } from '../src/core/schedule.js';
 
 const at = (h, m = 0) => new Date(2026, 9, 19, h, m);
 
@@ -27,13 +27,6 @@ test('degenerate schedules fall back to light', () => {
   assert.equal(scheduledTheme({ darkAt: '08:00', lightAt: '08:00' }, at(3)), 'light');
   assert.equal(scheduledTheme({ darkAt: 'nope', lightAt: '08:00' }, at(3)), 'light');
   assert.equal(parseTime('24:00'), null);
-});
-
-test('next switch countdown wraps around midnight', () => {
-  const s = { darkAt: '19:00', lightAt: '07:00' };
-  assert.equal(minutesToNextSwitch(s, at(18, 30)), 30);
-  assert.equal(minutesToNextSwitch(s, at(19, 0)), 720);
-  assert.equal(minutesToNextSwitch(s, at(23, 0)), 480);
 });
 
 test('manual choice stands when scheduling is off', () => {

@@ -235,9 +235,10 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 #scroller { flex: 1; overflow: auto; position: relative; }
 #content { position: relative; margin: 0 auto; }
 /* Script text is laid out on a character grid: nothing from the interface
-   typography (letter-spacing, kerning, ligatures) may change glyph advances. */
+   typography (kerning, ligatures) may change glyph advances. Characters sit 7pt
+   apart at 12pt (format.js PITCH), 1/60em tighter than the font's own advance. */
 .page, .tp-f, #input, .sheet, .metric-probe, .ghost {
-  letter-spacing: 0; word-spacing: 0; font-kerning: none; font-variant-ligatures: none;
+  letter-spacing: -0.016667em; word-spacing: 0; font-kerning: none; font-variant-ligatures: none;
   font-feature-settings: "kern" 0, "liga" 0, "calt" 0; text-rendering: optimizeSpeed;
 }
 .metric-probe { left: -100000px !important; top: 0; width: auto !important; height: auto !important; visibility: hidden; pointer-events: none; box-shadow: none; }

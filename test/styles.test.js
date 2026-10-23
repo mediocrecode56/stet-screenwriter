@@ -8,6 +8,7 @@ import { serialize, deserialize } from '../src/core/serialize.js';
 import { buildPrintPages } from '../src/core/printmodel.js';
 import { buildPdf } from '../src/core/pdf.js';
 import { printHTML } from '../src/core/printhtml.js';
+import { PITCH } from '../src/core/format.js';
 
 const styles = (b) => b.marks.filter((m) => 'bius'.includes(m.k)).map((m) => `${m.k}${m.s}-${m.e}`).sort();
 function typeStr(ed, s) { for (const ch of s) ed.insertText(ch); }
@@ -109,7 +110,7 @@ test('styles are saved, reopened and printed in the PDF, print and preview', () 
   const { pages } = buildPrintPages(back, { titlePage: false });
   const runs = pages[0].lines.filter((l) => l.row > 3);
   assert.deepEqual(runs.map((l) => [l.text, l.st || '']), [['Plain ', ''], ['BOLD', 'b'], [' ', ''], ['slanted', 'i'], [' ', ''], ['under', 'u'], [' ', ''], ['struck', 's']]);
-  for (let i = 1; i < runs.length; i++) assert.equal(runs[i].col, runs[i - 1].col + runs[i - 1].text.length, 'one character grid');
+  for (let i = 1; i < runs.length; i++) assert.ok(Math.abs(runs[i].col - runs[i - 1].col - runs[i - 1].text.length * PITCH) < 1e-9, 'characters PITCH apart');
   assert.equal(pages[0].rects.length, 0, 'highlights still print only when asked');
 
   const pdf = Buffer.from(buildPdf(pages)).toString('latin1');

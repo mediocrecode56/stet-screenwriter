@@ -3,13 +3,15 @@
 // Text is set in STET Courier (src/fonts: Bitstream's Courier 10 Pitch, the Courier Final
 // Draft prints with), embedded as TrueType in regular, bold, italic and bold italic. Without
 // the font files (`fonts` not given) it falls back to the standard Type 1 Courier family that
-// every PDF reader provides. Either way every glyph is 600/1000 em wide, i.e. 7.2pt at 12pt =
-// exactly 10 characters per inch. Text is encoded as WinAnsi (cp1252); characters outside it
-// become "?", and the one cp1252 character STET Courier lacks (the euro sign) prints in Courier.
+// every PDF reader provides. Either way every glyph is 600/1000 em wide (7.2pt at 12pt) and
+// set 0.2pt tighter, 7pt a character, as Final Draft sets it. Text is encoded as WinAnsi
+// (cp1252); characters outside it become "?", and the one cp1252 character STET Courier lacks
+// (the euro sign) prints in Courier.
 
 const PT_COL = 7.2;   // 0.1in
+const PT_CHAR = 7;    // a character's advance
 const PT_ROW = 12;    // 1/6in
-export const PAPER = { w: 595.28, h: 841.89 }; // A4, as Final Draft prints
+export const PAPER = { w: 595.32, h: 841.92 }; // A4, as Final Draft prints it (8.27 x 11.69in)
 const PAGE_W = PAPER.w, PAGE_H = PAPER.h;
 const BASELINE = 8.52; // baseline offset inside a 12pt row: 0.71em, where Final Draft prints it
 
@@ -60,7 +62,7 @@ function pageStream(page, embedded, used) {
     }
     s += '[] 0 d\n';
   }
-  s += '0 0 0 rg BT\n';
+  s += `0 0 0 rg BT\n${n(PT_CHAR - PT_COL)} Tc\n`;
   let lx = 0, ly = 0, font = -1;
   const rules = [];
   for (const l of page.lines) {
@@ -73,7 +75,7 @@ function pageStream(page, embedded, used) {
       const id = embedded && MISSING.test(t) ? f + 4 : f;
       if (id !== font) { s += `/F${id + 1} 12 Tf\n`; font = id; used.add(id); }
       s += `${n(px - lx)} ${n(y - ly)} Td (${pdfString(t)}) Tj\n`;
-      lx = px; ly = y; px += [...t].length * PT_COL;
+      lx = px; ly = y; px += [...t].length * PT_CHAR;
     }
     if (l.st && l.st.includes('u')) rules.push([x, y + UNDER, l.text.length]);
     if (l.st && l.st.includes('s')) rules.push([x, y + STRIKE, l.text.length]);
@@ -81,7 +83,7 @@ function pageStream(page, embedded, used) {
   s += 'ET\n';
   if (rules.length) {
     s += '0 0 0 RG 0.6 w\n';
-    for (const [x, y, w] of rules) s += `${n(x)} ${n(y)} m ${n(x + w * PT_COL)} ${n(y)} l S\n`;
+    for (const [x, y, w] of rules) s += `${n(x)} ${n(y)} m ${n(x + w * PT_CHAR)} ${n(y)} l S\n`;
   }
   return s;
 }

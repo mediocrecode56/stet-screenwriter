@@ -49,8 +49,9 @@ blocks have types; indentation is derived. `contenteditable` would make the
 DOM the source of truth and require reconstructing structure from it. Here the
 DOM is a projection of the model, so selection, undo and pagination are exact.
 
-**The character grid.** Courier 12pt is exactly 10 characters per inch and 6
-lines per inch. Every element is specified in columns (`format.js`): action
+**The character grid.** The page is a grid of 0.1in columns and 1/6in rows (12pt
+Courier's line). The characters of a line follow one another at `PITCH` columns
+(7pt, as Final Draft sets its Courier). Every element is specified in columns (`format.js`): action
 at column 15 (1.5in) and 60 columns wide, dialogue at 25 and 35 wide,
 character cue at 37, parenthetical at 31 and 25 wide, transitions
 right-aligned to column 75. Lines break at spaces, or after a hyphen inside a word

@@ -405,8 +405,9 @@ full path on hover), so the list never scrolls sideways. Missing files are marke
 - A speech of several paragraphs breaks between them, without (MORE) / (CONT'D), as
   Final Draft does; a paragraph too long to move whole, and action, split at line
   boundaries (with 2-line widow/orphan control), not preferentially at sentence ends.
-- PDF text uses STET Courier (src/fonts: Bitstream's Courier 10 Pitch, made into
-  TrueType by scripts/make-fonts.py), embedded, with WinAnsi (cp1252) encoding:
+- PDF text uses STET Courier (src/fonts: Bitstream's Courier 10 Pitch, thinned to
+  the weight of Final Draft's Courier and made into TrueType by scripts/make-fonts.py),
+  set 7pt a character as Final Draft sets it, embedded, with WinAnsi (cp1252) encoding:
   characters outside Western European scripts print as "?" in the PDF (the
   editor and OS printing show them correctly), and the euro sign, which the font
   lacks, prints in the standard Courier.

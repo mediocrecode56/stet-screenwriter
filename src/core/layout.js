@@ -58,7 +58,7 @@ function minNeed(blocks, bi, settings) {
     case 'transition': return n;
     default: {
       const next = blocks[bi + 1];
-      if (next && chainNext(b.type, next.type)) return n + spaceBefore(next.type, settings, b.type) + minNeed(blocks, bi + 1, settings);
+      if (next && chainNext(b.type, next.type)) return n + spaceBefore(next.type, settings) + minNeed(blocks, bi + 1, settings);
       return n;
     }
   }
@@ -164,7 +164,7 @@ export function paginate(blocks, settings, prev = null, dirty = null) {
     const b = blocks[bi];
     const L = linesOf(b);
     const n = L.length - line;
-    const sb = y === 0 || line > 0 || (page.cont && y === 1) ? 0 : spaceBefore(b.type, settings, bi > 0 ? blocks[bi - 1].type : null);
+    const sb = y === 0 || line > 0 || (page.cont && y === 1) ? 0 : spaceBefore(b.type, settings);
 
     if (line === 0 && y > 0) {
       const need = sb + minNeed(blocks, bi, settings);

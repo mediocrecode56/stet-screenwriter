@@ -8,6 +8,7 @@ import { paginate } from '../src/core/layout.js';
 import { sampleDocument, generateScript } from '../src/dev/sample.js';
 import { newDocument } from '../src/core/model.js';
 import { toPlainText, parsePlainText } from '../src/core/plaintext.js';
+import { PITCH } from '../src/core/format.js';
 
 test('page ranges', () => {
   const r = parseRange('1-3, 7, 10-', 12);
@@ -60,7 +61,7 @@ test('first page carries no number; later pages do, at the right margin', () => 
   assert.ok(!pages[0].lines.some((l) => l.row === 3));
   const n = pages[1].lines.find((l) => l.row === 3);
   assert.equal(n.text, '2.');
-  assert.equal(n.col + n.text.length, 72.5, 'ending 7.25in from the left edge, as Final Draft prints it');
+  assert.ok(Math.abs(n.col + n.text.length * PITCH - 72.5) < 1e-9, 'ending 7.25in from the left edge, as Final Draft prints it');
 });
 
 test('PDF is structurally valid: header, page count, xref offsets', () => {
@@ -115,7 +116,7 @@ test('plain text interchange recovers element types', () => {
 });
 
 test('aligned paragraphs print where the editor shows them; a justified line fills its width', async () => {
-  const { ELEMENT, lineGaps, colIn, offsetAtCol, setText } = await import('../src/core/format.js');
+  const { ELEMENT, lineGaps, colIn, offsetAtCol, setText, PITCH } = await import('../src/core/format.js');
   const { linesOf } = await import('../src/core/layout.js');
   const { makeBlock } = await import('../src/core/model.js');
   const doc = newDocument('');
@@ -128,8 +129,8 @@ test('aligned paragraphs print where the editor shows them; a justified line fil
   const { pages } = buildPrintPages(doc, { titlePage: false });
   const at = (text) => pages[0].lines.find((l) => l.text === text);
   const w = ELEMENT.action.width, left = ELEMENT.action.left;
-  assert.equal(at('Centred.').col, left + Math.floor((w - 8) / 2));
-  assert.equal(at('Right.').col, left + w - 6);
+  assert.equal(at('Centred.').col, left + Math.floor((w - 8) / 2) * PITCH);
+  assert.equal(at('Right.').col, left + (w - 6) * PITCH);
   const b = doc.blocks[2], starts = linesOf(b);
   assert.ok(starts.length >= 2);
   const first = pages[0].lines.find((l) => /^The +rain/.test(l.text));

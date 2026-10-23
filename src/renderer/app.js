@@ -738,7 +738,6 @@ async function importFdx(file = null) {
     doc.titlePage = fd.titlePage;
     if (!doc.titlePage.title) doc.titlePage.title = cfg.name.toUpperCase();
     doc.cast = fd.cast;
-    Object.assign(doc.settings, fd.settings);
     session.load(doc, null);
     const w = await session.saveTo(target);
     if (!w.ok) { await dlg.alertBox('COULD NOT CREATE FILE', 'The screenplay is imported and open but not saved yet.', w.error); return true; }

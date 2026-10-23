@@ -9,7 +9,7 @@
 
 import {
   buildChunks, chunkPrompt, validateFindings, planApply, afterApply, locateAll, shownRange,
-  applyUserLists, listsPrompt, estimate, normalize,
+  applyUserLists, listsPrompt, estimate, normalize, ignoreEntry,
   CATEGORIES, CATEGORY_LABEL, DECISION_LABEL, MODEL,
 } from '../core/revision.js';
 import { pos } from '../core/editor.js';
@@ -256,7 +256,7 @@ export class Revision {
     const f = this.byId(id);
     if (!f || f.decision) return;
     if (!this.doc.revision) this.doc.revision = { ignored: [] };
-    const e = { text: f.shownOriginal, category: f.category };
+    const e = ignoreEntry(f);
     if (!this.doc.revision.ignored.some((x) => x.category === e.category && normalize(x.text) === normalize(e.text))) this.doc.revision.ignored.push(e);
     this.decide(f, 'ignored');
   }

@@ -2,7 +2,7 @@
 // moving up/down between elements with different indents keeps the caret
 // visually aligned (the "goal column").
 
-import { lineX, lineGaps, colIn, offsetAtCol } from './format.js';
+import { lineX, lineGaps, colIn, offsetAtCol, PITCH } from './format.js';
 import { linesOf } from './layout.js';
 import { wordLeft, wordRight } from './text.js';
 import { pos } from './editor.js';
@@ -28,14 +28,14 @@ export function columnOf(blocks, p) {
   const b = blocks[p.b];
   const starts = linesOf(b);
   const i = lineIndexOf(starts, p.o);
-  return lineX(b, starts, i) + colIn(lineGaps(b, starts, i), p.o - starts[i]);
+  return lineX(b, starts, i) + colIn(lineGaps(b, starts, i), p.o - starts[i]) * PITCH;
 }
 
 /** Offset on line i of block nearest to page column col. */
 export function offsetAtColumn(block, i, col) {
   const starts = linesOf(block);
   const x = lineX(block, starts, i);
-  const o = starts[i] + offsetAtCol(lineGaps(block, starts, i), col - x, lineEndOffset(block.text, starts, i) - starts[i]);
+  const o = starts[i] + offsetAtCol(lineGaps(block, starts, i), (col - x) / PITCH, lineEndOffset(block.text, starts, i) - starts[i]);
   return Math.min(o, lineEndOffset(block.text, starts, i));
 }
 

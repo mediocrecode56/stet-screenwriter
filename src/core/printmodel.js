@@ -2,7 +2,7 @@
 // It is built from the document structure and the same pagination the editor
 // uses — never from the editor's screen, zoom or theme.
 
-import { PAGE, ELEMENT, lineText, lineX, lineGaps, colIn, setText } from './format.js';
+import { PAGE, ELEMENT, PITCH, lineText, lineX, lineGaps, colIn, setText } from './format.js';
 import { paginate, linesOf } from './layout.js';
 import { TITLE_FIELDS_SPEC } from './titlepage.js';
 import { styleRuns } from './model.js';
@@ -37,7 +37,7 @@ export function hasTitlePage(tp) {
 /**
  * Build printable pages.
  * options: { titlePage: bool, highlights: bool, comments: bool, range: string }
- * Returns { pages: [{ kind, number, lines:[{col,row,text,st?}], rects:[{col,row,w,color}], notes:[{col,row,w}] }], total, notes: [...] }
+ * Returns { pages: [{ kind, number, lines:[{col,row,text,st?}] (characters at PITCH columns), rects:[{col,row,w,color}], notes:[{col,row,w}] }], total, notes: [...] }
  */
 export function buildPrintPages(doc, options = {}) {
   const opt = { titlePage: true, highlights: false, comments: false, range: '', ...options };
@@ -55,9 +55,9 @@ export function buildPrintPages(doc, options = {}) {
     const number = pi + 1;
     if (!inRange(number)) return;
     const lines = [], rects = [], notes = [], markers = [];
-    if (pi > 0) { const label = `${number}.`; lines.push({ col: PAGE.numberCol - label.length, row: PAGE.numberRow, text: label }); }
+    if (pi > 0) { const label = `${number}.`; lines.push({ col: PAGE.numberCol - label.length * PITCH, row: PAGE.numberRow, text: label }); }
     const top = PAGE.topRows;
-    if (page.cont) lines.push({ col: ELEMENT.character.left, row: top, text: page.cont, st: 'b' });
+    if (page.cont) lines.push({ col: ELEMENT.character.left, row: top, text: page.cont });
     for (const it of page.items) {
       const b = blocks[it.bi];
       const starts = linesOf(b);
@@ -66,15 +66,13 @@ export function buildPrintPages(doc, options = {}) {
         const col = lineX(b, starts, l);
         const text = lineText(b.text, starts, l);
         const gaps = lineGaps(b, starts, l); // a justified line's widened spaces
-        const at = (k) => col + colIn(gaps, k);
+        const at = (k) => col + colIn(gaps, k) * PITCH;
         // Text styles always print; a styled line goes out as runs (st: e.g. 'bu').
         if (text) {
           const ls = starts[l];
-          const bold = ELEMENT[b.type].bold;
           for (const r of styleRuns(b.marks, ls, ls + text.length)) {
             const ln = { col: at(r.s - ls), row, text: setText(text, gaps, r.s - ls, r.e - ls) };
-            const st = bold && !(r.st || '').includes('b') ? 'b' + (r.st || '') : r.st;
-            if (st) ln.st = st;
+            if (r.st) ln.st = r.st;
             lines.push(ln);
           }
         }
@@ -112,7 +110,7 @@ function titlePage(tp) {
     const rows = v.split('\n').slice(0, f.rows || 1);
     rows.forEach((t, i) => {
       t = t.slice(0, f.w);
-      const col = f.align === 'c' ? f.col + Math.floor((f.w - t.length) / 2) : f.align === 'r' ? f.col + f.w - t.length : f.col;
+      const col = f.col + (f.align === 'c' ? Math.floor((f.w - t.length) / 2) : f.align === 'r' ? f.w - t.length : 0) * PITCH;
       lines.push({ col, row: f.row + i, text: t });
     });
   }

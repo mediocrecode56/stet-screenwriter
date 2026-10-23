@@ -1,5 +1,5 @@
 // HTML rendering of print-model pages for the OS print dialog. Positions are in
-// inches on the same character grid as the PDF, independent of editor zoom.
+// inches on the same grid as the PDF (characters 7pt apart), independent of editor zoom.
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // The script font's faces, from `fonts` (a URL ending in /): file, weight, style.
@@ -21,7 +21,7 @@ ${FACES.map(([f, w, st]) => `@font-face { font-family: "STET Courier"; src: url(
 html, body { margin: 0; padding: 0; background: #fff; }
 .p { position: relative; width: 210mm; height: 297mm; overflow: hidden; page-break-after: always; break-after: page; }
 .p:last-child { page-break-after: auto; break-after: auto; }
-b { position: absolute; font: 400 12pt/1 "STET Courier", "Courier New", Courier, monospace; white-space: pre; color: #000; height: 12pt; }
+b { position: absolute; font: 400 12pt/1 "STET Courier", "Courier New", Courier, monospace; letter-spacing: -0.2pt; white-space: pre; color: #000; height: 12pt; }
 i { position: absolute; height: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 u { position: absolute; height: 12pt; border-bottom: 0.6pt dashed #000; }
 .sb { font-weight: 700; } .si { font-style: italic; }

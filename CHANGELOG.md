@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.26.0 · 23 Oct 2026
+
+- STET no longer makes scene headings, character names or shots bold, and no longer adds blank lines of its own: none before dialogue, and new screenplays are back to one blank line before a scene heading. Bold and extra blank lines are yours to add.
+- Letters sit 7pt apart, as Final Draft sets its Courier, on screen, in PDFs and in print, and the letters are drawn as thin as Final Draft's. A Final Draft PDF and STET's PDF of the same script now match letter for letter, within a fifth of a point.
+- The PDF page is exactly the size of Final Draft's A4 page.
+- Importing a Final Draft script keeps the blank lines you put in it: an empty line a paragraph begins or ends with, and an empty paragraph. It no longer changes the screenplay's scene heading spacing.
+
 ## 0.25.0 · 22 Oct 2026
 
 - Pages print like Final Draft's. They are A4, in the Courier Final Draft uses (Bitstream's Courier 10 Pitch, now built into STET and embedded in every PDF), with scene headings, character names and shots in bold. The page number, the margins and where each line sits match a Final Draft PDF line for line. The screen shows the same font, the same bold and the same A4 page.

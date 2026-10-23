@@ -52,8 +52,11 @@ test('writing a scene from the keyboard', async () => {
   await app.key('Tab');
   await app.type('softly');
   assert.deepEqual(await blocks(), [['scene', 'INT. HARBOUR - NIGHT'], ['action', 'Rain.'], ['character', 'MARA'], ['dialogue', 'You came.'], ['paren', '(softly)']]);
-  // The bold elements are drawn bold on the page.
-  assert.equal(await app.eval(`getComputedStyle([...document.querySelectorAll('.page .l')].find((l) => l.textContent === 'MARA')).fontWeight`), '700');
+  // Set as written: no bold of STET's own, characters 7pt apart (format.js PITCH).
+  const r = await app.eval(`(() => { const l = [...document.querySelectorAll('.page .l')].find((l) => l.textContent === 'MARA');
+    return { weight: getComputedStyle(l).fontWeight, cw: __stet.view.cw, col: __stet.view.col }; })()`);
+  assert.equal(r.weight, '400');
+  assert.ok(Math.abs(r.cw / r.col - 7 / 7.2) < 0.002, `pitch ${r.cw / r.col * 7.2}pt`);
 });
 
 test('the Tab cycle: Ctrl+click and dragging the outline choose the types; Tab steps only through them', async () => {
@@ -136,7 +139,7 @@ test('save, reopen and export a PDF on A4 in the script font', async () => {
   const r = await app.eval(`window.stet.invoke('export:pdf', { json: __stet.session.serialize(), options: { titlePage: false }, name: 'smoke', file: ${JSON.stringify(pdf)} })`);
   assert.ok(r.ok, r.error);
   const bytes = (await fs.readFile(pdf)).toString('latin1');
-  assert.match(bytes, /\/MediaBox \[0 0 595\.28 841\.89\]/);
-  assert.match(bytes, /\/BaseFont \/STETCourier-Bold/);
+  assert.match(bytes, /\/MediaBox \[0 0 595\.32 841\.92\]/);
+  assert.match(bytes, /\/BaseFont \/STETCourier-Regular/);
   assert.match(bytes, /\/FontFile2/);
 });

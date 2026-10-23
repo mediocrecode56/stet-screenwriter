@@ -1,11 +1,12 @@
-// The page as Final Draft prints it: A4, Courier 10 Pitch, bold headings, cues and shots,
-// lines broken after hyphens, and speeches broken between their paragraphs. The numbers come
-// from a Final Draft PDF (positions in points from the page's top-left corner).
+// The page as Final Draft prints it: A4, Courier 10 Pitch with characters 7pt apart, lines
+// broken after hyphens, and speeches broken between their paragraphs. The numbers come from a
+// Final Draft PDF (positions in points from the page's top-left corner). Bold and blank lines
+// are the writer's own: STET adds none.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
-import { wrap, lineText, PAGE } from '../src/core/format.js';
+import { wrap, lineText, PAGE, PITCH } from '../src/core/format.js';
 import { paginate } from '../src/core/layout.js';
 import { buildPrintPages } from '../src/core/printmodel.js';
 import { buildPdf, PAPER } from '../src/core/pdf.js';
@@ -28,40 +29,37 @@ test('a line breaks after a hyphen inside a word, as Final Draft breaks it', () 
   assert.deepEqual(lines('aaaa pre- and post-war', 9), ['aaaa pre-', 'and post-', 'war']);
 });
 
-test('the page: A4, the script font embedded, the number 7.25in from the left, the baseline where Final Draft has it', () => {
+test('the page: A4, the script font embedded, characters 7pt apart, the number 7.25in from the left, the baseline where Final Draft has it', () => {
   const blocks = [makeBlock('scene', '1. INTRO')];
   for (let i = 0; i < 60; i++) blocks.push(makeBlock('action', `Line ${i}.`));
   const { pages } = buildPrintPages(doc(blocks), {});
   const pdf = Buffer.from(buildPdf(pages, { fonts: FONTS })).toString('latin1');
-  assert.match(pdf, /\/MediaBox \[0 0 595\.28 841\.89\]/);
+  assert.match(pdf, /\/MediaBox \[0 0 595\.32 841\.92\]/);
   assert.match(pdf, /\/BaseFont \/STETCourier-Regular .*\/Subtype \/TrueType|\/Subtype \/TrueType \/BaseFont \/STETCourier-Regular/);
-  assert.match(pdf, /\/BaseFont \/STETCourier-Bold/);
   assert.match(pdf, /\/FontFile2 \d+ 0 R/);
   // First line: 1.5in from the left, its baseline 80.52pt from the top (Final Draft: 108, 80.52).
-  assert.match(pdf, new RegExp(`BT\\n/F2 12 Tf\\n108 ${(PAPER.h - 80.52).toFixed(2)} Td \\(1\\. INTRO\\) Tj`));
+  assert.match(pdf, new RegExp(`BT\\n-0\\.2 Tc\\n/F1 12 Tf\\n108 ${Math.round((PAPER.h - 80.52) * 100) / 100} Td \\(1\\. INTRO\\) Tj`));
   const n = pages[1].lines.find((l) => l.text === '2.');
-  assert.equal(n.col * 7.2 + 2 * 7.2, 522, 'the page number ends at 522pt');
+  assert.ok(Math.abs(n.col * 7.2 + 2 * 7 - 522) < 1e-9, 'the page number ends at 522pt');
   assert.equal(n.row, PAGE.numberRow);
   // Without the font files it still makes a PDF, in the standard Courier.
   assert.match(Buffer.from(buildPdf(pages)).toString('latin1'), /\/BaseFont \/Courier-Bold/);
 });
 
-test('scene headings, cues and shots print bold; the rest keeps its own styles', () => {
-  const d = doc([makeBlock('scene', 'INT. ROOM - DAY'), makeBlock('action', 'Rain.'), makeBlock('character', 'ME (CLOSE-UP)'),
-    makeBlock('dialogue', 'Hello.'), makeBlock('shot', 'CLOSE ON THE DOOR'), makeBlock('transition', 'CUT TO:')]);
-  const { pages } = buildPrintPages(d, {});
-  const st = (t) => pages[0].lines.find((l) => l.text === t).st || '';
-  assert.deepEqual(['INT. ROOM - DAY', 'Rain.', 'ME (CLOSE-UP)', 'Hello.', 'CLOSE ON THE DOOR', 'CUT TO:'].map(st), ['b', '', 'b', '', 'b', '']);
-  const pdf = zlib.inflateSync(Buffer.from(Buffer.from(buildPdf(pages, { fonts: FONTS, deflate: (b) => zlib.deflateSync(b) })).toString('latin1').match(/stream\n([\s\S]*?)\nendstream/)[1], 'latin1')).toString('latin1');
-  assert.match(pdf, /\/F2 12 Tf\n[\d.-]+ [\d.-]+ Td \(INT\. ROOM - DAY\) Tj/);
-});
-
-test('spacing: two blank lines before a scene heading; dialogue under no cue starts a paragraph', () => {
-  assert.equal(newDocument().settings.sceneSpacing, 2);
+test('STET adds no bold and no blank lines of its own', () => {
   const d = doc([makeBlock('action', 'A.'), makeBlock('scene', 'INT. B'), makeBlock('shot', '- TITLE'),
     makeBlock('dialogue', 'Narration.'), makeBlock('character', 'ME'), makeBlock('dialogue', 'Hi.')]);
-  const p = paginate(d.blocks, d.settings)[0];
-  assert.deepEqual(p.items.map((it) => it.y), [0, 3, 5, 7, 9, 10]);
+  assert.equal(newDocument().settings.sceneSpacing, 1);
+  assert.deepEqual(paginate(d.blocks, d.settings)[0].items.map((it) => it.y), [0, 2, 4, 5, 7, 8]);
+  assert.ok(buildPrintPages(d, {}).pages[0].lines.every((l) => !l.st), 'nothing bold');
+});
+
+test('characters follow 7pt apart in the PDF, the print and on the editor\'s grid', async () => {
+  assert.equal(PITCH * 7.2, 7);
+  const { printHTML } = await import('../src/core/printhtml.js');
+  assert.match(printHTML([]), /letter-spacing: -0\.2pt/);
+  const css = fs.readFileSync(new URL('../src/renderer/style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.page, \.tp-f, #input, \.sheet, \.metric-probe, \.ghost \{\n  letter-spacing: -0\.016667em;/);
 });
 
 test("a speech breaks between its paragraphs with no (MORE) or (CONT'D), as Final Draft does", () => {
@@ -87,7 +85,7 @@ test("a speech breaks between its paragraphs with no (MORE) or (CONT'D), as Fina
   assert.ok(p2[0].more >= 0 && p2[1].cont === "ME (CONT'D)");
 });
 
-test('Final Draft import: the scene spacing it uses, and the empty lines that end a paragraph', () => {
+test('Final Draft import keeps the writer\'s empty lines, and changes no settings', () => {
   const xml = `<?xml version="1.0"?><FinalDraft DocumentType="Script" Version="5"><Content>
     <Paragraph Type="Scene Heading"><Text>1. INTRO</Text></Paragraph>
     <Paragraph Type="Character"><Text>ME</Text></Paragraph>
@@ -96,11 +94,17 @@ test('Final Draft import: the scene spacing it uses, and the empty lines that en
 Two.
 </Text></Paragraph>
     <Paragraph Type="Action"><Text>Rain.   </Text></Paragraph>
+    <Paragraph Type="Action"><Text></Text></Paragraph>
+    <Paragraph Type="Shot"><Text>- TITLE</Text></Paragraph>
+    <Paragraph Type="Dialogue"><Text>  
+Narration.</Text></Paragraph>
+    <Paragraph Type="Action"><Text></Text></Paragraph>
   </Content><ElementSettings Type="Scene Heading"><FontSpec Style="Bold"/><ParagraphSpec SpaceBefore="12"/></ElementSettings></FinalDraft>`;
   const r = parseFdx(xml);
-  assert.deepEqual(r.settings, { sceneSpacing: 1 });
-  assert.deepEqual(r.blocks.map((b) => b.text), ['1. INTRO', 'ME', 'One.\n\nTwo.\n', 'Rain.']);
-  assert.deepEqual(parseFdx(xml.replace(/<ElementSettings[\s\S]*<\/ElementSettings>/, '')).settings, {});
+  assert.equal(r.settings, undefined);
+  // An empty line a paragraph opens or ends on, and an empty paragraph, stay as Final Draft shows them;
+  // empty paragraphs at the end of the script go.
+  assert.deepEqual(r.blocks.map((b) => b.text), ['1. INTRO', 'ME', 'One.\n\nTwo.\n', 'Rain.', '', '- TITLE', '\nNarration.']);
   assert.deepEqual(parseFdx(xml.replace('<Text>ME</Text>', '<Text>ME\n</Text>')).blocks[1].text, 'ME', 'a cue stays one line');
 });
 
@@ -109,7 +113,7 @@ test('printing from the OS uses the same font and paper', async () => {
   const html = printHTML(buildPrintPages(doc([makeBlock('scene', 'INT. A')]), {}).pages);
   assert.match(html, /@page \{ size: 210mm 297mm; margin: 0; \}/);
   for (const f of ['Regular', 'Bold', 'Italic', 'BoldItalic']) assert.ok(html.includes(`url("STETCourier-${f}.ttf")`), f);
-  assert.match(html, /class="sb" style="left:1\.5in;top:1in">INT\. A</);
+  assert.match(html, /<b style="left:1\.5in;top:1in">INT\. A</);
 });
 
 test('"Written by" alone makes no title page', () => {

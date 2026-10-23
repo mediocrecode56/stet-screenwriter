@@ -107,7 +107,7 @@ until you accept.
 
 - Screenplays are saved as `.stet` files, in your **Documents\STET** folder
   unless you choose another place.
-- Pages are A4 and look like Final Draft's: the same Courier, margins, bold headings and cues, and page breaks.
+- Pages are A4 and look like Final Draft's: the same Courier, letter spacing, margins, line spacing and page breaks.
 - STET is young and improving often. See [what's new](CHANGELOG.md).
 
 ---

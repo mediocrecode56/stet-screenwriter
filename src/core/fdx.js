@@ -87,15 +87,17 @@ function readRuns(p) {
 }
 
 /**
- * Tidy the text the way STET keeps it: no tabs, no stray line ends before the paragraph. With
- * `keepEnd`, line ends after the text stay: Final Draft shows them as empty lines, and they move
- * its page breaks.
+ * Tidy the text the way STET keeps it: no tabs, no stray line ends around the paragraph. With
+ * `keepLines`, line ends before and after the text stay: Final Draft shows them as empty lines
+ * (the writer's own spacing), and they move its page breaks.
  */
-function tidy(text, marks, keepEnd = false) {
+function tidy(text, marks, keepLines = false) {
   let t = text.replace(/\r\n?/g, '\n').replace(/[\t\u000b]/g, ' ');
-  let cut = t.length - t.replace(/^[\s\n]+/, '').length;
-  t = t.slice(cut).replace(keepEnd ? /[ \u00a0]+$/ : /[\s\n]+$/, '');
-  if (keepEnd && !t.trim()) t = '';
+  if (keepLines && !t.trim()) t = '';
+  // The leading space and line ends, or with keepLines just the line ends.
+  const head = /^[\s\n]*/.exec(t)[0], kept = keepLines ? head.replace(/[^\n]/g, '') : '';
+  const cut = head.length - kept.length;
+  t = (kept + t.slice(head.length)).replace(keepLines ? /[ \u00a0]+$/ : /[\s\n]+$/, '');
   marks = marks.map((m) => ({ ...m, s: Math.max(0, m.s - cut), e: Math.min(t.length, m.e - cut) })).filter((m) => m.e > m.s);
   // More than one empty line in a row inside a paragraph reads as a gap Final Draft never shows.
   for (let i; (i = t.indexOf('\n\n\n')) >= 0;) {
@@ -113,10 +115,10 @@ function toBlock(p, warnings) {
     if (raw) warnings.add(`"${raw}" paragraphs came in as Action.`);
   }
   const runs = readRuns(p);
-  // Action and dialogue keep the empty lines that end them (Final Draft shows them); cues, headings
-  // and parentheticals are one line of their own.
+  // Action and dialogue keep the empty lines around them (Final Draft shows them); cues, headings
+  // and parentheticals are one line of their own. An empty Action paragraph stays an empty line.
   let { text, marks } = tidy(runs.text, runs.marks, type === 'action' || type === 'dialogue');
-  if (!text) return null;
+  if (!text) return type === 'action' ? makeBlock('action', '') : null;
   if (UPPER_TYPES.has(type)) {
     const up = text.toUpperCase();
     // Uppercasing can change length (e.g. "ß" -> "SS"); drop marks rather than misplace them.
@@ -128,10 +130,7 @@ function toBlock(p, warnings) {
     if (!text.startsWith('(')) marks = marks.map((m) => ({ ...m, s: m.s + 1, e: m.e + 1 }));
     text = '(' + text.replace(/^\(|\)$/g, '') + ')';
   }
-  const b = makeBlock(type, text, marks);
-  // A paragraph that opens on an empty line shows that line in Final Draft.
-  b.gap = /^[ \t]*\r?\n/.test(runs.text);
-  return b;
+  return makeBlock(type, text, marks);
 }
 
 /** Paragraphs in reading order; dual dialogue comes in as one speech after the other. */
@@ -177,7 +176,7 @@ function readTitlePage(tp) {
 // ---- document ---------------------------------------------------------------------------
 
 /**
- * Final Draft XML -> { blocks, titlePage, cast, settings, warnings }.
+ * Final Draft XML -> { blocks, titlePage, cast, warnings }.
  * Throws FdxError when the file is not a Final Draft script.
  */
 export function parseFdx(xml) {
@@ -191,13 +190,12 @@ export function parseFdx(xml) {
     const b = toBlock(p, warnings);
     if (!b) continue;
     const prev = blocks[blocks.length - 1];
-    const { gap, ...block } = b;
-    if (prev && prev.type === 'dialogue' && block.type === 'dialogue') {
-      // More of the same speech: one dialogue, as STET writes it, with the gap Final Draft showed.
-      const join = gap ? '\n\n' : '\n';
-      blocks[blocks.length - 1] = makeBlock('dialogue', prev.text + join + block.text, concatMarks(prev.marks, prev.text.length + join.length, block.marks));
-    } else blocks.push(block);
+    if (prev && prev.type === 'dialogue' && b.type === 'dialogue') {
+      // More of the same speech: one dialogue, as STET writes it (an empty line it opens on stays).
+      blocks[blocks.length - 1] = makeBlock('dialogue', prev.text + '\n' + b.text, concatMarks(prev.marks, prev.text.length + 1, b.marks));
+    } else if (b.text || blocks.length) blocks.push(b);
   }
+  while (blocks.length && !blocks[blocks.length - 1].text) blocks.pop();
   if (!blocks.length) blocks.push(makeBlock('scene', ''));
   const tp = child(fd, 'TitlePage');
   const titlePage = tp ? readTitlePage(tp) : emptyTitlePage();
@@ -207,17 +205,6 @@ export function parseFdx(xml) {
     const n = blocks[i].type === 'character' ? cueName(blocks[i].text) : '';
     if (n && !cast.includes(n)) cast.push(n);
   }
-  return { blocks, titlePage, cast, settings: readSettings(fd), warnings: [...warnings] };
+  return { blocks, titlePage, cast, warnings: [...warnings] };
 }
 
-/** The layout settings STET shares with the file: the blank lines before scene headings. */
-function readSettings(fd) {
-  const out = {};
-  for (const es of kids(fd, 'ElementSettings')) {
-    if ((es.attrs.Type || '').trim().toLowerCase() !== 'scene heading') continue;
-    const before = parseFloat((child(es, 'ParagraphSpec') || { attrs: {} }).attrs.SpaceBefore);
-    // Final Draft counts the space in points: 12 is one blank line.
-    if (before >= 0) out.sceneSpacing = Math.min(2, Math.max(1, Math.round(before / 12)));
-  }
-  return out;
-}

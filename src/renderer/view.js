@@ -69,7 +69,7 @@ export class View {
     this.caretEl = el('div', '');
     this.caretEl.id = 'caret';
     this.ghost = null;      // { b, o, text }: the rest of a character name, suggested after the caret
-    this.ghostEl = el('div', 'ghost sb'); // suggested in a cue, which is bold
+    this.ghostEl = el('div', 'ghost');
     this.ghostEl.setAttribute('aria-hidden', 'true');
     content.append(this.revLayer, this.findLayer, this.selLayer, this.ghostEl, this.caretEl);
     this.titleEl = null;
@@ -214,7 +214,7 @@ export class View {
       const label = `${pi + 1}.`;
       h += `<div class="pn" style="left:${this.xAt(PAGE.numberCol - label.length, 0)}px;top:${PAGE.numberRow * row}px">${label}</div>`;
     }
-    if (page.cont) h += `<div class="l sb" style="left:${this.xAt(ELEMENT.character.left, 0)}px;top:${top * row}px">${esc(page.cont)}</div>`;
+    if (page.cont) h += `<div class="l" style="left:${this.xAt(ELEMENT.character.left, 0)}px;top:${top * row}px">${esc(page.cont)}</div>`;
     const ticks = new Set();
     for (const it of page.items) {
       const b = blocks[it.bi];
@@ -224,7 +224,7 @@ export class View {
         const x0 = lineX(b, starts, l);
         const txt = lineText(b.text, starts, l);
         const gaps = lineGaps(b, starts, l);
-        if (txt) h += `<div class="l${ELEMENT[b.type].bold ? ' sb' : ''}" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt, gaps)}</div>`;
+        if (txt) h += `<div class="l" style="left:${x0 * this.col}px;top:${y}px">${styledLine(b, starts[l], txt, gaps)}</div>`;
         if (!b.marks.length) continue;
         const ls = starts[l], le = ls + txt.length;
         for (const m of b.marks) {
@@ -261,7 +261,7 @@ export class View {
     for (const f of node.querySelectorAll('.tp-f')) {
       const spec = TITLE_FIELDS.find((t) => t.key === f.dataset.k);
       Object.assign(f.style, {
-        left: spec.col * this.col + 'px', top: spec.row * this.row + 'px', width: spec.w * this.col + 'px',
+        left: spec.col * this.col + 'px', top: spec.row * this.row + 'px', width: spec.w * this.cw + 'px',
         height: (spec.rows || 1) * this.row + 'px', fontSize: this.row + 'px', lineHeight: this.row + 'px',
       });
     }

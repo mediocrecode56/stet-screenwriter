@@ -1,9 +1,12 @@
 // Screenplay page geometry (Courier 12pt, laid out as Final Draft does).
 //
-// Courier 12pt is exactly 10 characters per inch and 6 lines per inch, so the
-// whole layout is expressed on a character grid: 1 column = 0.1in, 1 row = 1/6in.
+// The page is measured on a grid: 1 column = 0.1in, 1 row = 1/6in (12pt Courier's line).
+// Margins sit on the grid; the characters of a line follow one another at PITCH columns
+// (7pt each, as Final Draft sets its Courier, a little tighter than the font's own 7.2pt).
 // Because the font is monospaced, wrapping is pure arithmetic and never needs
 // DOM measurement — this is the main reason layout is cheap.
+
+export const PITCH = 7 / 7.2; // columns a character takes
 
 export const PAGE = {
   cols: 82.68,       // A4: 210mm wide
@@ -27,25 +30,21 @@ const MARGINS = {
   transition: [5.5, 7.1],
   shot:       [1.5, 7.5],
 };
-// bold: the element is set in bold, as Final Draft prints scene headings, cues and shots.
 const STYLE = {
-  scene:      { before: 1, upper: true, bold: true },
+  scene:      { before: 1, upper: true },
   action:     { before: 1 },
-  character:  { before: 1, upper: true, bold: true },
+  character:  { before: 1, upper: true },
   paren:      { before: 0 },
   dialogue:   { before: 0 },
   transition: { before: 1, upper: true, right: true },
-  shot:       { before: 1, upper: true, bold: true },
+  shot:       { before: 1, upper: true },
 };
 // left: first column, width: whole characters that fit between the margins, before: blank rows above.
 export const ELEMENT = Object.fromEntries(Object.entries(MARGINS).map(([type, [l, r]]) =>
   [type, { left: Math.round(l * 10), width: Math.floor((r - l) * 10 + 1e-9), ...STYLE[type] }]));
 
-/** Blank rows above an element of `type` that follows one of `prevType`. */
-export function spaceBefore(type, settings, prevType) {
+export function spaceBefore(type, settings) {
   if (type === 'scene' && settings && settings.sceneSpacing) return settings.sceneSpacing;
-  // Dialogue that isn't under a cue or a parenthetical starts a paragraph of its own.
-  if (type === 'dialogue' && prevType && prevType !== 'character' && prevType !== 'paren') return 1;
   return ELEMENT[type].before;
 }
 
@@ -124,13 +123,13 @@ export function alignOf(b) {
   return b.align || (ELEMENT[b.type].right ? 'right' : 'left');
 }
 
-/** Column (relative to the page) where line i of block b starts. */
+/** Column (relative to the page) where line i of block b starts; characters follow at PITCH. */
 export function lineX(b, starts, i) {
   const el = ELEMENT[b.type];
   const a = alignOf(b);
   if (a === 'left' || a === 'justify') return el.left;
   const free = Math.max(0, el.width - lineText(b.text, starts, i).length);
-  return el.left + (a === 'right' ? free : Math.floor(free / 2));
+  return el.left + (a === 'right' ? free : Math.floor(free / 2)) * PITCH;
 }
 
 /**
