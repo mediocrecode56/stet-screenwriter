@@ -55,6 +55,14 @@ test('save, autosave and reopen: the file follows every change, notes included',
   assert.equal(await app.eval(`__stet.openPath(${JSON.stringify(file)})`), true);
   assert.deepEqual(await app.blocks(), now);
   assert.deepEqual(await app.eval('Object.values(__stet.session.doc.comments).map((c) => c.text)'), ['Check this beat.']);
+  // Saved under a new name while an autosave is still writing the old file: the new file is written too.
+  await app.key('Mod+End');
+  await app.type(' Wind.');
+  const copy = path.join(tmp, 'Night Copy.stet');
+  assert.equal((await app.eval(`(() => { const s = __stet.session; s.autosaveDelay = 60000; void s.flushQuiet(); return s.saveTo(${JSON.stringify(copy)}); })()`)).ok, true); // the autosave under way as it is saved elsewhere
+  assert.match(await decode(await fs.readFile(copy)), /Wind\./, 'the new file exists, with everything in it');
+  await app.eval('__stet.session.autosaveDelay = 40');
+  assert.equal(await app.eval(`__stet.openPath(${JSON.stringify(file)})`), true);
   // Back Up Now: into "<name> Backups", named with the date and time.
   assert.equal((await app.eval('__stet.session.maybeBackup(true)')).ok, true);
   const files = await fs.readdir(path.join(tmp, 'Night Backups'));
@@ -146,8 +154,9 @@ test('double-clicking the title renames the file in place; Open Recent follows; 
   const cost = path.join(tmp, 'Cost.stet');
   assert.equal((await app.saveTo(cost)).ok, true);
   assert.equal((await app.eval(`__stet.api.invoke('backup:create', { path: ${JSON.stringify(cost)}, id: 'x', dir: null, json: __stet.session.serialize() })`)).ok, true);
+  await app.load([]); // (renamed here behind STET's back: it mustn't still have the file open)
   const r = await app.eval(`__stet.api.invoke('doc:rename', { path: ${JSON.stringify(cost)}, name: 'Cost $& More', backupDir: null })`);
-  assert.deepEqual([r.ok, r.path], [true, path.join(tmp, 'Cost $& More.stet')]);
+  assert.deepEqual([r.ok, r.path], [true, path.join(tmp, 'Cost $& More.stet')], r.error + ' ' + JSON.stringify((await fs.readdir(tmp)).filter((f) => /stet$/.test(f))) + ' ' + await app.eval('JSON.stringify(__stet.api.invoke("recent:list").then((l) => l.slice(0, 3).map((x) => x.name)))'));
   const names = await fs.readdir(path.join(tmp, 'Cost $& More Backups'));
   assert.ok(names.length === 1 && names[0].startsWith('Cost $& More '), names[0]);
 });
@@ -290,6 +299,7 @@ test('a crash: the unsaved work comes back on the next start', async () => {
   await app.key('Escape');
   await app.key('Enter');
   await app.type('Gulls. Nothing else survives.');
+  assert.deepEqual(await app.blocks(), [['scene', 'EXT. HARBOR - DAWN'], ['action', 'Gulls. Nothing else survives.']], 'typed into the new screenplay ' + await app.eval('JSON.stringify({ active: document.activeElement.id || document.activeElement.className, dlg: document.querySelector("#overlay:not([hidden]) .dlg")?.innerText, dirty: __stet.session.dirty, quiet: __stet.session.quiet })'));
   await app.until(`__stet.api.invoke('recovery:list').then(async (l) => l.length && (await __stet.api.invoke('recovery:read', l[0].file)).json?.includes('survives.'))`, { what: 'a recovery copy with the last words' });
   await app.kill();
   app = await launch();

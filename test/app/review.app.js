@@ -46,8 +46,8 @@ const settled = () => app.until('!__stet.revision.timer', { what: 'the passages 
 // Started here and watched from the test (a hidden window's own timers run only about once a second).
 const begin = async () => {
   await app.eval('(() => { const r = __stet.revision; window.__run0 = r.run; r.start(); })()');
-  const asked = await app.until(`__stet.revision.run !== window.__run0 ? 'started' : [...document.querySelectorAll('#overlay .btn.primary')].some((b) => b.textContent === 'Review') && 'asked'`, { what: 'the review to start (or ask first)' });
-  if (asked === 'asked') await app.eval(`[...document.querySelectorAll('#overlay .btn.primary')].find((b) => b.textContent === 'Review').click()`); // "review again?" yes
+  const asked = await app.until(`__stet.revision.run !== window.__run0 ? 'started' : [...document.querySelectorAll('#overlay .dlg:not([inert]) .btn.primary')].some((b) => b.textContent === 'Review') && 'asked'`, { what: 'the review to start (or ask first)' });
+  if (asked === 'asked') await app.eval(`[...document.querySelectorAll('#overlay .dlg:not([inert]) .btn.primary')].find((b) => b.textContent === 'Review').click()`); // "review again?" yes
 };
 const ended = async (timeout = 15000) => {
   try { await app.until('__stet.revision.run && __stet.revision.run !== window.__run0 && __stet.revision.run.finished', { what: 'the review to end', timeout }); }

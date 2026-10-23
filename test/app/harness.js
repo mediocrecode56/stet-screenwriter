@@ -226,12 +226,12 @@ export class App {
   }
   saveTo(file) { return this.eval(`__stet.session.saveTo(${JSON.stringify(file)})`); }
   /** The open dialog's title and text ('' when none). */
-  dialog() { return this.eval(`(() => { const d = document.querySelector('#overlay:not([hidden]) .dlg'); return d ? d.innerText : ''; })()`); }
+  dialog() { return this.eval(`(() => { const d = document.querySelector('#overlay:not([hidden]) .dlg:not([inert])'); return d ? d.innerText : ''; })()`); }
   /** Wait for a dialog whose text matches `re`. */
   dialogMatching(re, timeout) { return this.until(async () => re.test(await this.dialog()), { what: 'a dialog matching ' + re, timeout }); }
   /** Click the dialog button labelled `label`. */
   async press(label) {
-    const ok = await this.eval(`(() => { const b = [...document.querySelectorAll('#overlay .dlg button')].find((x) => x.textContent === ${JSON.stringify(label)}); if (!b) return false; b.click(); return true; })()`);
+    const ok = await this.eval(`(() => { const b = [...document.querySelectorAll('#overlay .dlg:not([inert]) button')].find((x) => x.textContent === ${JSON.stringify(label)}); if (!b) return false; b.click(); return true; })()`);
     if (!ok) throw new Error('no button ' + label + ' in: ' + await this.dialog());
   }
   /** Wait for no dialog to be showing. */

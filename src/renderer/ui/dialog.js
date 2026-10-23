@@ -57,7 +57,10 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
     ov.addEventListener('keydown', onKey, true);
     const onDown = (e) => { if (e.target === ov) close(null); };
     ov.addEventListener('mousedown', onDown);
+    let closed = false;
     function close(v) {
+      if (closed) return; // a click on a dialog already on its way out must not close the next one
+      closed = true;
       ov.removeEventListener('keydown', onKey, true);
       ov.removeEventListener('mousedown', onDown);
       active = null;

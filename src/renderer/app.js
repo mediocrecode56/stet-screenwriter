@@ -533,10 +533,12 @@ function renameInPlace() {
     input.focus();
     if (!keep || !name || name === was) return;
     t.textContent = name; // shown at once; the disk catches up
+    const doc = session.doc, from = session.path; // (another screenplay opened meanwhile is left alone)
     await session.flushAll();
-    const r = await api.invoke('doc:rename', { path: session.path, name, backupDir: session.doc.settings.backup.dir });
+    if (session.doc !== doc || session.path !== from) return renderTitle();
+    const r = await api.invoke('doc:rename', { path: from, name, backupDir: doc.settings.backup.dir });
     if (!r.ok) { renderTitle(); return dlg.alertBox('RENAME FAILED', r.error); }
-    session.path = r.path;
+    if (session.doc === doc && session.path === from) session.path = r.path;
     renderTitle(); session.emit();
   };
   const onKey = (e) => {
@@ -667,7 +669,7 @@ async function saveAs() {
 async function openPath(file, { quiet = false, onlyOver = null } = {}) {
   const movedOn = () => onlyOver && (session.doc !== onlyOver || session.dirty);
   if (/\.fdx$/i.test(file)) return importFdx(file);
-  if (!(await releaseCurrent())) return false;
+  if (onlyOver ? movedOn() : !(await releaseCurrent())) return false; // (in place of an untouched document there is nothing to release)
   const r = await Session.readFile(file);
   if (movedOn()) return false;
   if (!r.ok) {

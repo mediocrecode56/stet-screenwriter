@@ -118,13 +118,16 @@ export class Session {
   }
 
   async writeFile({ force = false } = {}) {
-    if (this.saving) { await this.saving; if (!this.dirty) return { ok: true }; }
+    // A save already under way covers this one only if it went to the same file (a Save As
+    // meanwhile still has to write the new one).
+    if (this.saving) { const to = this.savingTo; await this.saving; if (!this.dirty && to === this.path) return { ok: true }; }
     const rev = this.rev;
     const json = this.serialize();
     this.status = 'saving';
     this.emit();
     const p = api.invoke('doc:save', { path: this.path, rev, json, force });
     this.saving = p;
+    this.savingTo = this.path;
     let r;
     try { r = await p; } finally { this.saving = null; }
     if (r.ok) {
