@@ -2,6 +2,18 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.34.0 · 23 Oct 2026
+
+- Timeline: holding Ctrl (Cmd on a Mac) now holds the pointer still while you step through the script, so it can no longer drift onto the toolbar or the script and light up or click something there. When you let go it is back on the timeline, where you started. Esc while stepping puts the caret back, and stepping waits until you press Ctrl again.
+- The dinosaur has four new habits: a good scratch on its back in the dust (all the more after the rain), a shameless strut up and down (all the more once you've met today's goal), a burp after a snack, and photobombing whatever is worth a look nearby. Click it while it shows off and it takes a bow.
+- Fix: saving under a new name while STET was still saving the old file could report success without writing the new file.
+- Fix: renaming a screenplay from its title could rename another one opened in the meantime.
+- Fix: the Open Recent window left the typing focus in the script behind it, so Escape didn't close it.
+- Fix: a click on a window that was already closing could close the next one with it.
+- Fix: STET reopening your last screenplay at start-up could interrupt you if you had already started writing.
+- A cleaner download page.
+- Behind the scenes: the tests were rebuilt to run in a fraction of the time, so they run more often.
+
 ## 0.33.0 · 23 Oct 2026
 
 - Timeline: right-click a scene to give it its own timecode. It shows beside the scene heading in the script, and the timeline's clock adjusts around it like any other timecode.

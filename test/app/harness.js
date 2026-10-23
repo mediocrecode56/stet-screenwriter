@@ -45,7 +45,8 @@ export async function scratch(name = 'stet') {
 // On Linux each app gets a virtual display of its own (Xvfb), so files running side by side never
 // share a screen: each window has the focus as a writer's would, the pointer can be locked, and no
 // window pops up on a desktop.
-const XVFB = process.platform === 'linux' && spawnSync('which', ['Xvfb']).status === 0;
+// (STET_E2E_DISPLAY=shared keeps them on the current display: to watch them, or to drive them with xdotool.)
+const XVFB = process.platform === 'linux' && process.env.STET_E2E_DISPLAY !== 'shared' && spawnSync('which', ['Xvfb']).status === 0;
 async function display() {
   for (let tries = 0; tries < 20; tries++) {
     const n = 200 + Math.floor(Math.random() * 3000);
