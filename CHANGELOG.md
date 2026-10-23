@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.31.0 · 23 Oct 2026
+
+- Timeline: while holding Ctrl (Cmd on a Mac) over it, a right-click pins a timecode at that exact second straight away, no menu.
+- Timecodes have a small editor of their own under the bar (right-click a timecode): type the exact time, nudge it a second with the arrow keys (ten with Shift), give it an optional tag and one of the highlight colours, or remove it. Enter or a click away keeps it, Esc leaves it as it was.
+- Timecodes show as a line across the bar in their colour, with their tag on the ruler, and draw the pointer slightly like scenes and notes.
+- Writing goals: the boxes at the top are as wide as the chart under them.
+- Fix: a time that would come after the next timecode is refused with the reason, instead of that next timecode quietly stopping counting.
+
 ## 0.30.0 · 23 Oct 2026
 
 - Timeline: hold Ctrl (Cmd on a Mac) and just move the pointer over it, no click needed, to step through the script a second at a time. The script follows, the exact time is shown, and right-clicking there offers that second for a timecode. Let go of Ctrl and the caret stays where you stopped.

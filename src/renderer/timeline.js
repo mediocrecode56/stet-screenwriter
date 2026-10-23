@@ -359,6 +359,7 @@ export class Timeline {
   /** A right-click: with Ctrl held, pins a timecode at the second stepped to; on a timecode, edits
    *  it; elsewhere, offers to add one there. */
   menu(e) {
+    if ((e.ctrlKey || e.metaKey) && !this.stepping) this.fine(e); // Ctrl held without moving yet
     const f = this.stepping && this.stepping.t != null ? this.stepping : null;
     if (f) return this.pin(f.x, f.t);
     const x = this.posAt(e.clientX);
@@ -456,6 +457,9 @@ export class Timeline {
       if (r && r.list) this.setTimecodes(r.list);
     };
     document.body.appendChild(pop);
+    // Zoomed in, the bar brings the timecode into view first.
+    const sc = this.scroll, cx = at.here * this.drawn + PADX;
+    if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = cx - sc.clientWidth / 3;
     // Under the bar, its notch on the timecode, kept inside the window.
     const hr = this.host.getBoundingClientRect(), ax = this.inner.getBoundingClientRect().left + at.here * this.drawn;
     const left = Math.max(6, Math.min(ax - 18, innerWidth - pop.offsetWidth - 6));
@@ -464,7 +468,7 @@ export class Timeline {
     pop.style.setProperty('--notch', Math.max(8, Math.min(pop.offsetWidth - 8, ax - left)) + 'px');
     this.editing = { pop, away, x: at.here };
     this.showEditing();
-    setTimeout(() => addEventListener('mousedown', away, true), 0);
+    setTimeout(() => { if (this.editing && this.editing.pop === pop) addEventListener('mousedown', away, true); }, 0);
     time.focus();
     time.select();
     if (err) fail(err);
