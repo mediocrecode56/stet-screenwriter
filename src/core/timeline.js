@@ -47,7 +47,7 @@ function lineOf(b, o) {
 }
 
 /**
- * What the timeline shows: its length, the scenes (where each starts), the highlights (from and
+ * What the timeline shows: the scenes (where each starts), the highlights (from and
  * to, in their colour, a run of the same colour across blocks as one) and the notes.
  */
 export function timelineOf(blocks, pages) {
@@ -69,7 +69,7 @@ export function timelineOf(blocks, pages) {
     }
     run = carried;
   }
-  return { length: Math.max(1, pages.length), scenes, highlights, notes };
+  return { scenes, highlights, notes };
 }
 
 /** Timecodes pinned in the script, as positions: [{ x, t, id }] in script order, unusable ones left out. */

@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.28.0 · 23 Oct 2026
+
+- **Timeline** (*View → Timeline*, Ctrl+Shift+T): the whole script as a strip under the toolbar, page by page. Highlights show in their colour on the script line, each scene has a small tick and each note an icon. A soft band marks the part of the script on screen. It's off until you turn it on.
+- Click anywhere on it to go there. Drag along it to scrub through the script, drag the band to move through the script, and drag the ruler sideways to scroll or up and down to zoom. Double-click the ruler for the whole script again.
+- The ruler counts a minute a page and ends with the script's estimated length. Right-click to pin a real time (HH:MM:SS) at any point: the rest of the timeline is estimated from it. Timecodes stay with their line as you edit and are saved with the script.
+
 ## 0.27.0 · 23 Oct 2026
 
 - English Revision lists its suggestions in the order they appear in the script, and keeps that order as you edit. Each one says what kind it is. The decided ones are in script order too.

@@ -1,6 +1,7 @@
-// The timeline bar under the toolbar (View > Timeline): the script from left to right, a thin
-// line for each scene, the highlights in their colours, the notes, and a time ruler that counts
-// a minute a page until timecodes are pinned to it (right-click). Clicking goes there.
+// The timeline bar under the toolbar (View > Timeline): the script from left to right, a tick
+// for each scene, the highlights in their colours, the notes, and a time ruler that counts a
+// minute a page until timecodes are pinned to it (right-click). Clicking goes there; dragging
+// scrubs, moves the window (the band) or, on the ruler, scrolls and zooms.
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
@@ -78,7 +79,7 @@ export class Timeline {
     this.inner.addEventListener('mouseleave', () => { this.hover.hidden = true; this.band.classList.remove('hot'); });
     this.scroll.addEventListener('wheel', (e) => {
       e.preventDefault();
-      if (e.ctrlKey || e.metaKey) this.zoom(e.deltaY < 0 ? 1.25 : 0.8, e.clientX);
+      if (e.ctrlKey || e.metaKey) this.zoom(2 ** (-Math.max(-200, Math.min(200, e.deltaY)) / 200), e.clientX); // in step with the wheel or a pinch
       else this.scroll.scrollLeft += e.deltaX || e.deltaY;
     }, { passive: false });
     new ResizeObserver(() => { if (this.visible) this.update(true); }).observe(host);
@@ -174,7 +175,8 @@ export class Timeline {
     if (at !== this.caretSeen) {
       this.caretSeen = at;
       const sc = this.scroll;
-      if (x < sc.scrollLeft || x > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = x - sc.clientWidth / 3;
+      const cx = x + PADX; // in the strip's scrolled content
+      if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = cx - sc.clientWidth / 3;
     }
   }
 
@@ -220,7 +222,7 @@ export class Timeline {
     }
     // The end of the script: its estimated length.
     ruler += `<span class="tl-lb tl-end" style="left:${len * s}px">${rulerLabel(total)}</span>`;
-    for (const a of anchors) ruler += `<span class="tl-lb tl-tc" style="left:${a.x * s}px" title="Timecode, pinned (right-click to change)">${rulerLabel(a.t)}</span>`;
+    for (const a of anchors) ruler += `<span class="tl-lb tl-tc" style="left:${a.x * s}px">${rulerLabel(a.t)}</span>`;
     this.ruler.innerHTML = ruler;
     this.grid.innerHTML = grid;
 

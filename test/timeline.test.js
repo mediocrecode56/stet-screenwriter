@@ -47,7 +47,6 @@ test('the timeline shows each scene, highlights (one across blocks) and notes', 
   assert.ok(tl.highlights[0].x1 > scriptPos(p, 2), 'the yellow runs on into the next block');
   assert.equal(tl.highlights[1].color, 'pink');
   assert.deepEqual(tl.notes.map((n) => [n.id, n.b]), [['n1', 2]]);
-  assert.equal(tl.length, p.length);
 });
 
 test('the ruler counts a minute a page until a timecode is pinned', () => {
