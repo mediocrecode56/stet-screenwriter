@@ -251,6 +251,34 @@ body.tl-drag-zoom, body.tl-drag-zoom *, body.tl-fine .tl-inner { cursor: ew-resi
 .tl-lb.tl-end { border-left: 0; border-right: 1px solid var(--rule); padding: 0 4px 0 0; transform: translateX(-100%); color: var(--ink-2); }
 .tl-lb.tl-tc { color: var(--ink); border-left-color: var(--ink); padding-left: 9px; }
 .tl-tc::before { content: ''; position: absolute; left: 2px; top: 3px; width: 4px; height: 4px; background: var(--ink); transform: rotate(45deg); } /* pinned */
+.tl-tc b { font-weight: 400; margin-left: 5px; color: var(--ink-2); letter-spacing: .04em; }
+.tl-tc.c-blue::before { background: var(--tl-blue); } .tl-tc.c-yellow::before { background: var(--tl-yellow); } .tl-tc.c-pink::before { background: var(--tl-pink); }
+.tl-tc.c-blue { border-left-color: var(--tl-blue); } .tl-tc.c-yellow { border-left-color: var(--tl-yellow); } .tl-tc.c-pink { border-left-color: var(--tl-pink); }
+/* A pinned timecode, the full height of the bar; it draws the pointer like the other marks. */
+.tl-tcm { position: absolute; top: 0; bottom: 15px; width: 1px; background: var(--ink-3); opacity: .55; pointer-events: none; transition: opacity var(--dur-fast) var(--ease-out); }
+.tl-tcm.c-blue { background: var(--tl-blue); } .tl-tcm.c-yellow { background: var(--tl-yellow); } .tl-tcm.c-pink { background: var(--tl-pink); }
+.tl-tcm.near { opacity: 1; box-shadow: 0 0 0 .5px currentColor; }
+.tl-tcm.new { animation: tc-new 600ms var(--ease-out); }
+@keyframes tc-new { from { opacity: 1; box-shadow: 0 0 0 2px var(--ink-3); } }
+.tl-inner.editing::after { content: ''; position: absolute; left: var(--edit-x); top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
+.tl-head.dim { opacity: .35; }
+/* The timecode editor: a small panel under the bar, its notch on the timecode. */
+.tc-pop { position: fixed; z-index: 50; background: var(--page); border: 1px solid var(--rule-strong); box-shadow: 4px 4px 0 var(--rule); padding: 5px; }
+.tc-pop::before { content: ''; position: absolute; top: -5px; left: calc(var(--notch) - 4px); width: 7px; height: 7px; background: var(--page); border: solid var(--rule-strong); border-width: 1px 0 0 1px; transform: rotate(45deg); }
+.tc-row { display: flex; align-items: center; gap: 5px; }
+.tc-pop input { height: 22px; border: 1px solid var(--rule); padding: 0 6px; background: var(--page); color: var(--ink); font: inherit; font-size: 12px; outline: 0; }
+.tc-pop input:focus { border-color: var(--rule-strong); }
+.tc-time { width: 76px; text-align: center; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.tc-tag { width: 110px; }
+.tc-tag::placeholder { color: var(--ink-3); }
+.tc-pop.bad .tc-time { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.tc-sws { display: flex; gap: 1px; margin-left: 1px; }
+.tc-sw, .tc-del { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; border-radius: 3px; }
+.tc-sw:hover, .tc-del:hover { background: var(--hover); color: var(--ink); }
+.tc-sw.on { box-shadow: inset 0 0 0 1px var(--ink); }
+.tc-del { margin-left: 2px; }
+.tc-err { display: none; max-width: 300px; padding: 4px 2px 0; font-size: 10px; letter-spacing: .04em; color: var(--ink-2); }
+.tc-pop.bad .tc-err { display: block; }
 .tl-head { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
 .tl-head::before { content: ''; position: absolute; top: 0; left: -3px; border: 3.5px solid transparent; border-top: 4px solid var(--ink); }
 .tl-hover { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); pointer-events: none; }
@@ -516,7 +544,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .wk-k { color: var(--ink-3); text-transform: uppercase; letter-spacing: .14em; font-size: 9px; display: flex; align-items: center; gap: 6px; }
 .wk-notice { border: 1px solid var(--rule-strong); padding: 5px 10px; }
 .wk-flash { color: var(--ink-2); }
-.wk-head { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); }
+.wk-head { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); margin: 0 34px; } /* as wide as the chart under it, between its scales */
 .wk-big { padding: 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; text-align: center; }
 .wk-big .wk-k { justify-content: center; }
 .wk-big + .wk-big { border-left: 1px solid var(--rule); }

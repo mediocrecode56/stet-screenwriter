@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, SEC_PER_PAGE } from '../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, makeTimecode, cleanTag, SEC_PER_PAGE } from '../src/core/timeline.js';
 import { paginate } from '../src/core/layout.js';
 import { newDocument, makeBlock } from '../src/core/model.js';
 import { serialize, deserialize } from '../src/core/serialize.js';
@@ -104,6 +104,26 @@ test('timecodes are saved with the script and come back on their lines', () => {
   doc.timecodes = [];
   assert.ok(!serialize(doc, 'test').includes('timecodes'));
   assert.deepEqual(deserialize(serialize(doc, 'test')).doc.timecodes, []);
+});
+
+test('a timecode keeps its tag and colour, saved with the script, and drops ones that are not', () => {
+  const { doc, blocks } = script(3, 4);
+  assert.equal(cleanTag('  Act   two\n starts '), 'Act two starts');
+  assert.equal(cleanTag('x'.repeat(60)).length, 40);
+  assert.deepEqual(makeTimecode('a', 0, 5, '  ', 'green'), { id: 'a', line: 0, t: 5 }, 'no tag, no colour that is not a highlight one');
+  doc.timecodes = [makeTimecode(blocks[3].id, 1, 70, 'Act two', 'pink'), makeTimecode(blocks[6].id, 0, 125)];
+  const json = serialize(doc, 'test');
+  const back = deserialize(json).doc;
+  assert.deepEqual(back.timecodes, [{ id: back.blocks[3].id, line: 1, t: 70, tag: 'Act two', color: 'pink' }, { id: back.blocks[6].id, line: 0, t: 125 }]);
+  const anchors = anchorsOf(back.timecodes, back.blocks, paginate(back.blocks));
+  assert.equal(anchors[0].tag, 'Act two');
+  assert.equal(anchors[0].color, 'pink');
+  assert.equal(anchors[1].tag, '');
+  // From a file: a colour that isn't one is left out, a tag is tidied.
+  const raw = JSON.parse(json);
+  raw.timecodes[0].c = 'red'; raw.timecodes[0].n = ' Act\ttwo ';
+  const again = deserialize(JSON.stringify(raw)).doc;
+  assert.deepEqual(again.timecodes[0], { id: again.blocks[3].id, line: 1, t: 70, tag: 'Act two' });
 });
 
 test('the pointer is drawn to the nearest mark within reach, and to none further off', () => {

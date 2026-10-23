@@ -7,6 +7,7 @@
 
 import { PAGE } from './format.js';
 import { linesOf, pageOf } from './layout.js';
+import { HIGHLIGHT_COLORS } from './model.js';
 
 export const SEC_PER_PAGE = 60;
 const BODY = PAGE.bodyRows;
@@ -95,7 +96,7 @@ export function anchorsOf(timecodes, blocks, pages) {
   for (const tc of timecodes) {
     const bi = at.get(tc.id);
     if (bi == null) continue;
-    out.push({ x: scriptPos(pages, bi, Math.min(tc.line || 0, linesOf(blocks[bi]).length - 1)), t: tc.t, id: tc.id, line: tc.line || 0 });
+    out.push({ x: scriptPos(pages, bi, Math.min(tc.line || 0, linesOf(blocks[bi]).length - 1)), t: tc.t, id: tc.id, line: tc.line || 0, tag: tc.tag || '', color: tc.color || null });
   }
   out.sort((a, b) => a.x - b.x);
   // Each must come later in the script and later in time than the one before (and the start, 0:00).
@@ -168,12 +169,31 @@ export function minorStep(step, pxPerSec, minPx = 10) {
   return 0;
 }
 
-/** Timecodes as saved: block index, line and seconds; ones whose block is gone are dropped. */
+/** A timecode's tag as kept: one line, at most 40 characters ('' for none). */
+export function cleanTag(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+/** A timecode as kept: { id, line, t } and its tag and colour when it has them. */
+export function makeTimecode(id, line, t, tag = '', color = null) {
+  const tc = { id, line, t };
+  if (cleanTag(tag)) tc.tag = cleanTag(tag);
+  if (HIGHLIGHT_COLORS.includes(color)) tc.color = color;
+  return tc;
+}
+
+/** Timecodes as saved: block index, line and seconds (and n: tag, c: colour); ones whose block is gone are dropped. */
 export function timecodesToJSON(timecodes, blocks) {
   if (!timecodes || !timecodes.length) return null;
   const at = new Map(blocks.map((b, i) => [b.id, i]));
   const out = [];
-  for (const tc of timecodes) if (at.has(tc.id)) out.push({ b: at.get(tc.id), l: tc.line || 0, t: tc.t });
+  for (const tc of timecodes) {
+    if (!at.has(tc.id)) continue;
+    const o = { b: at.get(tc.id), l: tc.line || 0, t: tc.t };
+    if (tc.tag) o.n = tc.tag;
+    if (tc.color) o.c = tc.color;
+    out.push(o);
+  }
   out.sort((a, b) => a.b - b.b || a.l - b.l);
   return out.length ? out : null;
 }
@@ -185,7 +205,7 @@ export function timecodesFromJSON(raw, blocks) {
   for (const x of raw) {
     if (!x || !Number.isInteger(x.b) || x.b < 0 || x.b >= blocks.length) continue;
     if (typeof x.t !== 'number' || !(x.t >= 0) || !Number.isFinite(x.t)) continue;
-    out.push({ id: blocks[x.b].id, line: Number.isInteger(x.l) && x.l >= 0 ? x.l : 0, t: Math.round(x.t) });
+    out.push(makeTimecode(blocks[x.b].id, Number.isInteger(x.l) && x.l >= 0 ? x.l : 0, Math.round(x.t), typeof x.n === 'string' ? x.n : '', x.c));
   }
   return out;
 }

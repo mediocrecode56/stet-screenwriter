@@ -207,18 +207,23 @@ the point pressed (right zooms in, down to about 100 pixels a second; left-right
 cursor); the band (hand cursor; its edges show) moves the window over the script. Moving
 over the bar with Ctrl held (Cmd on a Mac), no click needed, steps a whole second at a time
 from where Ctrl was first held (`fineTime`; at least 8 pixels a second, wider when zoomed in):
-the caret and the window follow, the readout shows the exact second, a right-click there offers
-that second for a timecode, and letting go of Ctrl leaves the caret there. The round button
+the caret and the window follow, the readout shows the exact second, a right-click there pins
+a timecode at that second at once, and letting go of Ctrl leaves the caret there. The round button
 centred on the right, or a double-click on the ruler or the band, shows the whole script.
 The wheel scrolls it and Ctrl+wheel zooms; the grid steps between 1 second and an hour so it
 stays readable, and the ruler is drawn only around the part in view.
 
-The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time,
-as HH:MM:SS, at the start of the line there: between two timecodes the time is spread evenly,
-and after the last one the rest of the script runs at the pace measured up to it (its time
-over its pages), so the length at the right end is the estimate. A timecode has to be later
-than the ones before it and earlier than the ones after; right-click it to change or remove
-it. Timecodes are kept with their line as you edit and saved in the .stet file.
+The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time
+at the start of the line there: between two timecodes the time is spread evenly, and after
+the last one the rest of the script runs at the pace measured up to it (its time over its
+pages), so the length at the right end is the estimate. A right-click on a timecode opens the
+same small editor under the bar (`editTimecode`): the exact time as HH:MM:SS (Up and Down nudge
+it a second, ten with Shift), an optional tag shown beside it on the ruler, one of the
+highlight colours, and a bin to remove it; Enter or a click away keeps it, Esc doesn't. A
+timecode has to be later than the ones before it and earlier than the ones after; the editor
+says so under the time when it isn't. Each timecode is drawn as a faint line the height of the
+bar, in its colour, and draws the pointer like the other marks. Timecodes are kept with their
+line as you edit and saved in the .stet file (with `n`, the tag, and `c`, the colour).
 
 ## English revision (Claude)
 

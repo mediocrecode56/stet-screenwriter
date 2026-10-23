@@ -191,18 +191,31 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   assert.equal(secs, t0 + 10, `80px with Ctrl held is ten seconds on (${read}, from ${t0})`);
   assert.equal(await app.eval('__stet.timeline.drawn'), fit, 'Ctrl steps, it does not zoom');
   const stepped = await app.eval('__stet.editor.caret.b');
+  // A right-click while stepping pins a timecode at that second, at once.
+  const hms = (sec) => [sec / 3600, (sec / 60) % 60, sec % 60].map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
+  await app.eval(`__stet.timeline.inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5, ctrlKey: true }))`);
+  assert.deepEqual(await app.eval('__stet.session.doc.timecodes.map((t) => t.t)'), [t0 + 10], 'Ctrl + right-click pins the second stepped to');
+  assert.equal(await app.eval('!!document.querySelector(".menu, .tc-pop")'), false, 'without a menu or the editor');
   await app.eval(`dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }))`);
   assert.equal(await app.eval('!!__stet.timeline.stepping || document.body.classList.contains("tl-fine")'), false, 'letting go of Ctrl ends it');
   assert.equal(await app.eval('__stet.editor.caret.b'), stepped, 'and the caret stays where it stepped to');
+  // A right-click on a timecode opens its editor, with its time; the bin removes it.
+  await app.eval(`(() => { const t = __stet.timeline, l = document.querySelector('#timeline .tl-tcm').getBoundingClientRect();
+    t.inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: l.left + 2, clientY: l.top + 20 })); })()`);
+  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-time').value`), hms(t0 + 10));
+  await app.eval(`document.querySelector('.tc-pop .tc-del').click()`);
+  assert.equal(await app.eval('__stet.session.doc.timecodes.length + document.querySelectorAll(".tc-pop, #timeline .tl-tcm").length'), 0, 'removed');
   // A timecode at the start of the last page at twice its minutes doubles the pace: the script comes to twice its pages in minutes.
-  const hms = (sec) => [sec / 3600, (sec / 60) % 60, sec % 60].map((n) => String(Math.floor(n)).padStart(2, '0')).join(':');
-  await app.eval(`void __stet.timeline.addTimecode(__stet.view.pages.length - 1)`);
-  await sleep(50);
-  await app.eval(`(() => { const d = document.querySelector('.dlg'); d.querySelector('input').value = '${hms(120 * (r.pages - 1))}'; d.querySelector('.btn.primary').click(); })()`);
-  await sleep(50);
-  assert.equal(await app.eval(`document.querySelector('#timeline .tl-end').textContent`), lbl(120 * r.pages));
-  assert.equal(await app.eval(`document.querySelectorAll('#timeline .tl-tc').length`), 1);
-  assert.match(await app.eval('__stet.session.serialize()'), /"timecodes"/, 'saved with the script');
+  // Typed in the editor, with a tag and a colour; Enter keeps it.
+  await app.eval(`__stet.timeline.editTimecode(__stet.view.pages.length - 1)`);
+  await app.eval(`(() => { const p = document.querySelector('.tc-pop'); p.querySelector('.tc-time').value = '${hms(120 * (r.pages - 1) - 1)}';
+    p.querySelector('.tc-time').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    p.querySelector('.tc-tag').value = 'Act three'; p.querySelector('[aria-label="pink"]').click();
+    p.querySelector('.tc-tag').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+  assert.equal(await app.eval('!!document.querySelector(".tc-pop")'), false, 'Enter closes it');
+  assert.equal(await app.eval(`document.querySelector('#timeline .tl-end').textContent`), lbl(120 * r.pages), 'Up nudged it a second on');
+  assert.equal(await app.eval(`document.querySelector('#timeline .tl-tc.c-pink b').textContent`), 'Act three');
+  assert.match(await app.eval('__stet.session.serialize()'), /"timecodes".*"n":"Act three","c":"pink"/s, 'saved with the script');
   await app.key('Ctrl+Shift+T');
   assert.equal(await app.eval('document.getElementById("timeline").hidden'), true);
 });
