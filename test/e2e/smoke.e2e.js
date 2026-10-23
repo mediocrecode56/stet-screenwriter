@@ -130,10 +130,11 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await sleep(80);
   const r = await app.eval(`(() => { const q = (s) => document.querySelectorAll('#timeline ' + s).length;
     return { hidden: document.getElementById('timeline').hidden, scenes: q('.tl-scene'), notes: q('.tl-note'), pink: q('.tl-hl.hl-pink'),
-      end: document.querySelector('#timeline .tl-len').textContent, pages: __stet.view.pages.length, saved: null }; })()`);
+      end: document.querySelector('#timeline .tl-end').textContent, pages: __stet.view.pages.length, saved: null }; })()`);
   assert.equal(r.hidden, false);
   assert.deepEqual([r.scenes, r.notes, r.pink], [12, 1, 1]);
-  assert.equal(r.end, `00:${String(r.pages).padStart(2, '0')}:00`, 'a minute a page');
+  const lbl = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, p2 = (n) => String(n).padStart(2, '0'); return h ? `${h}:${p2(m)}:${p2(sec % 60)}` : `${m}:${p2(sec % 60)}`; };
+  assert.equal(r.end, lbl(60 * r.pages), 'a minute a page: the length at the end of the ruler');
   // Click the line for scene 9: the caret goes there.
   const click = (sel, i, dx = 0) => app.eval(`(() => { const el = document.querySelectorAll(${JSON.stringify(sel)})[${i}], l = el.getBoundingClientRect();
     el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: l.left + ${dx}, clientY: l.top + 10 }));
@@ -175,7 +176,7 @@ test('the timeline: off at first, Ctrl+Shift+T shows it with each scene, note an
   await sleep(50);
   await app.eval(`(() => { const d = document.querySelector('.dlg'); d.querySelector('input').value = '${hms(120 * (r.pages - 1))}'; d.querySelector('.btn.primary').click(); })()`);
   await sleep(50);
-  assert.equal(await app.eval(`document.querySelector('#timeline .tl-len').textContent`), hms(120 * r.pages));
+  assert.equal(await app.eval(`document.querySelector('#timeline .tl-end').textContent`), lbl(120 * r.pages));
   assert.equal(await app.eval(`document.querySelectorAll('#timeline .tl-tc').length`), 1);
   assert.match(await app.eval('__stet.session.serialize()'), /"timecodes"/, 'saved with the script');
   await app.key('Ctrl+Shift+T');

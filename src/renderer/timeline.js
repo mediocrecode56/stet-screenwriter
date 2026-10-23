@@ -8,7 +8,6 @@ import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, ruler
 import { esc } from './ui/dialog.js';
 import * as dlg from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
-import { MAC, macKeys } from '../core/keys.js';
 
 const PPP_MAX = 600; // most pixels a page
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
@@ -23,11 +22,8 @@ export class Timeline {
     this.drawn = 1; // pixels a page as last painted
     this.bandA = this.bandB = 0; // the part of the script in the window
     this.key = '';
-    host.innerHTML = '<div class="tl-side" title="Estimated length of the script"><span class="tl-len"></span></div>'
-      + '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
-      + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
-      + '<div class="tl-zoom"><button class="tb" data-z="-1" title="Zoom out (Ctrl+wheel)">−</button><button class="tb" data-z="0" title="Show the whole script">FIT</button><button class="tb" data-z="1" title="Zoom in (Ctrl+wheel)">+</button></div>';
-    if (MAC) for (const b of host.querySelectorAll('[title]')) b.title = macKeys(b.title);
+    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
+      + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>';
     this.scroll = host.querySelector('.tl-scroll');
     this.inner = host.querySelector('.tl-inner');
     this.grid = host.querySelector('.tl-grid');
@@ -36,7 +32,6 @@ export class Timeline {
     this.hover = host.querySelector('.tl-hover');
     this.head = host.querySelector('.tl-head');
     this.band = host.querySelector('.tl-view');
-    this.len = host.querySelector('.tl-len');
 
     // One gesture, read the way Ableton reads its arrangement: a click goes there; a drag on the
     // ruler scrolls sideways and zooms up and down; a drag of the band (the part of the script in
@@ -76,8 +71,8 @@ export class Timeline {
       addEventListener('mousemove', move, true);
       addEventListener('mouseup', up, true);
     });
-    // Double-click on the ruler: the whole script, as double-clicking Ableton's ruler shows the whole arrangement.
-    this.inner.addEventListener('dblclick', (e) => { if (this.zone(e) === 'ruler') { this.ppp = 0; this.update(true); } });
+    // Double-click on the ruler or the band: the whole script, as in Ableton.
+    this.inner.addEventListener('dblclick', (e) => { if (this.zone(e) !== 'scrub') { this.ppp = 0; this.update(true); } });
     this.inner.addEventListener('contextmenu', (e) => { e.preventDefault(); this.menu(e); });
     this.inner.addEventListener('mousemove', (e) => { if (!document.body.classList.contains('tl-dragging')) this.showHover(e); });
     this.inner.addEventListener('mouseleave', () => { this.hover.hidden = true; this.band.classList.remove('hot'); });
@@ -86,13 +81,6 @@ export class Timeline {
       if (e.ctrlKey || e.metaKey) this.zoom(e.deltaY < 0 ? 1.25 : 0.8, e.clientX);
       else this.scroll.scrollLeft += e.deltaX || e.deltaY;
     }, { passive: false });
-    host.querySelector('.tl-zoom').addEventListener('mousedown', (e) => {
-      const b = e.target.closest('[data-z]');
-      if (!b) return;
-      e.preventDefault();
-      const z = +b.dataset.z;
-      if (z) this.zoom(z > 0 ? 1.5 : 1 / 1.5); else { this.ppp = 0; this.update(true); }
-    });
     new ResizeObserver(() => { if (this.visible) this.update(true); }).observe(host);
   }
 
@@ -216,7 +204,6 @@ export class Timeline {
     const anchors = this.anchors();
     const time = this.time = timeScale(anchors);
     const total = time.at(len);
-    this.len.textContent = formatTime(total);
 
     // The ruler: a label every so often, well apart; the grid (a faint line at each, shown while
     // the pointer is on the bar) carries the finer steps.
@@ -229,22 +216,18 @@ export class Timeline {
       const major = Math.round(t) % step === 0;
       if (t) grid += `<i${major ? ' class="mj"' : ''} style="left:${x}px"></i>`;
       // A pinned timecode is labelled in its own place; the regular labels give way around it.
-      if (major && x <= len * s - 40 && !anchors.some((a) => x > a.x * s - 52 && x < a.x * s + 64)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
+      if (major && x <= len * s - 70 && !anchors.some((a) => x > a.x * s - 52 && x < a.x * s + 64)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
     }
+    // The end of the script: its estimated length.
+    ruler += `<span class="tl-lb tl-end" style="left:${len * s}px">${rulerLabel(total)}</span>`;
     for (const a of anchors) ruler += `<span class="tl-lb tl-tc" style="left:${a.x * s}px" title="Timecode, pinned (right-click to change)">${rulerLabel(a.t)}</span>`;
     this.ruler.innerHTML = ruler;
     this.grid.innerHTML = grid;
 
-    // The script as a line, coloured where it is highlighted; a quiet tick for each scene, numbered
-    // (while the pointer is on the bar) only when every number fits; the notes under the line.
+    // The script as a line, coloured where it is highlighted; a quiet tick for each scene; the notes under the line.
     let m = `<div class="tl-line" style="width:${len * s}px"></div>`;
     for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
-    let room = Infinity;
-    for (let i = 1; i < tl.scenes.length; i++) room = Math.min(room, (tl.scenes[i].x - tl.scenes[i - 1].x) * s);
-    const numbered = room >= 34;
-    tl.scenes.forEach((sc, i) => {
-      m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px">${numbered ? `<span>${i + 1}</span>` : ''}</div>`;
-    });
+    for (const sc of tl.scenes) m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px"></div>`;
     for (const n of tl.notes) {
       const text = (this.session.doc.comments[n.id] || {}).text || 'Note';
       m += `<div class="tl-note" data-id="${esc(n.id)}" data-b="${n.b}" data-s="${n.s}" data-e="${n.e}" style="left:${n.x * s}px" title="${esc(text.slice(0, 200))}">${NOTE_ICON}</div>`;
@@ -252,21 +235,16 @@ export class Timeline {
     this.marks.innerHTML = m;
   }
 
-  /** The line under the pointer, with its page, time and scene; on the ruler, what dragging it does. */
+  /** The time and scene under the pointer. */
   showHover(e) {
     if (!this.time) return;
     const where = this.zone(e);
     const x = this.posAt(e.clientX);
     this.band.classList.toggle('hot', where === 'band');
     this.inner.dataset.zone = where;
-    let text;
-    if (where === 'ruler') text = '↔ SCROLL   ↕ ZOOM   DOUBLE-CLICK: ALL';
-    else {
-      let sc = -1;
-      for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
-      const scene = sc >= 0 ? `   ${sc + 1}  ${this.tl.scenes[sc].text || 'SCENE'}` : '';
-      text = `${formatTime(this.time.at(x))}   P. ${Math.min(this.length, Math.floor(x) + 1)}${scene}`;
-    }
+    let sc = -1;
+    for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
+    const text = formatTime(this.time.at(x)) + (sc >= 0 ? '   ' + (this.tl.scenes[sc].text || 'SCENE') : '');
     this.hover.hidden = false;
     this.hover.style.left = x * this.drawn + 'px';
     this.hover.firstChild.textContent = text;

@@ -219,13 +219,11 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 
 /* ---- timeline (View > Timeline) ----------------------------------------
    Calm at rest: the script line (coloured only where highlighted), quiet scene ticks, the notes
-   and a sparse time ruler. Detail comes in while the pointer is on the bar: the grid, scene
-   numbers, the zoom buttons and a readout of the time, page and scene under it.
-   Rows: scene numbers 3-13, ticks 13-19, the line at 19, notes 25-33, ruler 34-48. */
+   and a sparse time ruler ending in the script's length. While the pointer is on the bar: the
+   grid and the time and scene under it. Nothing explains itself; the cursors say what a drag does.
+   Rows: ticks 13-19, the line at 19, notes 25-33, ruler 34-48. */
 #timeline { position: relative; flex: none; height: 48px; display: flex; border-bottom: 1px solid var(--rule); background: var(--bar); color: var(--ink-3); }
 #timeline[hidden] { display: none; }
-.tl-side { flex: none; width: 84px; display: flex; align-items: center; padding: 0 0 0 12px; }
-.tl-len { font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
 .tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .tl-scroll::-webkit-scrollbar { display: none; }
 .tl-inner { position: relative; height: 100%; margin: 0 14px; cursor: pointer; }
@@ -245,25 +243,20 @@ body.tl-drag-scrub, body.tl-drag-scrub * { cursor: ew-resize !important; }
 .tl-hl { position: absolute; top: 17px; height: 6px; border-radius: 1px; }
 .tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }
 .tl-scene { position: absolute; top: 13px; height: 6px; width: 1px; background: var(--ink-3); }
-.tl-scene::before { content: ''; position: absolute; top: -10px; bottom: -3px; left: -4px; right: -4px; } /* easy to hit */
-.tl-scene span { position: absolute; top: -11px; left: 0; transform: translateX(-50%); font-size: 9px; line-height: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; pointer-events: none; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
-#timeline:hover .tl-scene span { opacity: 1; }
+.tl-scene::before { content: ''; position: absolute; top: -6px; bottom: -3px; left: -4px; right: -4px; } /* easy to hit */
 .tl-scene:hover { background: var(--ink); }
-.tl-scene:hover span { color: var(--ink); }
 .tl-note { position: absolute; top: 25px; margin-left: -1px; color: var(--ink-3); line-height: 0; }
 .tl-note:hover { color: var(--ink); }
 .tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 15px; }
 .tl-lb { position: absolute; top: 2px; padding-left: 4px; border-left: 1px solid var(--rule); font-size: 9px; line-height: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
+.tl-lb.tl-end { border-left: 0; border-right: 1px solid var(--rule); padding: 0 4px 0 0; transform: translateX(-100%); color: var(--ink-2); }
 .tl-lb.tl-tc { color: var(--ink); border-left-color: var(--ink); padding-left: 9px; }
 .tl-tc::before { content: ''; position: absolute; left: 2px; top: 3px; width: 4px; height: 4px; background: var(--ink); transform: rotate(45deg); } /* pinned */
 .tl-head { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
 .tl-head::before { content: ''; position: absolute; top: 0; left: -3px; border: 3.5px solid transparent; border-top: 4px solid var(--ink); }
 .tl-hover { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); pointer-events: none; }
-.tl-hover span { position: absolute; bottom: 1px; left: 4px; padding: 1px 6px; font-size: 9px; line-height: 12px; letter-spacing: .06em; white-space: pre; background: var(--inv-bg); color: var(--inv-fg); font-variant-numeric: tabular-nums; }
+.tl-hover span { position: absolute; bottom: 1px; left: 4px; padding: 0 5px; font-size: 9px; line-height: 13px; letter-spacing: .06em; white-space: pre; background: var(--bar); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); font-variant-numeric: tabular-nums; }
 .tl-hover.flip span { left: auto; right: 4px; }
-.tl-zoom { flex: none; display: flex; align-items: center; padding: 0 4px; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
-#timeline:hover .tl-zoom { opacity: 1; }
-.tl-zoom .tb { height: 22px; padding: 0 7px; font-size: 10px; }
 
 /* ---- main area ------------------------------------------------------- */
 #main { flex: 1; display: flex; min-height: 0; overflow: hidden; }

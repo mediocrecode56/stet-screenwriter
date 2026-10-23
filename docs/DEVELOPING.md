@@ -195,19 +195,18 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 *View → Timeline* (Ctrl+Shift+T; off until turned on, and remembered) is a strip under the
 toolbar with the whole script from left to right, a page to a unit, like a track in a
 sequencer (`src/core/timeline.js` for the arithmetic, `src/renderer/timeline.js` for the bar).
-The bar stays quiet until the pointer is on it. At rest it shows the script as a white line
-(grey in light mode), coloured where passages are highlighted, a small tick for each scene, an
-icon for each note, a time label every so often, the caret (the line with a cap), a soft band
-for the part of the script in the window, and the estimated length at the left. Hovering adds
-the grid, the scene numbers (when zoomed in enough for all of them to fit), the zoom buttons
-and a readout of the time, page and scene under the pointer. Clicking goes to the line drawn
-there (a scene tick to its heading, a note to its passage, with the note open). Dragging
-works the way Ableton Live's arrangement does: on the ruler, sideways scrolls and up and down
-zooms (down zooms in), and a double-click shows the whole script; dragging the band (it shows
-its edges under the pointer, like Ableton's overview outline) moves the window over the
-script; dragging anywhere else scrubs, the caret and the page following the pointer. The
-wheel scrolls it; Ctrl+wheel or **−** / **+** zoom too (the grid steps between 1 second and
-an hour so it stays readable), and **FIT** shows it all.
+The bar stays quiet and explains nothing in words: the cursor says what a drag will do. It
+shows the script as a white line (grey in light mode), coloured where passages are
+highlighted, a small tick for each scene, an icon for each note, a time ruler that ends in the
+estimated length, the caret (the line with a cap) and a soft band for the part of the script
+in the window. With the pointer on it, the grid comes in and a small readout gives the time
+and scene under the pointer. Clicking goes to the line drawn there (a scene tick to its
+heading, a note to its passage, with the note open). Dragging works the way Ableton Live's
+arrangement does: on the ruler (magnifier cursor), sideways scrolls and up and down zooms
+(down zooms in); the band (hand cursor; its edges show) moves the window over the script;
+anywhere else scrubs, the caret and the page following the pointer. A double-click on the
+ruler or the band shows the whole script. The wheel scrolls it and Ctrl+wheel zooms; the grid
+steps between 1 second and an hour so it stays readable.
 
 The ruler under it counts a minute a page. Right-click → *Add Timecode Here…* pins the time,
 as HH:MM:SS, at the start of the line there: between two timecodes the time is spread evenly,
