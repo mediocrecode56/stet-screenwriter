@@ -163,17 +163,12 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   const s10 = await app.rect('#timeline .tl-scene', 9);
   await app.until(async () => { const c = await app.rect('#timeline .tl-cur'); return Math.abs(c.left - s9.left) < 1 && Math.abs(c.right - s10.left) < 1; }, { what: 'the stretch of scene 9' });
   assert.equal(await app.eval(`(() => { const h = document.querySelector('#timeline .tl-head').getBoundingClientRect(), c = getComputedStyle(document.querySelector('#timeline .tl-head'), '::before'); return h.left + h.width / 2 - (h.left + parseFloat(c.left) + (parseFloat(c.width) + parseFloat(c.borderLeftWidth) + parseFloat(c.borderRightWidth)) / 2); })()`), 0, 'the cap centred on the line');
-  // A scene already inside the band: it glides to the middle of the window, and of the band.
-  const inside = await tl(`t.tl.scenes.findIndex((s, i) => i > 8 && s.x > t.bandA + 0.02 && s.x < t.bandB - 0.02)`);
-  assert.ok(inside > 8, 'a later scene in the window');
-  const si = await app.rect('#timeline .tl-scene', inside);
-  await app.click(si.left + 1, si.top + 6);
-  await app.until(`!__stet.view.glide`, { what: 'the glide' });
-  const sc0 = await app.eval('__stet.view.scroller.clientHeight');
-  const mid = await app.eval(`(() => { const v = __stet.view, r = v.caretRect(), sc = v.scroller; return { off: r.y + r.h / 2 - sc.scrollTop - sc.clientHeight / 2, max: sc.scrollHeight - sc.clientHeight - sc.scrollTop }; })()`);
-  assert.ok(Math.abs(mid.off) < sc0 / 3 || mid.max < 2, `well inside the window (${mid.off.toFixed(1)} px from its middle)`);
-  const band = await tl('[t.bandA, t.bandB, t.tl.scenes[' + inside + '].at]');
-  assert.ok(Math.abs((band[0] + band[1]) / 2 - band[2]) < 0.01, `and of the band (${band.map((x) => x.toFixed(3))})`);
+  // A click inside the band (whatever the window's height): that line glides to the middle of the band.
+  const view = await app.rect('#timeline .tl-view');
+  await app.click(view.left + view.width * 0.6, view.top + 8);
+  await app.until('!__stet.view.glide', { what: 'the glide' });
+  const band = await tl('[t.bandA, t.bandB, t.head.offsetLeft / t.drawn]');
+  assert.ok(Math.abs((band[0] + band[1]) / 2 - band[2] - 0.5 / 54) < 0.005 || band[0] === 0, `in the middle of the band (${band.map((x) => x.toFixed(3))})`);
   // The cursor says what a press does: drawn to a mark, on the ruler too, it is a click on it, not a zoom.
   const note = await app.rect('#timeline .tl-note');
   const bar0 = await app.rect('#timeline .tl-inner');

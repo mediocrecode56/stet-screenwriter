@@ -144,13 +144,13 @@ export class Timeline {
   /** Go to the line at position x: one in the window glides to its middle (and the band's), one
    *  outside it to the top, where the band then begins. */
   go(x) {
-    const p = this.lineStart(x);
-    if (p) this.jump(p, false, null, this.glideFor(x));
+    const { bi, line } = placeAt(this.view.pages, x), p = this.lineStart(x);
+    if (p) this.jump(p, false, null, this.glideFor(x, scriptPos(this.view.pages, bi, line) + 0.5 / 54)); // (the middle of that line)
   }
 
   /** How the script glides to position x (view.glideTo): to the middle of the band when x is in the
    *  window already (the middle of the window too, but where a page break is in view), else to the top. */
-  glideFor(x) { return x >= this.bandA - 1e-6 && x <= this.bandB + 1e-6 ? { y: () => this.centreTop(x) } : 'top'; }
+  glideFor(x, centre = x) { return x >= this.bandA - 1e-6 && x <= this.bandB + 1e-6 ? { y: () => this.centreTop(centre) } : 'top'; }
 
   /** The scroll position that puts position x in the middle of the band, as near as the ends allow. */
   centreTop(x) {
