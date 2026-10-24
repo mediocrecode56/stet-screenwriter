@@ -42,7 +42,8 @@ It formats as you type, saves as you go, and stays out of your way.</p>
 naps when you're idle, livens up when you write, reacts when you click it, watches the weather
 roll by, and grows a pixel with every milestone of your streak. It has no shame either: now and
 then it scratches its back in the dust, struts about, burps after a snack or photobombs a palm
-tree. Some days it crumples up a page of its own and tosses it over its shoulder, laps at a
+tree. Mice, lizards and bunnies dart out of the grass that grows while you're away (it chases them,
+never with any luck), and after a very long break rarer plants come up. Some days it crumples up a page of its own and tosses it over its shoulder, laps at a
 puddle after the rain, or settles down with a stick to chew. You can hide it from the View menu.
 
 **A second pair of eyes (optional).** If you use Claude, it can read your dialogue and action and
@@ -93,7 +94,8 @@ a Mac, its own). Only obvious slips are marked, with a thin pale red underline: 
 words and scene headings are left alone. Right-click a marked word for the fix, or to add it to
 your dictionary or ignore it in this script; STET remembers both (Tools > Dictionary & Ignored
 lists them). With **Auto** on, the same slips are corrected as you press Space, and Ctrl+Z
-takes a correction back.
+takes a correction back. No dictionary on your computer? **Install Dictionary** in the same menu
+downloads one in the background (and **Add a Language** any other), with a notice when it's ready.
 
 ## The timeline
 
@@ -111,6 +113,9 @@ line with the cap is where you're typing. **Ctrl+Shift+T** shows or hides it.
   spreads the time between them. **Right-click a scene** to give it its own timecode, shown beside
   its heading; right-click anywhere else to add one there; click one to change it. The **check**
   (or Enter) keeps it and the **bin** removes it; click away and nothing changes.
+- The **scene list** (Ctrl+\\) shows each scene at its time; right-click a scene there for its
+  timecode too. Drag the inner edge of the scene list, the notes or the revision panel to widen it;
+  the **lock** beside REVISE keeps them as they are.
 - Scenes, notes and highlights sit on **whole seconds**, never between two.
 - **Hold Ctrl** (**Cmd** on a Mac) over the strip to step through the script a second at a time.
   Only the script moves: the pointer stays put and your caret stays where it was, so nothing else

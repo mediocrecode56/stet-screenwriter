@@ -28,12 +28,14 @@ src/
     store.js       settings JSON store;  statsstore.js  the saved statistics (backups, upgrades, reset)
     pdf-worker.js  worker thread: JSON -> pages -> PDF bytes
     spell.js       the dictionaries installed on the computer;  spell-worker.js  the worker thread that checks words
+    dictinstall.js a dictionary downloaded when none is installed (several sources, each checked)
   renderer/    sandboxed UI (no Node access)
     app.js         composition root, commands, document operations
     view.js        virtualised page renderer, caret/selection overlays, hit testing, zoom
     input.js       keyboard, mouse, clipboard, IME
     session.js     save / autosave / recovery / backup orchestration
     spelling.js    spelling: underlines, the right-click fixes, Auto, the toolbar menu
+    ui/resize.js   side panels widened by dragging their inner edge (the lock beside REVISE)
     dino.js        the writing companion: behaviour engine and canvas;  dino-acts.js  its repertoire;  dino-art.js  its pixel art
     ui/            menus + palette (one command registry), dialogs, panels, find bar
   preload.cjs  whitelisted IPC bridge
@@ -229,7 +231,7 @@ class, restarts the polls and refreshes the goal and theme; the deep wake-up fol
 as before.
 
 The pixel art (`dino-art.js`: frames, props, glyphs as character grids) and
-the repertoire (`dino-acts.js`: 93 activities and 105 reactions, generator
+the repertoire (`dino-acts.js`: 94 activities and 105 reactions, generator
 functions yielding short steps of ≤ 1.5 s) are data for the engine in
 `dino.js`. `Critter` is the behaviour engine, pure and simulated in tests for
 hours at a time: props with a little physics, a drifting mood and a memory of
@@ -358,6 +360,17 @@ answers, and recomputes the underlines from them on every edit or caret move
 to the dictionary are the same list Claude's revision uses
 (`settings.dictionary`), and the words ignored are kept with the script in
 `doc.revision.ignored` (category `spelling`), so Tools > Dictionary & Ignored
-lists both. The tests use a small dictionary of their own
+lists both. With none installed, `src/main/dictinstall.js` downloads one into STET's own
+folder (`userData/dictionaries`, no administrator rights) in the background, for
+the computer's language or one chosen from Add a Language. No single link is
+relied on: it looks at LibreOffice's dictionaries through GitHub's listing of the
+repository, the npm `dictionary-*` packages through jsDelivr's file listing (the
+version pinned), unpkg, and LibreOffice's usual file paths, in that order; every
+download must parse as a Hunspell dictionary (not an error page, not tiny) before
+it is kept, written beside and renamed into place. A source that is down, moved
+or renamed falls through to the next. `STET_DICT_SOURCES` replaces the sources
+in the tests with their own server.
+
+The tests use a small dictionary of their own
 (`test/fixtures/hunspell`, via `STET_DICT_DIRS` and `STET_DICT_ONLY`), the same
 on every machine.

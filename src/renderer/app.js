@@ -21,6 +21,7 @@ import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
 import { Spelling } from './spelling.js';
 import { toast } from './ui/toast.js';
+import { resizable } from './ui/resize.js';
 import { Timeline } from './timeline.js';
 import { launchOrder } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
@@ -74,7 +75,11 @@ const jump = (p, center = false, end = null, glide = false) => {
   input.placeTextarea();
 };
 
-const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), { editor, view, jump: (p) => jumpScene(p.b) });
+const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), {
+  editor, view, jump: (p) => jumpScene(p.b),
+  times: () => timeline.sceneTimes(), // each scene's time, as the timeline has it
+  editTime: (b, box) => timeline.editScene(b, box),
+});
 const notes = new NotesPanel($('right'), $('notes'), $('note-count'), { editor, view, session, jump, onChange: () => session.touch() });
 const find = new FindBar({ editor, view, jump, focusEditor: () => input.focus() });
 
@@ -92,7 +97,7 @@ const spelling = new Spelling({
   setSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
   after: () => { input.after(); input.focus(); },
   onState: () => renderSpelling(),
-  notify: (text, detail) => { const t = toast(text, detail ? 6000 : 3500); if (detail) t.title = detail; },
+  notify: (text) => toast(text, 5000),
 });
 input.onSpace = () => spelling.spaced();
 view.scroller.addEventListener('contextmenu', (e) => spelling.contextMenu(e));
@@ -102,6 +107,7 @@ const timeline = new Timeline($('timeline'), {
   openNote: (id, b, s, e) => { jump(pos(b, s), true, pos(b, e), true); view.activeComment = id; openNote(id); view.invalidate(); },
   onToggle: (on) => api.invoke('settings:set', { timeline: on }),
   lockPointer: () => api.invoke('pointer:lock'),
+  onTimecodes: () => scenes.refresh(),
 });
 
 view.onTitleInput = () => session.touch();
@@ -143,6 +149,7 @@ function onDocLoaded(s) {
   view.refreshTitleFields();
   view.activeComment = null;
   view.invalidate();
+  view.stopGlide(); // (a glide still running in the last script would carry this one off)
   view.scroller.scrollTop = 0;
   describeDoc();
   lastRev = editor.rev;
@@ -529,6 +536,29 @@ tbClick('btn-comment', 'note-add');
 tbClick('btn-scenes', 'panel-scenes');
 tbClick('btn-notes', 'panel-notes');
 tbClick('btn-rev', 'revise-panel');
+
+// The side panels widen by dragging their inner edge (up to twice their usual width); the lock beside
+// REVISE keeps them as they are. Their widths are kept, and the page re-centres as they change.
+const LOCK = (shut) => `<svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="5.5" width="8" height="6" rx="1" fill="currentColor"/><path d="M2.8 5.5V3.6a2.2 2.2 0 0 1 4.4 0${shut ? 'V5.5' : 'V3'}" fill="none" stroke="currentColor" stroke-width="1.3" ${shut ? '' : 'transform="translate(2.6 -1)"'}/></svg>`;
+function renderLock() {
+  const on = !!settings.panelsLocked, b = $('btn-lock');
+  b.innerHTML = LOCK(on);
+  b.classList.toggle('locked', on);
+  b.setAttribute('aria-pressed', String(on));
+  b.title = on ? 'Side panel sizes locked (click to unlock)' : 'Lock the side panel sizes (drag a panel\'s edge to widen it)';
+  b.setAttribute('aria-label', on ? 'Unlock side panel sizes' : 'Lock side panel sizes');
+}
+$('btn-lock').addEventListener('mousedown', (e) => e.preventDefault()); // the script keeps the keyboard
+$('btn-lock').addEventListener('click', async () => { settings = await api.invoke('settings:set', { panelsLocked: !settings.panelsLocked }); renderLock(); });
+renderLock();
+for (const [id, edge, base] of [['left', 'right', 260], ['right', 'left', 300], ['rev', 'left', 360]]) {
+  const r = resizable($(id), {
+    edge, base, locked: () => !!settings.panelsLocked,
+    onDone: (w) => { api.invoke('settings:set', { panelWidths: { [id]: Math.round(w) } }).then((s) => { settings = s; }); },
+  });
+  const w = settings.panelWidths?.[id];
+  if (w) r.set(w);
+}
 tbClick('th-light', 'theme-light');
 tbClick('th-dark', 'theme-dark');
 tbClick('th-auto', 'theme-auto');

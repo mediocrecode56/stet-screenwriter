@@ -8,6 +8,7 @@ import { lineIndexOf } from '../../core/nav.js';
 import { pos } from '../../core/editor.js';
 import { esc } from './dialog.js';
 import { keyText } from './commands.js';
+import { rulerLabel } from '../../core/timeline.js';
 
 // Scroll a panel's list (only the list) so a row is in view. scrollIntoView would also scroll the
 // panel's own frame, which is offscreen while it slides in, and break the slide.
@@ -22,16 +23,25 @@ function idle(fn) {
 }
 
 export class ScenePanel {
-  constructor(host, list, count, { editor, view, jump }) {
+  constructor(host, list, count, { editor, view, jump, times, editTime }) {
     this.host = host; this.list = list; this.count = count;
     this.ed = editor; this.view = view; this.jump = jump;
+    this.times = times; // each scene's time on the timeline: () => (b) => { t, pinned }
+    this.editTime = editTime;
     this.pending = false;
     this.lastKey = '';
     list.addEventListener('mousedown', (e) => {
       const r = e.target.closest('.row');
       if (!r) return;
       e.preventDefault();
-      this.jump(pos(+r.dataset.b, 0), true);
+      if (e.button === 0) this.jump(pos(+r.dataset.b, 0), true); // (a right-click is for its timecode)
+    });
+    // A right-click on a scene: its own timecode, as on the timeline.
+    list.addEventListener('contextmenu', (e) => {
+      const r = e.target.closest('.row');
+      if (!r) return;
+      e.preventDefault();
+      this.editTime(+r.dataset.b, r.getBoundingClientRect());
     });
   }
 
@@ -49,15 +59,16 @@ export class ScenePanel {
     const cur = this.ed.caret.b;
     let curIdx = -1;
     for (let i = 0; i < scenes.length; i++) if (scenes[i].b <= cur) curIdx = i;
-    const key = scenes.map((s) => s.b + s.text).join('|') + '#' + curIdx + '#' + pages.length;
+    const at = this.times(), tms = scenes.map((s) => at(s.b));
+    const key = scenes.map((s, i) => s.b + s.text + '@' + tms[i].t + (tms[i].pinned ? '*' : '')).join('|') + '#' + curIdx + '#' + pages.length;
     if (key === this.lastKey) return;
     this.lastKey = key;
     this.count.textContent = scenes.length ? `· ${scenes.length}` : '';
     if (!scenes.length) { this.list.innerHTML = `<div class="empty">No scene headings yet. ${keyText('type-scene') || 'Scene Heading in the Element menu'} starts one.</div>`; return; }
     let h = '';
     scenes.forEach((s, i) => {
-      const pg = pageOf(pages, s.b, 0) + 1;
-      h += `<div class="row${i === curIdx ? ' cur' : ''}" data-b="${s.b}"><span class="n">${i + 1}</span><span class="t">${esc(s.text || '—')}</span><span class="p">${pg}</span></div>`;
+      const pg = pageOf(pages, s.b, 0) + 1, tm = tms[i];
+      h += `<div class="row${i === curIdx ? ' cur' : ''}" data-b="${s.b}" title="Scene ${i + 1}${tm.pinned ? ' · timecode pinned' : ''} (right-click for its timecode)"><span class="n${tm.pinned ? ' pin' : ''}">${rulerLabel(tm.t)}</span><span class="t">${esc(s.text || '—')}</span><span class="p">${pg}</span></div>`;
     });
     this.list.innerHTML = h;
     const c = this.list.querySelector('.cur');

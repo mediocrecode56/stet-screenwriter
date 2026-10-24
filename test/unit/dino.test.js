@@ -10,6 +10,8 @@ import { FACE, HEADS, spriteEdges } from '../../src/renderer/dino-art.js';
 import { GROW_FULL, seeded, make, wide, run, inView, doing, until, world, walksNotSlides, MINUTE, writer, chosen } from '../helpers/dino-sim.js';
 
 const { FRAMES, PROPS, W, H, ACTIVITIES, REACTIONS, BASELINE_0_8 } = _test;
+import { CRITTERS } from '../../src/renderer/dino-acts.js';
+const LUSH_KINDS = ['fern', 'bloom', 'reed'];
 
 test('every frame and prop is a full grid of known pixels', () => {
   for (const [name, rows] of Object.entries(FRAMES)) {
@@ -627,4 +629,51 @@ test('clicks are answered quietly and from where it is: few leaps when settled, 
   const lying = doing('daydream', 13);
   run(lying, 3000, { from: lying.now + 50, dt: 50 });
   assert.ok(share(answers(lying), ['glance', 'smile', 'ack', 'tilt']) > 0.2, 'a look round from where it lies');
+});
+
+test('something small darts out of the grass now and then; it gives chase, never catches it, and nothing is left behind', () => {
+  const plain = world(660);
+  assert.ok(!chosen(plain, 4000, 1e9, (d) => { d.lastEnv = {}; }).critter, 'no grass, no critters');
+  const kinds = new Set();
+  let chases = 0;
+  for (let seed = 0; seed < 10; seed++) {
+    const d = doing('look', 661 + seed, (c) => { for (const off of [-140, 120, 200]) c.spawn('grass', { x: c.clampProp(c.center() + off, 7), frame: 2, tuft: true, life: 1e9 }); });
+    if (seed === 0) assert.ok(chosen(d, 4000, 1e9, (c) => { c.lastEnv = {}; }).critter > 0, 'with grass about, now and then');
+    d.pending = 'critter'; d.gen = null; d.step = null;
+    let closest = Infinity, ran = false;
+    until(d, () => d.recent.includes('critter') && d.activity !== 'critter', 60000, 'the critter', () => {
+      for (const p of d.props) if (p.kind in CRITTERS) { kinds.add(p.kind); closest = Math.min(closest, Math.abs(d.propCenter(p) - d.center())); }
+      if (d.activity === 'critter' && /^run/.test(d.frame)) ran = true;
+      walksNotSlides(d); inView(d);
+    });
+    if (ran) chases++;
+    assert.ok(closest > d.dw * 0.35, `never caught (${closest.toFixed(1)} px at the closest)`);
+    assert.equal(d.tufts().length, 3, 'the grass where it was');
+    run(d, 30000, { from: d.now + 50, each: () => { d.pending = d.pending || 'look'; } });
+    assert.ok(!d.props.some((p) => p.kind in CRITTERS), 'gone: into the grass or off the strip');
+  }
+  assert.ok(chases >= 2 && kinds.size >= 2, `chases ${chases}, kinds ${[...kinds]}`);
+});
+
+test('a very long sleep: rarer plants come up slowly, and wither away a stage at a time once writing starts again', () => {
+  const c = world(670);
+  run(c, 30000, { dt: 100 });
+  c.setFocus(false, c.now);
+  const away = c.now;
+  run(c, c.T.lushAfter - 60000, { from: c.now, dt: 2000 });
+  assert.ok(!c.props.some((p) => p.lush), 'nothing before a long while');
+  run(c, 30 * MINUTE, { from: c.now, dt: 2000 });
+  const lush = c.props.filter((p) => p.lush);
+  assert.ok(c.deep && lush.length >= 1 && lush.length <= c.T.lushMax, `${lush.length} after ${Math.round((c.now - away) / MINUTE)} minutes`);
+  assert.ok(lush.every((p) => p.born >= away + c.T.lushAfter && LUSH_KINDS.includes(p.kind)));
+  assert.ok(lush.some((p) => p.frame >= 1), 'growing');
+  // Back, and writing: each withers back a stage at a time, and is gone within moments.
+  c.setFocus(true, c.now);
+  run(c, 3000, { from: c.now, dt: 100 });
+  assert.equal(c.props.filter((p) => p.lush).length, lush.length, 'still there until writing starts');
+  c.wrote(5, c.now);
+  const frames = new Map(lush.map((p) => [p, [p.frame]]));
+  run(c, 30000, { from: c.now, dt: 100, each: () => { for (const p of lush) if (c.has(p) && frames.get(p).at(-1) !== p.frame) frames.get(p).push(p.frame); } });
+  assert.ok(!c.props.some((p) => p.lush), 'all gone');
+  for (const f of frames.values()) assert.ok(f.every((x, i) => i === 0 || x === f[i - 1] - 1), `a stage at a time (${f})`);
 });

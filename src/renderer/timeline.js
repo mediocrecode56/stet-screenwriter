@@ -17,7 +17,7 @@ const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a pa
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
 const FINE_PX = 12; // fewest pixels of mouse travel a second while stepping
-const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.6 5.2A5 5 0 1 1 2 7.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M1.2 1.8v4h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.6 3.6A3.4 3.4 0 1 0 9.4 6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M9.7 2.2v2.2H7.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.3 8.3l3.9 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'; // zoom reset: a magnifier, its lens a turning arrow
 const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.4l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const NOTE_ICON = '<svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0.5 0.5h8v5.5H4L1.8 8.2V6H0.5z" fill="currentColor"/></svg>';
@@ -26,8 +26,9 @@ const mod = (e) => (MAC ? e.metaKey : e.ctrlKey);
 const isMod = (key) => key === (MAC ? 'Meta' : 'Control');
 
 export class Timeline {
-  constructor(host, { editor, view, session, jump, openNote, onToggle, lockPointer }) {
+  constructor(host, { editor, view, session, jump, openNote, onToggle, lockPointer, onTimecodes }) {
     this.host = host;
+    this.onTimecodes = onTimecodes; // the scene list shows them too
     this.ed = editor; this.view = view; this.session = session;
     this.jump = jump; this.openNote = openNote; this.onToggle = onToggle; this.lockPointer = lockPointer;
     this.ppp = 0; // pixels a page; 0 fits the whole script in the bar
@@ -601,6 +602,7 @@ export class Timeline {
     this.session.touch();
     this.update(true);
     this.view.schedule(); // the scenes' timecodes beside their headings
+    this.onTimecodes?.();
   }
 
   /** The line a timecode at x (or at { id, line }) is pinned to: { b, bi, line, here }. */
@@ -645,15 +647,16 @@ export class Timeline {
    *  time (Up and Down nudge it a second, ten with Shift), an optional tag and a colour; a scene's
    *  own names the scene. Only the check (or Enter) keeps it; the bin removes it, or drops a new one;
    *  Esc or a click away leaves everything as it was, so a new one not confirmed is never made.
-   *  Offers t0, or the whole second there now; shows `err` at once. */
-  editTimecode(x, existing = null, t0 = null, err = '') {
+   *  Offers t0, or the whole second there now; shows `err` at once. Opens under the bar, or under
+   *  `under` (a box: the scene list's row) with the same logic. */
+  editTimecode(x, existing = null, t0 = null, err = '', under = null) {
     this.closeEditor();
     this.endStep();
     const at = this.lineAt(x, existing);
     if (!at) return;
     const old = this.tcs().find((tc) => tc.id === at.b.id && tc.line === at.line);
     let color = old ? old.color || null : null;
-    const time = h('input', { class: 'tc-time', value: formatTime(t0 ?? (old ? old.t : this.time ? Math.round(this.time.at(at.here)) : at.here * 60)), spellcheck: false, 'aria-label': 'Time (HH:MM:SS)' });
+    const time = h('input', { class: 'tc-time', value: formatTime(t0 ?? (old ? old.t : Math.round(this.timeAt(at.here)))), spellcheck: false, 'aria-label': 'Time (HH:MM:SS)' });
     const tag = h('input', { class: 'tc-tag', value: old && old.tag || '', placeholder: 'Tag', maxlength: 40, spellcheck: false, 'aria-label': 'Tag (optional)' });
     const sws = [null, ...HIGHLIGHT_COLORS].map((c) => h('button', { class: 'tc-sw' + (c === color ? ' on' : ''), title: c ? `Mark ${c}` : 'No colour', 'aria-label': c || 'none', onmousedown: (e) => e.preventDefault(), onclick: () => { color = c; sws.forEach((b, i) => b.classList.toggle('on', i === [null, ...HIGHLIGHT_COLORS].indexOf(c))); } }, h('span', { class: 'sw ' + (c || 'none') })));
     const msg = h('div', { class: 'tc-err' });
@@ -692,12 +695,12 @@ export class Timeline {
     const away = (e) => { if (!pop.contains(e.target)) this.closeEditor(); };
     document.body.appendChild(pop);
     // Zoomed in, the bar brings the timecode into view first.
-    this.reveal(at.here * this.drawn + PADX);
-    // Under the bar, its notch on the timecode, kept inside the window.
-    const hr = this.host.getBoundingClientRect(), ax = this.inner.getBoundingClientRect().left + at.here * this.drawn;
+    if (this.visible) this.reveal(at.here * this.drawn + PADX);
+    // Under the bar (or the row), its notch on the timecode, kept inside the window.
+    const hr = under || this.host.getBoundingClientRect(), ax = under ? under.left + 24 : this.inner.getBoundingClientRect().left + at.here * this.drawn;
     const left = Math.max(6, Math.min(ax - 18, innerWidth - pop.offsetWidth - 6));
     pop.style.left = left + 'px';
-    pop.style.top = hr.bottom + 6 + 'px';
+    pop.style.top = Math.min(hr.bottom + 6, innerHeight - pop.offsetHeight - 6) + 'px';
     pop.style.setProperty('--notch', Math.max(8, Math.min(pop.offsetWidth - 8, ax - left)) + 'px');
     this.editing = { pop, away, x: old || !this.time ? at.here : Math.min(this.length, this.time.pos(Math.round(this.time.at(at.here)))) }; // on the second it offers
     this.showEditing();
@@ -705,6 +708,19 @@ export class Timeline {
     time.focus();
     time.select();
     if (err) fail(err);
+  }
+
+  /** The scene at block b's own timecode, edited under `box` (the scene list's row). */
+  editScene(b, box) { const blk = this.ed.blocks[b]; if (blk) this.editTimecode(null, { id: blk.id, line: 0 }, null, '', box); }
+
+  /** The time at position x of the script, by the timecodes (a minute a page until there are some). */
+  timeAt(x) { return (this.visible && this.time ? this.time : timeScale(this.anchors())).at(x); }
+
+  /** The time each scene starts at, and whether it is pinned: (b) => { t, pinned }. */
+  sceneTimes() {
+    const scale = this.visible && this.time ? this.time : timeScale(this.anchors());
+    const pinned = new Set(this.tcs().map((tc) => tc.id + ':' + tc.line));
+    return (b) => ({ t: Math.round(scale.at(scriptPos(this.view.pages, b))), pinned: pinned.has(this.ed.blocks[b]?.id + ':0') });
   }
 
   /** Where the timecode being edited is, as a line on the bar. */

@@ -320,6 +320,40 @@ test('the timeline: a click on a timecode edits it; a right-click on a scene giv
   await tl('t.setTimecodes([])');
 });
 
+test('the scene list: each scene at its time; a right-click gives it its own timecode, as on the timeline', async () => {
+  await app.load(SCRIPT);
+  await app.eval(`__stet.cmd.run('panel-scenes')`);
+  await app.until(`document.querySelectorAll('#scenes .row').length === 12 && !document.getElementById('left').getAnimations().length`, { what: 'the scene list, open' });
+  const times = await app.eval(`[...document.querySelectorAll('#scenes .row .n')].map((n) => n.textContent)`);
+  assert.equal(times[0], '0:00');
+  assert.ok(times.every((t) => /^\d+:\d\d$/.test(t)), times.join());
+  const r = await app.rect('#scenes .row', 4);
+  await app.click(r.x, r.y, { button: 'right' });
+  await app.until(`!!document.querySelector('.tc-pop')`, { what: 'the editor' });
+  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-head').textContent`), 'INT. ROOM 5 - DAY');
+  await app.key('Mod+A'); await app.type('00:09:00'); await app.key('Enter');
+  await app.until(`document.querySelectorAll('#scenes .row .n')[4].textContent === '9:00'`, { what: 'the list showing it' });
+  assert.ok(await app.eval(`document.querySelectorAll('#scenes .row .n')[4].classList.contains('pin')`), 'pinned');
+  assert.equal(await app.eval(`__stet.session.doc.timecodes.length`), 1);
+  // Its edge widens it, up to twice its width (the page re-centres); the lock beside REVISE keeps it; a double-click puts it back.
+  const L = await app.rect('#left'), y = L.top + 150;
+  await app.move(L.right - 2, y);
+  assert.equal(await app.eval(`getComputedStyle(document.getElementById('scenes')).cursor`), 'col-resize', 'the resize cursor at the edge');
+  await app.drag(L.right - 2, y, L.right + 600, y, 6);
+  assert.equal((await app.rect('#left')).width, 2 * L.width, 'twice its width at most');
+  assert.equal(await app.eval('__stet.settings().panelWidths.left'), 2 * L.width, 'kept');
+  await app.clickOn('#btn-lock');
+  await app.until('__stet.settings().panelsLocked === true');
+  await app.drag(2 * L.width + L.left - 2, y, L.right - 100, y, 4);
+  assert.equal((await app.rect('#left')).width, 2 * L.width, 'locked: as it was');
+  await app.clickOn('#btn-lock');
+  await app.until('__stet.settings().panelsLocked === false');
+  await app.click(2 * L.width + L.left - 2, y, { count: 2 });
+  await app.until(async () => (await app.rect('#left')).width === L.width, { what: 'back to its usual width' });
+  await app.eval(`__stet.cmd.run('panel-scenes')`);
+  await tl('t.setTimecodes([])'); // (the next test starts from none)
+});
+
 test('the timeline: a timecode sets the pace of the ruler; crowded labels give way to the newest; Ctrl+Shift+T hides it', async () => {
   const pages = await app.eval('__stet.view.pages.length');
   // At the start of the last page at twice its minutes (Up nudges a second on): twice the running time.
@@ -337,6 +371,7 @@ test('the timeline: a timecode sets the pace of the ruler; crowded labels give w
   await app.key('Mod+Shift+T');
   assert.equal(await app.eval('document.getElementById("timeline").hidden'), true);
   await app.key('Mod+Shift+T');
+  await app.until(`!document.getElementById('timeline').hidden && !document.getElementById('timeline').getAnimations().length`, { what: 'the timeline back in place' });
 });
 
 // ---- spelling ----

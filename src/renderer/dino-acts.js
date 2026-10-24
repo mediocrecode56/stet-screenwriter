@@ -10,9 +10,10 @@
 // The engine (dino.js) plays them one at a time, slots reactions in between
 // steps, and bridges postures so nothing ever jumps. `d` is the Critter.
 
-import { postureOf, H } from './dino-art.js';
+import { postureOf, H, PROPS } from './dino-art.js';
 
 const H_SKY = H + 18; // where things drift down from
+export const CRITTERS = { mouse: 1.2, lizard: 0.8, bunny: 0.6 }; // what lives in the grass, and how often each shows
 
 export const ACTIVITIES = {
   // -- idle, rest and personality --
@@ -1494,6 +1495,31 @@ export const ACTIVITIES = {
     yield { f: 'stand', t: 400, fx: 'dots' };
     if (d.has(cr)) d.fadeOut(cr, 1200);
   },
+  *critter(d) {
+    // A rustle in the grass and something small darts out: a mouse, a lizard, a bunny. A start, and
+    // often a chase, flat out, but it is always just quicker (and quicker still when it is close): it
+    // dives into another tuft or is off the strip. A look about, out of breath, and on with its day.
+    const homes = d.props.filter((p) => (p.tuft || p.lush) && !p.carried && p.frame >= 1);
+    if (!homes.length) return yield* ACTIVITIES.look(d);
+    yield* d.getTo('stand');
+    d.envMark('critter');
+    const home = homes[d.rint(0, homes.length - 1)], kind = d.pick(CRITTERS), dir = Math.sign(d.propCenter(home) - d.center()) || (d.chance(0.5) ? 1 : -1);
+    home.wobble = 600;
+    const cr = d.spawn(kind, { x: d.propCenter(home) - (PROPS[kind][0][0].length * d.u) / 2, face: dir, home, hide: d.chance(0.5), life: 30000 });
+    yield { f: 'stand', t: 500, face: dir };
+    yield { f: 'up', t: 350, fx: '!', do: () => { cr.vx = dir * { mouse: 85, lizard: 72, bunny: 78 }[kind]; } };
+    if (d.chance(0.6)) {
+      yield { f: 'crouch', t: 140 };
+      yield* d.walkTo(() => (d.has(cr) ? d.propCenter(cr) - d.dw / 2 : null), 3.2, { max: 70 });
+      yield { f: 'stand', t: 300, face: dir };
+      yield { f: 'hunch', t: 600, fx: d.pick({ dots: 1, '?': 1, hash: 0.3 }) }; // out of breath
+      if (d.chance(0.5)) { yield { f: 'sniff', t: 500 }; yield { f: 'sniffBlink', t: 200 }; } // where did it go?
+    } else {
+      for (let i = 0; i < 8 && d.has(cr); i++) yield { f: 'up', t: 300, face: d.dirTo(cr) };
+      yield { f: 'blink', t: 200, fx: d.chance(0.5) ? '?' : null };
+    }
+    yield { f: 'stand', t: 300 };
+  },
   *feather(d) {
     // A feather drifts down, this way and that. It watches it all the way and it lands on its head;
     // that tickles, a sneeze, and up it goes again.
@@ -1801,7 +1827,7 @@ export const ACTIVITIES = {
 };
 
 // Activities that start something of their own in the environment.
-export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm', 'acorn', 'cricket', 'feather', 'gem', 'stick']);
+export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm', 'acorn', 'cricket', 'feather', 'gem', 'stick', 'critter']);
 // Activities in the middle of which nothing else should happen in the environment.
 export const ABSORBED = new Set([...ENV_ACTIVITIES, 'cornerBite', 'tightrope', 'plantSeed', 'egg', 'ufo', 'skateboard', 'fireworks', 'grow', 'shrink', 'celebrate', 'zoomies', 'nightfall', 'daybreak']);
 // The streak's special loops, in the order they are unlocked.
@@ -2381,7 +2407,7 @@ export const REACTIONS = {
     yield { f: 'sitChew', t: 600 };
     yield* d.getTo('stand');
     yield { f: 'stretch', t: 900 };
-    yield { f: 'stand', t: 400, fx: d.tufts().length ? '!' : null }; // oh — grass
+    yield { f: 'stand', t: 400, fx: d.tufts().length || d.props.some((p) => p.lush) ? '!' : null }; // oh — grass (and more)
   } },
   rainbowLook: { cat: 'env', w: 1, *fn(d) {
     yield { f: 'up', t: 900, fx: '!' };
@@ -2408,7 +2434,7 @@ export const CATEGORY = {
 // Moods drift every several minutes and tilt the odds.
 export const MOODS = {
   content: { act: {}, react: {} },
-  playful: { act: { photobomb: 1.6, doodle: 1.3, tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, cricket: 1.6, acorn: 1.3, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
+  playful: { act: { critter: 1.8, photobomb: 1.6, doodle: 1.3, tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, cricket: 1.6, acorn: 1.3, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
   curious: { act: { doodle: 1.6, sniffTrail: 2, explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, gem: 1.6, feather: 1.5, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
   sleepy: { act: { strut: 0.4, doodle: 0.6, groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
   grumpy: { act: { strut: 0.5, photobomb: 0.4, roar: 2.5, look: 1.3, dance: 0.3, rest: 1.2, scratch: 1.5, wag: 0.3, sing: 0.4 }, react: { normal: 1.2, none: 1.6, big: 0.8 } },

@@ -58,7 +58,7 @@
 // 32 days in a row) and unlocks a special routine at every second one.
 
 import { W, H, FRAMES, PROPS, GLYPHS, ALPHA, MOUTH, HEAD_TOP, GET_UP, postureOf, spriteEdges } from './dino-art.js';
-import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, QUIET, BASELINE_0_8 } from './dino-acts.js';
+import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, QUIET, CRITTERS, BASELINE_0_8 } from './dino-acts.js';
 
 const MIN = 60000;
 // Poses that are merely held: one of these can be cut short (never a move, a jump or a lift).
@@ -70,7 +70,8 @@ const STEPPING = /^(walk|run|creep)/;
 const DANCING = new Set(['dance', 'sing', 'celebrate', 'rainDance', 'boogie']);
 const CALM = new Set(['rest', 'look', 'sleep', 'stargaze', 'watchWriter', 'readScript', 'coffeeBreak', 'writeAlong', 'treeShade', 'doze', 'scratch', 'wag', 'yoga', 'daydream']);
 // Things that grow and wither: frames from sprout to full, and how long each stage takes.
-const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800], cactus: [2, 1400], grass: [2, 900] };
+const GROW = { palm: [3, 1100], flower: [3, 900], mushroom: [2, 260], dandelion: [2, 800], cactus: [2, 1400], grass: [2, 900], fern: [3, 900], bloom: [3, 900], reed: [3, 900] };
+const LUSH = { fern: 1, bloom: 1, reed: 1 }; // the plants of a very long sleep
 // The large plants: they last a good while, and their time stands still while the window is in the background.
 const LARGE = new Set(['cactus', 'palm']);
 // What it will pose in front of (photobomb): grown plants, a rainbow, its own handiwork.
@@ -86,6 +87,10 @@ export const TIMING = {
   tuftGrow: 45000,              // per stage of a tuft's growth
   grazeAfter: [8000, 45000],    // back and writing again: a while before it starts on the grass
   dormantTick: 60000,           // dormant (see Critter.dormant): at most this long between ticks
+  lushAfter: 40 * MIN,          // away this long (deep asleep most of it): rarer plants come up too…
+  lushEvery: [3 * MIN, 7 * MIN], // …one every so often…
+  lushMax: 3,                   // …only a few
+  lushGrow: 3 * MIN,            // per stage of their growth
 };
 // Things that float or fly about: only a few at a time, so the scene never gets busy.
 const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug', 'feather']);
@@ -305,6 +310,12 @@ export class Critter {
     if (n <= 0) return;
     this.heat += Math.min(n, 50); // a single big change counts like a burst, not a marathon
     this.lastWrite = now;
+    // Writing again: the plants of a long sleep wither back, a stage at a time, each in its own time.
+    for (const p of this.props) if (p.lush && !p.wilting) {
+      p.wilting = true;
+      p.per = this.rnd(2500, 6000);
+      p.life = now - p.born + p.frame * p.per + this.rnd(500, 4000);
+    }
   }
 
   updateEnergy(dt) {
@@ -445,6 +456,8 @@ export class Critter {
       cricket: free && this.envOk('cricket', 5 * MIN) ? 0.09 : 0,
       feather: free && calmSky && this.envOk('feather', 6 * MIN) ? 0.06 : 0,
       gem: free && this.envOk('gem', 10 * MIN) ? 0.03 : 0,
+      // Something small lives in the grass: now and then it darts out, while you're here to see.
+      critter: free && this.focused && this.props.some((p) => (p.tuft || p.lush) && p.frame >= 1) && this.envOk('critter', 3 * MIN) ? 0.22 : 0,
       // Unlocked by the writing streak.
       skateboard: this.unlocked >= 1 && free ? 0.3 : 0,
       fireworks: this.unlocked >= 2 && free ? 0.22 : 0,
@@ -530,6 +543,7 @@ export class Critter {
     if (!this.deep && this.blurAt != null && now - this.blurAt >= this.T.deepSleep && now - (this.lastTick ?? now) > 5000) this.sleepDeeply();
     this.blurAt = null;
     this.tuftNext = null;
+    this.lushNext = null;
     this.backAt = now;
     this.grazeAt = now + this.rnd(...this.T.grazeAfter);
     if (this.step && this.step.dormant) this.step.end = now; // lying still: it breathes again straight away
@@ -560,7 +574,18 @@ export class Critter {
    * window), each tuft comes up when it was due, and has grown as much since.
    */
   growWhileAway(now) {
-    if (this.focused || this.tuftNext == null) return;
+    if (this.focused) return;
+    // Very long away, deep asleep: a fern, a bloom, a reed come up as well, slowly (lushNext).
+    if (this.deep && this.blurAt != null) {
+      this.lushNext ??= this.blurAt + this.T.lushAfter;
+      while (this.lushNext <= now && this.props.filter((p) => p.lush).length < this.T.lushMax) {
+        const kind = this.pick(LUSH), x = this.clearSpot(this.propCols({ kind }) * this.u, 0.3, 6);
+        if (x != null) this.spawn(kind, { x, born: this.lushNext, grows: true, lush: true, per: this.T.lushGrow });
+        this.lushNext += this.rnd(...this.T.lushEvery);
+      }
+      if (this.lushNext <= now) this.lushNext = Infinity; // enough of them: no more until next time
+    }
+    if (this.tuftNext == null) return;
     while (this.tuftNext <= now) {
       if (this.tufts().length >= this.T.tuftsMax) { this.tuftNext = null; return; } // enough: no more until next time
       this.tuft(this.tuftNext);
@@ -977,7 +1002,7 @@ export class Critter {
         p.withering = left < per * full;
         if (p.kind === 'palm' && p.withering && !p.shed && this.loose < 7) { p.shed = true; this.spawn('leaf', { x: p.x + 4 * u, y: 14, fall: true, life: 9000 }); }
         if (f !== p.frame) p.frame = f;
-        p.live = p.live || (!p.tuft && age < per * (full + 1)) || p.withering; // a tuft grows too slowly to need frames
+        p.live = p.live || (!p.tuft && !p.lush && age < per * (full + 1)) || (p.withering && !(p.lush && !p.wilting)); // tufts and a long sleep's plants grow too slowly to need frames
         continue;
       }
       switch (p.kind) {
@@ -1141,6 +1166,21 @@ export class Critter {
           if (p.y === 0) { p.vx *= Math.exp(-s * 8); if (Math.abs(p.vx) < 3) { p.vx = 0; p.frame = 1; } }
           if (p.x < -M || p.x > W2 + M - cols * u || (p.vx && this.gone(p, Math.sign(p.vx)))) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, 400); }
           break;
+        case 'mouse': case 'lizard': case 'bunny': {
+          // Out of the grass and away: always a little faster than the dinosaur, and quicker still when
+          // it comes close; into another tuft ahead, or off the strip.
+          if (!p.vx) { p.frame = 0; p.y = 0; break; }
+          p.live = true;
+          if (Math.abs(this.propCenter(p) - this.center()) < this.dw && Math.abs(p.vx) < 170) p.vx *= 1 + 3 * s;
+          p.x += p.vx * s;
+          p.face = Math.sign(p.vx);
+          p.frame = Math.floor((now - p.born) / (p.kind === 'lizard' ? 90 : 70)) % 2;
+          p.y = p.kind === 'bunny' ? Math.round(Math.abs(Math.sin((now - p.born) / 110)) * 4) : 0;
+          const bush = p.hide && this.props.find((q) => q !== p.home && (q.tuft || q.lush) && Math.abs(this.propCenter(q) - this.propCenter(p)) < 3);
+          if (bush) { bush.wobble = 500; this.remove(p); break; }
+          if (p.x < -M || p.x > W2 + M - cols * u) this.remove(p);
+          break;
+        }
         case 'frog': case 'cricket': {
           if (!p.vx && !p.bounce) { p.y = 0; p.frame = 0; break; }
           p.live = true;
@@ -1298,6 +1338,7 @@ export class Critter {
     if (this.ack && this.ack.t0 + 160 > this.now) t = Math.min(t, this.ack.t0 + 160);
     if (this.envNext != null) t = Math.min(t, this.envNext);
     if (!this.focused && this.tuftNext != null) t = Math.min(t, this.tuftNext);
+    if (!this.focused && this.deep && this.lushNext != null) t = Math.min(t, this.lushNext);
     return t;
   }
 
@@ -1535,7 +1576,7 @@ export class Dino {
       const art = PROPS[q.kind][q.frame] || PROPS[q.kind][0];
       const jitter = q.wobble ? (Math.round(now / 90) % 2 ? p : -p) : 0;
       g.globalAlpha = (ALPHA[q.kind] ?? 1) * (q.alpha ?? 1);
-      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0) || ((q.kind === 'plane' || q.kind === 'frog' || q.kind === 'cricket') && q.face < 0);
+      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0) || ((q.kind === 'plane' || q.kind === 'frog' || q.kind === 'cricket' || q.kind in CRITTERS) && q.face < 0);
       grid(art, snap(q.x) + jitter, ground - Math.round(q.y) * p, p, mirror);
       if (q.kind === 'ufo' && q.beam) {
         const bx = snap(q.x) + 4 * p;

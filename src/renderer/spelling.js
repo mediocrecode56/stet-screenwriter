@@ -246,7 +246,12 @@ export class Spelling {
     this.onState();
     const r = await this.api.invoke('spell:install', locale).catch((e) => ({ ok: false, error: e.message }));
     this.installing = false;
-    if (!r.ok) { this.onState(); this.notify(`The ${offer.label} dictionary could not be downloaded. Check the connection and try again.`, r.error); return; }
+    if (!r.ok) {
+      console.warn('Spelling:', r.error); // (what each source answered)
+      this.onState();
+      this.notify(`The ${offer.label} dictionary could not be downloaded. Check the connection and try again.`);
+      return;
+    }
     await this.setSettings({ spelling: { ...this.opts, on: true, lang: r.path } });
     await this.init();
     this.notify(`${offer.label} dictionary installed: spelling is on.`);

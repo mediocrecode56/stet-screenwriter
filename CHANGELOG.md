@@ -2,16 +2,23 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
-## Unreleased
+## 0.36.0 · 24 Oct 2026
 
 - Spelling: a new SPELLING menu on the toolbar. It uses the dictionaries already installed on your computer (from LibreOffice, Firefox or your system; on a Mac, its own checker): pick the language there, and switch spelling on or off.
 - Spelling: only obvious slips are marked, with a thin pale red underline. Names, all-caps words, scene headings and cues are left alone. Right-click a marked word for the fix, or use the small Dictionary button to add it to your dictionary (every screenplay) or Ignore to leave it be in this script. STET remembers both; Tools > Dictionary & Ignored lists them.
 - Spelling: with Auto on, those same slips are corrected as you press Space. Ctrl+Z takes a correction back.
+- Spelling: no dictionary on your computer? The SPELLING button shows a small dot, and Install Dictionary downloads one for your language in the background while you keep writing; a short notice says when it's ready. Add a Language in the same menu downloads any other common language. Dictionaries are kept in STET's own folder, and STET finds them in several places online, so a moved file doesn't stop it.
+- Scene list: each scene shows its time on the timeline instead of its number (darker when a timecode is pinned to it), and right-clicking a scene gives it its own timecode, just as on the timeline.
+- Side panels: drag the inner edge of the scene list, the notes or the revision panel to widen it, up to twice its usual width (double-click the edge to put it back). The lock beside REVISE keeps them as they are. STET remembers the widths.
 - Timeline: the little cap on the line is centred again (it sat half a pixel to the left), and the scene you're in is drawn as a slightly thicker stretch of the line, so you can see where you are and how long the scene runs.
+- Timeline: the button that shows the whole script again has the usual zoom-reset icon and matches the rest of the bar; the line stops at the ruler instead of crossing its labels, and timecode labels stay readable over the grid.
 - The dinosaur's new routines: it crumples up a page of its own draft and tosses it over its shoulder (sometimes it has second thoughts), laps at a puddle after the rain (more so after a run about), and, rarely, finds a stick and settles down to chew it.
+- Something small lives in the grass that grows while you're away: now and then a mouse, a lizard or a bunny darts out, and the dinosaur may give chase. It never catches one.
+- After a very long while away, rarer plants (a fern, a bloom, a reed) slowly come up too. Once you start writing again, they wither away a little at a time.
 - The dinosaur answers clicks more quietly: sitting, lying down or busy with something, it looks round at you from where it is instead of leaping up, and leaps come more as the clicks keep coming.
 - While STET rests in the background (the dinosaur in a deep sleep), the clock in the status bar checks the time once a minute instead of every second. A minimised window, or one with the companion turned off, now rests the same way.
 - Fix: right-clicking the page moved the keyboard away from the script, so the next keys you typed went nowhere until you clicked the page.
+- Fix: opening a screenplay while the page was still gliding to a scene could carry the new one away from its start.
 
 ## 0.35.0 · 24 Oct 2026
 

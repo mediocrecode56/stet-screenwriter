@@ -203,6 +203,9 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 #elright { display: flex; position: relative; }
 #elright::before { content: ''; position: absolute; left: -12px; right: -6px; top: -4px; height: 1px; background: var(--bar); pointer-events: none; }
 .tb:hover { color: var(--ink); background: var(--hover-on); }
+#btn-lock { width: 24px; padding: 0; display: grid; place-items: center; color: var(--ink-3); margin-right: 2px; }
+#btn-lock.locked { color: var(--ink); }
+#btn-lock:hover { color: var(--ink); }
 /* Pressed feedback is painted at pointerdown, before the command's own result. */
 .tb.pressed, .btn.pressed { background: var(--inv-bg); color: var(--inv-fg); }
 .tb.pressed sup { color: inherit; }
@@ -267,7 +270,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 15px; }
 .tl-lb { position: absolute; top: 2px; padding-left: 4px; border-left: 1px solid var(--rule); font-size: 9px; line-height: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
 .tl-lb.tl-end { border-left: 0; border-right: 1px solid var(--rule); padding: 0 4px 0 0; transform: translateX(-100%); color: var(--ink-2); }
-.tl-lb.tl-tc { color: var(--ink); border-left-color: var(--ink); padding-left: 9px; }
+.tl-lb.tl-tc { color: var(--ink); border-left-color: var(--ink); padding: 0 3px 0 9px; background: var(--bar); z-index: 1; } /* above the grid and the regular labels */
 .tl-tc::before { content: ''; position: absolute; left: 2px; top: 3px; width: 4px; height: 4px; background: var(--ink); transform: rotate(45deg); } /* pinned */
 .tl-tc b { font-weight: 400; margin-left: 5px; color: var(--ink-2); letter-spacing: .04em; }
 .tl-tc.c-blue::before { background: var(--tl-blue); } .tl-tc.c-yellow::before { background: var(--tl-yellow); } .tl-tc.c-pink::before { background: var(--tl-pink); }
@@ -309,7 +312,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tc-ok:focus-visible, .tc-del:focus-visible { outline: 1px solid var(--rule-strong); }
 .tc-err { display: none; max-width: 300px; padding: 4px 2px 0; font-size: 10px; letter-spacing: .04em; color: var(--ink-2); }
 .tc-pop.bad .tc-err { display: block; }
-.tl-head { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
+.tl-head { position: absolute; top: 0; bottom: 15px; width: 1px; background: var(--ink); pointer-events: none; } /* down to the ruler, never through its labels */
 .tl-head.glide { transition: left var(--dur-tl) var(--ease-out); } /* to where the caret went, unless the bar was redrawn */
 /* The cap: a 1px core (the line's own width) with 3px sides, so it is centred on the line at any
    display scale (Chromium rounds a border down to whole pixels: 3.5px sides drew it off to the left). */
@@ -323,21 +326,28 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-hover.fine span { color: var(--ink); box-shadow: 0 0 0 1px var(--ink-3); animation: tl-fine var(--dur-tl) var(--ease-out); transform-origin: 0 100%; }
 .tl-hover.fine.flip span { transform-origin: 100% 100%; }
 @keyframes tl-fine { from { transform: scale(.94); opacity: .5; } } /* stepping: the readout steps up a little */
-.tl-reset { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: var(--bar); color: var(--ink-2); box-shadow: 0 0 0 1px var(--ink-3), 0 1px 4px rgba(0,0,0,.12); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); }
+.tl-reset { position: absolute; right: 8px; top: 13px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--rule); border-radius: 3px; background: var(--bar); color: var(--ink-3); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); } /* like the timecode editor's small buttons */
 .tl-reset[hidden] { display: none; }
 @starting-style { .tl-reset { opacity: 0; } }
-.tl-reset:hover { color: var(--ink); background: var(--hover); }
+.tl-reset:hover { color: var(--ink); background: var(--hover); border-color: var(--ink-3); }
+.tl-reset:focus-visible { outline: 1px solid var(--rule-strong); }
 
 /* ---- main area ------------------------------------------------------- */
 #main { flex: 1; display: flex; min-height: 0; overflow: hidden; }
 aside { width: 260px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--rule); background: var(--bar); }
 #right { border-right: 0; border-left: 1px solid var(--rule); width: 300px; }
+/* Widened by dragging the inner edge (ui/resize.js): the cursor says so, and the edge shows where. */
+aside.rs-near, aside.rs-near * { cursor: col-resize !important; }
+aside.rs-near[data-edge="right"] { box-shadow: inset -1px 0 0 var(--ink-3); }
+aside.rs-near[data-edge="left"] { box-shadow: inset 1px 0 0 var(--ink-3); }
+body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none; }
 .panel-head { padding: 8px 10px 6px; letter-spacing: .2em; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
 .list { overflow-y: auto; flex: 1; }
 .row { padding: 4px 10px; display: flex; gap: 8px; cursor: default; border-bottom: 1px solid transparent; transition: background-color var(--dur-fast) var(--ease-out); }
 .row:hover { background: var(--hover); }
 .row.cur { box-shadow: inset 2px 0 0 var(--ink); }
-.row .n { color: var(--ink-3); width: 28px; flex: none; text-align: right; }
+.row .n { color: var(--ink-3); width: 44px; flex: none; text-align: right; font-size: 10px; line-height: 16px; letter-spacing: .04em; font-variant-numeric: tabular-nums; } /* the scene's time on the timeline */
+.row .n.pin { color: var(--ink-2); } /* pinned to a timecode */
 .row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .row .p { color: var(--ink-3); flex: none; }
 .note { padding: 8px 10px; border-bottom: 1px solid var(--rule); }
