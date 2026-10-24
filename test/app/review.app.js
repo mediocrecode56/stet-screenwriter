@@ -219,20 +219,15 @@ const centred = async (what) => {
     return { off: Math.round(mid - (s.scrollTop + s.clientHeight / 2)), atEnd: s.scrollTop <= 0 || s.scrollTop >= max - 1, row: v.row }; })()`);
   assert.ok(Math.abs(w.off) <= w.row || w.atEnd, `${what}: the passage centred (off by ${w.off} px)`);
 };
-const glides = async (label) => {
+const glides = async (label, passages) => {
   await app.load(LONG, {}, 'GLIDE');
   await review();
   await app.eval('document.getElementById("scroller").scrollTop = 0');
-  // Far down, back up, one already on screen, all the way up: each time it ends in the middle.
-  for (const o of ['made a decision', 'looking to him', 'looking to him', 'enter in the kitchen']) { await pressCard(o); await centred(`${label}, ${o}`); }
-  // Clicked again and again mid-glide: it always ends on the last one, centred.
-  for (const o of ['made a decision', 'enter in the kitchen', 'made a decision', 'looking to him']) { await pressCard(o); await app.eval('new Promise((r) => setTimeout(r, 60))'); }
-  await centred(`${label}, after rapid clicks`);
-  assert.match(await app.eval('__stet.editor.blocks[__stet.editor.caret.b].text'), /looking to him/);
+  for (const o of passages) { await pressCard(o); await centred(`${label}, ${o}`); }
 };
 
 test('clicking a suggestion glides its passage to the middle of the screen, even in a window that draws no frames', async () => {
-  await glides('a hidden window');
+  await glides('a hidden window', ['made a decision', 'enter in the kitchen']); // (its timers run about once a second: far down and back up is enough)
 });
 
 test('suggestions, decisions and ignored passages are kept across a restart; a new review starts afresh', async () => {
@@ -271,7 +266,12 @@ test('suggestions, decisions and ignored passages are kept across a restart; a n
 });
 
 test('in a shown window the glide passes through the positions in between, one way; the card buttons still do their own job; the marks are grey', async () => {
-  await glides('a shown window');
+  // Far down, back up, one already on screen, all the way up: each time it ends in the middle.
+  await glides('a shown window', ['made a decision', 'looking to him', 'looking to him', 'enter in the kitchen']);
+  // Clicked again and again mid-glide: it always ends on the last one, centred.
+  for (const o of ['made a decision', 'enter in the kitchen', 'made a decision', 'looking to him']) { await pressCard(o); await app.eval('new Promise((r) => setTimeout(r, 60))'); }
+  await centred('after rapid clicks');
+  assert.match(await app.eval('__stet.editor.blocks[__stet.editor.caret.b].text'), /looking to him/);
   await app.eval('document.getElementById("scroller").scrollTop = 0');
   await app.frame();
   const samples = await app.eval(`new Promise((done) => {

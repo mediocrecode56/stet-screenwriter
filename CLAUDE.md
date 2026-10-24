@@ -12,7 +12,7 @@
   STET-Setup.exe, STET-macOS.dmg, STET-Patch-electron-*.zip). Watch the run; if it fails,
   fix the cause and push to main (every push retries an unreleased version).
 - Run `npm run quick` (the unit tests and the smoke test, about ten seconds) before
-  pushing, and `npm run e2e` (the whole real-app suite, about half a minute) before a
+  pushing, and `npm run e2e` (the whole real-app suite, about 25 seconds) before a
   version; a test must pass on Windows and macOS too (no platform-specific paths in
   assertions). New behaviour gets a unit test (test/unit), and a step in
   test/app/smoke.app.js when it is a workflow a release must not break. App tests wait

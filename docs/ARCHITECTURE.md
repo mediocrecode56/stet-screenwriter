@@ -311,4 +311,9 @@ hidden.
 
 ## Native code
 
-See [NATIVE.md](NATIVE.md): measured, not needed.
+None, by measurement. In v0.3.0 the hottest UI-thread work (word counting on open) was written
+as a C kernel built to WebAssembly: at best 6 % faster than the same table-driven algorithm in
+JavaScript, and slower on accented and non-Latin text. The JavaScript version shipped
+(`src/core/text.js`, 2.5× faster than the old regex, fuzz-tested against it); the experiment is in
+git history (`git checkout v0.18.5 -- bench/native-experiment`). A future native-shaped workload
+would follow the same shape: one batched call, behind a worker like `src/main/pdf-worker.js`.

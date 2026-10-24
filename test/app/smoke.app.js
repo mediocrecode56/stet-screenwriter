@@ -216,12 +216,17 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   assert.equal(await changed(), '', 'nothing else in the window changes while Ctrl is held');
   assert.equal(await app.eval(`(() => { const p = __stet.view.scrubAt || {}, r = __stet.view.caretRect(p), c = document.getElementById('caret');
     return p.b > 6 && c.style.display !== 'none' && parseFloat(c.style.top) === r.y; })()`), true, 'the caret drawn on the line stepped to');
-  // Letting go ends it: the pointer is free again (back where it was locked, on the bar), the script
-  // stays where it stepped to, and still nothing else changes: not the caret, not the toolbar.
+  // Letting go ends it: the pointer is free again, on the bar where it was locked, now on the second
+  // stepped to (the bar slid under it); the script stays there, and still nothing else changes.
   const stepped = await top();
   await app.up('Mod');
   await app.until('!__stet.timeline.stepping && !document.pointerLockElement && !document.querySelector(".tl-cover")', { what: 'stepping to end' });
   assert.equal(await top(), stepped, 'the script stays where it stepped to');
+  const at = LOCKS ? x : x + 34 * 12; // the pointer: let go where it was locked, or where it went
+  await app.frame();
+  await app.move(at, LOCKS ? y : y - 16);
+  assert.equal(await tl(`Math.round(t.time.at(t.posAt(${at})))`), t0 + 34, 'the pointer is left on the second stepped to');
+  assert.equal(await tl('t.hover.hidden'), false, 'and the line with it');
   assert.equal(await caretAt(), caret0);
   assert.equal(await shown(), shown0);
   assert.equal(await changed(), '', 'nor after letting go of Ctrl');
@@ -229,11 +234,13 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   await app.move(x, y);
   await app.down('Mod');
   await app.until('!!__stet.timeline.stepping');
+  if (LOCKS) await app.until('document.pointerLockElement === __stet.timeline.inner');
   for (let i = 1; i <= 30; i++) await app.move(x + i * 12, y);
   await app.until(async () => (await top()) !== stepped, { what: 'stepped on' });
   await app.key('Escape'); // (Chromium takes it to let go of the pointer; the page never sees the key)
   await app.until('!__stet.timeline.stepping && !document.pointerLockElement', { what: 'Esc to end stepping' });
   assert.equal(await top(), stepped, 'Esc: back where it was');
+  await app.until(`!__stet.timeline.shift && !__stet.timeline.inner.getAnimations().length`, { what: 'the bar back as well' });
   await app.move(x + 80, y); // Ctrl still held: no stepping again until it is pressed afresh
   assert.equal(await tl('!!t.stepping'), false, 'not again until Ctrl is pressed afresh');
   assert.equal(await top(), stepped);
@@ -243,7 +250,7 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   // then does the toolbar show where it is.
   await app.move(x, y);
   await app.down('Mod');
-  await app.until('!!__stet.timeline.stepping');
+  await app.until('!!__stet.timeline.stepping'); // (just after an Esc, Chromium may refuse the lock: the cover stands in)
   for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 4);
   const type = await app.rect('.tb[data-t="character"]');
   await app.click(type.x, type.y, { button: 'right' });
@@ -257,16 +264,19 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   assert.equal(await app.eval('getSelection().toString()'), '', 'and selects nothing');
   await app.until(async () => /^action\|/.test(await shown()), { what: 'the toolbar to show where the caret went' });
   // With Ctrl held nothing draws the pointer: right beside the timecode it starts where the pointer is.
+  await app.until('!__stet.timeline.inner.getAnimations().length', { what: 'the bar settled' }); // (easing back if the pointer was let go off it)
   const tc = await app.rect('#timeline .tl-tcm');
   await app.move(tc.left + 4, y);
   await app.down('Mod');
   await app.until('!!__stet.timeline.stepping');
   assert.equal(await tl(`t.stepping.t0 === Math.round(t.time.at(t.posAt(${tc.left + 4}))) && t.stepping.t0 !== ${t0 + 10}`), true, 'no magnetism with Ctrl held');
-  await app.up('Mod');
+  await app.up('Mod'); // (a quick tap: the lock it asked for may come after it ended, and is let go at once)
+  await app.until(`!__stet.timeline.stepping && new Promise((r) => setTimeout(() => r(!document.pointerLockElement), 100))`, { what: 'the pointer free after a quick tap' });
   await app.eval(`(() => { window.__watch.disconnect(); __stet.cmd.run('panel-scenes'); })()`);
 });
 
 test('the timeline: a click on a timecode edits it; a right-click on a scene gives it its own, shown beside the heading', async () => {
+  await app.until('!__stet.timeline.inner.getAnimations().length', { what: 'the bar settled' });
   if (!(await app.eval('__stet.session.doc.timecodes?.length'))) await tl(`t.setTimecodes([{ id: __stet.editor.blocks[2].id, line: 0, t: 100 }])`);
   await app.frame();
   const t0 = await app.eval('__stet.session.doc.timecodes[0].t');

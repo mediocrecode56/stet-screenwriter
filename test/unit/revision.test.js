@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildChunks, chunkPrompt, validateFindings, findWhole, minimalEdit, locate, locateAll, planApply, afterApply, isApplied, sortByText, FINDINGS_SCHEMA, REVIEWABLE, SYSTEM_PROMPT } from '../../src/core/revision.js';
 import { Editor, pos } from '../../src/core/editor.js';
 import { makeBlock } from '../../src/core/model.js';
-import { generateScript } from '../fixtures.js';
+import { generateScript } from '../../src/dev/sample.js';
 
 const refs = (blocks) => new Map(blocks.map((b) => [b.id, b]));
 

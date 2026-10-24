@@ -46,9 +46,10 @@
   --ease-out: cubic-bezier(.2, 0, 0, 1);
   --ease-in-out: cubic-bezier(.4, 0, .2, 1);
   --dur-fast: 90ms;
+  --dur-tl: 140ms; /* the timeline's small movements */
   --dur-panel: 140ms;
 }
-@media (prefers-reduced-motion: reduce) { :root { --dur-fast: 0ms; --dur-panel: 0ms; } }
+@media (prefers-reduced-motion: reduce) { :root { --dur-fast: 0ms; --dur-panel: 0ms; --dur-tl: 0ms; } }
 
 :root[data-theme="dark"] {
   --desk: #0f0f0f;
@@ -244,11 +245,12 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-line { position: absolute; left: 0; top: 19px; height: 2px; background: var(--tl-line); opacity: .85; }
 .tl-hl { position: absolute; top: 17px; height: 6px; border-radius: 1px; }
 .tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }
+.tl-scene, .tl-note, .tl-hl { transition: transform var(--dur-tl) var(--ease-out), color var(--dur-tl) var(--ease-out), background-color var(--dur-tl) var(--ease-out); }
 .tl-scene { position: absolute; top: 14px; height: 12px; width: 1px; background: var(--ink-3); } /* across the line */
-.tl-scene.near { background: var(--ink); box-shadow: 0 0 0 .5px var(--ink); }
+.tl-scene.near { background: var(--ink); box-shadow: 0 0 0 .5px var(--ink); transform: scaleY(1.34); }
 .tl-note { position: absolute; top: 25px; margin-left: -1px; color: var(--ink-3); line-height: 0; }
-.tl-note.near { color: var(--ink); }
-.tl-hl.near { filter: brightness(1.15); }
+.tl-note.near { color: var(--ink); transform: translateY(-1px) scale(1.2); }
+.tl-hl.near { filter: brightness(1.15); transform: scaleY(1.34); }
 .tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 15px; }
 .tl-lb { position: absolute; top: 2px; padding-left: 4px; border-left: 1px solid var(--rule); font-size: 9px; line-height: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
 .tl-lb.tl-end { border-left: 0; border-right: 1px solid var(--rule); padding: 0 4px 0 0; transform: translateX(-100%); color: var(--ink-2); }
@@ -293,16 +295,21 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tc-err { display: none; max-width: 300px; padding: 4px 2px 0; font-size: 10px; letter-spacing: .04em; color: var(--ink-2); }
 .tc-pop.bad .tc-err { display: block; }
 .tl-head { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
+.tl-head.glide { transition: left var(--dur-tl) var(--ease-out); } /* to where the caret went, unless the bar was redrawn */
 .tl-head::before { content: ''; position: absolute; top: 0; left: -3px; border: 3.5px solid transparent; border-top: 4px solid var(--ink); }
-.tl-hover { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); pointer-events: none; }
+.tl-hover { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); pointer-events: none; transition: opacity var(--dur-tl) var(--ease-out), background-color var(--dur-tl) var(--ease-out); }
+@starting-style { .tl-hover { opacity: 0; } } /* fades in as the pointer comes onto the bar */
 .tl-hover span { position: absolute; bottom: 1px; left: 4px; padding: 0 5px; font-size: 9px; line-height: 13px; letter-spacing: .06em; white-space: pre; background: var(--bar); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); font-variant-numeric: tabular-nums; }
 .tl-hover.flip span { left: auto; right: 4px; }
 .tl-hover.snap { background: var(--ink-2); }
 .tl-hover.fine { background: var(--ink); }
 .tl-hover.fine::before { content: ''; position: absolute; top: 0; left: -3px; border: 3.5px solid transparent; border-top: 4px solid var(--ink); }
-.tl-hover.fine span { color: var(--ink); box-shadow: 0 0 0 1px var(--ink-3); }
-.tl-reset { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: var(--bar); color: var(--ink-2); box-shadow: 0 0 0 1px var(--ink-3), 0 1px 4px rgba(0,0,0,.12); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.tl-hover.fine span { color: var(--ink); box-shadow: 0 0 0 1px var(--ink-3); animation: tl-fine var(--dur-tl) var(--ease-out); transform-origin: 0 100%; }
+.tl-hover.fine.flip span { transform-origin: 100% 100%; }
+@keyframes tl-fine { from { transform: scale(.94); opacity: .5; } } /* stepping: the readout steps up a little */
+.tl-reset { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: var(--bar); color: var(--ink-2); box-shadow: 0 0 0 1px var(--ink-3), 0 1px 4px rgba(0,0,0,.12); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); }
 .tl-reset[hidden] { display: none; }
+@starting-style { .tl-reset { opacity: 0; } }
 .tl-reset:hover { color: var(--ink); background: var(--hover); }
 
 /* ---- main area ------------------------------------------------------- */

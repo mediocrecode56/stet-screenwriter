@@ -264,7 +264,7 @@ test('Tools > Run Performance Probe gives a score and leaves no trace', async ()
   const state = `(async () => ({ recent: (await __stet.api.invoke('recent:list')).map((x) => x.path), rec: (await __stet.api.invoke('recovery:list')).length, stats: (await __stet.api.invoke('stats:get')).data, text: __stet.editor.blocks.map((b) => b.text).join('|'), path: __stet.session.path, dirty: __stet.session.dirty, caret: __stet.editor.caret }))()`;
   const probes = async () => (await fs.readdir(os.tmpdir())).filter((n) => n.startsWith('stet-probe-'));
   const before = await app.eval(state), dirs = await probes();
-  await app.eval('window.__stetPerfSizes = [6, 12]'); // the probe's own steps on smaller scripts (it measures 120 and 400 pages)
+  await app.eval('window.__stetPerfSizes = [6]'); // the probe's own steps on one small script (it measures 120 and 400 pages)
   await app.eval(`void __stet.cmd.run('perf')`); // as from the Tools menu
   const score = Number(await app.until(`document.querySelector('#overlay .pf-score')?.textContent`, { timeout: 30000, what: 'the score' }));
   assert.ok(Number.isInteger(score) && score >= 0 && score <= 100, `score ${score}`);

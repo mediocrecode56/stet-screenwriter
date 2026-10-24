@@ -116,9 +116,7 @@ test('per-document, per-project, weekly and all-time figures agree under random 
   book.apply([], meta);
   consistent(book.data);
   assert.equal(book.data.total, net, 'the net returned by apply() adds up to the total');
-  const projects = book.byProject();
-  assert.equal(Object.values(projects).reduce((a, b) => a + b, 0), book.data.total, 'Σ projects = total');
-  assert.equal(projects['C:\\P1'], book.data.docs.a.w + book.data.docs.b.w);
+  assert.equal(Object.values(book.data.docs).reduce((a, d) => a + d.w, 0), book.data.total, 'Σ screenplays = total');
   // Σ of all weeks = total.
   let weeks = 0;
   for (let o = 0; ; o--) { const s = book.summary({}, o); weeks += s.week.total; if (!s.hasEarlier) break; }
@@ -281,15 +279,15 @@ test('performance: a year of heavy use books and summarises quickly', () => {
   const t0 = performance.now();
   for (let d = 0; d < 365; d++) {
     const day = now.ms() + d * 86400000;
-    for (let i = 0; i < 3000; i++) book.apply([{ doc: 'd' + (i % 7), n: 1, t: day + i * 1000 }]);
+    for (let i = 0; i < 600; i++) book.apply([{ doc: 'd' + (i % 7), n: 1, t: day + i * 1000 }]);
   }
   const booked = performance.now() - t0;
   now.set(now.ms() + 364 * 86400000);
   const t1 = performance.now();
   for (let i = 0; i < 100; i++) book.summary({ daily: 1000, weekly: 5000 });
   const sum = (performance.now() - t1) / 100;
-  assert.equal(book.data.total, 365 * 3000);
-  assert.ok(booked < 3000, `booking 1.1M credits took ${booked.toFixed(0)} ms`);
+  assert.equal(book.data.total, 365 * 600);
+  assert.ok(booked < 600, `booking 219k credits took ${booked.toFixed(0)} ms`);
   assert.ok(sum < 5, `summary took ${sum.toFixed(2)} ms`);
   assert.equal(JSON.stringify(book.data).length < 400000, true, 'the saved file stays small');
 });

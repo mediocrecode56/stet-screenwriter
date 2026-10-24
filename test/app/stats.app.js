@@ -255,9 +255,9 @@ test('a day joins the streak at its goal, once however many screenplays; opening
   s = await streak();
   assert.deepEqual([s.text, s.data.last, s.targetG, s.unlocked], ['2', dayAgo(0), 2, 1], 'the goal reached: two days, a milestone, the first special loop');
   assert.ok(s.cls.includes('lit'));
-  // It grows at its next natural moment, while you watch.
+  // It starts growing at its next natural moment, while you watch (how it grows: test/unit/dino.test.js).
   await app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.envDue = null; c.inReaction = null; c.paused = null; c.held = []; c.gen = null; })()`);
-  await app.until('__stet.dino.c.g === 2', { timeout: 30000, what: 'the dinosaur to grow' });
+  await app.until(`__stet.dino.c.activity === 'grow'`, { timeout: 10000, what: 'the dinosaur to grow' });
   for (const t of ['Pilot', 'Short']) { await app.load([], {}, t); await app.type(`The ${t.toLowerCase()} opens.`); }
   await todayIs(12);
   s = await streak();

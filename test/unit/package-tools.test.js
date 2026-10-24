@@ -16,18 +16,20 @@ function tree(root, files) {
 }
 const all = (root) => fs.readdirSync(root, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => path.relative(root, path.join(e.parentPath ?? e.path, e.name)).split(path.sep).join('/')).sort();
 
-test('node_modules keeps what runs, and loses type declarations, source maps, sources and docs', () => {
+test('node_modules keeps what runs, and loses type declarations, source maps, sources, docs and CommonJS copies', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-prune-'));
   tree(root, {
     'src/main/main.js': 'app', 'src/types.d.ts': 'the app itself is never pruned',
     'node_modules/@scope/sdk/index.mjs': 'x', 'node_modules/@scope/sdk/index.d.mts': 'x', 'node_modules/@scope/sdk/index.mjs.map': 'x',
-    'node_modules/@scope/sdk/src/index.ts': 'x', 'node_modules/@scope/sdk/README.md': 'x', 'node_modules/@scope/sdk/package.json': '{}',
+    'node_modules/@scope/sdk/src/index.ts': 'x', 'node_modules/@scope/sdk/README.md': 'x',
+    'node_modules/@scope/sdk/package.json': '{"exports":{".":{"require":"./index.js","default":"./index.mjs"}}}', 'node_modules/@scope/sdk/index.js': 'its CommonJS copy goes',
+    'node_modules/@scope/sdk/lib/only.js': 'no ES copy: stays',
     'node_modules/plain/lib/a.js': 'x', 'node_modules/plain/docs/guide.html': 'x', 'node_modules/plain/package.json': '{}',
     'node_modules/plain/node_modules/src/package.json': '{}', 'node_modules/plain/node_modules/src/index.js': 'a package named src stays',
   });
   assert.ok(pruneModules(root) > 0);
   assert.deepEqual(all(root), [
-    'node_modules/@scope/sdk/index.mjs', 'node_modules/@scope/sdk/package.json',
+    'node_modules/@scope/sdk/index.mjs', 'node_modules/@scope/sdk/lib/only.js', 'node_modules/@scope/sdk/package.json',
     'node_modules/plain/lib/a.js', 'node_modules/plain/node_modules/src/index.js', 'node_modules/plain/node_modules/src/package.json', 'node_modules/plain/package.json',
     'src/main/main.js', 'src/types.d.ts',
   ]);

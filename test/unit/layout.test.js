@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { wrap, lineText, PAGE, ELEMENT } from '../../src/core/format.js';
 import { paginate, linesOf, mergeDirty, pageOf } from '../../src/core/layout.js';
 import { makeBlock, withText, defaultDocSettings } from '../../src/core/model.js';
-import { generateScript } from '../fixtures.js';
+import { generateScript } from '../../src/dev/sample.js';
 
 const settings = defaultDocSettings();
 

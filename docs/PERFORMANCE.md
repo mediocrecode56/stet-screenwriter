@@ -112,7 +112,7 @@ was not computation. It came from the visual path:
 ## Word counting (v0.3.0)
 
 Replaced the Unicode-regex scan with a table-driven state machine (see
-[NATIVE.md](NATIVE.md)): 3.95 → 1.59 ms per full count on English, 14.6 →
+[ARCHITECTURE.md](ARCHITECTURE.md#native-code)): 3.95 → 1.59 ms per full count on English, 14.6 →
 1.5 ms on Cyrillic-heavy text; opening a 456-page script 14.5 → 13.0 ms.
 
 ## What was optimised, and why

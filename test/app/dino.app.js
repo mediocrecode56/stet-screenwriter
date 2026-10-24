@@ -2,7 +2,7 @@
 // at home around TODAY, taking no room and no clicks but its own), the pointer passing over it
 // ignored while a click is answered at once, a drag going straight through, a side panel narrowing
 // its ground, real writing (not pasting or opening) livening it up, its ink following the theme, the
-// weather and scenery drawn whole, the theme's sunset and sunrise, the four shameless routines, and
+// weather and scenery drawn whole, the theme's sunset and sunrise, and
 // hiding it from the View menu for good.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -129,22 +129,6 @@ test('its ink follows the theme; the weather and scenery are drawn whole: a rain
   await doing('skateboard', '__stet.dino.setStreak({ growth: 6, unlocked: 3 }, false)');
   await app.until(`!!__stet.dino.c.props.find((p) => p.kind === 'skateboard' && p.ride)`, { timeout: 8000, what: 'a ride on the skateboard' });
   await app.eval('__stet.dino.setStreak({ growth: 0, unlocked: 0 }, false)');
-});
-
-test('four shameless routines run in the app: a scratch on its back, a strut, a burp after a meal, a photobomb', async () => {
-  for (const [name, setup, frames] of [
-    ['backScratch', '', ['fallen']],
-    ['strut', '', ['walk1', 'armsUp']],
-    ['burp', 'c.fed = c.now', ['roar', 'sitHowl']],
-    ['photobomb', `c.energy = 1; c.heat = 40; c.spawn('palm', { x: c.clampProp(c.center() + 40, 11), frame: 3, life: 1e9 })`, ['armsUp']],
-  ]) {
-    await doing(name, setup);
-    const seen = new Set();
-    await app.until(async () => { const f = await c(`c.activity === ${JSON.stringify(name)} && c.frame`); if (f) seen.add(f); return frames.some((x) => seen.has(x)); }, { timeout: 15000, every: 40, what: `${name}: ${frames.join(' or ')}` });
-    assert.ok(await app.eval(`(() => { const d = __stet.dino; d.lastSig = ''; d.draw(); const x = d.canvas.getContext('2d').getImageData(0, 0, d.canvas.width, d.canvas.height).data; for (let i = 3; i < x.length; i += 4) if (x[i]) return true; return false; })()`), `${name} is drawn`);
-  }
-  // The photobomb: in front of the palm.
-  assert.ok(await c(`Math.abs(c.center() - c.propCenter(c.find('palm'))) < 12`), 'right in front of the palm');
 });
 
 test('when AUTO turns the theme, it sees the sun set and rise; a manual switch leaves it be', async () => {

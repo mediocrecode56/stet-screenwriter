@@ -354,16 +354,6 @@ export class StatsBook {
     return 'Untitled screenplay';
   }
 
-  /** All-time words per project — the folder a screenplay is saved in ('' = never saved). */
-  byProject() {
-    const out = {};
-    for (const m of Object.values(this.data.docs)) {
-      const dir = m.path ? m.path.replace(/[\\/][^\\/]*$/, '') : '';
-      out[dir] = (out[dir] || 0) + m.w;
-    }
-    return out;
-  }
-
   /** Clear all recorded writing (the confirmed Reset). Goals, screenplays and the writing streak are untouched. */
   reset() {
     const now = this.now();

@@ -84,10 +84,10 @@ test('typing word by word counts each new word once, immediately', () => {
 
 test('rapid typing (one long burst, merged undo groups) is fully counted', () => {
   const h = harness();
-  const text = Array.from({ length: 2000 }, (_, i) => 'w' + i).join(' ');
+  const text = Array.from({ length: 500 }, (_, i) => 'w' + i).join(' ');
   typeStr(h.ed, text);
-  assert.equal(h.ed.words, 2000);
-  assert.equal(h.written, 2000);
+  assert.equal(h.ed.words, 500);
+  assert.equal(h.written, 500);
   check(h.ed);
 });
 

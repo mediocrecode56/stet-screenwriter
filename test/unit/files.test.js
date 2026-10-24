@@ -97,15 +97,22 @@ test('damaged newest backup is not treated as the keeper', async () => {
   assert.ok(names.includes(good), 'the newest *valid* backup is kept');
 });
 
-test('recovery snapshots: write, list, clear; temp files are cleaned', async () => {
+test('recovery snapshots: write, list, clear; temp files left by another process are cleaned, never a write under way', async () => {
   const rec = new Recovery(path.join(dir, 'recovery'));
   await rec.write('doc1', { path: null, name: 'Untitled', rev: 4 }, docJson('unsaved words'));
-  await fs.writeFile(path.join(rec.dir, '.doc2.stet.123.deadbeef.tmp'), 'partial');
+  const dead = process.pid === 123 ? 124 : 123;
+  await fs.writeFile(path.join(rec.dir, `.doc2.stet.${dead}.deadbeef.tmp`), 'partial');
   const list = await rec.list();
   assert.equal(list.length, 1);
   assert.equal(list[0].id, 'doc1');
   assert.match((await readDocument(list[0].file)).json, /unsaved words/);
   assert.deepEqual((await fs.readdir(rec.dir)).filter((n) => n.endsWith('.tmp')), []);
+  // Listing (as opening a screenplay does) while a copy is being written: the write still lands.
+  let listing = true;
+  const lists = (async () => { while (listing) await rec.list(); })();
+  try { for (let i = 0; i < 20; i++) await rec.write('doc3', { path: null, name: 'Untitled', rev: i }, docJson('more words ' + i)); } finally { listing = false; await lists; }
+  assert.match((await readDocument((await rec.list()).find((x) => x.id === 'doc3').file)).json, /more words 19/);
+  await rec.clear('doc3');
   await rec.clear('doc1');
   assert.equal((await rec.list()).length, 0);
   assert.equal(await cleanTemps(path.join(dir, 'nope')), 0);

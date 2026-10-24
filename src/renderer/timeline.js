@@ -39,6 +39,8 @@ export class Timeline {
     this.stepping = null; // see startStep()
     this.cancelled = false; // Esc pressed while stepping, Ctrl still held
     this.editing = null; // see editTimecode()
+    this.unlocked = false; // stepping just ended with the pointer locked, and it hasn't moved since
+    this.shift = 0; // px the strip is slid past where it scrolls to, to keep a stepped line under the pointer
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
       + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
@@ -51,7 +53,7 @@ export class Timeline {
     this.head = host.querySelector('.tl-head');
     this.band = host.querySelector('.tl-view');
     this.reset = host.querySelector('.tl-reset');
-    this.reset.addEventListener('click', () => { this.ppp = 0; this.update(true); });
+    this.reset.addEventListener('click', () => this.whole());
 
     this.inner.addEventListener('mousedown', (e) => this.down(e));
     this.inner.addEventListener('mousemove', (e) => this.over(e));
@@ -60,7 +62,7 @@ export class Timeline {
     // Double-click on the ruler or the band: the whole script, as in Ableton.
     this.inner.addEventListener('dblclick', (e) => {
       if (this.stepping || this.snapAt(e.clientX)?.kind === 'tc') return;
-      if (this.zone(e) !== 'zoom' || this.onRuler(e)) { this.ppp = 0; this.update(true); }
+      if (this.zone(e) !== 'zoom' || this.onRuler(e)) this.whole();
     });
     // Ctrl pressed with the pointer on the bar starts stepping right there; letting go ends it,
     // and Esc puts the script back where it was (and no more stepping until Ctrl is pressed again).
@@ -76,9 +78,10 @@ export class Timeline {
     // writer switched windows, which leaves the script where it stepped to.
     window.__stetPointerLock = () => this.lock();
     document.addEventListener('pointerlockchange', () => {
-      const f = this.stepping;
-      if (!f) return;
-      if (document.pointerLockElement === this.inner) f.locked = true;
+      const f = this.stepping, mine = document.pointerLockElement === this.inner;
+      if (!mine) this.unlocked = true; // (and back on the bar where it was locked)
+      if (!f) { if (mine) document.exitPointerLock(); return; } // granted only after a quick tap of Ctrl ended
+      if (mine) f.locked = true;
       else if (f.locked) document.hasFocus() ? this.cancelStep() : this.endStep();
     });
     this.scroll.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
@@ -88,13 +91,13 @@ export class Timeline {
       const l = this.scroll.scrollLeft - PADX, w = this.scroll.clientWidth;
       if ((l < this.rulerA && this.rulerA > 0) || (l + w > this.rulerB && this.rulerB < this.length * this.drawn)) this.paintRuler();
     });
-    new ResizeObserver(() => { if (this.visible) this.update(true); }).observe(host);
+    new ResizeObserver(() => { if (this.visible) { this.slide(0); this.update(true); } }).observe(host);
   }
 
   get visible() { return !this.host.hidden; }
 
   show(on = !this.visible) {
-    if (!on) { this.endStep(); this.closeEditor(); this.leave(); }
+    if (!on) { this.endStep(); this.closeEditor(); this.leave(); this.slide(0); }
     this.host.hidden = !on;
     if (on) this.update(true);
     this.onToggle(on);
@@ -108,27 +111,72 @@ export class Timeline {
     return Math.max(0, Math.min(this.length, (clientX - this.inner.getBoundingClientRect().left) / this.drawn));
   }
 
-  /** Go to the line at position x. */
-  go(x) {
+  /** The start of the line at position x in the script (null past its end). */
+  lineStart(x) {
     const { bi, line } = placeAt(this.view.pages, x);
     const b = this.ed.blocks[bi];
-    if (!b) return;
-    this.jump(pos(bi, linesOf(b)[line] || 0), false, null, 'top');
+    return b ? pos(bi, linesOf(b)[line] || 0) : null;
+  }
+
+  /** Go to the line at position x. */
+  go(x) {
+    const p = this.lineStart(x);
+    if (p) this.jump(p, false, null, 'top');
+  }
+
+  /** Scroll the bar so that cx (in the strip) is in view, a third of the way in, unless it is. */
+  reveal(cx) {
+    const sc = this.scroll;
+    if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = cx - sc.clientWidth / 3;
   }
 
   /** Zoom by factor f, keeping the point under clientX where it is. */
   zoom(f, clientX) {
     const r = this.scroll.getBoundingClientRect();
-    const px = clientX == null ? r.width / 2 : clientX - r.left;
-    this.setScale(this.drawn * f, (this.scroll.scrollLeft + px - PADX) / this.drawn, px);
+    clientX ??= r.left + r.width / 2;
+    this.setScale(this.drawn * f, this.posAt(clientX), clientX - r.left);
   }
 
   /** Draw at `ppp` pixels a page (down to fitting the script), with position `at` at `px` in the bar. */
   setScale(ppp, at, px) {
     ppp = Math.min(PPP_MAX, ppp);
     this.ppp = ppp <= this.fit ? 0 : ppp;
+    this.slide(0);
     this.update(true);
     this.scroll.scrollLeft = at * this.drawn + PADX - px;
+  }
+
+  /** The whole script in the bar again (double-click, or the button), settling in with a slight zoom out. */
+  whole() {
+    const was = this.ppp;
+    this.ppp = 0;
+    this.slide(0);
+    this.update(true);
+    if (was) this.ease([{ transform: 'scaleX(1.06)', opacity: 0.4 }, { opacity: 1 }], 240);
+  }
+
+  /** Play the strip in from `frames` to as it is now, briefly, on the compositor (none with reduced motion). */
+  ease(frames, ms = 200) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const now = this.inner.style.transform || 'none';
+    this.inner.animate(frames.map((f) => ({ transform: now, ...f })), { duration: ms, easing: 'cubic-bezier(.2,.7,.2,1)' });
+  }
+
+  /** Slide the strip `px` past where it scrolls to (0: back, gently when `soft`). */
+  slide(px, soft = false) {
+    if (px === this.shift) return;
+    const from = this.inner.style.transform;
+    for (const a of this.inner.getAnimations()) a.cancel(); // (an easing back to 0 overtaken)
+    this.shift = px;
+    this.inner.style.transform = px ? `translateX(${px}px)` : '';
+    if (soft && from) this.ease([{ transform: from }, {}], 180);
+  }
+
+  /** Keep the strip's position x under the pointer at clientX: scrolled there, and slid past the ends. */
+  hold(x, clientX) {
+    const sc = this.scroll, want = sc.getBoundingClientRect().left + PADX + x * this.drawn - clientX;
+    sc.scrollLeft = want;
+    this.slide(sc.scrollLeft - want);
   }
 
   onRuler(e) { return e.clientY >= this.inner.getBoundingClientRect().bottom - 15; }
@@ -201,14 +249,17 @@ export class Timeline {
   /** The pointer moving over the bar: the time and scene under it, or a step with Ctrl held. */
   over(e) {
     if (this.dragging || this.stepping) return;
+    this.unlocked = false;
     this.pointer = e.clientX;
     if (mod(e)) return this.cancelled ? undefined : this.startStep(e.clientX); // (only Ctrl's own key events clear `cancelled`: letting go of the lock sends a move without it)
     this.showHover(e);
   }
 
   leave() {
+    if (this.unlocked) return; // (letting go of the pointer lock sends a leave, though it is back on the bar)
     this.pointer = null;
     if (this.stepping) return; // the cover has the pointer now
+    this.slide(0, true); // (kept under the pointer after stepping until now)
     this.hover.hidden = true;
     this.band.classList.remove('hot');
     this.mark(null);
@@ -224,10 +275,11 @@ export class Timeline {
 
   /** Holding Ctrl (Cmd) over the bar steps through the script a whole second at a time, at least
    *  FINE_PX pixels of mouse travel a second from where it started, whatever the zoom, drawn to
-   *  nothing. The line moves slower than the mouse, so the pointer is locked where stepping began
+   *  nothing. A second is less than a pixel of the bar, so the pointer is locked where stepping began
    *  and only its movement counts: it can't wander off over the toolbar or the script, nothing there
-   *  lights up or takes a click, and when Ctrl is let go it is back on the bar where it was. (Should
-   *  the lock be refused, a cover over the window takes the pointer instead.) The script follows the
+   *  lights up or takes a click. The line stays under the pointer and the strip slides beneath it,
+   *  so when Ctrl is let go the pointer is on the bar, on the second stepped to. (Should the lock be
+   *  refused, a cover over the window takes the pointer, and the line follows it.) The script follows the
    *  line, with the caret drawn where it is, but the caret itself stays put: nothing that shows where
    *  it is (the element in the toolbar, the status bar, the scene list, the notes) changes, then or
    *  after. A click puts the caret there; a right-click pins a timecode at that second; letting go
@@ -237,7 +289,7 @@ export class Timeline {
     const t0 = Math.round(this.time.at(this.posAt(clientX)));
     // The line shows at once; the script moves only once the line does, so a shortcut pressed with
     // the pointer resting on the bar leaves it where it is.
-    this.stepping = { top: this.view.scroller.scrollTop, t: t0, x: Math.min(this.length, this.time.pos(t0)), at: clientX, moved: false, locked: false };
+    this.stepping = { top: this.view.scroller.scrollTop, t: t0, x: Math.min(this.length, this.time.pos(t0)), at: clientX, ax: clientX, moved: false, locked: false };
     this.rebase(clientX, t0);
     // Every pointer event is the stepping's until it ends, wherever it lands.
     const off = this.stepOff = new AbortController(), opts = { capture: true, signal: off.signal };
@@ -246,7 +298,11 @@ export class Timeline {
     for (const type of ['mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu']) addEventListener(type, take, opts);
     // A right-click pins on the press: with the pointer locked there is no context menu event.
     addEventListener('mousedown', (e) => { take(e); if (e.button === 2) this.pinStep(); else if (e.button === 0) this.placeStep(); }, opts);
-    addEventListener('wheel', (e) => { take(e); this.wheel(e); if (this.stepping) this.rebase(this.stepping.at, this.stepping.t); }, { ...opts, passive: false });
+    addEventListener('wheel', (e) => {
+      take(e); this.wheel(e);
+      const f = this.stepping;
+      if (f) { this.rebase(f.at, f.t); if (f.moved) this.hold(f.x, f.ax); this.readout(f.x, f.t); }
+    }, { ...opts, passive: false });
     this.cover = document.body.appendChild(h('div', { class: 'tl-cover' }));
     document.body.classList.add('tl-fine');
     this.hover.classList.add('fine');
@@ -268,7 +324,8 @@ export class Timeline {
     // Ctrl let go where its key up didn't reach us; only without the lock, as letting go of the
     // lock (Esc) can send a move without Ctrl before it says the lock is gone.
     if (!mod(e)) return f.locked ? undefined : this.endStep();
-    f.at = document.pointerLockElement === this.inner ? f.at + e.movementX : e.clientX;
+    if (document.pointerLockElement === this.inner) f.at += e.movementX;
+    else { f.at = f.ax = e.clientX; f.ay = e.clientY; }
     this.step(f.at);
   }
 
@@ -292,6 +349,7 @@ export class Timeline {
     f.x = Math.min(this.length, this.time.pos(t));
     f.moved = true;
     this.scrub(f.x);
+    this.hold(f.x, f.ax);
     this.readout(f.x, t);
   }
 
@@ -307,6 +365,10 @@ export class Timeline {
     document.body.classList.remove('tl-fine');
     this.hover.classList.remove('fine');
     this.hover.hidden = true; // until the pointer moves over the bar again
+    // The pointer is back on the bar where it was locked, on the line; without the lock it may be anywhere.
+    this.unlocked = f.locked || f.ay == null; // (the lock, or one on its way: a leave that follows is no leave)
+    const r = this.inner.getBoundingClientRect();
+    if (f.ay != null && (f.ay < r.top || f.ay > r.bottom)) this.slide(0, true);
     const v = this.view;
     v.scrubAt = null;
     if (!f.moved) return;
@@ -314,18 +376,17 @@ export class Timeline {
     v.frame();
   }
 
-  /** Esc: stop stepping and put the script back; Ctrl has to be let go and pressed again to step on. */
+  /** Esc: stop stepping and put the script (and the bar) back; Ctrl has to be let go and pressed again to step on. */
   cancelStep() {
     this.cancelled = true;
     this.endStep(false);
+    this.slide(0, true);
   }
 
   /** The script follows the line at once, with the caret drawn there (the editor's stays put). */
   scrub(x) {
-    const { bi, line } = placeAt(this.view.pages, x);
-    const b = this.ed.blocks[bi];
-    if (!b) return;
-    const p = pos(bi, linesOf(b)[line] || 0);
+    const p = this.lineStart(x);
+    if (!p) return;
     const v = this.view;
     this.stepping.p = v.scrubAt = p;
     v.stopGlide();
@@ -362,7 +423,8 @@ export class Timeline {
     const key = `${this.ed.rev}|${pages.length}|${this.scale}|${tcs.map((t) => t.id + ':' + t.line + ':' + t.t).join(',')}`;
     // Another script: nothing carries over. One laid out to more or fewer pages: at once.
     if (this.session.doc !== this.docSeen) { this.endStep(); this.closeEditor(); }
-    if (force || this.drawn !== this.scale || this.session.doc !== this.docSeen || pages.length !== this.drawnPages) this.repaint(key);
+    const redraw = force || this.drawn !== this.scale || this.session.doc !== this.docSeen || pages.length !== this.drawnPages;
+    if (redraw) this.repaint(key);
     else if (key !== this.key || pages !== this.pagesSeen) {
       // While typing, the bar catches up a moment after the last key rather than on every one.
       clearTimeout(this.later);
@@ -374,15 +436,14 @@ export class Timeline {
     let l = 0;
     while (l + 1 < lines.length && lines[l + 1] <= c.o) l++;
     const x = scriptPos(pages, c.b, l) * this.drawn;
+    this.head.classList.toggle('glide', !redraw && !this.dragging); // a jump glides; a zoom or a new script doesn't
     this.head.style.left = x + 'px';
     this.showBand();
     // Zoomed in, the bar follows the caret when it leaves the part in view.
     const at = c.b + ':' + l;
     if (at !== this.caretSeen) {
       this.caretSeen = at;
-      const sc = this.scroll;
-      const cx = x + PADX; // in the strip's scrolled content
-      if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = cx - sc.clientWidth / 3;
+      this.reveal(x + PADX);
     }
   }
 
@@ -496,7 +557,7 @@ export class Timeline {
     this.hover.style.left = x * this.drawn + 'px';
     this.hover.firstChild.textContent = text;
     // The readout flips to the left of the line in the right half, so it stays in the bar.
-    this.hover.classList.toggle('flip', x * this.drawn - this.scroll.scrollLeft + PADX > this.scroll.clientWidth / 2);
+    this.hover.classList.toggle('flip', x * this.drawn - this.scroll.scrollLeft + this.shift + PADX > this.scroll.clientWidth / 2);
   }
 
   // ---- timecodes ------------------------------------------------------------------------
@@ -606,8 +667,7 @@ export class Timeline {
     };
     document.body.appendChild(pop);
     // Zoomed in, the bar brings the timecode into view first.
-    const sc = this.scroll, cx = at.here * this.drawn + PADX;
-    if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = cx - sc.clientWidth / 3;
+    this.reveal(at.here * this.drawn + PADX);
     // Under the bar, its notch on the timecode, kept inside the window.
     const hr = this.host.getBoundingClientRect(), ax = this.inner.getBoundingClientRect().left + at.here * this.drawn;
     const left = Math.max(6, Math.min(ax - 18, innerWidth - pop.offsetWidth - 6));

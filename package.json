@@ -14,7 +14,7 @@
     "perf": "electron . --perf-probe",
     "smoke": "node --test --test-force-exit test/app/smoke.app.js",
     "quick": "node --test \"test/unit/*.test.js\" && node --test --test-force-exit test/app/smoke.app.js",
-    "e2e": "node --test --test-force-exit test/app/smoke.app.js && node --test --test-force-exit --test-timeout=120000 --test-concurrency=4 \"test/app/!(smoke).app.js\"",
+    "e2e": "node --test --test-force-exit --test-timeout=120000 --test-concurrency=4 \"test/app/*.app.js\"",
     "postinstall": "node node_modules/electron/install.js",
     "exe": "node scripts/build-exe.js",
     "mac": "node scripts/build-mac.js"

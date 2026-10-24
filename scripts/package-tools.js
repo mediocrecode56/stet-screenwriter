@@ -32,7 +32,8 @@ export const MAC_DOC_INFO = {
   UTExportedTypeDeclarations: [{ UTTypeIdentifier: 'app.stet.screenplay', UTTypeDescription: 'STET Screenplay', UTTypeConformsTo: ['public.data', 'public.content'], UTTypeIconFile: 'electron.icns', UTTypeTagSpecification: { 'public.filename-extension': ['stet'] } }],
 };
 
-/** Removes from node_modules what is never run. Returns the bytes saved. */
+/** Removes from node_modules what is never run (and, in a package that is imported as an ES
+ *  module, the CommonJS copy of each file beside it). Returns the bytes saved. */
 export function pruneModules(appDir) {
   const nm = path.join(appDir, 'node_modules');
   let saved = 0;
@@ -44,12 +45,27 @@ export function pruneModules(appDir) {
         // A package's own src/ (TypeScript sources) and docs, but never a package named so.
         if (inPackage && DEAD_DIR.has(e.name) && !isPackage(p)) { saved += size(p); fs.rmSync(p, { recursive: true, force: true }); continue; }
         walk(p, inPackage || e.name !== 'node_modules');
-      } else if (DEAD_FILE.test(e.name)) {
+      } else if (DEAD_FILE.test(e.name) || (e.name.endsWith('.js') && inEsm(p) && fs.existsSync(p.slice(0, -3) + '.mjs'))) {
         saved += fs.statSync(p).size;
         fs.rmSync(p);
       }
     }
   };
+  // Packages whose entry for an import is .mjs (STET imports its dependencies, never requires them).
+  const esm = new Set();
+  const inEsm = (file) => { for (let d = path.dirname(file); d.length > nm.length; d = path.dirname(d)) if (fs.existsSync(path.join(d, 'package.json'))) return esm.has(d); return false; };
+  const entry = (x) => typeof x === 'string' ? x : x && (entry(x.import) || entry(x.default));
+  const find = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith('@')) { find(p); continue; }
+      try { const pk = JSON.parse(fs.readFileSync(path.join(p, 'package.json'), 'utf8')); if (/\.mjs$/.test(entry(pk.exports?.['.'] ?? pk.exports) || '')) esm.add(p); } catch { /* no package here */ }
+      find(path.join(p, 'node_modules'));
+    }
+  };
+  find(nm);
   if (fs.existsSync(nm)) for (const e of fs.readdirSync(nm, { withFileTypes: true })) {
     if (!e.isDirectory()) continue;
     const p = path.join(nm, e.name);

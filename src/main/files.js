@@ -40,13 +40,15 @@ export async function atomicWrite(target, buf, { verify = check } = {}) {
   }
 }
 
-/** Remove temp files left behind by an interrupted write. */
+/** Remove temp files left behind by an interrupted write: another process's (one that ended
+ *  mid-write), never this one's, which are writes still under way. */
 export async function cleanTemps(dir) {
   let names;
   try { names = await fs.readdir(dir); } catch { return 0; }
   let n = 0;
   for (const name of names) {
-    if (/^\..+\.\d+\.[0-9a-f]{8}\.tmp$/.test(name)) {
+    const m = /^\..+\.(\d+)\.[0-9a-f]{8}\.tmp$/.exec(name);
+    if (m && +m[1] !== process.pid) {
       await fs.rm(path.join(dir, name), { force: true }).catch(() => {});
       n++;
     }

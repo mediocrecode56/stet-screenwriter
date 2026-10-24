@@ -156,10 +156,10 @@ workflow would remove that warning.
 
 | command | what it does |
 |---|---|
-| `npm test` | the unit tests (`test/unit/*.test.js`, about 240, six seconds): formatting and pagination, editing and undo, file format round-trips and repair, safe saving, backups and crash recovery, PDF output, word counting and writing statistics, the streak, updates and patches, packaging, file links, the writing companion. Each file says what it covers |
+| `npm test` | the unit tests (`test/unit/*.test.js`, about 240, seven seconds): formatting and pagination, editing and undo, file format round-trips and repair, safe saving, backups and crash recovery, PDF output, word counting and writing statistics, the streak, updates and patches, packaging, file links, the writing companion. Each file says what it covers |
 | `npm run quick` | the routine check, about ten seconds: every unit test, then the smoke test (`test/app/smoke.app.js`: one start of the real app, then writing, the Tab cycle, element and alignment changes, scene navigation, the timeline with Ctrl held, timecodes and a scene's own, a changed shortcut, saving, reopening and the PDF). Run it before every push |
-| `npm run smoke` | the smoke test alone, about four seconds |
-| `npm run e2e` | the real app, every area (`test/app/*.app.js`), about half a minute: the smoke test, then four files at a time: writing (completion, styles, alignment, shortcuts, notes, the caret at every scale, zoom, the word count), files (saving, autosave, backups, Final Draft, renaming, Open Recent, the performance probe, reopening on launch, crash recovery), statistics and the streak, the companion, the look (header, status bar, themes and their schedule, slides and easing), the English review (a mock API and a fake Claude Code), updates and patches, file links. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
+| `npm run smoke` | the smoke test alone, about six seconds |
+| `npm run e2e` | the real app, every area (`test/app/*.app.js`, four files at a time), about 25 seconds: the smoke test, writing (completion, styles, alignment, shortcuts, notes, the caret at every scale, zoom, the word count), files (saving, autosave, backups, Final Draft, renaming, Open Recent, the performance probe, reopening on launch, crash recovery), statistics and the streak, the companion, the look (header, status bar, themes and their schedule, slides and easing), the English review (a mock API and a fake Claude Code), updates and patches, file links. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
 | `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
 
@@ -181,13 +181,15 @@ How the tests stay fast and dependable:
 - **Simulate once, check everything.** The companion's hours of life are simulated once
   (`test/unit/dino-life.test.js`) with every rule checked on every frame, and the tests read what
   happened from it; how often something happens is read from its choices directly rather than
-  waited for. `test/helpers/dino-sim.js` has the shared simulation.
+  waited for. `test/helpers/dino-sim.js` has the shared simulation. The app tests check only what
+  needs the real window (where it is drawn, what a click does); how a routine plays is the unit
+  tests' job, so nothing is checked twice.
 - **Nothing fails quietly.** Every app test fails if, while it ran, anything in the page threw an
   error nobody caught or the main process reported one (an error it didn't catch, a write that
   failed, the page gone), even when what the test checks came out right. A test of how STET copes
   with an error says so with `app.expect(/…/)`.
 - **Broken on purpose.** The suite was checked by breaking STET in turn (no pointer lock while
-  stepping, the caret or the toolbar following the stepping, Esc keeping the script where it stepped to, a dialog leaving the focus behind it, a routine sliding instead
+  stepping, the caret or the toolbar following the stepping, the pointer let go off the second stepped to, Esc keeping the script where it stepped to, a dialog leaving the focus behind it, a routine sliding instead
   of walking, autosave off, an undo keeping its word credit, a streak day counted twice, a burp
   without a meal, Save As during an autosave): each made the tests that cover it fail, and only those.
 
@@ -232,14 +234,19 @@ heading, a note to its passage, with the note open). Dragging sideways anywhere 
 the point pressed (right zooms in, down to about 100 pixels a second; left-right arrow
 cursor); the band (hand cursor; its edges show) moves the window over the script. Holding
 Ctrl (Cmd on a Mac, where Ctrl + click is a right-click) with the pointer on the bar steps a
-whole second at a time from where it was (`fineTime`; at least 12 pixels a second, wider when
-zoomed in): the system pointer is hidden and the line moves in its place, slower than the mouse
-and drawn to no mark. A cover over the whole window (`.tl-cover`) takes the pointer meanwhile, so
-wherever the hidden pointer wanders nothing else reacts (no toolbar hover or Ctrl + click, no
-selection in the script). The caret moves only once the line does (a shortcut pressed with the
-pointer resting on the bar leaves it alone), then the caret and the window follow, the readout
-shows the exact second, a right-click pins a timecode at that second at once, letting go of
-Ctrl leaves the caret there and Esc puts it back. The round button
+whole second at a time from where it was (`fineTime`; at least 12 pixels of mouse travel a
+second, more when zoomed in), drawn to no mark. The pointer is locked to the bar meanwhile (the
+main process asks for the lock, `pointer:lock`; refused, a cover over the window, `.tl-cover`,
+takes the pointer), so nothing else in the window lights up or takes a click. The line stays
+under the pointer and the strip slides beneath it (scrolled, and past its ends shifted,
+`Timeline.hold()`), so letting go of Ctrl leaves the pointer on the second stepped to; the shift
+eases away when the pointer leaves the bar. The script follows the line with a caret drawn there
+(`View.scrubAt`), but the editor's caret stays put, so the toolbar, status bar, scene list and
+notes never change. A click puts the caret there, a right-click pins a timecode at that second,
+letting go leaves the script there and Esc puts it (and the strip) back. The bar moves gently:
+the readout fades in, a mark the pointer is drawn to lifts a little, the caret's line glides
+to where a click sent it, and the whole script settles in with a slight zoom out (none with
+reduced motion). The round button
 centred on the right, or a double-click on the ruler or the band, shows the whole script.
 The wheel scrolls it and Ctrl+wheel zooms; the grid steps between 1 second and an hour so it
 stays readable, and the ruler is drawn only around the part in view.
@@ -381,78 +388,17 @@ progression again.
 
 ## Writing companion
 
-A tiny 8-bit dinosaur lives on the edge of the desk, standing on the status
-bar's top line, with a life of its own (it takes up no room: the editor and
-everything else work underneath it as before). Its home is the stretch above
-TODAY, but the whole width of the editor is its playground: now and then
-curiosity takes it out towards the ends, and very, very rarely it walks all
-the way to the bottom-left corner of the window to have a bite at the border.
-It walks whenever it moves, one step at a time, and never slides. When STET is
-in the background (you're working in another program), tufts of grass slowly
-come up around it, five at most, and it leaves them alone; after a long while
-away it curls up for a deep sleep. When you come back it wakes slowly, and once
-you're writing again it gets round to the grass in its own time, a bite at a
-time. While it sleeps like that, STET rests too: the dinosaur lies still,
-nothing animates and the background checks slow down, so the app uses next to
-nothing until you click back into it — then everything is there at once. It walks, runs and
-paces about, naps and dozes, stretches and does its yoga, chases a ball and
-its tail, digs up bones (and sometimes a disappointing pebble), builds little
-mounds of earth, reads a page of its own, takes a coffee break, sings, blows
-bubbles, stands on its head, watches leaves fall and butterflies go by, and —
-while you're writing — sometimes types along on a tiny typewriter or just
-watches the page fill up. Sometimes it just lies on its front, chin up, and
-watches the sky. Even its everyday things come out a little different each
-time — a rest with a tail tap or a scratch, a walk at its own pace with a sniff
-on the way, a dance with a favourite move of the day. Before a proper rest it
-often makes its bed (round and round, a scrape, a flop and a sigh), and it
-likes to line up pebbles in a neat little row. Once in a while it does a
-balancing act along the line it stands on, or plants a seed and waits for the
-flower to come up. Its mood drifts over the
-day, and it remembers what it did recently, so it doesn't repeat itself.
-
-Its little world has a life too, now and then and never two things at once: a
-rain cloud drifts over and rains on it, a breeze gets up, a bird drops by, a
-tumbleweed rolls through, a star falls at night, a cactus, a tuft of grass or
-a palm comes up out of the ground (it notices in its own time, and may go over
-to sniff it, nibble the grass or find out the hard way about the cactus, before
-the plant withers away again); it may grow a palm tree and
-sit in its shade (or shake it for a coconut), find a flower, bounce on a
-mushroom, meet a snail, splash in the puddle the rain left, or watch the
-fireflies. Visitors turn up too: a balloon on the breeze (it jumps for the
-string), a paper plane, a frog to hop along with, a ladybird that climbs onto
-its head, a dandelion to blow, a worm that is always a moment quicker. When the
-theme turns dark or light on its own (AUTO), it stops to watch: the sun goes
-down, it waves goodnight and lies chin up as the moon rises and the stars come
-out — or the sun comes up, wakes it, and gets a good-morning roar. What it does about the rain depends on what it was doing — it sleeps
-through it, shelters under the palm, runs for it (the cloud follows), catches
-the drops, dances in it, or holds a leaf over its head.
-
-Its energy comes from the words you actually write (not pastes, not opening
-files, not the clock) and changes gradually; idle, it calms down and dozes.
-The pointer passing over it does nothing. Click it and it notices at once (a
-blink and a little start), then reacts to fit what it was doing: stopped
-mid-stride, guarding its bone, a *ding* on the typewriter, hiding behind the
-palm tree, talking in its sleep — or anything from a nod to something
-ridiculous, sometimes after a beat, sometimes with a shrug, and with mounting
-indignation if you keep clicking. A pose it is just
-holding gives way immediately; a step, jump or stride in progress always
-finishes first, so nothing is cut off or sped up. It mostly keeps to the
-middle of its patch and never wanders out of sight. *View → Hide Writing Companion* turns it off. It redraws a tiny canvas a
-few times a second at most, and not at all while the window is hidden.
+What it does, for a writer: the README. How it works (the engine, the repertoire, the
+environment, the background and dormant states, the canvas): [ARCHITECTURE.md](ARCHITECTURE.md#writing-companion).
+In short: `dino-art.js` holds the pixel art, `dino-acts.js` the repertoire (generators of short
+steps), `dino.js` the engine (`Critter`, pure and simulated for hours in `test/unit/dino-life.test.js`)
+and the canvas (`Dino`). *View → Hide Writing Companion* turns it off.
 
 ## Open Recent
 
-Hover *Open Recent…* in the File menu for a quick list of your last ten
-screenplays beside it: click one to open it. Long titles end in "…" (hover for
-the full path), the one already open is dimmed, and a missing file can't be picked.
-Click *Open Recent…* itself for the full window.
-
-*File → Open Recent…* (Ctrl+Shift+O). Hover a project for three actions: the
-**folder icon** (*Show in Folder*) shows the file in its folder; **×**
-(*Remove from Recent*) removes it from the list only; the **bin icon** (*Move
-to Recycle Bin*) moves the file to the Recycle Bin after a confirmation (never a
-permanent delete). Long paths are shortened from the start ("…\Drafts\Film.stet",
-full path on hover), so the list never scrolls sideways. Missing files are marked.
+*File → Open Recent…* (Ctrl+Shift+O), or hovering it in the File menu for the last ten. Each
+project can be shown in its folder, removed from the list, or moved to the Recycle Bin after a
+confirmation (never a permanent delete); missing files are marked.
 
 On launch STET opens the screenplay last edited (`lastEdited` in settings, set when a save
 writes changes; `src/core/recent.js`), then the newest entry in Open Recent that still opens, so
@@ -475,7 +421,6 @@ one only looked at since doesn't take its place.
 - [Architecture](ARCHITECTURE.md) — modules, editing pipeline, pagination rules, integrity design
 - [File format](FILE_FORMAT.md) — `.stet` container and schema, versioning, migrations
 - [Performance](PERFORMANCE.md) — measured results and conditions
-- [Native code](NATIVE.md) — the C/WebAssembly word-count experiment and why it isn't shipped (measured)
 - [Changelog](../CHANGELOG.md) — one git commit and tag per version; also in the app under *Help → Changelog*
 
 ## Known limitations

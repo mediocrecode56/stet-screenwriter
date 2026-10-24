@@ -154,7 +154,6 @@ export class ClaudeService {
   }
 
   async reviewChunk(client, system, chunk, signal) {
-    if (process.env.STET_DEBUG_REVIEW) console.log('reviewChunk', chunk.index);
     try {
       const stream = client.beta.messages.stream({
         model: MODEL,
@@ -175,7 +174,6 @@ export class ClaudeService {
       if (!parsed || !Array.isArray(parsed.findings)) return { ok: false, error: { code: 'bad_output', message: 'The response had no findings list.' } };
       return { ok: true, findings: parsed.findings, usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens } };
     } catch (e) {
-      if (process.env.STET_DEBUG_REVIEW) console.log('chunk error', e);
       return { ok: false, error: describeError(e) };
     }
   }
