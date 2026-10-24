@@ -85,7 +85,7 @@ export class Timeline {
       const f = this.stepping, mine = document.pointerLockElement === this.inner;
       if (!mine) this.unlocked = true; // (and back on the bar where it was locked)
       if (!f) { if (mine) document.exitPointerLock(); return; } // granted only after a quick tap of Ctrl ended
-      if (mine) f.locked = true;
+      if (mine) f.locked = f.fresh = true;
       else if (f.locked) document.hasFocus() ? this.cancelStep() : this.endStep();
     });
     this.scroll.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
@@ -371,8 +371,13 @@ export class Timeline {
     // Ctrl let go where its key up didn't reach us; only without the lock, as letting go of the
     // lock (Esc) can send a move without Ctrl before it says the lock is gone.
     if (!mod(e)) return f.locked ? undefined : this.endStep();
-    if (document.pointerLockElement === this.inner) f.at += e.movementX;
-    else { f.at = f.ax = e.clientX; f.ay = e.clientY; }
+    if (document.pointerLockElement === this.inner) {
+      // On Windows the first move after the lock is measured from where the system put the cursor
+      // to lock it, a jump of hundreds of pixels that was never made: that one is left out.
+      const jump = f.fresh && Math.abs(e.movementX) > 64;
+      f.fresh = false;
+      if (!jump) f.at += e.movementX;
+    } else { f.at = f.ax = e.clientX; f.ay = e.clientY; }
     this.step(f.at);
   }
 

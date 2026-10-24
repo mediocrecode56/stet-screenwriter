@@ -130,7 +130,20 @@ test('scene navigation glides to the heading, nothing of the scene before it in 
 
 const lbl = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, p2 = (n) => String(n).padStart(2, '0'); return h ? `${h}:${p2(m)}:${p2(sec % 60)}` : `${m}:${p2(sec % 60)}`; };
 const hms = (sec) => [Math.floor(sec / 3600), Math.floor(sec / 60) % 60, sec % 60].map((n) => String(n).padStart(2, '0')).join(':');
+// The system grants the pointer lock only to the window with the focus, which a writer's always is.
+// On Linux each test window is (a display of its own); on Windows and a CI Mac it may or may not be,
+// and then the cover stands in. Each step waits for the lock where it is sure to come, else a moment
+// for it, and goes on in whichever way stepping got: locked, or under the cover.
 const LOCKS = process.platform === 'linux';
+// Locked, a move on the spot first: on Windows the first move after the lock comes with a jump to
+// where the system put the cursor, which stepping leaves out (and with it, that move's own distance).
+const locked = async (x, y) => {
+  const lock = 'document.pointerLockElement === __stet.timeline.inner';
+  await app.until(lock, { what: 'the pointer locked to the bar', ...(LOCKS ? {} : { timeout: 1500 }) }).catch(() => {});
+  const on = await app.eval(lock);
+  if (on) await app.move(x, y);
+  return on;
+};
 const tl = (expr) => app.eval(`(() => { const t = __stet.timeline; return ${expr}; })()`);
 
 test('the timeline: a tick for each scene, note and highlight; a click goes there, drawn to what is near', async () => {
@@ -208,9 +221,7 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   // the bar; the script stays put until the line moves (Ctrl+S and the like leave it alone).
   await app.down('Mod');
   await app.until('!!__stet.timeline.stepping', { what: 'stepping' });
-  // The system grants the lock only to the window with the focus, which a writer's always is; so is
-  // each one here on Linux (a display of its own). A CI Mac's may not be: there the cover stands in.
-  if (LOCKS) await app.until('document.pointerLockElement === __stet.timeline.inner', { what: 'the pointer locked to the bar' });
+  const locks = await locked(x, y);
   assert.equal(await top(), 0, 'Ctrl alone moves nothing');
   // The mouse wanders up over the toolbar while it moves 400px: ever further on, wherever it goes up or down.
   for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 4); // (up into the toolbar, within the window)
@@ -232,7 +243,7 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   await app.up('Mod');
   await app.until('!__stet.timeline.stepping && !document.pointerLockElement && !document.querySelector(".tl-cover")', { what: 'stepping to end' });
   assert.equal(await top(), stepped, 'the script stays where it stepped to');
-  const at = LOCKS ? x : x + 34 * 12; // the pointer: let go where it was locked, or where it went
+  const at = locks ? x : x + 34 * 12; // the pointer: let go where it was locked, or where it went
   await app.frame();
   await app.move(at, y);
   assert.equal(await tl(`Math.round(t.time.at(t.posAt(${at})))`), t0 + 34, 'the pointer is left on the second stepped to');
@@ -244,7 +255,7 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   await app.move(x, y);
   await app.down('Mod');
   await app.until('!!__stet.timeline.stepping');
-  if (LOCKS) await app.until('document.pointerLockElement === __stet.timeline.inner');
+  await locked(x, y);
   for (let i = 1; i <= 30; i++) await app.move(x + i * 12, y);
   await app.until(async () => (await top()) !== stepped, { what: 'stepped on' });
   await app.key('Escape'); // (Chromium takes it to let go of the pointer; the page never sees the key)
@@ -260,7 +271,8 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   // then does the toolbar show where it is.
   await app.move(x, y);
   await app.down('Mod');
-  await app.until('!!__stet.timeline.stepping'); // (just after an Esc, Chromium may refuse the lock: the cover stands in)
+  await app.until('!!__stet.timeline.stepping');
+  await locked(x, y); // (just after an Esc, Chromium may refuse the lock: the cover stands in)
   for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 4);
   const type = await app.rect('.tb[data-t="character"]');
   await app.click(type.x, type.y, { button: 'right' });
