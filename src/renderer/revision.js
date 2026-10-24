@@ -9,9 +9,10 @@
 
 import {
   buildChunks, chunkPrompt, validateFindings, planApply, afterApply, locateAll, shownRange,
-  applyUserLists, listsPrompt, estimate, normalize, ignoreEntry, isApplied, sortByText,
+  applyUserLists, listsPrompt, estimate, normalize, ignoreEntry, isApplied, sortByText, revisionIgnores,
   CATEGORIES, CATEGORY_LABEL, DECISION_LABEL, MODEL,
 } from '../core/revision.js';
+import { applyGuidelines, guidelinesPrompt, guidelinesOf, flagOf, noteFlag, addFlag, removeGuideline, cleanFlags } from '../core/guidelines.js';
 import { pos } from '../core/editor.js';
 import * as dlg from './ui/dialog.js';
 import { setPanel, isOpen } from './ui/motion.js';
@@ -50,7 +51,10 @@ export class Revision {
   get doc() { return this.session.doc; }
   get review() { return (this.doc && this.doc.revision && this.doc.revision.review) || null; }
   get findings() { return this.review ? this.review.findings : []; }
-  lists() { return { ignored: (this.doc.revision && this.doc.revision.ignored) || [], dictionary: this.getSettings().dictionary || [] }; }
+  lists() { return { ignored: revisionIgnores((this.doc.revision && this.doc.revision.ignored) || []) }; }
+  /** The writer's guidelines (every screenplay; core/guidelines.js), as flags. */
+  get flags() { return cleanFlags(this.getSettings().guidelines); }
+  async saveFlags(flags) { await this.setSettings({ guidelines: flags }); }
   open() { return this.findings.filter((f) => !f.decision); }
 
   /** A document was loaded: stop any running review and show the one stored in it. */
@@ -114,7 +118,7 @@ export class Revision {
     this.session.touch();
     this.cur = null;
     this.locs = new Map();
-    this.run = { id, chunks, refs, done: 0, failed: new Map(), cancelled: false, finished: false, stage: 'connecting', started: Date.now(), rejected: 0, suppressed: 0, fatal: null };
+    this.run = { id, chunks, refs, done: 0, failed: new Map(), cancelled: false, finished: false, stage: 'connecting', started: Date.now(), rejected: 0, suppressed: 0, held: 0, fatal: null };
     this.show(true);
     this.startTicker();
     this.render();
@@ -124,7 +128,7 @@ export class Revision {
 
   send(chunks) {
     const r = this.run;
-    Promise.resolve(api.invoke('review:start', { reviewId: r.id, chunks: chunks.map((c) => ({ index: c.index, prompt: chunkPrompt(c) })), extra: listsPrompt(this.lists()) }))
+    Promise.resolve(api.invoke('review:start', { reviewId: r.id, chunks: chunks.map((c) => ({ index: c.index, prompt: chunkPrompt(c) })), extra: [listsPrompt(this.lists()), guidelinesPrompt(this.flags)].filter(Boolean).join('\n\n') }))
       .then(() => { if (this.run === r && !r.finished && r.stage === 'connecting') { r.stage = 'reviewing'; this.renderStatus(); } })
       .catch((e) => this.onDone({ reviewId: r.id, error: { code: 'ipc', message: String(e && e.message || e) } }));
   }
@@ -163,7 +167,9 @@ export class Revision {
       r.rejected += v.rejected;
       const u = applyUserLists(v.findings, this.lists());
       r.suppressed += u.suppressed;
-      this.review.findings.push(...u.findings);
+      const g = applyGuidelines(u.findings, this.flags);
+      r.held += g.held;
+      this.review.findings.push(...g.findings);
       this.session.touch();
     }
     if (r.done >= r.chunks.length && !r.cancelled) r.stage = 'processing';
@@ -235,6 +241,9 @@ export class Revision {
       this.editor.replaceRanges(plan.matches, plan.replacements); // one undo step
       afterApply(this.findings, plan, this.editor.blocks);
     }
+    // Accepted although it looked like a guideline: the guideline was wrong about this one.
+    const counter = [...already, ...plan.applied].filter((f) => f.guide);
+    if (counter.length) this.saveFlags(counter.reduce((fl, f) => addFlag(fl, flagOf(f, { against: true })), this.flags));
     this.session.touch();
     this.relocate();
     this.render();
@@ -281,16 +290,15 @@ export class Revision {
     this.decide(f, 'ignored');
   }
 
-  /** Add the flagged words to the dictionary shared by every screenplay. */
-  async addToDictionary(id, word) {
+  /** Set a suggestion aside as a guideline (every screenplay), with a note in the writer's words if
+   *  they want; the guidelines learn from it (core/guidelines.js), so similar ones stop coming up. */
+  async addToGuidelines(id, note) {
     const f = this.byId(id);
     if (!f || f.decision) return;
-    const v = word ?? await dlg.prompt('ADD TO DICTIONARY', 'Word or phrase', (f.original.trim() || f.shownOriginal.trim()), 'Saved for every screenplay. Claude will not flag it again.');
-    if (!v || !v.trim()) return;
-    const dict = [...(this.getSettings().dictionary || [])];
-    if (!dict.some((d) => normalize(d) === normalize(v))) dict.push(v.trim());
-    await this.setSettings({ dictionary: dict });
-    this.decide(f, 'dictionary');
+    const v = note ?? await dlg.prompt('ADD TO GUIDELINES', 'Why it is fine (optional)', '', 'Kept for every screenplay. Claude learns from it: set aside twice, it stops coming up.');
+    if (v == null) return;
+    await this.saveFlags(addFlag(this.flags, flagOf(f, { note: v })));
+    this.decide(f, 'guideline');
   }
 
   select(id, focus = true) {
@@ -387,13 +395,13 @@ export class Revision {
       case 'cancel': return this.cancel();
       case 'retry': return this.retryFailed();
       case 'key': return keyDialog();
-      case 'dict': return dictionaryDialog(this);
+      case 'guides': return guidelinesDialog(this);
       case 'select': return this.select(id, false);
       case 'accept': return this.accept([id]);
       case 'discard': return this.discard(id);
       case 'reopen': return this.reopen(id);
       case 'ignore': return this.ignore(id);
-      case 'dictadd': return this.addToDictionary(id);
+      case 'guide': return this.addToGuidelines(id);
       case 'all': return this.acceptAll(null);
       case 'fold': this.showDecided = !this.showDecided; return this.render();
       case 'to-decided': return this.toDecided();
@@ -416,7 +424,8 @@ export class Revision {
       const when = rv.at ? new Date(rv.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
       const state = { cancelled: 'Review cancelled', interrupted: 'Review interrupted', partial: 'Review incomplete', failed: 'Review failed', running: 'Review interrupted' }[rv.state] || 'Reviewed';
       msg = `${state}${when ? ' ' + esc(when) : ''} · ${n} undecided of ${this.findings.length}`;
-      if (r && r.suppressed) msg += ` · ${r.suppressed} hidden by your lists`;
+      if (r && r.suppressed) msg += ` · ${r.suppressed} ignored in this script`;
+      if (r && r.held) msg += ` · ${r.held} held back by your guidelines`;
       if (r && r.rejected) msg += ` · ${r.rejected} unverifiable discarded`;
     } else msg = 'Claude suggests fixes; nothing changes until you accept.';
     let html = `<div class="rv-status"><span class="hint">${msg}</span><button class="btn primary" data-act="run">${rv ? 'REVIEW AGAIN' : 'REVIEW SCRIPT'}</button></div>`;
@@ -451,7 +460,7 @@ export class Revision {
     const r = this.run;
     if (!body && this.review && (!r || r.finished) && this.review.state === 'complete') body = '<div class="empty">No problems found. Your English reads naturally.</div>';
     const nApply = open.filter((f) => this.canApply(f)).length;
-    const foot = `<div class="rv-foot">${nApply > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="dict">DICTIONARY</button><button class="tb" data-act="key">CONNECTION</button></div>`;
+    const foot = `<div class="rv-foot">${nApply > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="guides">GUIDELINES</button><button class="tb" data-act="key">CONNECTION</button></div>`;
     const list = this.host.querySelector('.rv-list');
     const scroll = list ? list.scrollTop : 0;
     const jump = decided.length ? `<button class="rv-jump" data-act="to-decided" title="Go to the decided suggestions">DECIDED · ${decided.length} ↓</button>` : '';
@@ -463,7 +472,8 @@ export class Revision {
   item(f) {
     const cls = [f.id === this.cur ? 'cur' : '', f.id === this.hover ? 'hov' : '', f.decision ? 'decided' : ''].join(' ');
     const at = this.located(f);
-    const conf = `<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span><span class="rv-kind">${CATEGORY_LABEL[f.category]}</span>`;
+    const guide = f.guide && !f.decision ? `<span class="rv-guide" title="${esc(`Close to something you set aside before${f.guide.notes.length ? ': ' + f.guide.notes.join('; ') : ''}. Set it aside again and it stops coming up.`)}">GUIDELINE?</span>` : '';
+    const conf = `<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span><span class="rv-kind">${CATEGORY_LABEL[f.category]}</span>${guide}`;
     const diff = `<span class="rv-old">${esc(f.shownOriginal)}</span> <span class="rv-arrow">→</span> <span class="rv-new">${esc(f.shownReplacement)}</span>`;
     let actions, note = '';
     if (!f.decision) {
@@ -471,7 +481,7 @@ export class Revision {
       if (!at) note = '<div class="rv-lost">The original passage can no longer be located in the script.</div>';
       else if (isApplied(f, at, this.editor.blocks)) note = '<div class="rv-lost">The change is still in the script; accepting keeps it.</div>';
       else if (!ok) note = '<div class="rv-lost">The passage has been edited since the review.</div>';
-      actions = `<button class="tb" data-act="accept"${ok ? '' : ' disabled title="The original text is no longer there to replace"'}>ACCEPT</button><button class="tb" data-act="discard" title="Keep your text; drop this suggestion">DISCARD</button><button class="tb" data-act="ignore" title="Keep your text and never flag this passage again in this screenplay">IGNORE</button><button class="tb" data-act="dictadd" title="Correct in every screenplay: add to your dictionary">+DICTIONARY</button>`;
+      actions = `<button class="tb" data-act="accept"${ok ? '' : ' disabled title="The original text is no longer there to replace"'}>ACCEPT</button><button class="tb" data-act="discard" title="Keep your text; drop this suggestion">DISCARD</button><button class="tb" data-act="ignore" title="Keep your text and never flag this passage again in this screenplay">IGNORE</button><button class="tb" data-act="guide" title="Fine in every screenplay: add to your guidelines, so similar suggestions stop coming up">+GUIDELINE</button>`;
     } else {
       const extra = f.decision === 'accepted' && !at ? ' · change no longer found in the script' : '';
       actions = `<span class="rv-dec">${DECISION_LABEL[f.decision]}${extra}</span><button class="tb" data-act="reopen" title="Make this suggestion undecided again (does not change the script)">REOPEN</button>`;
@@ -551,28 +561,47 @@ export async function keyDialog(lead = '') {
   return (await api.invoke('claude:key-status')).source !== 'none';
 }
 
-export async function dictionaryDialog(rev) {
+const LEVEL = { firm: 'FIRM', soft: 'LEARNING', note: 'NOTE' };
+
+/** The writer's guidelines (every screenplay) and the passages ignored in this one: each can be removed;
+ *  a guideline can also be written by hand, as a note for Claude. */
+export async function guidelinesDialog(rev) {
   const render = () => {
-    const dict = rev.getSettings().dictionary || [];
-    const ign = rev.lists().ignored;
-    const row = (text, act, i) => `<tr><td>${esc(text)}</td><td style="text-align:right"><button class="tb" data-x="${act}" data-i="${i}">REMOVE</button></td></tr>`;
-    return `<p class="hint">Dictionary — correct in every screenplay (${dict.length})</p><table class="t">${dict.map((d, i) => row(d, 'd', i)).join('') || '<tr><td class="hint">empty</td></tr>'}</table>
-      <p class="hint" style="margin-top:14px">Ignored in this screenplay (${ign.length})</p><table class="t">${ign.map((x, i) => row(`${x.text} · ${CATEGORY_LABEL[x.category] || x.category}`, 'g', i)).join('') || '<tr><td class="hint">none</td></tr>'}</table>`;
+    const list = guidelinesOf(rev.flags), ign = rev.lists().ignored;
+    const what = (g) => {
+      if (g.level === 'note') return esc(g.notes[0]);
+      const pattern = g.key.startsWith('edit:') && g.edit && g.examples.length > 1;
+      const head = pattern ? `${esc(g.edit.replace('→', ' → '))} <span class="hint">· ${g.examples.slice(0, 3).map(esc).join(' · ')}</span>` : esc(g.text);
+      return `${head} <span class="hint">· ${CATEGORY_LABEL[g.category] || ''}</span>${g.notes.length ? `<div class="hint">${g.notes.map(esc).join(' · ')}</div>` : ''}`;
+    };
+    const row = (html, act, i, tag = '') => `<tr><td>${tag ? `<span class="gl-lv">${tag}</span>` : ''}${html}</td><td style="text-align:right"><button class="tb" data-x="${act}" data-i="${i}">REMOVE</button></td></tr>`;
+    return `<p class="hint">Guidelines, for every screenplay (${list.length}). Set aside once, a suggestion is only a hint for Claude; twice (or the same change four times), it stops coming up.</p>
+      <table class="t">${list.map((g, i) => row(what(g), 'g', i, LEVEL[g.level])).join('') || '<tr><td class="hint">none yet: +GUIDELINE on a suggestion adds one</td></tr>'}</table>
+      <div class="gl-add"><input type="text" placeholder="write one for Claude: Rosa's dialogue mixes in Spanish on purpose" spellcheck="false"><button class="tb" data-x="add">ADD</button></div>
+      <p class="hint" style="margin-top:14px">Ignored in this screenplay (${ign.length})</p><table class="t">${ign.map((x, i) => row(`${esc(x.text)} <span class="hint">· ${CATEGORY_LABEL[x.category] || x.category}</span>`, 'i', i)).join('') || '<tr><td class="hint">none</td></tr>'}</table>`;
   };
-  const body = dlg.h('div', { class: 'body', style: 'width:520px', html: render() });
+  const body = dlg.h('div', { class: 'body', style: 'width:560px', html: render() });
+  const add = async () => {
+    const field = body.querySelector('.gl-add input'), v = field.value.trim();
+    if (!v) return field.focus();
+    await rev.saveFlags(addFlag(rev.flags, noteFlag(v)));
+    body.innerHTML = render();
+    body.querySelector('.gl-add input').focus();
+  };
+  // Enter in the field adds what is written (and doesn't close the window).
+  body.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.closest('.gl-add')) { e.preventDefault(); e.stopPropagation(); add(); } }, true);
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-x]');
     if (!b) return;
     const i = +b.dataset.i;
-    if (b.dataset.x === 'd') {
-      const dict = [...(rev.getSettings().dictionary || [])];
-      dict.splice(i, 1);
-      await rev.setSettings({ dictionary: dict });
-    } else {
-      rev.doc.revision.ignored.splice(i, 1);
+    if (b.dataset.x === 'add') return add();
+    if (b.dataset.x === 'g') await rev.saveFlags(removeGuideline(rev.flags, guidelinesOf(rev.flags)[i]));
+    else {
+      const x = rev.lists().ignored[i], all = rev.doc.revision.ignored;
+      all.splice(all.indexOf(x), 1);
       rev.session.touch();
     }
     body.innerHTML = render();
   });
-  return dlg.open({ title: 'DICTIONARY & IGNORED', body, buttons: [{ label: 'Close', value: null, primary: true }] });
+  return dlg.open({ title: 'REVISE GUIDELINES', body, buttons: [{ label: 'Close', value: null, primary: true }] });
 }

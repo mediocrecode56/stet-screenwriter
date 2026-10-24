@@ -2,13 +2,14 @@
 // fixed from a right-click (with Add to dictionary and Ignore in this script), and, with Auto on,
 // corrected as Space moves on to the next word. The words are checked against a dictionary
 // installed on the computer, in the main process (src/main/spell.js); a Mac can use its own checker.
-// The dictionary is the one Claude's revision uses (settings.dictionary, every screenplay); words
-// ignored are kept with the script (doc.revision.ignored, as "spelling"), so neither comes up again.
+// Its dictionary (settings.dictionary, every screenplay) is spelling's own: Claude's revision keeps
+// guidelines of its own (core/guidelines.js). Words ignored are kept with the script
+// (doc.revision.ignored, as "spelling"), so neither comes up again.
 
 import { pos } from '../core/editor.js';
 import { SPELLED, wordsToCheck, namesIn, inCaseOf, oneEdit, languageName } from '../core/spell.js';
 import { normalize } from '../core/revision.js';
-import { h, esc } from './ui/dialog.js';
+import { h, esc, open as openDialog } from './ui/dialog.js';
 import { closeMenu } from './ui/commands.js';
 import { arrive, leave, DUR_FAST } from './ui/motion.js';
 
@@ -46,6 +47,9 @@ export class Spelling {
       if (!this.lang && pick) await this.setSettings({ spelling: { ...this.opts, lang: pick } });
     } catch { this.list = []; }
     await this.load();
+    // None on this computer: the one for its language is installed at once, in the background (once a
+    // start; if it can't be, Add a Language is pointed out in the menu instead).
+    if (!this.list.length && this.opts.on && !this.tried) { this.tried = true; this.install(); }
   }
 
   async load() {
@@ -65,6 +69,7 @@ export class Spelling {
     await this.setSettings({ spelling: { ...was, ...patch } });
     if (was.on !== this.opts.on || was.lang !== this.opts.lang) await this.load();
     else { this.paint(); this.onState(); }
+    if (this.opts.on && !was.on && !this.list.length && !this.tried) { this.tried = true; this.install(); } // turned on with none: one on its way
   }
 
   // ---- what is flagged ----------------------------------------------------------------------
@@ -132,7 +137,7 @@ export class Spelling {
   /** Words never flagged: in the dictionary, ignored in this script, the cast and the names in it. */
   skipped() {
     const dict = this.getSettings().dictionary || [], ign = (this.session.doc.revision && this.session.doc.revision.ignored) || [];
-    const key = `${this.session.doc.meta.id}|${this.ed.rev}|${dict.length}|${ign.length}`; // (looked at on every move of the caret: kept until something changes)
+    const key = `${this.session.doc.meta.id}|${this.ed.rev}|${dict.join('')}|${ign.map((x) => x.text).join('')}`; // (looked at on every move of the caret: kept until something changes, a word swapped for another included)
     if (this.skip && this.skip.key === key) return this.skip.set;
     const s = new Set(dict.map(normalize));
     for (const x of ign) if (x.category === 'spelling') s.add(normalize(x.text));
@@ -241,7 +246,8 @@ export class Spelling {
    *  `locale` (Add a Language); a notice says when it is ready (or why not), and spelling uses it. */
   async install(locale) {
     if (this.installing) return;
-    const offer = await this.api.invoke('spell:install-offer', locale);
+    this.installing = '…'; // (at once: a second call meanwhile does nothing)
+    const offer = await this.api.invoke('spell:install-offer', locale).catch(() => ({ label: locale || 'the' }));
     this.installing = offer.label;
     this.onState();
     const r = await this.api.invoke('spell:install', locale).catch((e) => ({ ok: false, error: e.message }));
@@ -249,7 +255,7 @@ export class Spelling {
     if (!r.ok) {
       console.warn('Spelling:', r.error); // (what each source answered)
       this.onState();
-      this.notify(`The ${offer.label} dictionary could not be downloaded. Check the connection and try again.`);
+      this.notify(`The ${offer.label} dictionary could not be downloaded. Choose one in SPELLING > Add a Language to try again.`);
       return;
     }
     await this.setSettings({ spelling: { ...this.opts, on: true, lang: r.path } });
@@ -259,22 +265,53 @@ export class Spelling {
 
   // ---- the toolbar menu -----------------------------------------------------------------------
 
-  /** The SPELLING menu: the switch, Suggestions, Auto, and the dictionaries installed. */
+  /** The SPELLING menu: the switch, Suggestions, Auto, and the dictionaries installed. With none,
+   *  the one for this computer's language is on its way (install()), or Add a Language stands out. */
   menuItems() {
     const o = this.opts, off = () => !this.opts.on;
     const langs = this.list.length
       ? this.list.map((d) => ({ label: d.label, checked: () => this.opts.lang === d.id, enabled: () => !off(), run: () => this.set({ lang: d.id }) }))
-      : [{ label: 'No dictionary on this computer', enabled: () => false },
-        { label: this.installing ? `Downloading ${this.installing}…` : 'Install Dictionary', enabled: () => !this.installing, run: () => this.install() }];
+      : [{ label: this.installing ? `Installing ${this.installing}…` : 'No dictionary on this computer', enabled: () => false }];
     return [
       { label: 'Spelling', checked: () => o.on, run: () => this.set({ on: !o.on }) },
       { label: 'Suggestions', checked: () => o.suggest, enabled: () => !off(), run: () => this.set({ suggest: !o.suggest }) },
       { label: 'Auto', checked: () => o.auto, enabled: () => !off(), run: () => this.set({ auto: !o.auto }) },
       '-', ...langs,
-      { label: this.installing ? `Downloading ${this.installing}…` : 'Add a Language', enabled: () => !this.installing, sub: () => Promise.resolve(this.languageItems()) },
-      '-', 'revise-dict',
+      { label: 'Add a Language', enabled: () => !this.installing, highlight: !this.list.length && !this.installing, sub: () => Promise.resolve(this.languageItems()) },
+      '-', 'spell-dict',
     ];
   }
+
+  /** The words added to the dictionary (every screenplay) and those ignored in this one; each can be removed. */
+  listsDialog() {
+    const render = () => {
+      const dict = this.getSettings().dictionary || [], ign = this.ignored();
+      const row = (text, act, i) => `<tr><td>${esc(text)}</td><td style="text-align:right"><button class="tb" data-x="${act}" data-i="${i}">REMOVE</button></td></tr>`;
+      return `<p class="hint">Dictionary, for every screenplay (${dict.length})</p><table class="t">${dict.map((d, i) => row(d, 'd', i)).join('') || '<tr><td class="hint">empty</td></tr>'}</table>
+        <p class="hint" style="margin-top:14px">Ignored in this screenplay (${ign.length})</p><table class="t">${ign.map((x, i) => row(x.text, 'i', i)).join('') || '<tr><td class="hint">none</td></tr>'}</table>`;
+    };
+    const body = h('div', { class: 'body', style: 'width:480px', html: render() });
+    body.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-x]');
+      if (!b) return;
+      const i = +b.dataset.i;
+      if (b.dataset.x === 'd') {
+        const dict = [...(this.getSettings().dictionary || [])];
+        dict.splice(i, 1);
+        await this.setSettings({ dictionary: dict });
+      } else {
+        const x = this.ignored()[i], all = this.session.doc.revision.ignored;
+        all.splice(all.indexOf(x), 1);
+        this.session.touch();
+      }
+      body.innerHTML = render();
+      this.paint();
+    });
+    return openDialog({ title: 'SPELLING DICTIONARY', body, buttons: [{ label: 'Close', value: null, primary: true }] });
+  }
+
+  /** The words ignored in this script (the revision keeps its own ignores in the same list). */
+  ignored() { return ((this.session.doc.revision && this.session.doc.revision.ignored) || []).filter((x) => x.category === 'spelling'); }
 
   /** Add a Language: the common languages, an installed one chosen at once, any other downloaded. */
   languageItems() {

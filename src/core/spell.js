@@ -218,10 +218,11 @@ export function inCaseOf(word, fix) {
   return word[0] !== word[0].toLowerCase() ? fix[0].toUpperCase() + fix.slice(1) : fix;
 }
 
-/** "en_US" → "English (United States)"; the code as it is when the name isn't known. */
+/** "en_US" → "English (United States)", "es_ES" → "Spanish (Spain)" (never "European Spanish": every
+ *  regional one names its country); the code as it is when the name isn't known. */
 export function languageName(code) {
   try {
-    const n = new Intl.DisplayNames(['en'], { type: 'language' }).of(code.replace(/_/g, '-'));
+    const n = new Intl.DisplayNames(['en'], { type: 'language', languageDisplay: 'standard' }).of(code.replace(/_/g, '-'));
     return n && n !== code ? n : code;
   } catch { return code; }
 }

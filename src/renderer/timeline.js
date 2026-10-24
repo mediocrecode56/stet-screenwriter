@@ -100,7 +100,7 @@ export class Timeline {
   get visible() { return !this.host.hidden; }
 
   show(on = !this.visible) {
-    if (!on) { this.endStep(); this.closeEditor(); this.leave(); this.slide(0); }
+    if (!on) { this.stopZoom(); this.endStep(); this.closeEditor(); this.leave(); this.slide(0); }
     this.host.hidden = !on;
     if (on) this.update(true);
     this.onToggle(on);
@@ -133,12 +133,44 @@ export class Timeline {
     if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = cx - sc.clientWidth / 3;
   }
 
-  /** Zoom by factor f, keeping the point under clientX where it is. */
+  /** Zoom by factor f, keeping the point under clientX where it is. Wheel turns in a row add up
+   *  toward one goal, on the same point while the pointer stays put. */
   zoom(f, clientX) {
     const r = this.scroll.getBoundingClientRect();
     clientX ??= r.left + r.width / 2;
-    this.setScale(this.drawn * f, this.posAt(clientX), clientX - r.left);
+    const g = this.zoomGoal, px = clientX - r.left;
+    const at = g && Math.abs(g.px - px) < 1 ? g.at : this.posAt(clientX);
+    this.zoomTo((g ? g.ppp : this.drawn) * f, at, px);
   }
+
+  /**
+   * Zoom smoothly to `ppp` pixels a page with position `at` ending `px` from the bar's left. The
+   * scale eases there on a log scale (so zooming in and out feel the same) and the strip is
+   * redrawn at its true scale on every frame: the marks, ticks and labels stay crisp and never
+   * stretch. A new goal mid-way carries on from where it is, without a restart.
+   */
+  zoomTo(ppp, at, px, { tau = 70 } = {}) {
+    ppp = Math.max(this.fit, Math.min(PPP_MAX, ppp));
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { this.stopZoom(); return this.setScale(ppp, at, px); }
+    const from = { s: this.drawn, px: at * this.drawn + PADX - this.scroll.scrollLeft + (this.shift || 0) }; // where `at` is now
+    this.zoomGoal = { ppp, at, px, tau, from };
+    if (this.zoomRaf) return;
+    let last = performance.now();
+    const step = (now) => {
+      const g = this.zoomGoal, k = 1 - Math.exp(-Math.min(64, now - last) / g.tau);
+      last = now;
+      const f = g.from, ls = Math.log(f.s) + (Math.log(g.ppp) - Math.log(f.s)) * k;
+      f.s = Math.exp(ls); f.px += (g.px - f.px) * k;
+      const done = Math.abs(ls - Math.log(g.ppp)) < 0.003 && Math.abs(g.px - f.px) < 0.5;
+      if (done) { this.stopZoom(); return this.setScale(g.ppp, g.at, g.px); } // (the last frame drawn in full)
+      this.setScale(f.s, g.at, f.px);
+      this.zoomRaf = requestAnimationFrame(step);
+    };
+    this.zoomRaf = requestAnimationFrame(step);
+  }
+
+  /** Stop a zoom on its way, where it is. */
+  stopZoom() { cancelAnimationFrame(this.zoomRaf); this.zoomRaf = 0; this.zoomGoal = null; }
 
   /** Draw at `ppp` pixels a page (down to fitting the script), with position `at` at `px` in the bar. */
   setScale(ppp, at, px) {
@@ -149,13 +181,12 @@ export class Timeline {
     this.scroll.scrollLeft = at * this.drawn + PADX - px;
   }
 
-  /** The whole script in the bar again (double-click, or the button), settling in with a slight zoom out. */
+  /** The whole script in the bar again (double-click, or the button): one smooth zoom out, the
+   *  middle of what is in view gliding to its own place in the whole. */
   whole() {
-    const was = this.ppp;
-    this.ppp = 0;
-    this.slide(0);
-    this.update(true);
-    if (was) this.ease([{ transform: 'scaleX(1.06)', opacity: 0.4 }, { opacity: 1 }], 240);
+    if (!this.ppp && !this.zoomRaf) return;
+    const r = this.scroll.getBoundingClientRect(), at = this.posAt(r.left + r.width / 2);
+    this.zoomTo(this.fit, at, PADX + at * this.fit, { tau: 80 });
   }
 
   /** Play the strip in from `frames` to as it is now, briefly, on the compositor (none with reduced motion). */
@@ -212,7 +243,7 @@ export class Timeline {
     if (e.button !== 0) return;
     e.preventDefault(); // the script keeps the focus, and nothing is selected
     if (this.stepping) return;
-    if (mod(e)) return this.startStep(e.clientX);
+    if (mod(e)) { this.stopZoom(); return this.startStep(e.clientX); }
     const x0 = e.clientX, y0 = e.clientY;
     const where = this.zone(e);
     const at0 = this.posAt(x0), ppp0 = this.drawn, top0 = this.view.scroller.scrollTop;
@@ -229,7 +260,7 @@ export class Timeline {
         document.body.classList.add('tl-dragging', 'tl-drag-' + mode);
         this.hover.hidden = true;
       }
-      if (mode === 'zoom') this.setScale(ppp0 * 2 ** (dx / 50), at0, px0);
+      if (mode === 'zoom') this.zoomTo(ppp0 * 2 ** (dx / 50), at0, px0, { tau: 40 });
       else { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); }
     };
     const up = () => {
@@ -488,9 +519,10 @@ export class Timeline {
     const s = this.drawn = this.scale, len = this.length; // positions are read back at the scale they were drawn
     const w = Math.max(this.scroll.clientWidth - PADX * 2, len * s);
     this.inner.style.width = w + 'px';
-    const anchors = this.anchorsDrawn = this.anchors();
-    this.time = timeScale(anchors);
-    const tl = this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages), this.time, len); // each on its second, never between two
+    const again = this.zoomRaf && this.tl && this.docSeen === this.session.doc; // mid-zoom: the same marks, drawn at the new scale
+    const anchors = again ? this.anchorsDrawn : (this.anchorsDrawn = this.anchors());
+    if (!again) this.time = timeScale(anchors);
+    const tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages), this.time, len)); // each on its second, never between two
     this.paintRuler();
     this.reset.hidden = !this.ppp;
 

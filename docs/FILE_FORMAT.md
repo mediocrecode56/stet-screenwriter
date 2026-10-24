@@ -106,7 +106,7 @@ Passages the writer chose to **Ignore** in the English revision. Future reviews
 of this script hide matching findings, and Claude is told not to flag them.
 Written only when non-empty, so files without ignores are byte-identical to
 0.3.x output. Older builds ignore the field (and would drop it on save). The
-global dictionary is not stored in screenplays — it lives in the app settings.
+spelling dictionary and the revision's guidelines are not stored in screenplays — they live in the app settings.
 
 ### Review (optional, since 0.6.0)
 
@@ -124,7 +124,7 @@ global dictionary is not stored in screenplays — it lives in the app settings.
       "shownOriginal": "looking to him since five minutes", "shownReplacement": "staring at him for five minutes",
       "contextBefore": "She is ", "contextAfter": " five minutes.",
       "category": "non_native", "confidence": "medium", "explanation": "…",
-      "decision": "discarded",        // absent = undecided; accepted | discarded | ignored | dictionary
+      "decision": "discarded",        // absent = undecided; accepted | discarded | ignored | guideline ("dictionary" before 0.37, read as guideline)
       "appliedText": "…"              // accepted only: the text that was put in
     } ]
   }

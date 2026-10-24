@@ -269,7 +269,7 @@ test('structured-output schema is strict', () => {
   assert.deepEqual(item.required.sort(), ['category', 'confidence', 'element', 'explanation', 'original', 'replacement']);
 });
 
-test('ignored passages (per script) and dictionary words (global) suppress findings', async () => {
+test('ignored passages (per script) suppress findings; the spelling dictionary and spelling ignores never do', async () => {
   const { applyUserLists, ignoreEntry, listsPrompt } = await import('../../src/core/revision.js');
   const blocks = [makeBlock('action', 'Mara enter the cocina. ITNRO plays.')];
   const [c] = buildChunks(blocks);
@@ -278,12 +278,12 @@ test('ignored passages (per script) and dictionary words (global) suppress findi
     { element: 'e1', category: 'non_native', original: 'the cocina', replacement: 'the kitchen', explanation: '', confidence: 'medium' },
     { element: 'e1', category: 'awkward', original: 'ITNRO', replacement: 'INTRO', explanation: '', confidence: 'low' },
   ], refs(blocks));
-  const lists = { ignored: [ignoreEntry(findings[1])], dictionary: ['itnro'] };
+  const lists = { ignored: [ignoreEntry(findings[1]), { text: 'ITNRO', category: 'spelling' }], dictionary: ['itnro'] };
   const r = applyUserLists(findings, lists);
-  assert.deepEqual(r.findings.map((f) => f.category), ['grammar']);
-  assert.equal(r.suppressed, 2);
+  assert.deepEqual(r.findings.map((f) => f.category), ['grammar', 'awkward'], 'spelling\'s words are its own');
+  assert.equal(r.suppressed, 1);
   const p = listsPrompt(lists);
-  assert.match(p, /dictionary[\s\S]*"itnro"/);
+  assert.doesNotMatch(p, /itnro|ITNRO|dictionary/);
   assert.match(p, /already reviewed[\s\S]*"the cocina"/);
 });
 

@@ -143,7 +143,15 @@ Since 0.6 a suggestion never changes or resolves by itself: `locate()`
 recomputes only its position — unchanged element, exact diff against the
 element version last seen, same text with the same context, a distinctive
 unique phrase — and otherwise reports it as not locatable. Decisions
-(accepted / discarded / ignored / dictionary) change only through the panel.
+(accepted / discarded / ignored / guideline) change only through the panel.
+What no screenplay should have flagged lives in the writer's guidelines
+(`src/core/guidelines.js`, `settings.guidelines`), never in the spelling
+dictionary. They are soft: each suggestion set aside with +GUIDELINE is kept as a
+flag (passage, kind, the edit Claude wanted, an optional note), and a new
+suggestion is weighed against them all: the same passage counts 1, the same edit
+in another passage 0.5, a suggestion accepted although it matched counts against.
+Below 2 it is still shown, marked GUIDELINE?, and Claude gets it as a hint; from 2
+on it is held back, and Claude is told it is firm.
 The review is stored in the document (`doc.revision.review`) and serialised
 with it. `src/renderer/revision.js` is the panel. Accepting goes through
 `Editor.replaceRanges`, so it is ordinary, undoable editing.
@@ -357,12 +365,13 @@ The checking runs in a worker thread (`spell-worker.js`); the renderer
 (`src/renderer/spelling.js`) sends each word it hasn't seen yet once, keeps the
 answers, and recomputes the underlines from them on every edit or caret move
 (the word being typed is underlined once the caret leaves it). The words added
-to the dictionary are the same list Claude's revision uses
-(`settings.dictionary`), and the words ignored are kept with the script in
-`doc.revision.ignored` (category `spelling`), so Tools > Dictionary & Ignored
+to the dictionary are spelling's own (`settings.dictionary`; Claude's revision
+has its guidelines instead), and the words ignored are kept with the script in
+`doc.revision.ignored` (category `spelling`), so Tools > Spelling Dictionary
 lists both. With none installed, `src/main/dictinstall.js` downloads one into STET's own
-folder (`userData/dictionaries`, no administrator rights) in the background, for
-the computer's language or one chosen from Add a Language. No single link is
+folder (`userData/dictionaries`, no administrator rights) in the background, at
+once for the computer's language (if that fails, the menu points out Add a
+Language), or one chosen from Add a Language. No single link is
 relied on: it looks at LibreOffice's dictionaries through GitHub's listing of the
 repository, the npm `dictionary-*` packages through jsDelivr's file listing (the
 version pinned), unpkg, and LibreOffice's usual file paths, in that order; every

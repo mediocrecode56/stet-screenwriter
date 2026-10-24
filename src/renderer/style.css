@@ -28,7 +28,7 @@
   --tl-blue: #4a8ee8;
   --tl-yellow: #e5be14;
   --tl-pink: #e2609f;
-  --spell: rgba(214, 64, 64, .5); /* a misspelling's underline: thin and pale */
+  --spell: rgba(206, 38, 38, .74); /* a misspelling's underline: a clear red line under the word */
   --find: rgba(0, 0, 0, .10);
   --find-cur: rgba(0, 0, 0, .32);
   --note-line: #000;
@@ -72,7 +72,7 @@
   --tl-blue: #5b9cf0;
   --tl-yellow: #f2d33a;
   --tl-pink: #ef6fae;
-  --spell: rgba(255, 128, 128, .55);
+  --spell: rgba(255, 102, 102, .78);
   --find: rgba(255, 255, 255, .12);
   --find-cur: rgba(255, 255, 255, .34);
   --note-line: #f0f0ed;
@@ -161,7 +161,7 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .mi.disabled { color: var(--ink-3); pointer-events: none; }
 .sp-menu .sp-fix { min-width: 120px; }
 .sp-acts { display: flex; gap: 2px; margin-top: 3px; padding: 3px 4px 0; border-top: 1px solid var(--rule); }
-.sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; border-radius: 3px; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: pointer; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: pointer; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .sp-act:hover { background: var(--hover-on); color: var(--ink); }
 .msep { height: 1px; background: var(--rule); margin: 3px 0; }
 /* A menu row with a quick flyout (Open Recent), and the flyout: short, long titles end in "…". */
@@ -169,9 +169,12 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .msub { position: absolute; min-width: 160px; max-width: 260px; }
 .msub .mi-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .msub .mi.cur { color: var(--ink-3); }
-.msub .mi.cur:hover { color: var(--inv-fg); }
+.msub .mi.cur:hover { color: var(--ink); }
 /* A toolbar menu (alignment): the current choice marked like the current scene or note. */
 .menu > .mi.cur { box-shadow: inset 2px 0 0 var(--ink); }
+/* A row the menu points out (SPELLING > Add a Language with no dictionary): tinted, marked, gently pulsing. */
+.menu > .mi.hi { background: var(--hover-on); color: var(--ink); box-shadow: inset 2px 0 0 var(--spell); animation: mi-hi 1.6s var(--ease-in-out) 2 alternate; }
+@keyframes mi-hi { to { background: var(--hover); } }
 
 /* ---- element bar ----------------------------------------------------- */
 #elbar { height: 30px; flex: none; display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); background: var(--bar); padding: 0 6px; }
@@ -212,7 +215,7 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 .tb.on { background: var(--inv-bg); color: var(--inv-fg); }
 #btn-spell.off { color: var(--ink-3); } /* spelling off, or no dictionary */
 #btn-spell.need { position: relative; }
-#btn-spell.need::after { content: ''; position: absolute; top: 5px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--spell); } /* none installed: one can be */
+#btn-spell.need::after { content: ''; position: absolute; top: 5px; right: 3px; width: 4px; height: 4px; background: var(--spell); } /* none installed: one can be */
 #btn-spell.busy { animation: spell-busy 1.2s var(--ease-out) infinite alternate; } /* downloading one */
 @keyframes spell-busy { to { opacity: .45; } }
 .tb sup { font-size: 8px; margin-left: 3px; color: var(--ink-3); vertical-align: 2px; }
@@ -257,9 +260,9 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-grid i { position: absolute; top: 13px; bottom: 15px; width: 1px; background: var(--rule); opacity: .4; }
 .tl-grid i.mj { opacity: 1; }
 .tl-line { position: absolute; left: 0; top: 19px; height: 2px; background: var(--tl-line); opacity: .85; }
-.tl-cur { position: absolute; top: 18px; height: 4px; border-radius: 1px; background: var(--tl-line); pointer-events: none; } /* the caret's scene */
+.tl-cur { position: absolute; top: 18px; height: 4px; background: var(--tl-line); pointer-events: none; } /* the caret's scene */
 .tl-cur.glide { transition: left var(--dur-tl) var(--ease-out), width var(--dur-tl) var(--ease-out); }
-.tl-hl { position: absolute; top: 17px; height: 6px; border-radius: 1px; }
+.tl-hl { position: absolute; top: 17px; height: 6px; }
 .tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }
 .tl-scene, .tl-note, .tl-hl { transition: transform var(--dur-tl) var(--ease-out), color var(--dur-tl) var(--ease-out), background-color var(--dur-tl) var(--ease-out); }
 .tl-scene { position: absolute; top: 14px; height: 12px; width: 1px; background: var(--ink-3); } /* across the line */
@@ -305,7 +308,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tc-tag::placeholder { color: var(--ink-3); }
 .tc-pop.bad .tc-time { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .tc-sws { display: flex; gap: 1px; margin-left: 1px; }
-.tc-sw, .tc-ok, .tc-del { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; border-radius: 3px; }
+.tc-sw, .tc-ok, .tc-del { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; }
 .tc-sw:hover, .tc-ok:hover, .tc-del:hover { background: var(--hover); color: var(--ink); }
 .tc-sw.on { box-shadow: inset 0 0 0 1px var(--ink); }
 .tc-ok { margin-left: 2px; color: var(--ink-2); }
@@ -326,7 +329,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-hover.fine span { color: var(--ink); box-shadow: 0 0 0 1px var(--ink-3); animation: tl-fine var(--dur-tl) var(--ease-out); transform-origin: 0 100%; }
 .tl-hover.fine.flip span { transform-origin: 100% 100%; }
 @keyframes tl-fine { from { transform: scale(.94); opacity: .5; } } /* stepping: the readout steps up a little */
-.tl-reset { position: absolute; right: 8px; top: 13px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--rule); border-radius: 3px; background: var(--bar); color: var(--ink-3); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); } /* like the timecode editor's small buttons */
+.tl-reset { position: absolute; right: 8px; top: 13px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--rule); background: var(--bar); color: var(--ink-3); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); } /* like the timecode editor's small buttons */
 .tl-reset[hidden] { display: none; }
 @starting-style { .tl-reset { opacity: 0; } }
 .tl-reset:hover { color: var(--ink); background: var(--hover); border-color: var(--ink-3); }
@@ -424,7 +427,7 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 
 
 /* ---- status bar ------------------------------------------------------ */
-.toast { position: fixed; z-index: 60; left: 50%; bottom: 34px; transform: translateX(-50%); padding: 6px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.18); } /* a short notice (ui/toast.js) */
+.toast { position: fixed; z-index: 60; left: 50%; bottom: 34px; transform: translateX(-50%); padding: 6px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: none; box-shadow: 3px 3px 0 var(--rule); } /* a short notice (ui/toast.js) */
 #status { height: 24px; flex: none; display: flex; align-items: stretch; border-top: 1px solid var(--rule); background: var(--bar); color: var(--ink-2); padding: 0 4px; }
 .st { display: flex; align-items: center; padding: 0 8px; white-space: nowrap; }
 .st + .st { box-shadow: -1px 0 0 var(--rule); }
@@ -531,7 +534,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 
 /* English revision */
 #rev { border-right: 0; border-left: 1px solid var(--rule); width: 360px; }
-.spr { position: absolute; pointer-events: none; box-shadow: inset 0 -1px 0 var(--spell); }
+.spr { position: absolute; pointer-events: none; box-shadow: inset 0 -2px 0 var(--spell); }
 .revr { position: absolute; transition: background-color var(--dur-fast) var(--ease-out); }
 .revr.r-grammar { box-shadow: inset 0 -2px 0 var(--ink); }
 .revr.r-non_native { border-bottom: 2px dashed var(--ink); }
@@ -580,7 +583,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .rv-list { flex: 1; }
 .rv-kind { font: 9px var(--ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin-left: 6px; vertical-align: 1px; }
-.rv-jump { position: absolute; left: 50%; bottom: 10px; transform: translate(-50%, 6px); opacity: 0; pointer-events: none; border: 0; padding: 4px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 10px; letter-spacing: .14em; cursor: default; box-shadow: 0 2px 8px rgba(0, 0, 0, .18); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.rv-jump { position: absolute; left: 50%; bottom: 10px; transform: translate(-50%, 6px); opacity: 0; pointer-events: none; border: 0; padding: 4px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 10px; letter-spacing: .14em; cursor: default; box-shadow: 3px 3px 0 var(--rule); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .rv-jump.on { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
 .rv-jump:hover { opacity: .85; }
 
@@ -684,3 +687,32 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .upd-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--ink); }
 .upd-bar.indet i { width: 34%; animation: rv-sweep 1.5s var(--ease-in-out) infinite; will-change: transform; }
 @media (prefers-reduced-motion: reduce) { .upd-bar.indet i { width: 100%; animation: rv-pulse 2s linear infinite; } }
+
+/* ---- Revise guidelines -------------------------------------------------- */
+.rv-guide { font: 9px var(--ui); letter-spacing: .12em; color: var(--ink-2); border: 1px dashed var(--ink-3); padding: 0 4px; margin-left: 6px; vertical-align: 1px; cursor: help; } /* close to a guideline: still shown */
+.gl-lv { display: inline-block; min-width: 64px; margin-right: 8px; font-size: 9px; letter-spacing: .12em; color: var(--ink-3); }
+.gl-add { display: flex; gap: 6px; margin-top: 8px; }
+.gl-add input { flex: 1; border: 1px solid var(--rule); padding: 3px 6px; }
+.gl-add input:focus { border-color: var(--rule-strong); }
+.gl-add .tb { border: 1px solid var(--rule); padding: 0 10px; }
+
+/* ---- focus mode (ui/focus.js) ------------------------------------------------- */
+/* The menus and toolbar wait above the screen and drop back in over the page when the pointer
+   reaches the top edge; the status bar, the timeline and the companion are gone. */
+html.focus #top, html.focus #elbar { position: fixed; left: 0; right: 0; z-index: 70; -webkit-app-region: no-drag; }
+html.focus-ready #top, html.focus-ready #elbar { transition: transform var(--dur-panel) var(--ease-in-out); }
+html.focus #top * { -webkit-app-region: no-drag; }
+html.focus #top { top: 0; transform: translateY(-100%); }
+html.focus #elbar { top: 30px; transform: translateY(calc(-100% - 31px)); }
+html.focus #elbar[hidden] { display: flex !important; } /* (shown here even when hidden in the window) */
+html.focus.peek #top, html.focus.peek #elbar { transform: none; transition-timing-function: var(--ease-out); }
+html.focus.peek #elbar { box-shadow: 0 3px 0 var(--rule); }
+html.focus #timeline, html.focus #status, html.focus #dino { display: none !important; }
+#focus-edge-top { position: fixed; z-index: 65; left: 0; right: 0; top: 0; height: 6px; }
+#focus-edge-right { position: fixed; z-index: 65; right: 0; top: 25%; height: 50%; width: 6px; }
+/* The rail at the right edge: back to the window, and the side panels. */
+#focus-rail { position: fixed; z-index: 72; right: 0; top: 50%; display: flex; flex-direction: column; gap: 0; padding: 4px; background: var(--page); border: 1px solid var(--rule-strong); border-right: 0; box-shadow: -3px 3px 0 var(--rule); transform: translate(calc(100% + 4px), -50%); transition: transform var(--dur-panel) var(--ease-in-out); }
+#focus-rail.on { transform: translate(0, -50%); transition-timing-function: var(--ease-out); }
+#focus-rail .tb { display: flex; align-items: center; justify-content: flex-start; gap: 6px; padding: 5px 10px; letter-spacing: .12em; text-align: left; }
+#focus-rail .tb.on { box-shadow: inset 2px 0 0 var(--ink); }
+#focus-rail .fr-exit { margin-bottom: 4px; padding-bottom: 7px; border-bottom: 1px solid var(--rule); }

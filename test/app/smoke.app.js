@@ -164,13 +164,14 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   assert.equal(await app.eval('document.querySelector("#timeline .tl-reset").hidden'), true, 'no reset while it all fits');
   const bar = await app.rect('#timeline .tl-inner');
   await app.drag(bar.left + bar.width * 0.3, bar.bottom - 5, bar.left + bar.width * 0.3 + 60, bar.bottom - 5);
-  assert.ok(await tl('t.drawn') > fit * 1.9, 'dragging right on the ruler zooms in');
+  await app.until(`__stet.timeline.drawn > ${fit * 1.9} && !__stet.timeline.zoomRaf`, { what: 'dragging right on the ruler zooms in' });
   await app.clickOn('#timeline .tl-reset');
-  assert.equal(await tl('t.drawn'), fit, 'the corner button: the whole script');
+  await app.until(`__stet.timeline.drawn === ${fit} && !__stet.timeline.zoomRaf`, { what: 'the corner button: the whole script, in one smooth zoom' });
   await app.drag(bar.left + bar.width * 0.3, bar.bottom - 5, bar.left + bar.width * 0.3 + 60, bar.bottom - 5);
   const r = await app.rect('#timeline .tl-scroll'); // (zoomed in, the strip itself runs off the window)
+  await app.until('!__stet.timeline.zoomRaf', { what: 'the zoom settled' });
   await app.click(r.left + 50, r.bottom - 5); await app.click(r.left + 50, r.bottom - 5, { count: 2 });
-  assert.equal(await tl('t.drawn'), fit, 'double-click on the ruler: the whole script again');
+  await app.until(`__stet.timeline.drawn === ${fit}`, { what: 'double-click on the ruler: the whole script again' });
   await app.eval('__stet.view.scroller.scrollTop = 0');
   await app.frame();
   const band = await tl('(() => { const r = t.inner.getBoundingClientRect(); return { x: (t.bandA + t.bandB) / 2 * t.drawn + r.left, y: r.top + 20 }; })()');

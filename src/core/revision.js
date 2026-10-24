@@ -249,8 +249,8 @@ export function resolveOverlaps(findings) {
 // when that is certain; otherwise it is reported as not locatable, never
 // pointed at a different passage.
 
-export const DECISIONS = ['accepted', 'discarded', 'ignored', 'dictionary'];
-export const DECISION_LABEL = { accepted: 'Accepted', discarded: 'Discarded', ignored: 'Ignored', dictionary: 'In dictionary' };
+export const DECISIONS = ['accepted', 'discarded', 'ignored', 'guideline'];
+export const DECISION_LABEL = { accepted: 'Accepted', discarded: 'Discarded', ignored: 'Ignored', guideline: 'Added to guidelines' };
 
 export function indexById(blocks) {
   const m = new Map();
@@ -430,7 +430,7 @@ export function afterApply(findings, plan, blocks) {
 
 // ---- storing a review in the .stet file -------------------------------------------------
 
-const KEEP = ['id', 's', 'e', 'padL', 'padR', 'original', 'replacement', 'shownOriginal', 'shownReplacement', 'contextBefore', 'contextAfter', 'category', 'confidence', 'explanation', 'decision', 'appliedText'];
+const KEEP = ['id', 's', 'e', 'padL', 'padR', 'original', 'replacement', 'shownOriginal', 'shownReplacement', 'contextBefore', 'contextAfter', 'category', 'confidence', 'explanation', 'decision', 'appliedText', 'guide'];
 
 /** Plain-JSON form of a review. Block ids aren't stored in files, so positions use element numbers. */
 export function reviewToJSON(review, blocks) {
@@ -465,8 +465,9 @@ export function reviewFromJSON(r, blocks) {
       contextBefore: isStr(x.contextBefore) ? x.contextBefore : '', contextAfter: isStr(x.contextAfter) ? x.contextAfter : '',
       category: x.category, confidence: CONFIDENCE.includes(x.confidence) ? x.confidence : 'medium',
       explanation: isStr(x.explanation) ? x.explanation : '',
-      decision: DECISIONS.includes(x.decision) ? x.decision : null,
+      decision: x.decision === 'dictionary' ? 'guideline' : DECISIONS.includes(x.decision) ? x.decision : null, // (before 0.37: "in dictionary")
       appliedText: isStr(x.appliedText) ? x.appliedText : null,
+      ...(x.guide && typeof x.guide.score === 'number' ? { guide: { score: x.guide.score, notes: Array.isArray(x.guide.notes) ? x.guide.notes.filter(isStr) : [] } } : {}),
     });
   }
   return { id: isStr(r.id) ? r.id : 'r0', at: isStr(r.at) ? r.at : null, model: isStr(r.model) ? r.model : MODEL, state: isStr(r.state) ? r.state : 'complete', findings };
@@ -478,7 +479,8 @@ export function estimate(chunks) {
   return { requests: chunks.length, inputTokens: Math.round(chars / 3.6 + chunks.length * (SYSTEM_PROMPT.length / 3.6 + 120)) };
 }
 
-// ---- writer's lists: per-script ignores, global dictionary ---------------------------
+// ---- the writer's ignores in this script -------------------------------------------------
+// (What no screenplay should have flagged is in core/guidelines.js; spelling keeps its own lists.)
 
 export const normalize = (t) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -487,28 +489,22 @@ export function ignoreEntry(f) {
   return { text: f.shownOriginal, category: f.category };
 }
 
-/**
- * Drop findings the writer has ignored in this script (same passage, same
- * category) or whose flagged words are in the global dictionary.
- */
-export function applyUserLists(findings, { ignored = [], dictionary = [] } = {}) {
-  const ign = new Set(ignored.map((x) => x.category + '\u0000' + normalize(x.text)));
-  const dict = new Set(dictionary.map(normalize));
+/** The revision's own ignores: the spelling ones kept in the same list are not the revision's. */
+export const revisionIgnores = (ignored = []) => ignored.filter((x) => x && x.category !== 'spelling');
+
+/** Drop findings the writer has ignored in this script (same passage, same category). */
+export function applyUserLists(findings, { ignored = [] } = {}) {
+  const ign = new Set(revisionIgnores(ignored).map((x) => x.category + '\u0000' + normalize(x.text)));
   const kept = [];
   let suppressed = 0;
   for (const f of findings) {
-    const hit = ign.has(f.category + '\u0000' + normalize(f.shownOriginal)) || dict.has(normalize(f.original)) || dict.has(normalize(f.shownOriginal));
-    if (hit) suppressed++; else kept.push(f);
+    if (ign.has(f.category + '\u0000' + normalize(f.shownOriginal))) suppressed++; else kept.push(f);
   }
   return { findings: kept, suppressed };
 }
 
-/** Extra instructions so Claude doesn't spend effort on what the writer accepted. */
-export function listsPrompt({ ignored = [], dictionary = [] } = {}) {
-  const parts = [];
-  const dict = [...new Set(dictionary.map((d) => d.trim()).filter(Boolean))].slice(0, 300);
-  const ign = [...new Set(ignored.map((x) => x.text.trim()).filter(Boolean))].slice(0, 200);
-  if (dict.length) parts.push(`The writer's dictionary — words and phrases the writer has confirmed are correct. Never flag them:\n${dict.map((d) => JSON.stringify(d)).join('\n')}`);
-  if (ign.length) parts.push(`Passages the writer has already reviewed and chosen to keep. Do not flag them again:\n${ign.map((d) => JSON.stringify(d)).join('\n')}`);
-  return parts.join('\n\n');
+/** Extra instructions so Claude doesn't spend effort on what the writer chose to keep in this script. */
+export function listsPrompt({ ignored = [] } = {}) {
+  const ign = [...new Set(revisionIgnores(ignored).map((x) => x.text.trim()).filter(Boolean))].slice(0, 200);
+  return ign.length ? `Passages the writer has already reviewed and chosen to keep. Do not flag them again:\n${ign.map((d) => JSON.stringify(d)).join('\n')}` : '';
 }

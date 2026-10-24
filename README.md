@@ -29,7 +29,8 @@ It formats as you type, saves as you go, and stays out of your way.</p>
 | **Your work is always safe** | Saved as you type, backed up on a schedule, and brought back if the computer shuts down unexpectedly. |
 | **The whole script at a glance** | A timeline above the page shows every scene, note and highlight, with an estimated running time you can pin to real timecodes. |
 | **A goal for every day** | Daily and weekly goals, a week of progress at a glance, and a writing streak to keep going. |
-| **Spelling that stays out of the way** | Obvious slips get a thin pale red underline; right-click for the fix, or let Auto correct them as you type. It uses the dictionaries already on your computer. |
+| **Spelling that stays out of the way** | Obvious slips get a clear red underline; right-click for the fix, or let Auto correct them as you type. It uses the dictionaries already on your computer. |
+| **Nothing but the page** | Focus Mode (F11) fills the screen with your script alone; the toolbar and the side panels are a nudge of the pointer away. |
 | **Day or night** | A light page, a dark one, or both, switching by themselves at the times you choose. |
 | **Comes in, goes out** | Imports Final Draft (.fdx) scripts; prints or saves a PDF with the title page, ready to send. |
 
@@ -90,12 +91,13 @@ and asks to restart when it's ready. Your screenplays, settings and statistics s
 
 The **SPELLING** menu on the toolbar switches spelling on or off and picks the language from the
 dictionaries installed on your computer (those LibreOffice, Firefox or your system installed; on
-a Mac, its own). Only obvious slips are marked, with a thin pale red underline: names, all-caps
+a Mac, its own). Only obvious slips are marked, with a clear red underline: names, all-caps
 words and scene headings are left alone. Right-click a marked word for the fix, or to add it to
-your dictionary or ignore it in this script; STET remembers both (Tools > Dictionary & Ignored
+your dictionary or ignore it in this script; STET remembers both (Tools > Spelling Dictionary
 lists them). With **Auto** on, the same slips are corrected as you press Space, and Ctrl+Z
-takes a correction back. No dictionary on your computer? **Install Dictionary** in the same menu
-downloads one in the background (and **Add a Language** any other), with a notice when it's ready.
+takes a correction back. No dictionary on your computer? STET downloads the one for your
+language by itself, in the background, with a notice when it's ready; **Add a Language** gets any
+other (and is pointed out in the menu if the download didn't work).
 
 ## The timeline
 
@@ -132,6 +134,7 @@ line with the cap is where you're typing. **Ctrl+Shift+T** shows or hides it.
 | Ctrl+F | find |
 | Ctrl+P | print or save as PDF |
 | Ctrl+Shift+T | show or hide the timeline |
+| F11 | focus mode: the page alone, full screen (Esc to leave) |
 | F9 | see your writing week |
 | Ctrl+K | search every command |
 | F1 | see all the keys, and change any of them |

@@ -290,7 +290,7 @@ script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
 
 - Per suggestion: **Accept** (one undo step), **Discard**, **Ignore**
   (remembered in this screenplay's .stet file — never flagged again here) and
-  **+Dictionary** (shared by every screenplay). *Accept all…* (all, or one kind)
+  **+Guideline** (every screenplay, soft: set aside twice, it stops coming up). *Accept all…* (all, or one kind)
   asks first and is a single undo step. Decided suggestions move to a folded
   *Decided* group, also in script order; near the lower end of the list a floating
   **DECIDED** button goes there while it is out of sight. **Reopen** makes one

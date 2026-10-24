@@ -1,5 +1,5 @@
-// Spelling on a computer with no dictionary: the SPELLING button says so, its menu offers to install
-// one and downloads it in the background with a notice when it is ready (here from a local server standing in for the
+// Spelling on a computer with no dictionary: the one for its language is installed at once, in the
+// background, with a notice when it is ready (no Install item to find in the menu) (here from a local server standing in for the
 // internet, its first source down so the next is used), keeps it in its own folder, and spells with it
 // at once, and again on the next start. Add a Language downloads another; the menu chooses between them.
 import { test, before, after } from 'node:test';
@@ -37,14 +37,14 @@ async function menuRow(text) {
 
 const settled = () => app.until(`!document.querySelector('.menu')`, { what: 'the last menu gone' }); // (one fading out still holds its rows)
 
-test('no dictionary: the button says so; Install downloads one in the background, a notice says when, spelling works at once', async () => {
-  await app.until(`document.getElementById('btn-spell').classList.contains('need')`, { what: 'the button to say none is installed' });
-  assert.match(await app.eval(`document.getElementById('btn-spell').title`), /no dictionary/);
-  assert.deepEqual(hits, [], 'nothing downloaded unasked');
+test('no dictionary: one is installed at once in the background, a notice says when, spelling works at once', async () => {
   // In the background: the writer still writing meanwhile.
   await app.load([['action', 'Rain on teh glass.']]);
-  await app.clickOn('#btn-spell'); await menuRow('Install Dictionary');
   assert.equal(await app.dialog(), '', 'no questions');
+  await app.clickOn('#btn-spell');
+  const labels = await app.eval(`[...document.querySelectorAll('.menu .mi')].map((x) => x.textContent)`);
+  assert.ok(!labels.some((l) => /Install Dictionary/.test(l)), 'no Install item: ' + labels.join(' | '));
+  await app.key('Escape');
   await app.type('Rain. ');
   await app.until('__stet.spelling.ready', { what: 'the dictionary installed and loaded' });
   await app.until(`/dictionary installed/.test(document.querySelector('.toast')?.textContent || '')`, { what: 'the notice' });

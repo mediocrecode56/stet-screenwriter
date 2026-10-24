@@ -2,6 +2,22 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.37.0 · 24 Oct 2026
+
+- Focus Mode (View > Focus Mode, or F11): STET fills the screen with nothing but the page and your text. Everything else slides away in one smooth move. Spelling fixes, name completions and Find still come up as you write. Move the pointer to the top edge and the menus and toolbar drop back in. Move it to the right edge for a small rail: WINDOW takes you back (so does Esc), and REVISE, SCENES and NOTES open their panels beside the page. When you leave, the panels you had open before come back.
+- View > Hide Toolbar slides the toolbar out of the way, and Show Toolbar brings it back. STET remembers your choice.
+- Revise has its own guidelines, kept apart from the spelling dictionary. +GUIDELINE on a suggestion (it replaces +DICTIONARY) sets it aside for every screenplay, with an optional note on why it's fine ("a band name", "Rosa mixes in Spanish on purpose").
+- Revise guidelines are soft, and STET learns from them. Set aside once, a similar suggestion still comes up, marked GUIDELINE?, and Claude is only told about it as a hint. Set aside twice, or the same change set aside four times in different places, it stops coming up. Accepting one that looked like a guideline weakens that guideline again. Tools > Revise Guidelines lists them as FIRM or LEARNING. You can remove any of them there, or write one yourself as a note for Claude.
+- Spelling has its own dictionary window (Tools > Spelling Dictionary, also at the bottom of the SPELLING menu). The words you add there no longer change what Claude's revision flags.
+- Spelling: no dictionary on your computer? STET now downloads the one for your language by itself, in the background, with a notice when it's ready. There's no Install Dictionary item to find any more. If the download doesn't work, Add a Language is highlighted in the menu instead.
+- Spelling: languages are named with their country, for example Spanish (Spain) instead of European Spanish, English (United Kingdom) instead of British English, and Portuguese (Portugal).
+- Spelling: the red underline under a misspelt word is a little thicker and stronger, so it's easier to spot.
+- Timeline: zooming is one continuous, smooth motion. The Ctrl+wheel, a pinch, dragging the ruler and the button that shows the whole script all glide to their new scale. The point under the pointer stays put, and the marks and labels stay sharp the whole way (no stretching, no flicker). Going back to the whole script is a single smooth zoom out, without the old flash.
+- Fix: closing STET while it was full screen saved the full-screen size as the window's normal size.
+- Fix: in a menu's side list (Open Recent, Add a Language), pointing at the current item made its text invisible in the light theme.
+- Fix: a few corners were still rounded and a few shadows soft (the toast, the DECIDED button, the timeline's small buttons, the spelling menu). They're square and hard like the rest of STET now.
+- Fix: removing a word from the spelling dictionary and adding another one could leave the old underlines as they were until you edited the script.
+
 ## 0.36.0 · 24 Oct 2026
 
 - Spelling: a new SPELLING menu on the toolbar. It uses the dictionaries already installed on your computer (from LibreOffice, Firefox or your system; on a Mac, its own checker): pick the language there, and switch spelling on or off.

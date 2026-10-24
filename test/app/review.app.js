@@ -237,7 +237,8 @@ test('suggestions, decisions and ignored passages are kept across a restart; a n
   const nn = f.find((x) => x.cat === 'non_native'), g = f.find((x) => x.cat === 'grammar'), it = f.find((x) => x.o === 'ITNRO');
   await app.eval(`__stet.revision.ignore('${nn.id}')`);
   await app.eval(`__stet.revision.accept(['${g.id}'])`);
-  await app.eval(`__stet.revision.addToDictionary('${it.id}', 'ITNRO')`);
+  await app.eval(`__stet.revision.addToGuidelines('${it.id}', 'a band name')`);
+  assert.deepEqual(await app.eval('__stet.settings().dictionary'), [], 'the spelling dictionary is not the revision\'s');
   const file = path.join(tmp, 'Rev.stet');
   assert.equal((await app.saveTo(file)).ok, true);
   const json = JSON.parse(await decode(await fs.readFile(file)));
@@ -259,9 +260,11 @@ test('suggestions, decisions and ignored passages are kept across a restart; a n
   await review();
   f = await findings();
   assert.ok(f.every((x) => x.decision === null), 'no decisions carried over');
-  assert.ok(!f.some((x) => x.cat === 'non_native' || x.o === 'ITNRO' || x.id === g.id), 'ignored passages and dictionary words not shown again; the old ones gone');
+  assert.ok(!f.some((x) => x.cat === 'non_native' || x.id === g.id), 'ignored passages not shown again; the old ones gone');
+  // Set aside once, a guideline is soft: the suggestion still comes, marked as close to it.
+  assert.equal(await app.eval(`__stet.revision.findings.filter((x) => x.original === 'ITNRO' && x.guide).length`), 1, 'shown, marked as close to a guideline');
   const sys = mock.requests.find((r) => r.body && r.body.system).body.system[0].text;
-  assert.match(sys, /dictionary[\s\S]*"ITNRO"/);
+  assert.match(sys, /guidelines[\s\S]*\[hint\] awkward: "ITNRO"[\s\S]*a band name/);
   assert.match(sys, /already reviewed[\s\S]*looking to him since five minutes/);
 });
 

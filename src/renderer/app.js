@@ -10,6 +10,7 @@ import { Input } from './input.js';
 import { Session } from './session.js';
 import { ScenePanel, NotesPanel } from './ui/panels.js';
 import { setPanel, isOpen } from './ui/motion.js';
+import { FocusMode } from './ui/focus.js';
 import { Dino } from './dino.js';
 import { WritingStats } from './writing.js';
 import { FindBar } from './ui/find.js';
@@ -18,7 +19,7 @@ import * as dlg from './ui/dialog.js';
 import * as dialogs from './ui/dialogs.js';
 import { initUpdates } from './ui/update.js';
 import { runPerfProbe } from './perf.js';
-import { Revision, keyDialog, dictionaryDialog } from './revision.js';
+import { Revision, keyDialog, guidelinesDialog } from './revision.js';
 import { Spelling } from './spelling.js';
 import { toast } from './ui/toast.js';
 import { resizable } from './ui/resize.js';
@@ -58,7 +59,11 @@ const input = new Input({
   onCommandKey: (e) => cmd.handleKey(e),
   onCommentClick: (id) => openNote(id, true),
 });
-input.onEscape = () => { if (!find.open) return false; find.close(); return true; };
+input.onEscape = () => {
+  if (find.open) { find.close(); return true; }
+  if (focus.on) { focus.exit(); return true; } // Esc leaves focus mode
+  return false;
+};
 input.onZoom = () => { renderZoom(); persistZoom(); };
 // Character cues complete from the script's cast, most recently used first (core/cast.js).
 input.names = () => castOrder(session.doc.cast, editor.characterNames());
@@ -519,7 +524,7 @@ function renderSpelling() {
   spellBtn.classList.toggle('off', !o.on || !spelling.ready);
   spellBtn.classList.toggle('need', o.on && !spelling.list.length); // a dot: none installed, one can be
   spellBtn.classList.toggle('busy', spelling.installing);
-  spellBtn.title = spelling.installing ? `Spelling: downloading the ${spelling.installing} dictionary…` : !spelling.list.length ? 'Spelling: no dictionary on this computer (click to install one)'
+  spellBtn.title = spelling.installing ? `Spelling: downloading the ${spelling.installing} dictionary…` : !spelling.list.length ? 'Spelling: no dictionary on this computer (click to add a language)'
     : !o.on ? 'Spelling: off' : `Spelling: ${lang ? lang.label : 'no dictionary'}${o.suggest ? '' : ', no suggestions'}${o.auto ? ', corrects as you type' : ''}`;
 }
 tip($('btn-comment'), 'Comment on selection', 'note-add');
@@ -900,12 +905,12 @@ function stepNote(dir) {
   view.invalidate();
 }
 
-function showPanel(which, on) {
+function showPanel(which, on, keep = !focus.on) { // (what focus mode opens or closes is not remembered)
   const host = which === 'scenes' ? $('left') : $('right');
   const want = on ?? !isOpen(host);
   setPanel(host, want);
   $(which === 'scenes' ? 'btn-scenes' : 'btn-notes').classList.toggle('on', want);
-  api.invoke('settings:set', { panels: { [which]: want } });
+  if (keep) api.invoke('settings:set', { panels: { [which]: want } });
   // The view's ResizeObserver re-centres and repaints only what moved; no full teardown.
   view.layoutDirty = true;
   view.schedule();
@@ -914,6 +919,25 @@ function showPanel(which, on) {
 
 // Scenes are reached with the same glide as suggestions and notes, their heading at the top of the view.
 const jumpScene = (b) => jump(pos(b, 0), false, null, 'top');
+// The toolbar (View > Hide Toolbar) slides up out of the way, and back; the choice is kept.
+function showToolbar(on) {
+  setPanel($('elbar'), on);
+  view.layoutDirty = true;
+  view.schedule();
+  api.invoke('settings:set', { toolbar: on });
+}
+
+// Focus mode: full screen, the page alone (ui/focus.js).
+const focus = new FocusMode({
+  api,
+  panels: [
+    { key: 'rev', label: 'REVISE', title: 'English revision with Claude', isOpen: () => revision.visible, set: (on) => revision.show(on) },
+    { key: 'scenes', label: 'SCENES', title: 'Scene navigator', isOpen: () => isOpen($('left')), set: (on) => showPanel('scenes', on) },
+    { key: 'notes', label: 'NOTES', title: 'Comments', isOpen: () => isOpen($('right')), set: (on) => showPanel('notes', on) },
+  ],
+  onChange: () => { view.layoutDirty = true; view.schedule(); fitTitle(); input.focus(); },
+});
+
 function sceneStep(dir) {
   const s = editor.scenes();
   const c = editor.caret.b;
@@ -1041,6 +1065,8 @@ cmd.register([
   { id: 'zoom-reset', cat: 'View', label: 'Actual Size (100%)', keys: 'Ctrl+0', global: true, run: () => { view.setZoom(1); renderZoom(); persistZoom(); } },
   { id: 'panel-scenes', cat: 'View', label: 'Scene Navigator', keys: 'Ctrl+\\', global: true, run: () => showPanel('scenes') },
   { id: 'panel-notes', cat: 'View', label: 'Notes Panel', keys: 'Ctrl+Shift+\\', global: true, run: () => showPanel('notes') },
+  { id: 'toolbar', cat: 'View', label: () => (isOpen($('elbar')) ? 'Hide Toolbar' : 'Show Toolbar'), run: () => showToolbar(!isOpen($('elbar'))) },
+  { id: 'focus', cat: 'View', label: () => (focus.on ? 'Leave Focus Mode' : 'Focus Mode'), keys: 'F11', global: true, run: () => focus.toggle() },
   { id: 'timeline', cat: 'View', label: () => (timeline.visible ? 'Hide Timeline' : 'Timeline'), keys: 'Ctrl+Shift+T', global: true, run: () => timeline.show() },
   { id: 'companion', cat: 'View', label: () => (dino && dino.enabled ? 'Hide Writing Companion' : 'Show Writing Companion'), run: () => { dino.setEnabled(!dino.enabled); api.invoke('settings:set', { companion: dino.enabled }); } },
   { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => { view.showTitle = !view.showTitle; api.invoke('settings:set', { showTitlePage: view.showTitle }); view.invalidate(); view.revealCaret(); } },
@@ -1074,7 +1100,8 @@ cmd.register([
   { id: 'spell-toggle', cat: 'Tools', label: 'Spelling', checked: () => spelling.opts.on, run: () => spelling.set({ on: !spelling.opts.on }) },
   { id: 'spell-suggest', cat: 'Tools', label: 'Spelling Suggestions', checked: () => spelling.opts.suggest, enabled: () => spelling.opts.on, run: () => spelling.set({ suggest: !spelling.opts.suggest }) },
   { id: 'spell-auto', cat: 'Tools', label: 'Correct Spelling as You Type', checked: () => spelling.opts.auto, enabled: () => spelling.opts.on, run: () => spelling.set({ auto: !spelling.opts.auto }) },
-  { id: 'revise-dict', cat: 'Tools', label: 'Dictionary & Ignored…', run: async () => { await dictionaryDialog(revision); spelling.paint(); } },
+  { id: 'revise-guides', cat: 'Tools', label: 'Revise Guidelines…', run: () => guidelinesDialog(revision) },
+  { id: 'spell-dict', cat: 'Tools', label: 'Spelling Dictionary…', run: () => spelling.listsDialog() },
   { id: 'claude-key', cat: 'Tools', label: 'Claude Connection…', run: () => keyDialog() },
   { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, writing, api, report: false, ...(info.e2e && window.__stetPerfSizes ? { sizes: window.__stetPerfSizes } : {}) }) },
 
@@ -1102,8 +1129,8 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
-  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'timeline', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
-  { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'spell-toggle', 'spell-suggest', 'spell-auto', '-', 'perf'] },
+  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'focus', 'toolbar', 'panel-scenes', 'panel-notes', 'timeline', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
+  { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-guides', 'claude-key', '-', 'spell-toggle', 'spell-suggest', 'spell-auto', 'spell-dict', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
 ]);
 
@@ -1151,7 +1178,7 @@ const updates = initUpdates({
   saveSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
 });
 api.on('app:open-file', (file) => openPath(file));
-api.on('app:fullscreen', (on) => { document.documentElement.classList.toggle('fullscreen', on); fitTitle(); }); // a Mac hides its window buttons
+api.on('app:fullscreen', (on) => { document.documentElement.classList.toggle('fullscreen', on); fitTitle(); focus.fullscreenChanged(on); }); // a Mac hides its window buttons
 api.on('perf:start', () => runPerfProbe({ editor, view, input, session, writing, api, report: true }));
 
 window.addEventListener('dragover', (e) => e.preventDefault());
@@ -1162,7 +1189,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, timeline, spelling, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, timeline, spelling, focus, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 
@@ -1171,6 +1198,7 @@ session.autosave = settings.autosave;
 session.autosaveDelay = settings.autosaveDelayMs;
 if (settings.zoom && settings.zoom !== 1) view.setZoom(settings.zoom);
 renderZoom();
+if (settings.toolbar === false) { $('elbar').hidden = true; $('elbar').dataset.open = '0'; }
 if (settings.panels?.scenes) showPanel('scenes', true);
 setTabTypes(Array.isArray(settings.tabTypes) ? settings.tabTypes : TYPES, false);
 if (document.fonts) document.fonts.ready.then(renderTabTypes);

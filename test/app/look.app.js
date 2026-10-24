@@ -190,3 +190,37 @@ test('the active REVISE button stops short of the toolbar’s rules, spaced like
   assert.ok(line.revLeft - line.maskStart >= 10, `the rule stops ${line.revLeft - line.maskStart}px before REVISE`);
   await app.eval('__stet.revision.show(false)');
 });
+
+test('View > Hide Toolbar slides it away and is kept; Focus Mode: full screen, the page alone, the toolbar back at the top edge, the rail at the right, Esc back', async () => {
+  await app.load([['action', 'Rain.']], {}, 'Focus');
+  await app.eval(`__stet.cmd.run('toolbar')`);
+  await app.until(`document.getElementById('elbar').hidden`, { what: 'the toolbar hidden' });
+  assert.equal((await settings()).toolbar, false, 'kept');
+  await app.eval(`__stet.cmd.run('panel-scenes')`);
+  await app.until(`!document.getElementById('left').hidden`, { what: 'the scene list open' });
+  await app.eval(`__stet.cmd.run('focus')`);
+  await app.until(`document.documentElement.classList.contains('focus')`, { what: 'focus mode' });
+  await app.until(`document.getElementById('left').hidden`, { what: 'the panels away' });
+  const shown = (sel) => app.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; })()`);
+  for (const sel of ['#top', '#elbar', '#status']) assert.equal(await shown(sel), false, sel + ' out of sight');
+  assert.equal(await shown('#content'), true, 'the page');
+  // The top edge: the menus and the toolbar (hidden in the window) come down over the page.
+  await app.move(400, 300); await app.move(400, 1);
+  await app.until(`document.documentElement.classList.contains('peek') && document.getElementById('elbar').getBoundingClientRect().top >= 29`, { what: 'the toolbar back at the top' });
+  await app.move(400, 400);
+  await app.until(`!document.documentElement.classList.contains('peek')`, { what: 'gone again' });
+  // The right edge: the rail, its NOTES opens the notes beside the page.
+  const w = await app.eval('innerWidth'), h = await app.eval('innerHeight');
+  await app.move(w - 40, h / 2); await app.move(w - 2, h / 2);
+  await app.until(`document.getElementById('focus-rail').classList.contains('on')`, { what: 'the rail' });
+  await app.until(`document.getElementById('focus-rail').getBoundingClientRect().right <= innerWidth + 1`, { what: 'the rail in view' });
+  await app.clickOn('#focus-rail [data-f="notes"]');
+  await app.until(`!document.getElementById('right').hidden`, { what: 'the notes open' });
+  await app.key('Escape');
+  await app.until(`!document.documentElement.classList.contains('focus')`, { what: 'back to the window' });
+  await app.until(`!document.getElementById('left').hidden && document.getElementById('right').hidden`, { what: 'the panels as they were' });
+  assert.equal(await shown('#status'), true, 'the status bar back');
+  await app.eval(`__stet.cmd.run('toolbar')`);
+  await app.until(`!document.getElementById('elbar').hidden`, { what: 'the toolbar back' });
+  await app.eval(`__stet.cmd.run('panel-scenes')`);
+});

@@ -117,7 +117,7 @@ function showMenu(btn, items) {
     if (!c) continue;
     const disabled = c.enabled && !c.enabled();
     const label = typeof c.label === 'function' ? c.label() : c.label;
-    const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') + (c.sub ? ' has-sub' : '') + (c.checked && c.checked() ? ' cur' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
+    const row = h('div', { class: 'mi' + (disabled ? ' disabled' : '') + (c.sub ? ' has-sub' : '') + (c.checked && c.checked() ? ' cur' : '') + (c.highlight ? ' hi' : '') }, h('span', {}, label), h('span', { class: 'k' }, keyLabel(c)));
     row.addEventListener('mouseup', () => { closeMenu(); if (c.run) setTimeout(() => (c.id ? run(c.id) : c.run()), 0); });
     if (c.sub && !disabled) quickSub(el, row, c.sub()); else row.addEventListener('mouseenter', () => hideSub(el, SUB_GRACE));
     el.appendChild(row);
