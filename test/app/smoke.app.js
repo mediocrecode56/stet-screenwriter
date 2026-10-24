@@ -218,13 +218,14 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
     return p.b > 6 && c.style.display !== 'none' && parseFloat(c.style.top) === r.y; })()`), true, 'the caret drawn on the line stepped to');
   // Letting go ends it: the pointer is free again, on the bar where it was locked, now on the second
   // stepped to (the bar slid under it); the script stays there, and still nothing else changes.
+  await app.move(x + 34 * 12, y); // (back down onto the bar, no further on: off it, the bar slides back)
   const stepped = await top();
   await app.up('Mod');
   await app.until('!__stet.timeline.stepping && !document.pointerLockElement && !document.querySelector(".tl-cover")', { what: 'stepping to end' });
   assert.equal(await top(), stepped, 'the script stays where it stepped to');
   const at = LOCKS ? x : x + 34 * 12; // the pointer: let go where it was locked, or where it went
   await app.frame();
-  await app.move(at, LOCKS ? y : y - 16);
+  await app.move(at, y);
   assert.equal(await tl(`Math.round(t.time.at(t.posAt(${at})))`), t0 + 34, 'the pointer is left on the second stepped to');
   assert.equal(await tl('t.hover.hidden'), false, 'and the line with it');
   assert.equal(await caretAt(), caret0);
