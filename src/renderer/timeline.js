@@ -18,11 +18,11 @@ const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const COVER = 0.62; // the part of the fade at the right end (zoomed in) dense enough that nothing under it is in play
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
 const FINE_PX = 12; // fewest pixels of mouse travel a second while stepping
-const END_PX = 20; // how far before the fade the pointer brings it up
-const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.6 3.6A3.4 3.4 0 1 0 9.4 6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M9.7 2.2v2.2H7.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.3 8.3l3.9 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'; // zoom reset: a magnifier, its lens a turning arrow
+const END_PX = 20; // how far before the fade the pointer has brought it all the way up
+const END_RAMP = 40; // over how many pixels before that it comes up, with the pointer
+const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3v8M12.5 3v8M4 7h6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.6 5.2L3.8 7l1.8 1.8M8.4 5.2L10.2 7 8.4 8.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="miter"/></svg>'; // the whole script: out to both ends
 const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.4l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const NOTE_ICON = '<svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0.5 0.5h8v5.5H4L1.8 8.2V6H0.5z" fill="currentColor"/></svg>';
 // Stepping is held with Ctrl, or Cmd on a Mac (where Ctrl + click is a right-click).
 const mod = (e) => (MAC ? e.metaKey : e.ctrlKey);
 const isMod = (key) => key === (MAC ? 'Meta' : 'Control');
@@ -46,7 +46,8 @@ export class Timeline {
     this.editing = null; // see editTimecode()
     this.unlocked = false; // stepping just ended with the pointer locked, and it hasn't moved since
     this.shift = 0; // px the strip is slid past where it scrolls to, to keep a stepped line under the pointer
-    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
+    // (the grid under the band, whose glass softens it: the marks over the band read clearly)
+    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-grid"></div><div class="tl-view"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
       + '<div class="tl-fade" hidden></div>' // (under the reset button: the strip fades out softly behind it while the pointer is on the bar)
       + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
@@ -254,14 +255,17 @@ export class Timeline {
   get coveredFrom() { return this.zoomed ? this.scroll.getBoundingClientRect().right - this.fade.offsetWidth * COVER : Infinity; }
   covered(clientX) { return clientX >= this.coveredFrom; }
 
-  /** Bring up the fade (and the reset button's edge) with the pointer at clientX within END_PX of the
-   *  fade, zoomed in; it stays up a little further out than it came, so it never flickers at the edge.
-   *  Never while stepping: the strip under the pointer is what is in play then. */
+  /** Bring up the fade with the pointer at clientX, zoomed in: it comes up gradually as the pointer
+   *  nears the right end (over END_RAMP pixels), all the way within END_PX of the fade, and goes the
+   *  same way, so there is no edge where it switches on. Fully up, the reset button sharpens
+   *  (tl-end-near). Never while stepping: the strip under the pointer is what is in play then. */
   nearEnd(clientX) {
-    const on = this.host.classList.contains('tl-end-near');
-    const want = clientX != null && this.zoomed && !this.stepping
-      && clientX >= this.host.getBoundingClientRect().right - this.fade.offsetWidth - END_PX - (on ? 12 : 0);
-    if (want !== on) this.host.classList.toggle('tl-end-near', want);
+    const full = this.host.getBoundingClientRect().right - this.fade.offsetWidth - END_PX;
+    const p = clientX != null && this.zoomed && !this.stepping ? Math.max(0, Math.min(1, (clientX - full + END_RAMP) / END_RAMP)) : 0;
+    if (p === this.endP) return;
+    this.endP = p;
+    this.host.style.setProperty('--tl-end', p.toFixed(3));
+    this.host.classList.toggle('tl-end-near', p === 1);
   }
 
   /** Light up the mark the pointer is drawn to (null: none). */
@@ -582,7 +586,7 @@ export class Timeline {
     for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
     for (const sc of tl.scenes) m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px"></div>`;
     const notes = this.session.doc.comments;
-    tl.notes.forEach((n, i) => { const c = notes[n.id]?.color; m += `<div class="tl-note${c ? ' c-' + c : ''}" data-i="${i}" style="left:${n.x * s}px">${NOTE_ICON}</div>`; }); // in the note's colour, if it has one
+    tl.notes.forEach((n, i) => { const c = notes[n.id]?.color; m += `<div class="tl-note${c ? ' c-' + c : ''}" data-i="${i}" style="left:${n.x * s}px"></div>`; }); // a square hung from the line, as on the page; in the note's colour, if it has one
     for (const a of anchors) m += `<div class="tl-tcm ${a.scene ? 'sc' : 'loose'}${a.color ? ' c-' + a.color : ''}" style="left:${a.x * s}px"></div>`;
     this.marks.innerHTML = m;
     const els = this.marks.children; // in the order drawn: the line, the highlights, the scenes, the notes, the timecodes

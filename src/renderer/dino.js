@@ -64,6 +64,8 @@ const MIN = 60000;
 // Poses that are merely held: one of these can be cut short (never a move, a jump or a lift).
 const HOLD = new Set(['stand', 'blink', 'up', 'sit', 'sitBlink', 'sitBreath', 'sitUp', 'armsUp', 'yawn', 'oneLeg', 'wag', 'hunch', 'lie', 'lieBreath', 'lieUp', 'lieUpBlink']);
 const isHold = (s) => HOLD.has(s.f) && !s.dx && !s.jump && !s.lift && !s.flip;
+const BLINK_MS = 140; // one of its own blinks
+const LAND_MS = 110;  // the crouch as it lands from a jump
 const WALKING = new Set(['walk', 'patrol', 'zoomies', 'ponder', 'explore', 'cornerBite']);
 // Frames whose legs carry it along the ground (any other move on the ground would slide).
 const STEPPING = /^(walk|run|creep)/;
@@ -182,9 +184,16 @@ export class Critter {
     this.tuftNext = null;   // when the next tuft comes up (only while in the background)
     this.deep = false;      // in a deep sleep
     this.gapMs = 0;         // real time since the previous tick (uncapped)
+    // The small touches of something alive: blinks of its own, and the weight of a landing.
+    this.blinkAt = null;    // when its next blink starts
+    this.landAt = -Infinity; // when it last came down from a jump
+    this.ownSeed = 0x2545f491;
   }
 
   // -- randomness --
+  /** The small touches' own random numbers (blinks, a landing's dust), so they never change what
+   *  it does: the rest of its life runs exactly as it would without them. */
+  ownRnd(a, b) { this.ownSeed = (this.ownSeed * 1664525 + 1013904223) >>> 0; return a + (this.ownSeed / 4294967296) * (b - a); }
   rnd(a, b) { return a + this.rng() * (b - a); }
   rint(a, b) { return Math.floor(this.rnd(a, b + 1)); }
   chance(p) { return this.rng() < p; }
@@ -1302,6 +1311,7 @@ export class Critter {
     if (s && now < s.end && !this.inReaction && this.dueNow(now) && isHold(s) && this.onstage()) s.end = now;
     if (!s || now >= s.end) {
       if (s) { this.x = s.x1; this.y = s.lift ? s.lift[1] : 0; }
+      if (s && s.jump >= 3 && !s.lift && !s.flip) this.land(now);
       const v = this.bridged(this.held.length ? this.held.shift() : this.nextStep(now));
       if (v.do) v.do(this);
       if (v.face) this.face = v.face;
@@ -1320,9 +1330,33 @@ export class Critter {
     this.x = s.ground ? s.x1 : s.x0 + (s.x1 - s.x0) * k;
     this.y = (s.lift ? s.lift[0] + (s.lift[1] - s.lift[0]) * k : 0) + (s.jump ? s.jump * 4 * k * (1 - k) : 0);
     this.effects = this.effects.filter((e) => now - e.t0 < 1400);
-    return s.x1 !== s.x0 || !!s.jump || !!s.lift || this.effects.length > 0 || this.particles.length > 0 || this.acking(now) > 0 ||
+    this.nextBlink(now);
+    return s.x1 !== s.x0 || !!s.jump || !!s.lift || this.effects.length > 0 || this.particles.length > 0 || this.acking(now) > 0 || this.landing(now) ||
       this.drops.length > 0 || this.sparks.length > 0 || this.streaks.length > 0 || !!this.wind || this.props.some((p) => p.live);
   }
+
+  // -- the small touches --
+  /** Eyes it can blink: open, awake, the right way up. */
+  eyesOpen() { return !this.deep && !this.flip && !this.asleep() && (FRAMES[this.frame] || FRAMES.stand).some((r) => r.includes('o')); }
+
+  /** Schedule its own blinks: one every 2.5 to 7 s, now and then two in quick succession. */
+  nextBlink(now) {
+    if (this.blinkAt == null || now - this.blinkAt > 30000) this.blinkAt = now + this.ownRnd(2500, 7000); // (the first, or back from a long gap)
+    else if (now >= this.blinkAt + BLINK_MS) this.blinkAt = now + (this.ownRnd(0, 1) < 0.16 ? this.ownRnd(160, 260) : this.ownRnd(2500, 7000));
+  }
+
+  /** In the middle of one of its own blinks (drawn with the eyes shut). */
+  blinking(now) { return this.blinkAt != null && now >= this.blinkAt && now < this.blinkAt + BLINK_MS && this.eyesOpen(); }
+
+  /** Down from a jump: a little dust kicked up either side of its feet, and a moment's crouch (Dino.draw). */
+  land(now) {
+    this.landAt = now;
+    const fx = this.x + (W / 2) * this.du;
+    for (const dir of [-1, 1]) for (let i = 0; i < 2; i++) this.particles.push({ x: fx + dir * this.ownRnd(3, 6) * this.du, y: 1, vx: dir * this.ownRnd(14, 30), vy: this.ownRnd(8, 18), t0: now });
+  }
+
+  /** Just landed: the knees take the weight for a moment. */
+  landing(now) { return now - this.landAt < LAND_MS; }
 
   /** Never jump between postures: getting up from lying or sitting always shows the in-between frames. */
   bridged(v) {
@@ -1339,6 +1373,9 @@ export class Critter {
     if (this.envDue) t = Math.min(t, this.envDue.at);
     if (this.ack && this.ack.t0 + 160 > this.now) t = Math.min(t, this.ack.t0 + 160);
     if (this.envNext != null) t = Math.min(t, this.envNext);
+    if (this.landAt + LAND_MS > this.now) t = Math.min(t, this.landAt + LAND_MS);
+    // Its own blinks, on time, while anyone can see them (never asleep or dormant).
+    if (this.focused && !this.dormant && this.blinkAt != null && this.eyesOpen()) t = Math.min(t, this.blinkAt > this.now ? this.blinkAt : this.blinkAt + BLINK_MS);
     if (!this.focused && this.tuftNext != null) t = Math.min(t, this.tuftNext);
     if (!this.focused && this.deep && this.lushNext != null) t = Math.min(t, this.lushNext);
     return t;
@@ -1552,7 +1589,11 @@ export class Dino {
     const props = c.props.map((q) => `${q.kind}${q.frame}${snap(q.x)},${Math.round(q.y)}${q.carried ? 'c' : ''}${q.wobble ? Math.round(now / 90) % 2 : ''}${q.beam ? 'b' : ''}${q.on ? 'o' : ''}${q.alpha != null ? Math.round(q.alpha * 10) : ''}${this.blinkOut(q, now) ? 'x' : ''}`).join();
     const parts = c.particles.map((q) => `${snap(q.x)},${Math.round(q.y)}`).join();
     const busy = c.drops.length || c.sparks.length || c.streaks.length ? Math.round(now / 45) : '';
-    const sig = `${c.frame}|${px}|${py}|${c.face}|${c.flip}|${ack}|${c.g}|${fx}|${props}|${parts}|${busy}|${c.hat ? c.hat.kind : ''}${c.step?.hatUp ? '^' : ''}`;
+    // Its own blinks; a moment's crouch as it lands from a jump; its shadow on the ground while it is up in the air.
+    const shut = ack || c.blinking(now);
+    const frame = c.landing(now) && c.y < 1 && !c.flip && postureOf(c.frame) === 'stand' && !c.hat && !c.props.some((q) => q.carried) ? 'crouch' : FRAMES[c.frame] ? c.frame : 'stand';
+    const air = c.step?.jump && !c.step.lift && c.y >= 1 ? Math.round(c.y) : 0;
+    const sig = `${frame}|${px}|${py}|${c.face}|${c.flip}|${ack}|${shut}|${air}|${c.g}|${fx}|${props}|${parts}|${busy}|${c.hat ? c.hat.kind : ''}${c.step?.hatUp ? '^' : ''}`;
     if (sig === this.lastSig) return;
     this.lastSig = sig;
     const g = this.ctx, cw = this.canvas.width, ch = this.canvas.height;
@@ -1590,10 +1631,16 @@ export class Dino {
     for (const kind of BACKDROP) for (const q of c.props) if (q.kind === kind) drawProp(q);
     for (const q of c.props) if (!BACKDROP.includes(q.kind)) drawProp(q);
     // The dinosaur, pixel by pixel on edges that keep its face the same shape at any size, either way round.
-    const frame = FRAMES[c.frame] ? c.frame : 'stand';
     let rows = FRAMES[frame];
-    if (ack) rows = rows.map((r) => r.replace('o', '#')); // a blink: noticed!
+    if (shut) rows = rows.map((r) => r.replace('o', '#')); // a blink (on a click: noticed!)
     const e = spriteEdges(frame, cs), sw = e.cols[W], sh = e.rows[H];
+    if (air) {
+      // Its shadow: under it on the ground, narrower and fainter the higher it goes.
+      const sw2 = Math.max(3, 11 - Math.round(air / 2)) * p;
+      g.globalAlpha = Math.max(0.1, 0.32 - air * 0.02);
+      g.fillRect(Math.round((px + sw / 2 - sw2 / 2) / p) * p, ground - p, sw2, p);
+      g.globalAlpha = 1;
+    }
     const top = ground - py - sh;
     const colX = (i) => px + (c.face > 0 ? e.cols[i] : sw - e.cols[i + 1]); // left edge of sprite column i on screen
     for (let r = 0; r < H; r++) {

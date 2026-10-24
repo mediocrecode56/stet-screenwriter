@@ -293,7 +293,8 @@ test('+NOTE again on the same selection goes back to its note; a new selection m
   const del = '#notes .note:first-child .ndel';
   await app.until('!document.getElementById("right").getAnimations().length', { what: 'the panel in place' });
   await app.clickOn(del);
-  assert.deepEqual(await app.eval(`(() => { const b = document.querySelector('${del}'); return [b.classList.contains('armed'), b.textContent, !!b.querySelector('svg'), b.title]; })()`), [true, '', true, 'Press again to delete this note'], 'armed: a check, no word');
+  assert.deepEqual(await app.eval(`(() => { const b = document.querySelector('${del}'); return [b.classList.contains('armed'), b.textContent, !!b.querySelector('svg'), b.title]; })()`), [true, '', true, 'Press again to delete this note'], 'armed: an X, no word');
+  assert.deepEqual(await app.eval(`(() => { const b = document.querySelector('${del}'); return [b.classList.contains('held'), b._arm ?? null, getComputedStyle(b, '::after').display]; })()`), [true, null, 'none'], 'no countdown: it waits for a press elsewhere');
   assert.equal(await n(), 2, 'one press deletes nothing');
   await app.clickOn(del);
   await app.until(`__stet.editor.commentAnchors().length === 1 && document.querySelectorAll('#notes .note').length === 1`, { what: 'the note folded away' });
@@ -342,6 +343,8 @@ test('a note pinned glides to the top and keeps its writing; its colour shows on
   await app.clickOn('#notes .note:first-child [data-sw="pink"]');
   await app.until(`document.querySelector('#notes .note:first-child').className.includes('c-pink') && !document.querySelector('#notes .picking')`, { what: 'the card in pink, the swatches away' });
   await app.until(`document.querySelectorAll('#timeline .tl-note.c-pink').length === 1`, { what: 'its mark on the timeline in pink' });
+  await app.until(`document.querySelectorAll('.page .mk.hl-pink').length === 1 && document.querySelectorAll('.page .cmtick.c-pink').length === 1`, { what: 'its passage highlighted in pink, and its marker on the page' });
+  assert.ok(await app.eval(`(() => { const r = document.querySelector('.page .cmtick').getBoundingClientRect(); return Math.abs(r.width - r.height) < 0.5 && r.width > 2; })()`), 'the marker is a square');
   assert.deepEqual(await app.eval('Object.values(__stet.session.doc.comments).map((c) => c.color || null).sort()'), [null, 'pink'].sort());
   await app.clickOn('#notes .note:first-child [data-x="pin"]');
   await app.until(`${order} === 'One,Two!'`, { what: 'unpinned: back to its place in the script' });

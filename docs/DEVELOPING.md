@@ -229,9 +229,10 @@ toolbar with the whole script from left to right, a page to a unit, like a track
 sequencer (`src/core/timeline.js` for the arithmetic, `src/renderer/timeline.js` for the bar).
 The bar stays quiet and explains nothing in words: the cursor says what a drag will do. It
 shows the script as a white line (grey in light mode), coloured where passages are
-highlighted, a small tick across it for each scene, an icon for each note, a time ruler that ends in the
-estimated length, the caret (the line with a cap) and a soft band for the part of the script
-in the window. With the pointer on it, the grid comes in and a small readout gives the time
+highlighted, a small tick across it for each scene, a square hung from the line for each note (in its
+colour, if it has one), a time ruler that ends in the estimated length, the caret (the line with a
+cap) and a pane of glass the full height of the bar for the part of the script in the window (it
+softens the grid under it, so the marks on it read clearly). With the pointer on it, the grid comes in and a small readout gives the time
 and scene under the pointer. The pointer is drawn to a scene, note, highlight or timecode within 10 pixels
 (`snapTo`), and the mark lights up. Clicking goes to the line drawn there (a scene to its
 heading, a note to its passage, with the note open). Dragging sideways anywhere zooms around
@@ -250,8 +251,8 @@ notes never change. A click puts the caret there, a right-click pins a timecode 
 letting go leaves the script there and Esc puts it (and the strip) back. The bar moves gently:
 the readout fades in, a mark the pointer is drawn to lifts a little, the caret's line glides
 to where a click sent it, and the whole script settles in with a slight zoom out (none with
-reduced motion). The round button
-centred on the right, or a double-click on the ruler or the band, shows the whole script.
+reduced motion). The button at the
+right end (zoomed in; the strip fades out behind it as the pointer nears it, by degrees), or a double-click on the ruler or the band, shows the whole script.
 The wheel scrolls it and Ctrl+wheel zooms; the grid steps between 1 second and an hour so it
 stays readable, and the ruler is drawn only around the part in view.
 

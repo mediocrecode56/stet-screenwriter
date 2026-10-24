@@ -677,3 +677,32 @@ test('a very long sleep: rarer plants come up slowly, and wither away a stage at
   assert.ok(!c.props.some((p) => p.lush), 'all gone');
   for (const f of frames.values()) assert.ok(f.every((x, i) => i === 0 || x === f[i - 1] - 1), `a stage at a time (${f})`);
 });
+
+test('it blinks on its own every few seconds (never asleep), lands from a jump with weight, and neither changes what it does', () => {
+  // Blinks: counted as they start, over ten minutes of its life.
+  const c = wide(7);
+  let blinks = 0, was = false, asleepBlinks = 0;
+  run(c, 10 * MINUTE, { dt: 20, each: (now) => {
+    const b = c.blinking(now);
+    if (b && !was) blinks++;
+    if (b && (c.asleep() || c.deep)) asleepBlinks++;
+    was = b;
+  } });
+  assert.ok(blinks >= 20 && blinks <= 300, `${blinks} blinks in ten minutes`);
+  assert.equal(asleepBlinks, 0, 'never with its eyes shut already');
+  // The same life with and without them, step for step: they draw on random numbers of their own.
+  const trace = (c) => { const out = []; run(c, 5 * MINUTE, { dt: 50, each: () => out.push(c.frame + c.x.toFixed(2)) }); return out.join(); };
+  const plain = wide(11);
+  plain.nextBlink = () => {};
+  plain.land = () => {};
+  assert.equal(trace(wide(11)), trace(plain), 'the same activities, the same moves');
+  // A landing: dust either side of its feet, and a moment's crouch.
+  const d = wide(3);
+  run(d, 2000, { dt: 50 });
+  const t0 = d.now, dust = d.particles.length;
+  d.step = { f: 'jump', t: 340, jump: 5, start: t0, end: t0 + 340, x0: d.x, x1: d.x, ground: false };
+  d.advance(t0 + 341);
+  assert.equal(d.landAt, t0 + 341);
+  assert.ok(d.particles.length >= dust + 4, 'dust kicked up');
+  assert.ok(d.landing(t0 + 400) && !d.landing(t0 + 500), 'the crouch is brief');
+});

@@ -2,7 +2,7 @@
 // and how often things happen, read from its choices (test/unit/dino.test.js has each behaviour).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GROW_FULL, HEADROOM, seeded, make, wide, run, inView, doing, until, world, STEPPING, walksNotSlides, MINUTE, writer, chosen } from '../helpers/dino-sim.js';
+import { GROW_FULL, seeded, make, wide, run, inView, doing, until, world, STEPPING, walksNotSlides, MINUTE, writer, chosen } from '../helpers/dino-sim.js';
 
 // ---- one long life, shared ----------------------------------------------------------------------
 //

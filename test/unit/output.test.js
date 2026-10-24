@@ -52,6 +52,13 @@ test('highlights and notes are only exported when requested', () => {
   assert.ok(rich.pages[0].notes.length >= 1);
   const notes = rich.pages.find((p) => p.kind === 'notes');
   assert.ok(notes.lines.some((l) => l.text.includes('too on the nose')));
+  // A note given a colour prints its passage highlighted in it, with the highlights.
+  const id = Object.keys(doc.comments)[0];
+  const before = rich.pages.flatMap((p) => p.rects).filter((r) => r.color === 'pink').length;
+  doc.comments[id].color = 'pink';
+  const coloured = buildPrintPages(doc, { titlePage: false, highlights: true, comments: true }).pages.flatMap((p) => p.rects);
+  assert.ok(coloured.filter((r) => r.color === 'pink').length > before, 'the note\'s passage in pink');
+  assert.equal(buildPrintPages(doc, { titlePage: false, comments: true }).pages.flatMap((p) => p.rects).length, 0, 'and not without the highlights');
 });
 
 test('first page carries no number; later pages do, at the right margin', () => {

@@ -2,7 +2,17 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
-## 0.41.0 · 24 Oct 2026
+## 0.42.0 · 24 Oct 2026
+
+- Notes: giving a note a colour now also highlights its passage in the script in that colour, and its marker in the page's right margin takes the colour too. With highlights turned on, the passage prints highlighted as well.
+- Notes: the marker in the right margin is a small square, a little larger for the note you're on.
+- Notes: deleting a note still takes a second press, but the bin now turns into an X with no countdown. It waits until you click somewhere else.
+- Timeline: the part of the script on screen is a pane of glass the full height of the bar. It softens the grid behind it, so the marks on it are easier to read.
+- Timeline: each note is a small square hanging from the line, like its marker on the page. The whole-script button has a clearer icon (arrows out to both ends).
+- Timeline: the stretch of the scene you're in is much more subtle. Scene ticks are a little taller.
+- Timeline: zoomed in, the fade behind the whole-script button now comes up gradually as the pointer nears the right end, and goes the same way, so it no longer switches on at an edge.
+- The dinosaur blinks now and then on its own. When it jumps, its shadow shows on the ground under it, and it lands with a moment's crouch and a little dust.
+- A tidier codebase: unused code removed, and the docs brought up to date.
 
 - Spelling: choosing a suggestion from the right-click menu now only replaces the word. Before, if the caret was somewhere else in the script, the page jumped there after the fix.
 - Notes: a click anywhere on a note (its top line or its margins, not just the passage) goes to its page and centres it.

@@ -104,12 +104,12 @@ other (and is pointed out in the menu if the download didn't work).
 ![The timeline above the script, with two scene timecodes and the time under the pointer](docs/images/timeline.png)
 
 The strip under the toolbar is your whole screenplay from left to right, like a track in a video
-editor: a tick for each scene, your highlights in their colours, an icon for each note, and a time
-ruler with the estimated running time at the right end. The shaded band is the part on screen; the
+editor: a tick for each scene, your highlights in their colours, a small square for each note, and a time
+ruler with the estimated running time at the right end. The glass band is the part on screen; the
 line with the cap is where you're typing. **Ctrl+Shift+T** shows or hides it.
 
 - **Point** at it to see the time and the scene there; **click** to go there.
-- **Drag sideways** to zoom around that point, **drag the shaded band** to scroll, and
+- **Drag sideways** to zoom around that point, **drag the glass band** to scroll, and
   **double-click the ruler** to see the whole script again.
 - **Timecodes** set the clock. The ruler counts a minute a page until you pin real times; then it
   spreads the time between them. **Right-click a scene** to give it its own timecode, shown beside

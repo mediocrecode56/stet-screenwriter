@@ -24,9 +24,8 @@ const APP_ARGS = [...(process.env.STET_E2E_EXE ? [] : [ROOT]), ...(process.getui
 const START_MS = Number(process.env.STET_E2E_START_MS) || 15000;
 const SEND_MS = 30000;
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-/** Ctrl, or Cmd on a Mac: the modifier STET's shortcuts and timeline stepping use. */
+/** A Mac, where STET's shortcuts and timeline stepping use Cmd for Ctrl ('Mod' in a key combo). */
 export const MAC = process.platform === 'darwin';
-export const MOD = MAC ? 'Meta' : 'Ctrl';
 
 // Every app and folder still around when the test process ends goes with it, so a failed test
 // can never leave one behind (or keep the run waiting on it).

@@ -196,6 +196,7 @@ export class View {
       sig += `${ver(blocks[it.bi])}.${it.l0}.${it.l1}.${it.y}.${it.bi},`;
       const tc = times.get(blocks[it.bi].id);
       if (tc) sig += `${tc.t}.${tc.tag},`;
+      for (const m of blocks[it.bi].marks) if (m.k === 'cm') sig += `${this.noteColor(m.v)},`; // (a note's colour shows on its passage)
     }
     if (this.activeComment) sig += '|' + this.activeComment;
     let node = this.els.get(vi);
@@ -215,6 +216,9 @@ export class View {
     s.fontSize = this.row + 'px';
     node.innerHTML = this.pageHTML(page, pi, blocks, times);
   }
+
+  /** The highlight colour a note was given in the notes panel ('' for none). */
+  noteColor(id) { return (this.doc && this.doc.comments && this.doc.comments[id] || {}).color || ''; }
 
   /** The scenes' own timecodes (core/timeline.js), shown beside their headings: by block id. */
   sceneTimes() {
@@ -255,11 +259,15 @@ export class View {
           const x = this.xAt(x0, colIn(gaps, a - ls)), w = (colIn(gaps, z - ls) - colIn(gaps, a - ls)) * this.cw;
           if (m.k === 'hl') h += `<div class="mk hl-${m.v}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
           else if (m.k === 'cm') {
+            // A note given a colour highlights its passage in it, and its marker takes it too.
+            const c = this.noteColor(m.v);
+            if (c) h += `<div class="mk hl-${c}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
             h += `<div class="mk cm" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
             if (!ticks.has(m.v)) {
               ticks.add(m.v);
-              const cur = m.v === this.activeComment ? ' cur' : '';
-              h += `<div class="mk cmtick${cur}" data-c="${esc(m.v)}" style="left:${this.xAt(PAGE.rightCol + 3, 0)}px;top:${y}px;height:${row}px" title="Note"></div>`;
+              // The marker in the right margin: a square, centred on the line, larger for the note you are on.
+              const cur = m.v === this.activeComment, d = Math.round(row * (cur ? 0.62 : 0.46));
+              h += `<div class="mk cmtick${cur ? ' cur' : ''}${c ? ' c-' + c : ''}" data-c="${esc(m.v)}" style="left:${this.xAt(PAGE.rightCol + 3, 0) + Math.round((row * 0.62 - d) / 2)}px;top:${y + Math.round((row - d) / 2)}px;width:${d}px;height:${d}px" title="Note"></div>`;
             }
           }
         }

@@ -93,12 +93,7 @@ const featuresOf = (f) => {
 };
 const flagFeatures = (g) => ({ t: canon(g.text), n: words(g.text).length, category: g.category, edit: g.edit, kept: keptOf(g.edit), speaker: g.speaker || '' });
 
-/** How much a flag speaks for leaving suggestion f alone, by the closest thing they share (0: nothing). */
-export function weigh(f, flag) {
-  if (!flag.text) return 0;
-  return closeness(featuresOf(f), flagFeatures(flag));
-}
-
+/** How much a flag speaks for leaving a suggestion alone, by the closest thing their features share (0: nothing). */
 function closeness(a, b) {
   if (a.t && a.t === b.t) return a.category === b.category ? 1 : 0.6;
   if (a.category !== b.category) return 0;

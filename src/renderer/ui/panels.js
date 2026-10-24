@@ -80,8 +80,8 @@ export class ScenePanel {
 
 const TRASH_ICON = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const PIN_ICON = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path class="head" d="M4.2 1.4h3.6l-.5 3.3 1.9 1.8v.9H2.8v-.9l1.9-1.8z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6 7.4v3.4" stroke="currentColor" stroke-width="1.2"/></svg>';
-const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 6.3l2.5 2.5 5.1-5.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-const NOTE_COLORS =[null, ...HIGHLIGHT_COLORS];
+const X_ICON = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3L3 9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>';
+const NOTE_COLORS = [null, ...HIGHLIGHT_COLORS];
 
 export class NotesPanel {
   constructor(host, list, count, { editor, view, session, jump, onChange, onMark }) {
@@ -102,8 +102,9 @@ export class NotesPanel {
       }
       e.preventDefault(); // (a note being written keeps the focus)
       const id = note.dataset.id;
-      // Delete takes a second press (ui/arm.js), shown by a check; then the note folds away.
-      if (btn.dataset.x === 'del') arm(btn, () => this.fold(id), { icon: CHECK_ICON, title: 'Press again to delete this note' });
+      // Delete takes a second press (ui/arm.js), shown by an X that waits, with no countdown, until a
+      // press lands elsewhere; then the note folds away.
+      if (btn.dataset.x === 'del') arm(btn, () => this.fold(id), { icon: X_ICON, title: 'Press again to delete this note', ms: 0 });
       else if (btn.dataset.x === 'pin') this.pin(id);
       else if (btn.dataset.x === 'col') this.pick(btn.closest('.note').classList.contains('picking') ? null : id);
       else if (btn.dataset.sw != null) { this.setColor(id, btn.dataset.sw || null); this.pick(null); }
@@ -204,7 +205,8 @@ export class NotesPanel {
     if (id) this.card(id)?.classList.add('picking');
   }
 
-  /** Give note `id` a highlight colour (null: none), shown on its card and on the timeline. */
+  /** Give note `id` a highlight colour (null: none), shown on its card, on its passage and marker in
+   *  the script, and on the timeline. */
   setColor(id, color) {
     const c = this.body(id);
     if ((c.color || null) === color) return;

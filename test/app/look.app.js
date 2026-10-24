@@ -148,10 +148,12 @@ test('every panel, bar, dialog and menu arrives with the same slide; Find search
   assert.match(t.transform, /^matrix\(1, 0, 0, 1, -\d/, `still centred while it arrives (${t.transform})`);
   assert.ok(parseFloat(t.translate.split(' ')[1]) > 0, `from below (${t.translate})`);
   assert.deepEqual([t.boxes, t.text], [1, 'two']);
-  // The timeline's fade behind the reset button: no blur, and it clears faster than it came.
-  const fade = await app.eval(`(() => { const f = document.querySelector('#timeline .tl-fade'), s = getComputedStyle(f); return { blur: s.backdropFilter, out: parseFloat(s.transitionDuration), into: parseFloat(getComputedStyle(document.querySelector('#timeline .tl-hover') || f).getPropertyValue('--dur-tl')) }; })()`);
+  // The timeline's fade behind the reset button: no blur; it follows the pointer (--tl-end), each step smoothed.
+  const fade = await app.eval(`(() => { const f = document.querySelector('#timeline .tl-fade'), s = getComputedStyle(f); return { blur: s.backdropFilter, ms: parseFloat(s.transitionDuration) * 1000, follows: (document.getElementById('timeline').style.setProperty('--tl-end', '0.5'), f.style.transition = 'none', getComputedStyle(f).opacity) }; })()`);
+  await app.eval(`(() => { const f = document.querySelector('#timeline .tl-fade'); f.style.transition = ''; document.getElementById('timeline').style.removeProperty('--tl-end'); })()`);
   assert.equal(fade.blur, 'none');
-  assert.ok(fade.out > 0 && fade.out * 1000 < fade.into, `out ${fade.out}s, in ${fade.into}ms`);
+  assert.equal(fade.follows, '0.5', 'as far up as the pointer has brought it');
+  assert.ok(fade.ms > 0 && fade.ms <= 160, `a short smoothing (${fade.ms}ms)`);
   // Reduced motion: no movement at all.
   await app.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await app.key('Mod+F');
