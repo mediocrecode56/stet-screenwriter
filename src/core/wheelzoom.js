@@ -9,7 +9,7 @@
 
 export const ZOOM_STEP = 0.05;
 export const ZOOM_MIN = 0.5;
-export const ZOOM_MAX = 3;
+export const ZOOM_MAX = 2; // (beyond twice the size the layout around the pages breaks)
 const STEP_PX = 50;
 const IDLE_MS = 400;
 
@@ -36,4 +36,10 @@ export class WheelZoom {
 export function stepZoom(z, steps) {
   const next = Math.round((z + steps * ZOOM_STEP) * 100) / 100;
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+}
+
+/** The scale of a side panel's text at script zoom `z`, following only a `share` of it (the notes
+ *  and Revise half, the scenes a tenth): at 200% the notes are 150%, the scenes 110%. */
+export function panelScale(z, share) {
+  return Math.round((1 + (z - 1) * share) * 1000) / 1000;
 }

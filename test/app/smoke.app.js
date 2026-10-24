@@ -416,16 +416,22 @@ async function menuRow(text) {
 }
 
 test('spelling: obvious slips underlined (names left alone), fixed, added or ignored from a right-click; Auto corrects on Space', async () => {
-  await app.load([['action', 'Mara opens teh door. Rain on the glass, dorr open.'], ['character', 'MARA'], ['dialogue', 'I recieve nothing, Mara.']]);
+  await app.load([['action', 'Mara opens teh door. Rain on the glass, dorr open.'], ['character', 'MARA'], ['dialogue', 'I recieve nothing, Mara.'], ...Array.from({ length: 160 }, () => ['action', 'Rain on the glass.'])]);
   const flagged = () => app.eval('__stet.spelling.marks.map((m) => m.word)');
   await app.until(`document.querySelectorAll('.spr').length === 3`, { what: 'three underlines' });
   assert.deepEqual(await flagged(), ['teh', 'dorr', 'recieve'], 'the slips, not the name');
   const rightClick = async () => { const r = await app.rect('.spr'); await app.click(r.x, r.y, { button: 'right' }); await app.until(`[...document.querySelectorAll('.sp-menu')].some((m) => m.style.pointerEvents !== 'none')`, { what: 'the spelling menu' }); };
-  // A fix from the menu: one undo step, the caret where it was.
+  // A fix from the menu: one undo step, the caret where it was, and the script stays where it is
+  // (the caret pages away: no jump to it).
+  const last = await app.eval('__stet.editor.blocks.length - 1'), top = await app.eval('__stet.view.scroller.scrollTop');
+  await app.caret(last, 0);
+  await app.eval(`__stet.view.scroller.scrollTop = ${top}`);
+  await app.until(`document.querySelectorAll('.spr').length === 3`, { what: 'the first page back' });
   await rightClick();
   assert.equal(await app.eval(`[...document.querySelectorAll('.sp-menu .sp-fix')].map((x) => x.textContent).join()`), 'the', 'its one fix');
   await menuRow('the');
   await app.until(`__stet.editor.blocks[0].text.startsWith('Mara opens the door.')`, { what: 'the fix' });
+  assert.deepEqual(await app.eval('new Promise((r) => requestAnimationFrame(() => r([__stet.view.scroller.scrollTop, __stet.editor.caret.b])))'), [top, last],'no jump: the page stays, the caret too');
   // Ignored in this script (kept with it), added to the dictionary (every script).
   const drawn = (n) => app.until(`document.querySelectorAll('.spr').length === ${n}`, { what: n + ' underlines drawn' });
   await drawn(2);

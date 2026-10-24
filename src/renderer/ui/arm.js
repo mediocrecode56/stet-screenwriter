@@ -1,6 +1,6 @@
 // A second press to confirm, for the few buttons whose one press would lose work (deleting a
 // note, resetting the guidelines). The first press arms the button: it fills, its label turns to
-// CONFIRM and a thin bar under it runs out; a second press before the bar is gone does the job.
+// CONFIRM (on an icon button, a check) and a thin bar under it runs out; a second press before the bar is gone does the job.
 // Otherwise, or on a press anywhere else, it quietly goes back. Nothing modal, nothing to dismiss.
 
 import { reducedMotion, EASE_OUT } from './motion.js';
@@ -14,15 +14,18 @@ export function disarm(btn) {
     if (!b.classList.contains('armed')) continue;
     b.classList.remove('armed');
     b.innerHTML = b.dataset.label; // (its icon, if it had one)
+    if (b.dataset.title != null) { b.title = b.dataset.title; delete b.dataset.title; }
   }
 }
 
-/** Press on an arming button: the first press arms it, the second (while armed) runs `confirm`. Returns whether it ran. */
-export function arm(btn, confirm, { label = 'CONFIRM', ms = ARM_MS } = {}) {
+/** Press on an arming button: the first press arms it, the second (while armed) runs `confirm`. Returns whether it ran.
+ *  `icon` (an svg) stands in for the label on a small icon button, `title` says what the second press does. */
+export function arm(btn, confirm, { label = 'CONFIRM', icon = null, title = null, ms = ARM_MS } = {}) {
   if (btn.classList.contains('armed')) { disarm(btn); confirm(); return true; }
   disarm();
   btn.dataset.label = btn.innerHTML;
-  btn.textContent = label;
+  if (icon) btn.innerHTML = icon; else btn.textContent = label;
+  if (title) { btn.dataset.title = btn.title; btn.title = title; }
   btn.classList.add('armed');
   btn.style.setProperty('--arm-ms', ms + 'ms');
   btn._arm = setTimeout(() => disarm(btn), ms);

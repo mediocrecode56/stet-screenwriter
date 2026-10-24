@@ -119,10 +119,12 @@ export class Input {
   }
 
   /** Common post-edit work: lay out, repaint and reveal the caret. */
-  after() {
+  /** After an edit: laid out and drawn, the caret scrolled into view (unless `reveal` is false: a
+   *  spelling fix from the right-click menu, made where the pointer is while the caret may be pages away). */
+  after(reveal = true) {
     this.view.relayout();
     this.view.frame();
-    this.view.revealCaret();
+    if (reveal) this.view.revealCaret();
     this.placeTextarea();
   }
 

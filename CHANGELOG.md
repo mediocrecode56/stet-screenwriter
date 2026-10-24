@@ -2,6 +2,15 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.41.0 · 24 Oct 2026
+
+- Spelling: choosing a suggestion from the right-click menu now only replaces the word. Before, if the caret was somewhere else in the script, the page jumped there after the fix.
+- Notes: a click anywhere on a note (its top line or its margins, not just the passage) goes to its page and centres it.
+- Notes: deleting a note still takes a second press, but the bin now turns into a check mark instead of the word CONFIRM. The note's buttons are a little larger.
+- Zoom also sizes the side panels, by less than the script: the notes and Revise follow half of it (at 200% their text is 150%), the scenes a tenth (110%).
+- Zoom now stops at 200%. Beyond that, the layout around the pages broke.
+- Scenes: less empty space on the left of the list.
+
 ## 0.40.0 · 24 Oct 2026
 
 - Notes: each note has three small buttons that show when you point at it: a colour, a pin and a bin. The colour button gives the note one of the highlight colours (blue, yellow or pink). The colour shows on the note's passage in the list and on its mark on the timeline. The pin moves the note to the top of the list, where it stays (pinned notes keep their script order among themselves); the cards glide to their new places, and a note you are writing in keeps your typing. The bin replaces DELETE and still takes a second press.

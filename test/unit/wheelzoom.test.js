@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WheelZoom, stepZoom } from '../../src/core/wheelzoom.js';
+import { WheelZoom, stepZoom, panelScale } from '../../src/core/wheelzoom.js';
 
 test('each wheel notch is exactly one 5-point step, in and out', () => {
   const w = new WheelZoom();
@@ -31,10 +31,18 @@ test('trackpad-sized deltas accumulate into whole steps; direction change discar
 });
 
 test('limits and exact 5-point steps are kept', () => {
-  assert.equal(stepZoom(2.99, 1), 3);
-  assert.equal(stepZoom(3, 1), 3);
+  assert.equal(stepZoom(1.99, 1), 2);
+  assert.equal(stepZoom(2, 1), 2);
   assert.equal(stepZoom(0.51, -1), 0.5);
   assert.equal(stepZoom(1.13, 1), 1.18);
   assert.equal(stepZoom(1, -1), 0.95);
   assert.equal(stepZoom(0.95, 1), 1);
+});
+
+test('the side panels follow a share of the zoom: notes and Revise half, scenes a tenth', () => {
+  assert.equal(panelScale(1, 0.5), 1);
+  assert.equal(panelScale(2, 0.5), 1.5);
+  assert.equal(panelScale(2, 0.1), 1.1);
+  assert.equal(panelScale(0.5, 0.5), 0.75);
+  assert.equal(panelScale(1.25, 0.1), 1.025);
 });

@@ -293,10 +293,27 @@ test('+NOTE again on the same selection goes back to its note; a new selection m
   const del = '#notes .note:first-child .ndel';
   await app.until('!document.getElementById("right").getAnimations().length', { what: 'the panel in place' });
   await app.clickOn(del);
-  assert.equal(await app.eval(`document.querySelector('${del}').textContent`), 'CONFIRM');
+  assert.deepEqual(await app.eval(`(() => { const b = document.querySelector('${del}'); return [b.classList.contains('armed'), b.textContent, !!b.querySelector('svg'), b.title]; })()`), [true, '', true, 'Press again to delete this note'], 'armed: a check, no word');
   assert.equal(await n(), 2, 'one press deletes nothing');
   await app.clickOn(del);
   await app.until(`__stet.editor.commentAnchors().length === 1 && document.querySelectorAll('#notes .note').length === 1`, { what: 'the note folded away' });
+  await app.eval(`__stet.cmd.run('panel-notes')`);
+  await app.until('document.getElementById("right").hidden');
+});
+
+test('a press on a note\'s header or margin goes to its passage, as one on the passage does', async () => {
+  await app.load([['action', 'At the top.'], ...Array.from({ length: 120 }, () => ['action', 'Filler line.']), ['action', 'The passage with the note.']]);
+  const b = await app.eval('__stet.editor.blocks.length - 1');
+  await app.caret(b, 4, 11);
+  await app.clickOn('#btn-comment');
+  await app.until('document.activeElement.tagName === "TEXTAREA"', { what: 'the note open' });
+  await app.until('!document.getElementById("right").getAnimations().length', { what: 'the panel in place' });
+  for (const where of ['header', 'margin']) {
+    await app.caret(0, 0);
+    if (where === 'header') await app.clickOn('#notes .note .when');
+    else { const r = await app.rect('#notes .note'); await app.click(r.left + 5, r.top + r.height / 2); }
+    await app.until(`__stet.editor.caret.b === ${b}`, { what: 'the note\'s passage, from its ' + where });
+  }
   await app.eval(`__stet.cmd.run('panel-notes')`);
   await app.until('document.getElementById("right").hidden');
 });
@@ -398,8 +415,9 @@ test('zoom: Ctrl+= and Ctrl+0, and Ctrl+wheel in exact 5-point steps within the 
   assert.equal(await wheel(-100, 4), 1.25);
   assert.equal(await wheel(100, 5), 1);
   assert.equal(await wheel(-600), 1.05, 'one oversized event is still one step');
-  await app.eval('__stet.view.setZoom(2.97)');
-  assert.equal(await wheel(-100, 3), 3, 'the maximum kept');
+  await app.eval('__stet.view.setZoom(1.97)');
+  assert.equal(await wheel(-100, 3), 2, 'the maximum kept (200%)');
+  assert.deepEqual(await app.eval(`['--pz-notes', '--pz-scenes'].map((v) => getComputedStyle(document.documentElement).getPropertyValue(v))`), ['1.5', '1.1'], 'the notes and Revise follow half the zoom, the scenes a tenth');
   await app.eval('__stet.view.setZoom(0.53)');
   assert.equal(await wheel(100, 3), 0.5, 'the minimum kept');
   await app.eval('__stet.view.setZoom(1)');

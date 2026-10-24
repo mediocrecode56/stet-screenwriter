@@ -27,7 +27,7 @@ import { Timeline } from './timeline.js';
 import { launchOrder } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { MAC, macKeys } from '../core/keys.js';
-import { stepZoom } from '../core/wheelzoom.js';
+import { stepZoom, panelScale } from '../core/wheelzoom.js';
 import { castOrder, touchCast } from '../core/cast.js';
 import { parseFdx } from '../core/fdx.js';
 import { alignOf } from '../core/format.js';
@@ -101,7 +101,7 @@ const spelling = new Spelling({
   api, editor, view, session,
   getSettings: () => settings,
   setSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
-  after: () => { input.after(); input.focus(); },
+  after: (reveal) => { input.after(reveal); input.focus(); },
   onState: () => renderSpelling(),
   notify: (text) => toast(text, 5000),
 });
@@ -333,7 +333,13 @@ function renderTitle() {
   describeDoc();
 }
 
-function renderZoom() { $('zoom-val').textContent = Math.round(view.z * 100) + '%'; }
+// The side panels' text follows the zoom too, but only part of it (style.css --pz-notes, --pz-scenes).
+function renderZoom() {
+  $('zoom-val').textContent = Math.round(view.z * 100) + '%';
+  const root = document.documentElement.style;
+  root.setProperty('--pz-notes', panelScale(view.z, 0.5)); // the notes and Revise
+  root.setProperty('--pz-scenes', panelScale(view.z, 0.1));
+}
 let zoomTimer = 0;
 function persistZoom() { clearTimeout(zoomTimer); zoomTimer = setTimeout(() => api.invoke('settings:set', { zoom: view.z }), 500); }
 

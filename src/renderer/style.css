@@ -363,10 +363,10 @@ aside.rs-near[data-edge="left"] { box-shadow: inset 1px 0 0 var(--ink-3); }
 body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none; }
 .panel-head { padding: 8px 10px 6px; letter-spacing: .2em; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
 .list { overflow-y: auto; flex: 1; }
-.row { padding: 4px 10px; display: flex; gap: 8px; cursor: default; border-bottom: 1px solid transparent; transition: background-color var(--dur-fast) var(--ease-out); }
+.row { padding: 4px 10px 4px 6px; display: flex; gap: 8px; cursor: default; border-bottom: 1px solid transparent; transition: background-color var(--dur-fast) var(--ease-out); }
 .row:hover { background: var(--hover); }
 .row.cur { box-shadow: inset 2px 0 0 var(--ink); }
-.row .n { color: var(--ink-3); width: 44px; flex: none; text-align: right; font-size: 10px; line-height: 16px; letter-spacing: .04em; font-variant-numeric: tabular-nums; } /* the scene's time on the timeline */
+.row .n { color: var(--ink-3); min-width: 4.5ch; flex: none; text-align: right; font-size: 10px; line-height: 16px; letter-spacing: .04em; font-variant-numeric: tabular-nums; } /* the scene's time on the timeline */
 .row .n.pin { color: var(--ink-2); } /* pinned to a timecode */
 .row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .row .p { color: var(--ink-3); flex: none; }
@@ -382,20 +382,20 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 /* The card's small buttons, on the pointer (or the card you are on): its colour, its pin and the bin.
    A pinned note keeps its pin in sight; the colour shows on the passage's rule (and on the timeline). */
 .nacts { flex: none; display: flex; align-items: center; gap: 1px; }
-.nb { flex: none; height: 18px; min-width: 18px; display: grid; place-items: center; border: 1px solid transparent; background: none; color: var(--ink-3); padding: 0; font-size: 9px; letter-spacing: .14em; cursor: default; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.nb { flex: none; height: 20px; min-width: 20px; display: grid; place-items: center; border: 1px solid transparent; background: none; color: var(--ink-3); padding: 0; font-size: 9px; letter-spacing: .14em; cursor: default; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
 .note:hover .nb, .note.cur .nb, .note.picking .nb, .nb:focus-visible, .nb.armed, .note.pinned .npin { opacity: 1; }
 .nb:hover { color: var(--ink); border-color: var(--rule-strong); transition: none; }
-.ndel.armed { padding: 0 6px; }
-.ncol i { width: 8px; height: 8px; border: 1px solid currentColor; }
+.ndel.armed { padding: 0 5px; } /* a check: press again to delete (ui/arm.js) */
+.ncol i { width: 9px; height: 9px; border: 1px solid currentColor; }
 .note.c-blue .ncol i { background: var(--tl-blue); border-color: var(--tl-blue); } .note.c-yellow .ncol i { background: var(--tl-yellow); border-color: var(--tl-yellow); } .note.c-pink .ncol i { background: var(--tl-pink); border-color: var(--tl-pink); }
 .note.pinned .npin:not(:hover) { color: var(--ink-2); }
 .note.pinned .npin .head { fill: currentColor; }
 .nsws { display: none; gap: 1px; margin-right: 2px; }
 .note.picking .nsws { display: flex; }
 .note.picking .ncol { color: var(--ink); border-color: var(--rule-strong); }
-.nsw { width: 18px; height: 18px; display: grid; place-items: center; padding: 0; border: 0; background: none; cursor: default; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.nsw { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: none; cursor: default; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 @starting-style { .note.picking .nsw { opacity: 0; transform: translateX(4px); } } /* the swatches slide out of the colour button */
-.nsw .sw { width: 10px; height: 10px; vertical-align: 0; }
+.nsw .sw { width: 11px; height: 11px; vertical-align: 0; }
 .nsw:hover { background: var(--hover-on); transition: none; }
 .note.lift { z-index: 1; background: var(--bar); box-shadow: 0 0 0 1px var(--rule); } /* pinned or unpinned: gliding over the others */
 .note.cur.lift { background: var(--page); box-shadow: inset 2px 0 0 var(--ink), 0 0 0 1px var(--rule); }
@@ -403,7 +403,12 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .note .q:hover, .note.cur .q { border-left-color: var(--ink); color: var(--ink); }
 .note.c-blue .q { border-left-color: var(--tl-blue); } .note.c-yellow .q { border-left-color: var(--tl-yellow); } .note.c-pink .q { border-left-color: var(--tl-pink); } /* (on the card you are on too) */
 .note textarea { display: block; width: 100%; min-height: 1.5em; field-sizing: content; resize: none; overflow: hidden; border: 0; outline: 0; background: none; color: var(--ink); padding: 0; margin: 0; font: 12px/1.5 var(--ui); letter-spacing: .01em; cursor: text; }
+.note { cursor: pointer; } /* (a press anywhere on the card goes to its page: panels.js) */
 .note textarea::placeholder { color: var(--ink-3); }
+/* The script's zoom carries into the panels, a share of it (app.js renderZoom): the cards of the notes
+   and Revise at half, the scene rows at a tenth. Each card scales whole, its icons with its text. */
+#notes > *, .rv-list > * { zoom: var(--pz-notes, 1); }
+#scenes > * { zoom: var(--pz-scenes, 1); }
 .empty { padding: 16px 14px; color: var(--ink-2); line-height: 1.6; }
 .empty .hint { display: block; }
 /* A button waiting for its second press (ui/arm.js): filled, a bar under it running out. */

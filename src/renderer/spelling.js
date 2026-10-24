@@ -152,14 +152,16 @@ export class Spelling {
 
   // ---- fixing -------------------------------------------------------------------------------
 
-  /** Put `word` in place of the flagged one (one undo step), the caret where it was. */
-  fix(m, word) {
+  /** Put `word` in place of the flagged one (one undo step), the caret where it was. From the menu
+   *  (`reveal` false) the script stays where it is: a right-click leaves the caret wherever it was,
+   *  pages away perhaps, and the fix must not scroll there. */
+  fix(m, word, reveal = true) {
     const ed = this.ed, b = ed.blocks[m.b];
     if (!b || b.text.slice(m.s, m.e) !== m.word) return false;
     const c = ed.caret, d = word.length - (m.e - m.s);
     ed.replaceRanges([{ b: m.b, s: m.s, e: m.e }], [word]);
     ed.setSel(c.b === m.b && c.o >= m.e ? pos(c.b, c.o + d) : c);
-    this.after();
+    this.after(reveal);
     return true;
   }
 
@@ -213,7 +215,7 @@ export class Spelling {
     pop.addEventListener('mousedown', (e) => e.preventDefault()); // the script keeps the keyboard
     for (const f of m.fixes) {
       const row = h('div', { class: 'mi sp-fix', role: 'menuitem' }, h('span', {}, f));
-      row.addEventListener('mouseup', () => { this.closeMenu(); this.fix(m, f); });
+      row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; this.closeMenu(); this.fix(m, f, false); });
       pop.appendChild(row);
     }
     const acts = h('div', { class: 'sp-acts' });

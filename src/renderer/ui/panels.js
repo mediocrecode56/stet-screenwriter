@@ -78,9 +78,10 @@ export class ScenePanel {
   }
 }
 
-const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
-const PIN_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="head" d="M4.2 1.4h3.6l-.5 3.3 1.9 1.8v.9H2.8v-.9l1.9-1.8z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6 7.4v3.4" stroke="currentColor" stroke-width="1.2"/></svg>';
-const NOTE_COLORS = [null, ...HIGHLIGHT_COLORS];
+const TRASH_ICON = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+const PIN_ICON = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path class="head" d="M4.2 1.4h3.6l-.5 3.3 1.9 1.8v.9H2.8v-.9l1.9-1.8z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6 7.4v3.4" stroke="currentColor" stroke-width="1.2"/></svg>';
+const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 6.3l2.5 2.5 5.1-5.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+const NOTE_COLORS =[null, ...HIGHLIGHT_COLORS];
 
 export class NotesPanel {
   constructor(host, list, count, { editor, view, session, jump, onChange, onMark }) {
@@ -90,14 +91,19 @@ export class NotesPanel {
     this.pending = false;
     this.lastKey = '';
     list.addEventListener('mousedown', (e) => {
-      const q = e.target.closest('.q');
-      if (q) { e.preventDefault(); this.select(q.closest('.note').dataset.id, true); return; }
+      const note = e.target.closest('.note');
+      if (!note || e.button !== 0) return;
       const btn = e.target.closest('button');
-      if (!btn) return;
+      // Anywhere on the card but its buttons and its text (the passage, the header, the margins):
+      // the note's page, centred, as for the passage itself.
+      if (!btn) {
+        if (e.target.closest('textarea')) return;
+        e.preventDefault(); this.select(note.dataset.id, true); return;
+      }
       e.preventDefault(); // (a note being written keeps the focus)
-      const id = btn.closest('.note').dataset.id;
-      // Delete takes a second press (ui/arm.js); then the note folds away.
-      if (btn.dataset.x === 'del') arm(btn, () => this.fold(id));
+      const id = note.dataset.id;
+      // Delete takes a second press (ui/arm.js), shown by a check; then the note folds away.
+      if (btn.dataset.x === 'del') arm(btn, () => this.fold(id), { icon: CHECK_ICON, title: 'Press again to delete this note' });
       else if (btn.dataset.x === 'pin') this.pin(id);
       else if (btn.dataset.x === 'col') this.pick(btn.closest('.note').classList.contains('picking') ? null : id);
       else if (btn.dataset.sw != null) { this.setColor(id, btn.dataset.sw || null); this.pick(null); }
@@ -223,7 +229,8 @@ export class NotesPanel {
     reveal(this.list, moved);
     if (reducedMotion()) return;
     for (const n of this.list.querySelectorAll('.note')) {
-      const dy = before.get(n.dataset.id) - n.getBoundingClientRect().top;
+      // (on the screen; the card's own pixels are scaled by the panel's zoom, style.css --pz-notes)
+      const dy = (before.get(n.dataset.id) - n.getBoundingClientRect().top) / (parseFloat(getComputedStyle(n).zoom) || 1);
       if (!dy) continue;
       if (n === moved) n.classList.add('lift');
       const a = n.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: n === moved ? 240 : 200, easing: EASE_OUT });
