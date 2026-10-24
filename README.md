@@ -48,7 +48,7 @@ never with any luck), and after a very long break rarer plants come up. Some day
 puddle after the rain, or settles down with a stick to chew. You can hide it from the View menu.
 
 **A second pair of eyes (optional).** If you use Claude, it can read your dialogue and action and
-suggest fixes to the English. Nothing in the script changes until you accept a suggestion.
+suggest fixes to the language, whichever language you write in. Nothing in the script changes until you accept a suggestion.
 
 ## Get started
 

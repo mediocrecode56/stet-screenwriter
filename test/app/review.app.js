@@ -78,6 +78,12 @@ test('a review sends a structured request with a progress indicator; one list in
   assert.equal(await app.eval('__stet.revision.run.rejected'), 1, 'the made-up element discarded');
   assert.deepEqual(await app.eval('[...document.querySelectorAll("#rev .rv-item")].map((n) => n.dataset.id)'), f.map((x) => x.id), 'one list, in script order');
   assert.deepEqual(f.map((x) => x.at.b), [1, 3, 4, 5]);
+  // The top of the panel: no title, the last review in one line, the button centred under it, clear of the edges.
+  const top = await app.eval(`(() => { const h = document.getElementById('rev'), r = h.getBoundingClientRect(), l = h.querySelector('.rv-line').getBoundingClientRect(), b = h.querySelector('.rv-run').getBoundingClientRect();
+    return { title: /ENGLISH/.test(h.textContent), first: l.bottom <= b.top && l.top - r.top < 16, one: l.height < 16, off: Math.abs((b.left + b.right) / 2 - (r.left + r.right) / 2), gap: b.left - r.left, text: h.querySelector('.rv-line').textContent }; })()`);
+  assert.deepEqual([top.title, top.first, top.one], [false, true, true], 'no title; the status first, on one line');
+  assert.ok(top.off < 1.5 && top.gap >= 16, `centred (${top.off}px off), ${top.gap}px from the edge`);
+  assert.match(top.text, /^Reviewed .+ · 4 of 4 open/);
   await app.eval('__stet.view.frame()');
   assert.ok(await app.eval('document.querySelectorAll(".revr").length') >= 4, 'the passages marked in the script');
   assert.equal((await texts())[1], 'Mara enter in the kitchen and sits.', 'reviewing changes nothing');
@@ -266,6 +272,17 @@ test('suggestions, decisions and ignored passages are kept across a restart; a n
   const sys = mock.requests.find((r) => r.body && r.body.system).body.system[0].text;
   assert.match(sys, /guidelines[\s\S]*\[hint\] awkward: "ITNRO"[\s\S]*a band name/);
   assert.match(sys, /already reviewed[\s\S]*looking to him since five minutes/);
+  // The guidelines window: what it is for in one sentence, no double rule at its end, and RESET only on a second press.
+  await app.eval(`__stet.cmd.run('revise-guides')`);
+  await app.until(`!!document.querySelector('#overlay .dlg .foot .grow .btn')`, { what: 'the guidelines window' });
+  assert.equal(await app.eval(`document.querySelector('#overlay .dlg .body > p.hint').textContent`), 'What Revise leaves alone in every screenplay, learned from the suggestions you set aside.');
+  assert.equal(await app.eval(`getComputedStyle([...document.querySelectorAll('#overlay .dlg .body > table.t')].at(-1).querySelector('tr:last-child td')).borderBottomWidth`), '0px', 'the foot\'s rule is the only one');
+  await app.clickOn('#overlay .dlg .foot .grow .btn');
+  assert.equal(await app.eval(`document.querySelector('#overlay .dlg .foot .grow .btn').textContent`), 'CONFIRM RESET');
+  assert.ok((await app.eval('__stet.settings().guidelines.length')) > 0, 'one press: nothing forgotten');
+  await app.clickOn('#overlay .dlg .foot .grow .btn');
+  await app.until(`(__stet.settings().guidelines || []).length === 0 && document.querySelector('#overlay .dlg .foot .grow .btn').disabled`, { what: 'the guidelines reset' });
+  await app.key('Escape');
 });
 
 test('in a shown window the glide passes through the positions in between, one way; the card buttons still do their own job; the marks are grey', async () => {

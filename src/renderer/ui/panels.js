@@ -2,7 +2,8 @@
 // Both refresh lazily (on idle after edits) and only while visible.
 
 import { pageOf } from '../../core/layout.js';
-import { isOpen } from './motion.js';
+import { isOpen, reducedMotion, DUR_PANEL, EASE_IN_OUT } from './motion.js';
+import { arm } from './arm.js';
 import { linesOf } from '../../core/layout.js';
 import { lineIndexOf } from '../../core/nav.js';
 import { pos } from '../../core/editor.js';
@@ -85,8 +86,9 @@ export class NotesPanel {
     list.addEventListener('mousedown', (e) => {
       const q = e.target.closest('.q');
       if (q) { e.preventDefault(); this.select(q.closest('.note').dataset.id, true); return; }
+      // Delete takes a second press (ui/arm.js); then the note folds away.
       const del = e.target.closest('[data-del]');
-      if (del) { e.preventDefault(); this.remove(del.dataset.del); }
+      if (del) { e.preventDefault(); arm(del, () => this.fold(del.dataset.del)); }
     });
     list.addEventListener('input', (e) => {
       const ta = e.target.closest('textarea');
@@ -120,15 +122,15 @@ export class NotesPanel {
     const anchors = this.anchors();
     const key = anchors.map((a) => a.id + ':' + a.b).join('|') + '#' + this.view.pages.length;
     if (key === this.lastKey) return;
-    // Don't rebuild while the user types in a note: the textarea would lose focus.
-    if (this.list.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA' && this.lastKey) {
+    // Don't rebuild while the user types in a note (the textarea would lose focus) or a delete waits for its second press.
+    if ((this.list.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA' && this.lastKey) || this.list.querySelector('.armed')) {
       const ids = [...this.list.querySelectorAll('.note')].map((n) => n.dataset.id).join('|');
       if (ids === anchors.map((a) => a.id).join('|')) return;
     }
     this.lastKey = key;
     this.count.textContent = anchors.length ? `· ${anchors.length}` : '';
     if (!anchors.length) {
-      this.list.innerHTML = `<div class="empty">No notes. Select text and press ${keyText('note-add') || '+NOTE'}.</div>`;
+      this.list.innerHTML = `<div class="empty">No notes yet.<span class="hint">Select a passage and press +NOTE${keyText('note-add') ? ' (' + keyText('note-add') + ')' : ''}.</span></div>`;
       return;
     }
     const blocks = this.ed.blocks;
@@ -139,10 +141,11 @@ export class NotesPanel {
       const quote = b.text.slice(a.s, a.e).replace(/\s+/g, ' ');
       const pg = pageOf(this.view.pages, a.b, lineIndexOf(linesOf(b), a.s)) + 1;
       const when = c.modified ? new Date(c.modified).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      // A card: where it is and when it was written, the passage it is about, then the note itself.
       h += `<div class="note${a.id === this.view.activeComment ? ' cur' : ''}" data-id="${esc(a.id)}">
-        <div class="q" title="Jump to text">p.${pg} — “${esc(quote.slice(0, 80))}”</div>
-        <textarea spellcheck="true" placeholder="write a note…">${esc(c.text)}</textarea>
-        <div class="meta"><span>${esc(when)}</span><button data-del="${esc(a.id)}">delete</button></div>
+        <div class="nh"><span class="pg">P.${pg}</span><span class="when">${esc(when)}</span><button class="ndel" data-del="${esc(a.id)}" title="Delete this note (press twice)">DELETE</button></div>
+        <div class="q" dir="auto" title="Go to the passage">${esc(quote.slice(0, 160))}</div>
+        <textarea spellcheck="true" dir="auto" placeholder="Write a note…">${esc(c.text)}</textarea>
       </div>`;
     }
     this.list.innerHTML = h;
@@ -165,6 +168,18 @@ export class NotesPanel {
       reveal(this.list, n);
       if (focusText) { const ta = n.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); }
     }
+  }
+
+  /** The note folds shut, then goes (its passage keeps its text; only the note is removed). */
+  fold(id) {
+    const n = this.list.querySelector(`.note[data-id="${CSS.escape(id)}"]`);
+    if (!n || reducedMotion()) return this.remove(id);
+    n.style.pointerEvents = 'none';
+    const a = n.animate([{ height: n.offsetHeight + 'px', opacity: 1 }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0 }], { duration: DUR_PANEL, easing: EASE_IN_OUT, fill: 'forwards' });
+    let done = false;
+    const go = () => { if (done) return; done = true; this.remove(id); };
+    a.onfinish = go;
+    setTimeout(go, DUR_PANEL + 80); // (a background window doesn't run animations)
   }
 
   remove(id) {

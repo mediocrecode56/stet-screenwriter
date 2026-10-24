@@ -118,7 +118,7 @@ page.
 | corrupt / unknown file | container checksum + schema validation; refused files are never written to |
 | format evolution | schema version + migrations; pre-migration original is backed up |
 
-## English revision
+## Revise
 
 `src/core/revision.js` (pure, unit-tested) builds review sections, the system
 prompt and the structured-output schema; validates every returned finding
@@ -146,12 +146,20 @@ unique phrase — and otherwise reports it as not locatable. Decisions
 (accepted / discarded / ignored / guideline) change only through the panel.
 What no screenplay should have flagged lives in the writer's guidelines
 (`src/core/guidelines.js`, `settings.guidelines`), never in the spelling
-dictionary. They are soft: each suggestion set aside with +GUIDELINE is kept as a
-flag (passage, kind, the edit Claude wanted, an optional note), and a new
-suggestion is weighed against them all: the same passage counts 1, the same edit
-in another passage 0.5, a suggestion accepted although it matched counts against.
-Below 2 it is still shown, marked GUIDELINE?, and Claude gets it as a hint; from 2
-on it is held back, and Claude is told it is firm.
+dictionary. They are soft, and stored as evidence, never as rules: each suggestion
+set aside with +GUIDELINE is kept as a flag (passage, kind, the edit Claude wanted,
+who speaks it, an optional note), each one accepted although it matched as a flag
+against. A new suggestion is weighed against every flag by the closest thing they
+share: the same passage 1, the same edit 0.5, one passage inside the other 0.4, the
+same words kept whatever the fix 0.35; apart from those, flags of the same kind in
+the same character's lines add 0.25 each, up to 1.5 (a voice alone never hides one).
+It is held back at 2 (2.5 when Claude is highly confident, 1.5 when it is not), and
+from 0.4 shown marked GUIDELINE?, with Claude told about it as a hint. Patterns across
+many flags (words kept against several fixes, a character's voice) go to Claude as
+patterns to apply to similar passages. The list keeps at most 400 flags, letting go of
+the surplus examples of understood guidelines before anything else, so nothing learned
+is lost to age. Passages are compared in one Unicode form, without case or end
+punctuation; scripts without spaces (Chinese, Japanese, Thai…) count a character as a word.
 The review is stored in the document (`doc.revision.review`) and serialised
 with it. `src/renderer/revision.js` is the panel. Accepting goes through
 `Editor.replaceRanges`, so it is ordinary, undoable editing.
@@ -204,7 +212,7 @@ resets them. A Reset keeps the streak.
 One set of easing curves and durations (CSS variables `--ease-out`,
 `--ease-in-out`, `--dur-fast`, `--dur-panel`, mirrored in `ui/motion.js`).
 Nothing overshoots. Every surface that opens uses the same few functions in
-`ui/motion.js`: docked panels (scenes, notes, English revision, and the find
+`ui/motion.js`: docked panels (scenes, notes, Revise, and the find
 bar from under the toolbar) slide by animating their outer margin (Web
 Animations API), so the page glides and panel text never re-wraps, and a
 toggle mid-way reverses from the current position; floating surfaces (dialogs,

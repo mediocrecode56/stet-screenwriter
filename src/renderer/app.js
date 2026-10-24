@@ -528,7 +528,7 @@ function renderSpelling() {
     : !o.on ? 'Spelling: off' : `Spelling: ${lang ? lang.label : 'no dictionary'}${o.suggest ? '' : ', no suggestions'}${o.auto ? ', corrects as you type' : ''}`;
 }
 tip($('btn-comment'), 'Comment on selection', 'note-add');
-tip($('btn-rev'), 'English revision with Claude', 'revise-next', ' next suggestion');
+tip($('btn-rev'), 'Revise with Claude', 'revise-next', ' next suggestion');
 tip($('btn-scenes'), 'Scene navigator', 'panel-scenes');
 tip($('btn-notes'), 'Comments', 'panel-notes');
 tip($('th-light'), 'Light mode', 'theme-toggle', ' toggles');
@@ -885,11 +885,17 @@ function openNote(id, focusText = false) {
   requestAnimationFrame(() => notes.select(id, false, focusText));
 }
 
+// The note +NOTE made last, and the selection and script it was made for: pressed again before
+// either changes, +NOTE goes back to that note instead of making a second one.
+let lastNote = null;
 function addNote() {
+  const [s, e] = editor.ordered(), at = `${s.b}:${s.o}-${e.b}:${e.o}`;
+  if (lastNote && lastNote.at === at && lastNote.rev === editor.rev && editor.commentAnchors().some((a) => a.id === lastNote.id)) { openNote(lastNote.id, true); return; }
   const id = uuid().slice(0, 8);
   const now = new Date().toISOString();
   session.doc.comments[id] = { text: '', created: now, modified: now };
   if (!editor.attachComment(id)) { delete session.doc.comments[id]; return; }
+  lastNote = { id, at, rev: editor.rev };
   showPanel('notes', true);
   notes.lastKey = '';
   notes.render();
@@ -931,7 +937,7 @@ function showToolbar(on) {
 const focus = new FocusMode({
   api,
   panels: [
-    { key: 'rev', label: 'REVISE', title: 'English revision with Claude', isOpen: () => revision.visible, set: (on) => revision.show(on) },
+    { key: 'rev', label: 'REVISE', title: 'Revise with Claude', isOpen: () => revision.visible, set: (on) => revision.show(on) },
     { key: 'scenes', label: 'SCENES', title: 'Scene navigator', isOpen: () => isOpen($('left')), set: (on) => showPanel('scenes', on) },
     { key: 'notes', label: 'NOTES', title: 'Comments', isOpen: () => isOpen($('right')), set: (on) => showPanel('notes', on) },
   ],
@@ -1093,8 +1099,8 @@ cmd.register([
       reset: async () => { const r = await writing.reset(); renderGoal(); return r; },
     });
   } },
-  { id: 'revise-panel', cat: 'Tools', label: () => (revision.visible ? 'Hide English Revision' : 'English Revision'), keys: 'Ctrl+Shift+R', global: true, run: () => revision.show() },
-  { id: 'revise-run', cat: 'Tools', label: 'Review English with Claude…', run: () => { revision.show(true); revision.start(); } },
+  { id: 'revise-panel', cat: 'Tools', label: () => (revision.visible ? 'Hide Revise' : 'Revise'), keys: 'Ctrl+Shift+R', global: true, run: () => revision.show() },
+  { id: 'revise-run', cat: 'Tools', label: 'Review the Script with Claude…', run: () => { revision.show(true); revision.start(); } },
   { id: 'revise-next', cat: 'Tools', label: 'Next Suggestion', keys: 'F7', global: true, run: () => revision.step(1) },
   { id: 'revise-prev', cat: 'Tools', label: 'Previous Suggestion', keys: 'Shift+F7', global: true, run: () => revision.step(-1) },
   { id: 'spell-toggle', cat: 'Tools', label: 'Spelling', checked: () => spelling.opts.on, run: () => spelling.set({ on: !spelling.opts.on }) },

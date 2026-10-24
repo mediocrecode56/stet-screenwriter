@@ -37,6 +37,7 @@ export class Timeline {
     this.key = '';
     this.targets = []; // what the pointer is drawn to: { x, kind, el, ... }
     this.pointer = null; // clientX of the pointer while it is over the bar
+    this.pointerY = null; // (and its clientY)
     this.dragging = false; // a press on the bar, until it lets go
     this.stepping = null; // see startStep()
     this.cancelled = false; // Esc pressed while stepping, Ctrl still held
@@ -93,8 +94,16 @@ export class Timeline {
       if (!this.time) return;
       const l = this.scroll.scrollLeft - PADX, w = this.scroll.clientWidth;
       if ((l < this.rulerA && this.rulerA > 0) || (l + w > this.rulerB && this.rulerB < this.length * this.drawn)) this.paintRuler();
+      this.refreshHover(); // the strip moved under a pointer that didn't
     });
-    new ResizeObserver(() => { if (this.visible) { this.slide(0); this.update(true); } }).observe(host);
+    // A wider window may hold the whole script at the zoom it had: then it is simply the whole script.
+    new ResizeObserver(() => {
+      if (!this.visible) return;
+      if (!this.zoomed) this.ppp = 0;
+      this.slide(0);
+      this.update(true);
+      this.editing?.place();
+    }).observe(host);
   }
 
   get visible() { return !this.host.hidden; }
@@ -108,7 +117,9 @@ export class Timeline {
 
   get length() { return Math.max(1, this.view.pages.length); }
   get fit() { return Math.max(1, this.scroll.clientWidth - PADX * 2) / this.length; }
-  get scale() { return this.ppp || this.fit; }
+  get scale() { return this.zoomed ? this.ppp : this.fit; }
+  /** Zoomed in past fitting the whole script in the bar. */
+  get zoomed() { return this.ppp > this.fit; }
 
   posAt(clientX) {
     return Math.max(0, Math.min(this.length, (clientX - this.inner.getBoundingClientRect().left) / this.drawn));
@@ -179,12 +190,13 @@ export class Timeline {
     this.slide(0);
     this.update(true);
     this.scroll.scrollLeft = at * this.drawn + PADX - px;
+    this.refreshHover();
   }
 
   /** The whole script in the bar again (double-click, or the button): one smooth zoom out, the
    *  middle of what is in view gliding to its own place in the whole. */
   whole() {
-    if (!this.ppp && !this.zoomRaf) return;
+    if (!this.zoomed && !this.zoomRaf) return;
     const r = this.scroll.getBoundingClientRect(), at = this.posAt(r.left + r.width / 2);
     this.zoomTo(this.fit, at, PADX + at * this.fit, { tau: 80 });
   }
@@ -285,6 +297,7 @@ export class Timeline {
     if (this.dragging || this.stepping) return;
     this.unlocked = false;
     this.pointer = e.clientX;
+    this.pointerY = e.clientY;
     if (mod(e)) return this.cancelled ? undefined : this.startStep(e.clientX); // (only Ctrl's own key events clear `cancelled`: letting go of the lock sends a move without it)
     this.showHover(e);
   }
@@ -302,7 +315,7 @@ export class Timeline {
   wheel(e) {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) this.zoom(2 ** (-Math.max(-200, Math.min(200, e.deltaY)) / 200), e.clientX); // in step with the wheel or a pinch
-    else this.scroll.scrollLeft += e.deltaX || e.deltaY;
+    else { this.stopZoom(); this.scroll.scrollLeft += e.deltaX || e.deltaY; } // (a zoom on its way would pull it back)
   }
 
   // ---- stepping ---------------------------------------------------------------------------
@@ -524,7 +537,7 @@ export class Timeline {
     if (!again) this.time = timeScale(anchors);
     const tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages), this.time, len)); // each on its second, never between two
     this.paintRuler();
-    this.reset.hidden = !this.ppp;
+    this.reset.hidden = !this.zoomed;
 
     // The script as a line, coloured where it is highlighted; a tick across it for each scene; the
     // notes under it; a line down the bar for each timecode, fainter for one outside a scene heading.
@@ -587,6 +600,12 @@ export class Timeline {
     this.inner.dataset.zone = near && near.kind === 'tc' ? 'tc' : this.onRuler(e) ? 'ruler' : where; // on a timecode a click edits it
     this.mark(near);
     this.readout(near ? near.x : this.posAt(e.clientX), null, near);
+  }
+
+  /** The readout again where the pointer rests, after the strip moved or was redrawn under it. */
+  refreshHover() {
+    if (this.pointer == null || this.pointerY == null || this.stepping || this.dragging || this.hover.hidden) return;
+    this.showHover({ clientX: this.pointer, clientY: this.pointerY });
   }
 
   /** The line and readout at x: the time (t, or the time there), and the timecode's tag, the note or the scene. */
@@ -728,13 +747,16 @@ export class Timeline {
     document.body.appendChild(pop);
     // Zoomed in, the bar brings the timecode into view first.
     if (this.visible) this.reveal(at.here * this.drawn + PADX);
-    // Under the bar (or the row), its notch on the timecode, kept inside the window.
-    const hr = under || this.host.getBoundingClientRect(), ax = under ? under.left + 24 : this.inner.getBoundingClientRect().left + at.here * this.drawn;
-    const left = Math.max(6, Math.min(ax - 18, innerWidth - pop.offsetWidth - 6));
-    pop.style.left = left + 'px';
-    pop.style.top = Math.min(hr.bottom + 6, innerHeight - pop.offsetHeight - 6) + 'px';
-    pop.style.setProperty('--notch', Math.max(8, Math.min(pop.offsetWidth - 8, ax - left)) + 'px');
-    this.editing = { pop, away, x: old || !this.time ? at.here : Math.min(this.length, this.time.pos(Math.round(this.time.at(at.here)))) }; // on the second it offers
+    // Under the bar (or the row), its notch on the timecode, kept inside the window (again when the bar changes size).
+    const place = () => {
+      const hr = under || this.host.getBoundingClientRect(), ax = under ? under.left + 24 : this.inner.getBoundingClientRect().left + at.here * this.drawn;
+      const left = Math.max(6, Math.min(ax - 18, innerWidth - pop.offsetWidth - 6));
+      pop.style.left = left + 'px';
+      pop.style.top = Math.min(hr.bottom + 6, innerHeight - pop.offsetHeight - 6) + 'px';
+      pop.style.setProperty('--notch', Math.max(8, Math.min(pop.offsetWidth - 8, ax - left)) + 'px');
+    };
+    place();
+    this.editing = { pop, away, place, x: old || !this.time ? at.here : Math.min(this.length, this.time.pos(Math.round(this.time.at(at.here)))) }; // on the second it offers
     this.showEditing();
     addEventListener('mousedown', away, true); // (at once: whatever opened it is past its press, and a listener added while a press is dispatched doesn't hear that one)
     time.focus();

@@ -1,4 +1,5 @@
-// English revision: everything about a Claude review except the network call.
+// Revise: everything about a Claude review except the network call. Any language: Claude finds
+// the language of each passage itself and judges it by that language's own standards.
 //
 //  1. buildChunks()      split the script into review requests (scene-aligned,
 //                        with read-only context from the preceding elements)
@@ -26,24 +27,29 @@ export const CONFIDENCE = ['high', 'medium', 'low'];
 export const REVIEWABLE = new Set(['action', 'dialogue', 'paren']);
 const LABEL = { scene: 'SCENE HEADING', action: 'ACTION', character: 'CHARACTER', paren: 'PARENTHETICAL', dialogue: 'DIALOGUE', transition: 'TRANSITION', shot: 'SHOT' };
 
-export const SYSTEM_PROMPT = `You are a line editor reviewing a screenplay for English-language problems. The writer may not be a native English speaker. Your job is to find real problems and propose the smallest possible fix — never to restyle the script.
+export const SYSTEM_PROMPT = `You are a line editor reviewing a screenplay for language problems. The screenplay may be written in any language, and the writer may not be a native speaker of it. Your job is to find real problems and propose the smallest possible fix — never to restyle the script.
+
+Languages:
+- Work out the language of each passage yourself and judge it by the grammar, spelling conventions, punctuation and idiom of that language (and of its regional variety, when the script consistently uses one: Brazilian or European Portuguese, Latin American or Peninsular Spanish, British or American English, and so on). Never apply the rules of one language to another.
+- A character may speak another language, or mix languages, on purpose. Review such a passage in its own language; never translate it and never flag it only for not being in the script's main language.
+- Write every explanation in the main language of the script's action lines, so the writer reads it in the language they are writing in.
 
 Report three kinds of issues:
-- grammar: errors in grammar, verb tense, subject–verb agreement, articles, prepositions, pronouns or word forms, and punctuation that affects grammatical correctness.
-- non_native: grammatically possible but unnatural English that a fluent native writer would not produce — non-idiomatic collocations, literal translations, unnatural prepositions or word order.
-- awkward: clumsy or tangled wording, unidiomatic expressions, or word choices that misfire in English (a word that does not mean what the writer evidently intends, or that no fluent writer would pick for it).
+- grammar: errors in grammar, verb tense, agreement (subject–verb, gender, number, case), articles, prepositions, pronouns, particles or word forms, and punctuation that affects grammatical correctness.
+- non_native: grammatically possible but unnatural wording that a fluent native writer of that language would not produce — non-idiomatic collocations, literal translations from another language, unnatural prepositions, word order or register.
+- awkward: clumsy or tangled wording, unidiomatic expressions, or word choices that misfire in that language (a word that does not mean what the writer evidently intends, or that no fluent writer would pick for it).
 
 Protect the writer's voice:
 - Dialogue is how characters speak. Slang, dialect, contractions, fragments, run-ons, profanity, verbal tics, deliberate errors and informal grammar are usually intentional characterization. Never make dialogue more formal. Flag dialogue only when the wording reads as the writer's English mistake rather than the character's voice, and then usually with low or medium confidence.
 - Action lines follow screenplay convention: present tense, terse, sentence fragments are normal ("Rain. Silence."), character names in capitals when introduced, sound cues in capitals. Do not flag these conventions.
 - Do not change meaning, tone, emotional intention or a character's personality. Do not flatten distinctive prose into generic English. Unusual is not the same as wrong.
 - When a phrase could be a deliberate stylistic choice, either leave it alone or flag it with low confidence and say in the explanation that it may be intentional.
-- You are checking the English, not editing the story. Do not flag a passage because it could be clearer, simpler, shorter or easier to follow, because it lacks context or explanation, or because you would phrase it differently. A screenplay leaves things unsaid on purpose, and the reader is not expected to understand every line out of context. Flag clarity only when the English itself makes the meaning come out wrong (a misplaced modifier, an ambiguous pronoun that a grammatical fix resolves).
+- You are checking the language, not editing the story. Do not flag a passage because it could be clearer, simpler, shorter or easier to follow, because it lacks context or explanation, or because you would phrase it differently. A screenplay leaves things unsaid on purpose, and the reader is not expected to understand every line out of context. Flag clarity only when the English itself makes the meaning come out wrong (a misplaced modifier, an ambiguous pronoun that a grammatical fix resolves).
 - If a passage is correct and natural, report nothing for it. An empty list is the right answer for clean text.
 
 For each issue give:
 - element: the id of the element where it occurs (for example "e7"). Only elements inside <review> may be flagged; <context> is for understanding only.
-- original: text copied character for character from that element — the shortest span that contains the problem (usually a few words, not the whole sentence).
+- original: text copied character for character from that element, in its own script and spelling — the shortest span that contains the problem (usually a few words, not the whole sentence).
 - replacement: what should replace original. Change only what is needed and keep the writer's own words everywhere else.
 - explanation: one or two plain sentences saying what is wrong and why the replacement is correct or more natural.
 - confidence: "high" = clearly an error a careful editor would fix; "medium" = very likely unnatural but could be deliberate; "low" = possibly intentional or a matter of taste.
@@ -132,7 +138,7 @@ function makeChunk(blocks, start, end, contextChars) {
     if (!b.text.trim()) continue;
     if (REVIEWABLE.has(b.type)) {
       const id = 'e' + (ids.length + 1);
-      ids.push({ id, blockId: b.id, text: b.text, type: b.type });
+      ids.push({ id, blockId: b.id, text: b.text, type: b.type, speaker: b.type === 'action' ? '' : speakerOf(blocks, i) });
       lines.push(describe(blocks, i, id));
       chars += b.text.length;
     } else {
@@ -161,10 +167,17 @@ ${chunk.contextLines.join('\n') || '(start of script)'}
 ${chunk.lines.join('\n')}
 </review>
 
-Report the English problems in the <review> elements.`;
+Report the language problems in the <review> elements.`;
 }
 
 // ---- validation --------------------------------------------------------------------
+
+// Scripts written without spaces between words (Chinese, Japanese, Thai, Lao, Khmer, Burmese,
+// Tibetan): there every character is its own boundary, so a passage may start or end inside a run.
+const SPACELESS = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}]/u;
+export const spaceless = (t) => SPACELESS.test(t);
+/** A letter, digit or mark of a spaced word (whose inside a passage must not start or end in). */
+const inWord = (c, extra) => !!c && !SPACELESS.test(c) && (/[\p{L}\p{N}\p{M}]/u.test(c) || extra.includes(c));
 
 let seq = 0;
 const nextId = () => 'f' + (++seq).toString(36);
@@ -177,7 +190,7 @@ export function minimalEdit(text, s, e, replacement) {
   let q = 0;
   while (q < orig.length - p && q < replacement.length - p && orig[orig.length - 1 - q] === replacement[replacement.length - 1 - q]) q++;
   // Widen back to word boundaries so the visible change is a readable phrase.
-  const isW = (c) => !!c && /[\p{L}\p{N}'’]/u.test(c);
+  const isW = (c) => inWord(c, "'’");
   while (p > 0 && (isW(orig[p - 1]) || isW(replacement[p - 1]))) p--;
   while (q > 0 && (isW(orig[orig.length - q]) || isW(replacement[replacement.length - q]))) q--;
   return { s: s + p, e: e - q, rep: replacement.slice(p, replacement.length - q) };
@@ -197,18 +210,22 @@ export function validateFindings(chunk, raw, blockRefs) {
       typeof r.original === 'string' && r.original.length > 0 && typeof r.replacement === 'string' &&
       typeof r.explanation === 'string' && r.replacement !== r.original;
     if (!ok) { rejected++; continue; }
-    const at = findWhole(el.text, r.original);
-    if (at === -1) { rejected++; continue; } // not in the element, or only inside longer words
-    const m = minimalEdit(el.text, at, at + r.original.length, r.replacement);
+    // (Claude may answer in another Unicode form than the script is stored in: é as one character or two.)
+    const orig = [r.original, r.original.normalize('NFC'), r.original.normalize('NFD')].find((o) => findWhole(el.text, o) !== -1);
+    if (orig == null) { rejected++; continue; } // not in the element, or only inside longer words
+    const rep = orig === r.original ? r.replacement : r.replacement.normalize(orig === r.original.normalize('NFC') ? 'NFC' : 'NFD');
+    const at = findWhole(el.text, orig);
+    const m = minimalEdit(el.text, at, at + orig.length, rep);
     if (m.e - m.s === 0 && m.rep === '') { rejected++; continue; }
     out.push({
       id: nextId(), chunk: chunk.index, blockId: el.blockId, ref: blockRefs ? blockRefs.get(el.blockId) : null,
       s: m.s, e: m.e, original: el.text.slice(m.s, m.e), replacement: m.rep,
-      shownOriginal: r.original, shownReplacement: r.replacement,
+      shownOriginal: orig, shownReplacement: rep,
       // How much of the passage shown to the writer lies around the minimal span (for hover).
-      padL: m.s - at, padR: at + r.original.length - m.e,
+      padL: m.s - at, padR: at + orig.length - m.e,
       contextBefore: el.text.slice(Math.max(0, m.s - 30), m.s), contextAfter: el.text.slice(m.e, m.e + 30),
       category: r.category, confidence: r.confidence, explanation: r.explanation.trim().slice(0, 600),
+      type: el.type, ...(el.speaker ? { speaker: el.speaker } : {}), // (what the guidelines learn from)
       decision: null, appliedText: null,
     });
   }
@@ -220,7 +237,8 @@ export function validateFindings(chunk, raw, blockRefs) {
  * ("creatur" is not in "creature"). The first such place, or -1.
  */
 export function findWhole(text, needle) {
-  const isW = (c) => !!c && /[\p{L}\p{N}_]/u.test(c);
+  if (!needle) return -1;
+  const isW = (c) => inWord(c, '_');
   const wl = isW(needle[0]), wr = isW(needle[needle.length - 1]);
   for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + 1)) {
     if ((!wl || !isW(text[i - 1])) && (!wr || !isW(text[i + needle.length]))) return i;
@@ -317,7 +335,7 @@ function locateText(f, blocks, idx, anchor) {
     }
     const withCtx = occurrences(b.text, cb + anchor + ca);
     if (withCtx.n === 1) return found(i, withCtx.at + cb.length);
-    if (/\S\s+\S/.test(anchor.trim()) || anchor.trim().length >= 8) {
+    if (/\S\s+\S/.test(anchor.trim()) || anchor.trim().length >= (spaceless(anchor) ? 4 : 8)) {
       const alone = occurrences(b.text, anchor);
       if (alone.n === 1) return found(i, alone.at);
     }
@@ -430,7 +448,7 @@ export function afterApply(findings, plan, blocks) {
 
 // ---- storing a review in the .stet file -------------------------------------------------
 
-const KEEP = ['id', 's', 'e', 'padL', 'padR', 'original', 'replacement', 'shownOriginal', 'shownReplacement', 'contextBefore', 'contextAfter', 'category', 'confidence', 'explanation', 'decision', 'appliedText', 'guide'];
+const KEEP = ['id', 's', 'e', 'padL', 'padR', 'original', 'replacement', 'shownOriginal', 'shownReplacement', 'contextBefore', 'contextAfter', 'category', 'confidence', 'explanation', 'decision', 'appliedText', 'guide', 'type', 'speaker'];
 
 /** Plain-JSON form of a review. Block ids aren't stored in files, so positions use element numbers. */
 export function reviewToJSON(review, blocks) {
@@ -467,6 +485,7 @@ export function reviewFromJSON(r, blocks) {
       explanation: isStr(x.explanation) ? x.explanation : '',
       decision: x.decision === 'dictionary' ? 'guideline' : DECISIONS.includes(x.decision) ? x.decision : null, // (before 0.37: "in dictionary")
       appliedText: isStr(x.appliedText) ? x.appliedText : null,
+      ...(REVIEWABLE.has(x.type) ? { type: x.type } : {}), ...(isStr(x.speaker) && x.speaker ? { speaker: x.speaker.slice(0, 60) } : {}),
       ...(x.guide && typeof x.guide.score === 'number' ? { guide: { score: x.guide.score, notes: Array.isArray(x.guide.notes) ? x.guide.notes.filter(isStr) : [] } } : {}),
     });
   }

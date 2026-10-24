@@ -272,6 +272,31 @@ test('a click on a note opens the panel with the same slide as NOTES, the note p
   await app.until('document.getElementById("right").hidden', { what: 'the panel to slide shut' });
 });
 
+test('+NOTE again on the same selection goes back to its note; a new selection makes a new one; delete takes a second press', async () => {
+  await app.load([['action', 'A line with two notes on it.']]);
+  const n = () => app.eval('__stet.editor.commentAnchors().length');
+  await app.caret(0, 2, 6);
+  await app.clickOn('#btn-comment');
+  await app.until('document.activeElement.tagName === "TEXTAREA"', { what: 'the note open to write in' });
+  await app.type('First.');
+  await app.clickOn('#btn-comment');
+  await app.clickOn('#btn-comment');
+  assert.equal(await n(), 1, 'pressed again and again: still one note');
+  await app.until('document.activeElement.tagName === "TEXTAREA" && document.activeElement.value === "First."', { what: 'back in that note' });
+  await app.caret(0, 12, 17);
+  await app.clickOn('#btn-comment');
+  assert.equal(await n(), 2, 'another passage: a new note');
+  const del = '#notes .note:first-child .ndel';
+  await app.until('!document.getElementById("right").getAnimations().length', { what: 'the panel in place' });
+  await app.clickOn(del);
+  assert.equal(await app.eval(`document.querySelector('${del}').textContent`), 'CONFIRM');
+  assert.equal(await n(), 2, 'one press deletes nothing');
+  await app.clickOn(del);
+  await app.until(`__stet.editor.commentAnchors().length === 1 && document.querySelectorAll('#notes .note').length === 1`, { what: 'the note folded away' });
+  await app.eval(`__stet.cmd.run('panel-notes')`);
+  await app.until('document.getElementById("right").hidden');
+});
+
 test('the caret, the selection and clicks sit on the drawn letters at display scales 1 and 1.5 and every zoom', async () => {
   // Regression: v0.3.0 drew the caret into the text (inherited letter-spacing).
   const LINE = 'INT. COFFEE SHOP - NIGHT AND THE RAIN KEEPS FALLING ON IT';

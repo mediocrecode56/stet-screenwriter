@@ -2,6 +2,19 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.38.0 · 24 Oct 2026
+
+- Revise works in any language. Claude works out the language of each passage and judges it by that language's own grammar and idiom (and its regional variety, such as Brazilian Portuguese or British English). A character who speaks another language on purpose is reviewed in that language, never translated. Explanations come in the language your script is written in. Passages in Chinese, Japanese, Thai and other languages written without spaces are matched exactly, and an accented letter is found however it is stored.
+- The Revise panel is redesigned in the style of the notes. The ENGLISH REVISION title is gone. The last review is summed up in one line at the top, with REVIEW AGAIN centred under it. Each suggestion is a card: its kind and confidence on top, the change in the script's own type, then the explanation and the buttons.
+- Revise guidelines learn much more from what you set aside. Beyond single passages and single changes, they now notice when you keep the same words whatever fix Claude offers ("gonna", say), and when you keep setting aside one kind of suggestion in one character's lines (their voice). Claude is told about both as patterns to apply to similar passages. A clear, high-confidence error needs more evidence before it's held back than a low-confidence one. A passage counts as the same however it's capitalised, quoted or punctuated. The guidelines you already have keep working as before. Once a guideline is well understood, setting it aside again adds nothing new, and the list never forgets what it has learned to make room.
+- Tools > Revise Guidelines says what it's for in one sentence and shows the patterns learned. A new RESET button forgets every guideline. It asks for a second press, so one click never wipes them.
+- The notes panel is redesigned: each note is a card with its page and time on top, the passage it's about in the script's type, then your note. The note you're on stands out.
+- Deleting a note takes a second press: DELETE turns into CONFIRM, with a short bar running out under it. Press again before it runs out and the note folds away. Otherwise nothing happens.
+- +NOTE pressed again on the same selection takes you back to the note it just made, instead of making another. Select something else, or edit the script, and the next +NOTE makes a new one.
+- While you're away, the grass and plants come up and grow a quarter faster. They still stop at the same number, and still wait for you to start writing again before they go.
+- Timeline: the time and scene under the pointer stay right while the bar scrolls or zooms beneath it. A plain scroll during a zoom is no longer pulled back. A wider window that now fits the whole script shows it whole, without a leftover reset button. The timecode editor stays on its timecode when the bar changes size.
+- Fix: the Spelling Dictionary window (and the Revise Guidelines window) drew two lines one above the other at the bottom of its list.
+
 ## 0.37.0 · 24 Oct 2026
 
 - Focus Mode (View > Focus Mode, or F11): STET fills the screen with nothing but the page and your text. Everything else slides away in one smooth move. Spelling fixes, name completions and Find still come up as you write. Move the pointer to the top edge and the menus and toolbar drop back in. Move it to the right edge for a small rail: WINDOW takes you back (so does Esc), and REVISE, SCENES and NOTES open their panels beside the page. When you leave, the panels you had open before come back.

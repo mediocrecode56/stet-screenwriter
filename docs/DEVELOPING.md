@@ -279,10 +279,11 @@ each newest first (the last pinned or edited), and one that would run into a lab
 time and tag still show in the readout when the pointer is on it. Timecodes are kept with their
 line as you edit and saved in the .stet file (with `n`, the tag, and `c`, the colour).
 
-## English revision (Claude)
+## Revise (Claude)
 
-*Tools → English Revision* (Ctrl+Shift+R, or **REVISE** in the toolbar) reviews
-the action, dialogue and parentheticals with Claude (`claude-opus-5-5`) and
+*Tools → Revise* (Ctrl+Shift+R, or **REVISE** in the toolbar) reviews
+the action, dialogue and parentheticals with Claude (`claude-opus-5-5`), in whatever
+language each passage is written (Claude works it out, and explains in the script's main language), and
 lists findings in the order their passages appear in the script, each named as a
 **Grammar Error**, **Non-Native Construction** or **Awkward Phrasing**, with the
 original, a minimal replacement, a short explanation and a confidence level. Flagged passages are underlined in the

@@ -17,7 +17,7 @@ function life() {
   if (LIFE) return LIFE;
   LIFE = [];
   const night = Date.parse('2026-10-21T22:30:00');
-  for (const [seed, mk, hours] of [[41, (s) => world(s), 3], [42, (s) => world(s, { clock: () => night }), 3], [404, (s) => wide(s), 2]]) {
+  for (const [seed, mk, hours] of [[41, (s) => world(s), 3], [42, (s) => world(s, { clock: () => night }), 3], [405, (s) => wide(s), 2]]) {
     const c = mk(seed), rng = seeded(seed);
     const L = { c, hours, n: 0, away: 0, outer: 0, middle: 0, walked: 0, activities: {}, reactions: new Set(), events: [], floating: 0, gusts: 0, shifts: 0, suns: 0, times: {}, back: 0 };
     const orig = c.startEvent.bind(c);
@@ -190,3 +190,9 @@ test('in the background tufts of grass come up on the clock, one at a time, minu
   assert.ok(born.length >= 3 && born[0] >= c.T.tuftFirst[0], `${born.length} came up, the first after ${Math.round(born[0] / 1000)} s`);
 });
 
+
+test('what grows while you are away comes up and grows a quarter faster than it did (0.38)', () => {
+  const T = world(990).T, before = { tuftFirst: [1, 2.5], tuftEvery: [1.5, 4], tuftGrow: 0.75, lushAfter: 40, lushEvery: [3, 7], lushGrow: 3 }; // (minutes, until 0.37)
+  for (const [k, v] of Object.entries(before)) assert.deepEqual([T[k]].flat().map((x) => Math.round(x / MINUTE * 1.25 * 1000) / 1000), [v].flat(), k);
+  assert.deepEqual([T.tuftsMax, T.lushMax, T.deepSleep], [12, 3, 12 * MINUTE], 'as many, and the same deep sleep');
+});

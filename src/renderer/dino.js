@@ -79,18 +79,20 @@ const SIGHTS = new Set(['palm', 'flower', 'cactus', 'mushroom', 'rainbow', 'moun
 // While the window is in the background (another application has the focus) small tufts of grass creep
 // up, slowly and only so many, and after a long while it falls into a deep sleep; back at work, it wakes
 // and in its own time eats the grass. All in ms; Critter's `timing` option overrides any of them.
+// (Everything that comes up while you are away does so at GROWTH times the pace it had until 0.37.)
+const GROWTH = 1.25;
 export const TIMING = {
   deepSleep: 12 * MIN,          // in the background this long: a deep sleep
-  tuftFirst: [1 * MIN, 2.5 * MIN], // the first tuft after the window loses the focus…
-  tuftEvery: [1.5 * MIN, 4 * MIN], // …and then one every so often
+  tuftFirst: [1 * MIN / GROWTH, 2.5 * MIN / GROWTH], // the first tuft after the window loses the focus…
+  tuftEvery: [1.5 * MIN / GROWTH, 4 * MIN / GROWTH], // …and then one every so often
   tuftsMax: 12,                    // a little meadow by the time you're back
-  tuftGrow: 45000,              // per stage of a tuft's growth
+  tuftGrow: 45000 / GROWTH,     // per stage of a tuft's growth
   grazeAfter: [8000, 45000],    // back and writing again: a while before it starts on the grass
   dormantTick: 60000,           // dormant (see Critter.dormant): at most this long between ticks
-  lushAfter: 40 * MIN,          // away this long (deep asleep most of it): rarer plants come up too…
-  lushEvery: [3 * MIN, 7 * MIN], // …one every so often…
+  lushAfter: 40 * MIN / GROWTH, // away this long (deep asleep most of it): rarer plants come up too…
+  lushEvery: [3 * MIN / GROWTH, 7 * MIN / GROWTH], // …one every so often…
   lushMax: 3,                   // …only a few
-  lushGrow: 3 * MIN,            // per stage of their growth
+  lushGrow: 3 * MIN / GROWTH,   // per stage of their growth
 };
 // Things that float or fly about: only a few at a time, so the scene never gets busy.
 const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug', 'feather']);

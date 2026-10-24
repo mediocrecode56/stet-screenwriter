@@ -256,8 +256,8 @@ test('a review and its decisions round-trip through the .stet payload', async ()
   assert.equal(deserialize(JSON.stringify(p)).doc.revision.review.findings.length, 2);
 });
 
-test('the review checks the English, not how clear or complete the story is', () => {
-  assert.match(SYSTEM_PROMPT, /checking the English, not editing the story/);
+test('the review checks the language, not how clear or complete the story is', () => {
+  assert.match(SYSTEM_PROMPT, /checking the language, not editing the story/);
   assert.match(SYSTEM_PROMPT, /Do not flag a passage because it could be clearer, simpler, shorter or easier to follow, because it lacks context/);
   assert.ok(!/unclear or needlessly complicated/.test(SYSTEM_PROMPT), 'awkward no longer covers "unclear"');
   for (const k of ['grammar:', 'non_native:', 'awkward:', 'Protect the writer\'s voice']) assert.ok(SYSTEM_PROMPT.includes(k), k + ' kept');
@@ -296,4 +296,31 @@ test('ignore list round-trips through the .stet payload', async () => {
   const back = deserialize(serialize(d)).doc;
   assert.deepEqual(back.revision.ignored, [{ text: 'the cocina', category: 'non_native' }]);
   assert.equal(serialize(back), serialize(d));
+});
+
+test('any language: passages in scripts without spaces, accents in either Unicode form, the speaker kept', () => {
+  // Chinese and Japanese have no spaces between words: a passage may start and end inside a run.
+  assert.equal(findWhole('他昨天去学校了。', '去学校'), 3);
+  assert.equal(findWhole('彼は学校に行きました。', '学校に'), 2);
+  assert.equal(findWhole('creature', 'creatur'), -1, 'a spaced word still is never cut');
+  assert.equal(findWhole('Él está cansado.', 'está'), 3);
+  const blocks = [
+    makeBlock('action', 'Ella está cansada y él tambien.'),
+    makeBlock('character', 'ROSA'),
+    makeBlock('dialogue', '我昨天去了学校了。'),
+  ];
+  const [c] = buildChunks(blocks);
+  const raw = [
+    // Claude answers with the accent as two characters (NFD); the script stores one (NFC).
+    { element: 'e1', category: 'grammar', original: 'él tambien'.normalize('NFD'), replacement: 'él también'.normalize('NFD'), explanation: 'Acento.', confidence: 'high' },
+    { element: 'e2', category: 'grammar', original: '去了学校了', replacement: '去了学校', explanation: '多余的“了”。', confidence: 'medium' },
+  ];
+  const { findings, rejected } = validateFindings(c, raw, refs(blocks));
+  assert.equal(rejected, 0);
+  const [es, zh] = findings;
+  assert.equal(es.original, 'tambien');
+  assert.equal(es.replacement, 'también'.normalize('NFC'), 'in the form the script is stored in');
+  assert.deepEqual([zh.original, zh.replacement, zh.type, zh.speaker], ['了', '', 'dialogue', 'ROSA'], 'the smallest change, one character');
+  assert.match(SYSTEM_PROMPT, /any language/);
+  assert.match(SYSTEM_PROMPT, /never translate it/);
 });

@@ -1,4 +1,4 @@
-// English revision: review controller + panel. Claude is only called when the
+// Revise: review controller + panel, in whatever language the script is written. Claude is only called when the
 // writer presses REVIEW; every change to the script is a click the writer makes.
 //
 // The latest review lives in the document (doc.revision.review) and is saved in
@@ -12,7 +12,8 @@ import {
   applyUserLists, listsPrompt, estimate, normalize, ignoreEntry, isApplied, sortByText, revisionIgnores,
   CATEGORIES, CATEGORY_LABEL, DECISION_LABEL, MODEL,
 } from '../core/revision.js';
-import { applyGuidelines, guidelinesPrompt, guidelinesOf, flagOf, noteFlag, addFlag, removeGuideline, cleanFlags } from '../core/guidelines.js';
+import { applyGuidelines, guidelinesPrompt, guidelinesOf, patternsOf, flagOf, noteFlag, addFlag, removeGuideline, cleanFlags } from '../core/guidelines.js';
+import { arm } from './ui/arm.js';
 import { pos } from '../core/editor.js';
 import * as dlg from './ui/dialog.js';
 import { setPanel, isOpen } from './ui/motion.js';
@@ -83,7 +84,7 @@ export class Revision {
     if (this.run && !this.run.finished) return;
     let status = await api.invoke('claude:key-status');
     if (status.source === 'none') {
-      const ok = await keyDialog(status.provider === 'api' ? 'The English revision is set to use an API key, and none is set up.' : 'The English revision needs Claude. Claude Code was not found on this computer.');
+      const ok = await keyDialog(status.provider === 'api' ? 'Revise is set to use an API key, and none is set up.' : 'Revise needs Claude. Claude Code was not found on this computer.');
       if (!ok) return;
       status = await api.invoke('claude:key-status');
     }
@@ -96,9 +97,9 @@ export class Revision {
     if (!this.getSettings().reviewConsent) {
       const remember = dlg.h('input', { type: 'checkbox' });
       const v = await dlg.open({
-        title: 'ENGLISH REVISION', sub: MODEL,
+        title: 'REVISE', sub: MODEL,
         body: dlg.h('div', { class: 'body', style: 'max-width:560px' },
-          dlg.h('p', {}, `Send this screenplay's action, dialogue and parentheticals (about ${words.toLocaleString()} words) to Claude for an English review?`),
+          dlg.h('p', {}, `Send this screenplay's action, dialogue and parentheticals (about ${words.toLocaleString()} words) to Claude for a review? Claude reads it in the language it is written in.`),
           dlg.h('p', { class: 'hint' }, `${est.requests} request${est.requests === 1 ? '' : 's'}, roughly ${est.inputTokens.toLocaleString()} input tokens plus Claude's reasoning and answers, ${viaCli ? 'through Claude Code on your Claude sign-in (counts toward your plan usage)' : 'billed to your Anthropic API account'}. Scene headings and character names are sent as context; the title page and your notes are not sent. Nothing in the script changes until you accept a suggestion.`),
           this.findings.length ? dlg.h('p', { class: 'hint' }, 'The current suggestions and your decisions on them will be replaced by the new review.') : null,
           dlg.h('label', { class: 'chk' }, remember, "don't ask again")),
@@ -295,7 +296,7 @@ export class Revision {
   async addToGuidelines(id, note) {
     const f = this.byId(id);
     if (!f || f.decision) return;
-    const v = note ?? await dlg.prompt('ADD TO GUIDELINES', 'Why it is fine (optional)', '', 'Kept for every screenplay. Claude learns from it: set aside twice, it stops coming up.');
+    const v = note ?? await dlg.prompt('ADD TO GUIDELINES', 'Why it is fine (optional)', '', 'Revise learns from it, in every screenplay.');
     if (v == null) return;
     await this.saveFlags(addFlag(this.flags, flagOf(f, { note: v })));
     this.decide(f, 'guideline');
@@ -417,18 +418,20 @@ export class Revision {
         <div class="rv-stage"><span class="rv-stage-t">${STAGE[r.stage] || STAGE.reviewing}</span><span class="rv-el">${elapsed(r.started)}</span></div>
         <div class="rv-stage"><span class="hint">${sub} · you can keep writing</span>${r.stage === 'cancelling' ? '' : '<button class="tb" data-act="cancel">CANCEL</button>'}</div></div>`;
     }
+    // The last review in one line at the top (all of it in the tooltip), the button centred under it.
     let msg;
     const n = this.open().length;
-    if (r && r.fatal) msg = `<span class="rv-err">Review failed: ${esc(r.fatal.message)}</span>`;
+    if (r && r.fatal) msg = 'Review failed';
     else if (rv) {
-      const when = rv.at ? new Date(rv.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      const when = rv.at ? new Date(rv.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
       const state = { cancelled: 'Review cancelled', interrupted: 'Review interrupted', partial: 'Review incomplete', failed: 'Review failed', running: 'Review interrupted' }[rv.state] || 'Reviewed';
-      msg = `${state}${when ? ' ' + esc(when) : ''} · ${n} undecided of ${this.findings.length}`;
-      if (r && r.suppressed) msg += ` · ${r.suppressed} ignored in this script`;
+      msg = `${state}${when ? ' ' + when : ''} · ${n ? `${n} of ${this.findings.length} open` : `${this.findings.length} decided`}`;
+      if (r && r.suppressed) msg += ` · ${r.suppressed} ignored`;
       if (r && r.held) msg += ` · ${r.held} held back by your guidelines`;
-      if (r && r.rejected) msg += ` · ${r.rejected} unverifiable discarded`;
+      if (r && r.rejected) msg += ` · ${r.rejected} unverifiable dropped`;
     } else msg = 'Claude suggests fixes; nothing changes until you accept.';
-    let html = `<div class="rv-status"><span class="hint">${msg}</span><button class="btn primary" data-act="run">${rv ? 'REVIEW AGAIN' : 'REVIEW SCRIPT'}</button></div>`;
+    let html = `<div class="rv-status"><div class="rv-line" title="${esc(msg)}">${esc(msg)}</div><button class="btn primary rv-run" data-act="run">${rv ? 'REVIEW AGAIN' : 'REVIEW SCRIPT'}</button></div>`;
+    if (r && r.fatal) html += `<div class="rv-fail">${esc(r.fatal.message)}</div>`;
     if (r && r.finished && r.failed.size) {
       const first = [...r.failed.values()][0];
       html += `<div class="rv-fail">${r.failed.size} section${r.failed.size === 1 ? '' : 's'} failed: ${esc(first.message)} <button class="tb" data-act="retry">RETRY</button></div>`;
@@ -458,13 +461,13 @@ export class Revision {
       body += '</div>';
     }
     const r = this.run;
-    if (!body && this.review && (!r || r.finished) && this.review.state === 'complete') body = '<div class="empty">No problems found. Your English reads naturally.</div>';
+    if (!body && this.review && (!r || r.finished) && this.review.state === 'complete') body = '<div class="empty">No problems found. The writing reads naturally.</div>';
     const nApply = open.filter((f) => this.canApply(f)).length;
     const foot = `<div class="rv-foot">${nApply > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="guides">GUIDELINES</button><button class="tb" data-act="key">CONNECTION</button></div>`;
     const list = this.host.querySelector('.rv-list');
     const scroll = list ? list.scrollTop : 0;
     const jump = decided.length ? `<button class="rv-jump" data-act="to-decided" title="Go to the decided suggestions">DECIDED · ${decided.length} ↓</button>` : '';
-    this.host.innerHTML = `<div class="panel-head">ENGLISH REVISION <span>${open.length ? '· ' + open.length : ''}</span></div><div class="rv-head">${this.statusHTML()}</div><div class="rv-wrap"><div class="list rv-list">${body}</div>${jump}</div>${foot}`;
+    this.host.innerHTML = `<div class="rv-head">${this.statusHTML()}</div><div class="rv-wrap"><div class="list rv-list">${body}</div>${jump}</div>${foot}`;
     this.host.querySelector('.rv-list').scrollTop = scroll;
     if (this.near) this.nearEnd(true);
   }
@@ -472,8 +475,8 @@ export class Revision {
   item(f) {
     const cls = [f.id === this.cur ? 'cur' : '', f.id === this.hover ? 'hov' : '', f.decision ? 'decided' : ''].join(' ');
     const at = this.located(f);
-    const guide = f.guide && !f.decision ? `<span class="rv-guide" title="${esc(`Close to something you set aside before${f.guide.notes.length ? ': ' + f.guide.notes.join('; ') : ''}. Set it aside again and it stops coming up.`)}">GUIDELINE?</span>` : '';
-    const conf = `<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span><span class="rv-kind">${CATEGORY_LABEL[f.category]}</span>${guide}`;
+    const guide = f.guide && !f.decision ? `<span class="rv-guide" title="${esc(`Close to something you set aside before${f.guide.notes.length ? ': ' + f.guide.notes.join('; ') : ''}`)}">GUIDELINE?</span>` : '';
+    const head = `<div class="nh"><span class="rv-kind">${CATEGORY_LABEL[f.category]}</span>${guide}<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span></div>`;
     const diff = `<span class="rv-old">${esc(f.shownOriginal)}</span> <span class="rv-arrow">→</span> <span class="rv-new">${esc(f.shownReplacement)}</span>`;
     let actions, note = '';
     if (!f.decision) {
@@ -488,8 +491,8 @@ export class Revision {
     }
     // A press anywhere on the card shows its passage; the buttons on it keep their own jobs (the nearest data-act wins).
     return `<div class="rv-item k-${f.category} ${cls}" data-id="${esc(f.id)}" data-act="select" title="${at ? 'Show in script' : 'Passage not found'}">
-      <div class="rv-diff">${diff} ${conf}</div>
-      <div class="rv-why">${esc(f.explanation)}</div>${note}
+      ${head}<div class="rv-diff" dir="auto">${diff}</div>
+      <div class="rv-why" dir="auto">${esc(f.explanation)}</div>${note}
       <div class="rv-acts">${actions}</div></div>`;
   }
 }
@@ -561,22 +564,24 @@ export async function keyDialog(lead = '') {
   return (await api.invoke('claude:key-status')).source !== 'none';
 }
 
-const LEVEL = { firm: 'FIRM', soft: 'LEARNING', note: 'NOTE' };
+const LEVEL = { firm: 'FIRM', soft: 'LEARNING', note: 'NOTE', kept: 'PATTERN', voice: 'VOICE' };
 
-/** The writer's guidelines (every screenplay) and the passages ignored in this one: each can be removed;
- *  a guideline can also be written by hand, as a note for Claude. */
+/** The writer's guidelines (every screenplay), what they show, and the passages ignored in this one:
+ *  each can be removed, a guideline can be written by hand, and RESET (pressed twice) starts over. */
 export async function guidelinesDialog(rev) {
   const render = () => {
-    const list = guidelinesOf(rev.flags), ign = rev.lists().ignored;
+    const list = guidelinesOf(rev.flags), learned = patternsOf(rev.flags), ign = rev.lists().ignored;
     const what = (g) => {
       if (g.level === 'note') return esc(g.notes[0]);
       const pattern = g.key.startsWith('edit:') && g.edit && g.examples.length > 1;
       const head = pattern ? `${esc(g.edit.replace('→', ' → '))} <span class="hint">· ${g.examples.slice(0, 3).map(esc).join(' · ')}</span>` : esc(g.text);
       return `${head} <span class="hint">· ${CATEGORY_LABEL[g.category] || ''}</span>${g.notes.length ? `<div class="hint">${g.notes.map(esc).join(' · ')}</div>` : ''}`;
     };
-    const row = (html, act, i, tag = '') => `<tr><td>${tag ? `<span class="gl-lv">${tag}</span>` : ''}${html}</td><td style="text-align:right"><button class="tb" data-x="${act}" data-i="${i}">REMOVE</button></td></tr>`;
-    return `<p class="hint">Guidelines, for every screenplay (${list.length}). Set aside once, a suggestion is only a hint for Claude; twice (or the same change four times), it stops coming up.</p>
-      <table class="t">${list.map((g, i) => row(what(g), 'g', i, LEVEL[g.level])).join('') || '<tr><td class="hint">none yet: +GUIDELINE on a suggestion adds one</td></tr>'}</table>
+    const row = (html, act, i, tag = '') => `<tr><td>${tag ? `<span class="gl-lv">${tag}</span>` : ''}${html}</td><td style="text-align:right">${act ? `<button class="tb" data-x="${act}" data-i="${i}">REMOVE</button>` : ''}</td></tr>`;
+    // (what the flags show together: learned, so not removed on its own; it goes with its examples)
+    const pattern = (p) => `${p.kind === 'kept' ? `keeps “${esc(p.what)}”` : `${esc(p.what)}’s lines`} <span class="hint">· ${CATEGORY_LABEL[p.category] || ''} · ${p.count} times</span>`;
+    return `<p class="hint">What Revise leaves alone in every screenplay, learned from the suggestions you set aside.</p>
+      <table class="t">${list.map((g, i) => row(what(g), 'g', i, LEVEL[g.level])).join('') || '<tr><td class="hint">none yet: +GUIDELINE on a suggestion adds one</td></tr>'}${learned.map((p) => row(pattern(p), '', 0, LEVEL[p.kind])).join('')}</table>
       <div class="gl-add"><input type="text" placeholder="write one for Claude: Rosa's dialogue mixes in Spanish on purpose" spellcheck="false"><button class="tb" data-x="add">ADD</button></div>
       <p class="hint" style="margin-top:14px">Ignored in this screenplay (${ign.length})</p><table class="t">${ign.map((x, i) => row(`${esc(x.text)} <span class="hint">· ${CATEGORY_LABEL[x.category] || x.category}</span>`, 'i', i)).join('') || '<tr><td class="hint">none</td></tr>'}</table>`;
   };
@@ -586,6 +591,7 @@ export async function guidelinesDialog(rev) {
     if (!v) return field.focus();
     await rev.saveFlags(addFlag(rev.flags, noteFlag(v)));
     body.innerHTML = render();
+    sync();
     body.querySelector('.gl-add input').focus();
   };
   // Enter in the field adds what is written (and doesn't close the window).
@@ -602,6 +608,11 @@ export async function guidelinesDialog(rev) {
       rev.session.touch();
     }
     body.innerHTML = render();
+    sync();
   });
-  return dlg.open({ title: 'REVISE GUIDELINES', body, buttons: [{ label: 'Close', value: null, primary: true }] });
+  const reset = dlg.h('button', { class: 'btn', title: 'Forget every guideline (press twice)' }, 'RESET');
+  const sync = () => { reset.disabled = !rev.flags.length; };
+  reset.addEventListener('click', () => arm(reset, async () => { await rev.saveFlags([]); body.innerHTML = render(); sync(); }, { label: 'CONFIRM RESET' }));
+  sync();
+  return dlg.open({ title: 'REVISE GUIDELINES', body, foot: reset, buttons: [{ label: 'Close', value: null, primary: true }] });
 }
