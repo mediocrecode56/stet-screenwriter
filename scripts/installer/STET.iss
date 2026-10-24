@@ -55,6 +55,9 @@ RestartApplications=no
 ChangesAssociations=yes
 Compression=lzma2/max
 SolidCompression=yes
+; (compressed on every core of the build machine, in a process of its own: the same small download, built in a fraction of the time)
+LZMANumBlockThreads=4
+LZMAUseSeparateProcess=yes
 OutputDir=.
 OutputBaseFilename=STET-Setup
 

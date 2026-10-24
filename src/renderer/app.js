@@ -31,6 +31,7 @@ import { stepZoom } from '../core/wheelzoom.js';
 import { castOrder, touchCast } from '../core/cast.js';
 import { parseFdx } from '../core/fdx.js';
 import { alignOf } from '../core/format.js';
+import { documentWords } from '../core/text.js';
 
 const api = window.stet;
 // On a Mac the window buttons sit at the left of the top bar (style.css), and shortcuts read ⌘.
@@ -166,7 +167,15 @@ function onDocLoaded(s) {
   if (find.open) find.search(true);
   // Start writing on the first script page, not the title page.
   editor.setSel(pos(0, 0));
-  requestAnimationFrame(() => { view.scrollToPage(0); view.frame(); input.focus(); input.placeTextarea(); });
+  // The keyboard goes to the script, unless something else took it meanwhile (a note begun at once):
+  // its keys must not end up in the script.
+  const had = document.activeElement;
+  requestAnimationFrame(() => {
+    view.scrollToPage(0); view.frame();
+    const now = document.activeElement;
+    if (now === had || now === document.body || now === $('input') || !now) input.focus();
+    input.placeTextarea();
+  });
 }
 
 // ---- statistics --------------------------------------------------------------------
@@ -834,14 +843,15 @@ async function importFdx(file = null) {
   }
 }
 
+/** File > Restore Backup: the open screenplay's backups (or, `asNew`, those of one that can't be opened). */
 async function restoreFromBackups(ref, asNew = false) {
-  const v = await dialogs.backupsDialog(ref, ref.path ? ref.path : 'untitled');
-  if (v === 'reveal') { api.invoke('backup:reveal', ref); return; }
-  if (v === 'now') {
-    const r = await session.maybeBackup(true);
-    if (r && !r.ok) dlg.alertBox('BACKUP FAILED', 'The backup could not be written.', r.error);
-    return restoreFromBackups(ref, asNew);
-  }
+  const v = await dialogs.backupsDialog(ref, asNew ? (ref.path || 'untitled').split(/[\\/]/).pop() : session.name, {
+    words: asNew ? null : editor.words,
+    readWords: async (file) => { const r = await Session.readFile(file, 'backup:read'); return r.ok ? documentWords(r.doc.blocks) : null; },
+    backupNow: () => (asNew ? Promise.resolve({ ok: false, error: 'This screenplay is not open.' }) : session.maybeBackup(true)),
+    remove: (file) => api.invoke('backup:delete', { ref, file }),
+    reveal: () => api.invoke('backup:reveal', ref),
+  });
   if (!v || !v.file) return;
   const r = await Session.readFile(v.file, 'backup:read');
   if (!r.ok) { dlg.alertBox('BACKUP DAMAGED', 'This backup cannot be read. Try an older one.', r.error); return; }
@@ -851,8 +861,7 @@ async function restoreFromBackups(ref, asNew = false) {
     dlg.alertBox('RESTORED', 'The backup is open as a new, unsaved screenplay. Save it (Ctrl+S) to keep it.');
     return;
   }
-  const ok = await dlg.confirm('RESTORE BACKUP', 'Replace the current text with this backup? The current version is backed up first, but undo history will be cleared.', 'Restore');
-  if (!ok) return;
+  // (RESTORE took its second press in the window: what is open now is backed up, then replaced)
   await session.maybeBackup(true);
   r.doc.meta.id = session.doc.meta.id;
   const path = session.path;
@@ -1022,7 +1031,7 @@ cmd.register([
   { id: 'save-as', cat: 'File', label: 'Save As…', keys: 'Ctrl+Shift+S', global: true, run: saveAs },
   { id: 'rename', cat: 'File', label: 'Rename…', enabled: () => !!session.path, run: () => renameInPlace() },
   { id: 'reveal', cat: 'File', label: 'Show in Folder', enabled: () => !!session.path, run: () => api.invoke('shell:reveal', session.path) },
-  { id: 'backups', cat: 'File', label: 'Backups & Restore…', keys: 'Ctrl+Shift+B', global: true, run: () => restoreFromBackups(session.ref()) },
+  { id: 'backups', cat: 'File', label: 'Restore Backup…', keys: 'Ctrl+Shift+B', global: true, run: () => restoreFromBackups(session.ref()) },
   { id: 'backup-now', cat: 'File', label: 'Backup Now', run: async () => { const r = await session.maybeBackup(true); if (r && !r.ok) dlg.alertBox('BACKUP FAILED', 'The backup could not be written.', r.error); } },
   { id: 'recover', cat: 'File', label: 'Recover Unsaved Work…', run: () => checkRecovery(false) },
   { id: 'print', cat: 'File', label: 'Print / Export Preview…', keys: 'Ctrl+P', global: true, run: preview },
@@ -1198,7 +1207,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, timeline, spelling, focus, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, notes, cmd, revision, timeline, spelling, focus, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 

@@ -63,7 +63,9 @@ test('a patch: offered with its small size, unpacked, then run on the next start
   await app.close();
   // A patch that cannot start is set aside, and STET starts all the same, from then on with the last good one.
   const broken = path.join(patches, '99.0.1');
-  await fs.cp(unpacked, broken, { recursive: true, verbatimSymlinks: true });
+  // (its node_modules linked again as a junction: copied, it would become a symlink, which Windows allows only with a privilege)
+  await fs.cp(unpacked, broken, { recursive: true, filter: (f) => path.basename(f) !== 'node_modules' });
+  await fs.symlink(path.join(ROOT, 'node_modules'), path.join(broken, 'node_modules'), 'junction');
   await fs.rm(path.join(broken, '.ok'), { force: true });
   await fs.writeFile(path.join(broken, '.stet-patch.json'), JSON.stringify({ version: '99.0.1', electron: ELECTRON }));
   await fs.writeFile(path.join(broken, 'src', 'main', 'main.js'), 'this is not JavaScript (');

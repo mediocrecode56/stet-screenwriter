@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { atomicWrite, SaveQueue, createBackup, listBackups, pruneBackups, backupTime, Recovery, cleanTemps, readDocument, backupDirFor } from '../../src/main/files.js';
+import { atomicWrite, SaveQueue, createBackup, listBackups, pruneBackups, deleteBackup, backupTime, Recovery, cleanTemps, readDocument, backupDirFor } from '../../src/main/files.js';
 import { encode, decode, check } from '../../src/main/container.js';
 import { serialize } from '../../src/core/serialize.js';
 import { newDocument, makeBlock } from '../../src/core/model.js';
@@ -125,11 +125,31 @@ test('killing a writer mid-save never leaves a corrupt document', { timeout: 600
     const f = path.join(dir, `crash${round}.stet`);
     await atomicWrite(f, await encode(docJson('seed')));
     const child = spawn(process.execPath, [writer, f], { stdio: 'ignore' });
+    const exited = new Promise((r) => child.once('exit', r)); // (heard from the start: it may end before the kill)
     await new Promise((r) => setTimeout(r, 120 + Math.random() * 300));
     child.kill('SIGKILL');
-    await new Promise((r) => child.once('exit', r));
+    await exited;
     check(await fs.readFile(f)); // throws if damaged
     assert.match(await decode(await fs.readFile(f)), /"format":"stet"/);
   }));
   await cleanTemps(dir);
+});
+
+test('deleting a backup from Restore Backup removes only a backup of this screenplay, inside its folder', async () => {
+  const bdir = path.join(dir, 'Pilot Backups');
+  await fs.mkdir(bdir, { recursive: true });
+  const json = serialize({ ...(await import('../../src/core/model.js')).newDocument() });
+  const a = await createBackup(bdir, 'Pilot', json, new Date(2026, 9, 24, 10, 0, 0));
+  const keep = await createBackup(bdir, 'Pilot', json, new Date(2026, 9, 24, 11, 0, 0));
+  const other = path.join(dir, 'Other 2026-10-24 100000.stet'); // a backup's name, but outside the folder
+  await fs.writeFile(other, 'x');
+  const notes = path.join(bdir, 'notes.txt'); // inside the folder, but not a backup
+  await fs.writeFile(notes, 'x');
+  assert.equal(await deleteBackup(bdir, a), true);
+  assert.equal(await deleteBackup(bdir, a), false, 'already gone');
+  assert.equal(await deleteBackup(bdir, other), false);
+  assert.equal(await deleteBackup(bdir, notes), false);
+  assert.equal(await deleteBackup(bdir, path.join(bdir, '..', 'Other 2026-10-24 100000.stet')), false, 'no way out of the folder');
+  assert.deepEqual((await listBackups(bdir)).map((b) => b.file), [keep]);
+  await fs.access(other); await fs.access(notes);
 });

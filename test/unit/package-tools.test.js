@@ -54,7 +54,9 @@ test('on a Mac, only the English .lproj folders are kept, and framework links ar
     'Electron.app/Contents/Resources/Base.lproj/x.nib': 'b', 'Electron.app/Contents/Resources/fr.lproj/x.strings': 'f',
     'Electron.app/Contents/Resources/electron.icns': 'i',
   });
-  fs.symlinkSync('Versions/A/Resources', path.join(root, fw, 'Resources'));
+  // (on Windows a junction: a symlink needs a privilege there, and a junction is a link all the same)
+  if (process.platform === 'win32') fs.symlinkSync(path.join(root, fw, 'Versions/A/Resources'), path.join(root, fw, 'Resources'), 'junction');
+  else fs.symlinkSync('Versions/A/Resources', path.join(root, fw, 'Resources'));
   assert.equal(trimMacLocales(root), 5); // de, pt and fr
   assert.deepEqual(all(root), [
     // (the same two again, through the framework's link)

@@ -87,7 +87,7 @@ export class App {
     let err = '', port = 0;
     // What the main process reports going wrong (an error it didn't catch, a write that failed, the page gone) fails the file as a page error does.
     const failed = child.failed = [];
-    child.stderr.on('data', (d) => { err = (err + d).slice(-2000); port ||= +(/DevTools listening on ws:\/\/[^/]*:(\d+)\//.exec(err)?.[1] || 0); for (const l of String(d).split('\n')) if (/Uncaught|JavaScript error|Error occurred in handler|renderer gone|write failed|could not start/.test(l)) failed.push(l.trim()); });
+    child.stderr.on('data', (d) => { err = child.err = (err + d).slice(-2000); port ||= +(/DevTools listening on ws:\/\/[^/]*:(\d+)\//.exec(err)?.[1] || 0); for (const l of String(d).split('\n')) if (/Uncaught|JavaScript error|Error occurred in handler|renderer gone|write failed|could not start/.test(l)) failed.push(l.trim()); });
     let target = null;
     for (const end = Date.now() + START_MS; Date.now() < end && !target && child.exitCode === null;) {
       await sleep(100);
@@ -118,7 +118,13 @@ export class App {
       this.ws.onopen = resolve;
       this.ws.onerror = reject;
       // The app going away answers nothing more: fail what is still waiting rather than hang.
-      this.ws.onclose = () => { for (const { rej } of this.pending.values()) rej(new Error('connection closed')); this.pending.clear(); };
+      this.ws.onclose = () => {
+        // (what the app said last, and how it ended, so a closed connection explains itself)
+        const c = this.child, how = c.exitCode !== null ? 'exited with ' + c.exitCode : c.signalCode ? 'killed by ' + c.signalCode : 'still running';
+        const why = ` (app ${how})${c.err ? ':\n' + c.err.split('\n').slice(-12).join('\n') : ''}`;
+        for (const { rej } of this.pending.values()) rej(new Error('connection closed' + why));
+        this.pending.clear();
+      };
       this.ws.onmessage = (m) => {
         const msg = JSON.parse(m.data);
         if (msg.method === 'Runtime.exceptionThrown') { const d = msg.params.exceptionDetails; this.errors.push(d.exception?.description || d.text); }

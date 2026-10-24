@@ -278,7 +278,11 @@ test('+NOTE again on the same selection goes back to its note; a new selection m
   await app.caret(0, 2, 6);
   await app.clickOn('#btn-comment');
   await app.until('document.activeElement.tagName === "TEXTAREA"', { what: 'the note open to write in' });
-  await app.type('First.');
+  await app.type('Fir');
+  // The list refreshed (as it is a moment after +NOTE) while the note is being written: it keeps it.
+  await app.eval('__stet.notes.lastKey = ""; __stet.notes.render()');
+  await app.type('st.');
+  assert.equal(await app.eval('document.activeElement.value'), 'First.', 'every key in the note');
   await app.clickOn('#btn-comment');
   await app.clickOn('#btn-comment');
   assert.equal(await n(), 1, 'pressed again and again: still one note');

@@ -156,6 +156,16 @@ export async function listBackups(dir) {
 }
 
 /**
+ * Delete one backup the writer chose (File > Restore Backup): only a file named as a backup, right
+ * inside the screenplay's own backup folder, is ever removed. Resolves with whether it was.
+ */
+export async function deleteBackup(dir, file) {
+  const f = path.resolve(file);
+  if (path.dirname(f) !== path.resolve(dir) || backupTime(path.basename(f)) == null) return false;
+  try { await fs.rm(f); return true; } catch { return false; }
+}
+
+/**
  * Delete backups older than `retentionDays`. Safety rules:
  *  - the newest *valid* backup is always kept;
  *  - nothing is deleted unless `primaryValid` (the document itself, or its

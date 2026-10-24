@@ -122,8 +122,10 @@ export class NotesPanel {
     const anchors = this.anchors();
     const key = anchors.map((a) => a.id + ':' + a.b).join('|') + '#' + this.view.pages.length;
     if (key === this.lastKey) return;
-    // Don't rebuild while the user types in a note (the textarea would lose focus) or a delete waits for its second press.
-    if ((this.list.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA' && this.lastKey) || this.list.querySelector('.armed')) {
+    // Don't rebuild while the user types in a note (the textarea would lose focus, and the next keys
+    // with it) or a delete waits for its second press: not even for a forced refresh, such as the one
+    // that comes a moment after +NOTE, often once the writing has begun. The same notes need no rebuild.
+    if ((this.list.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') || this.list.querySelector('.armed')) {
       const ids = [...this.list.querySelectorAll('.note')].map((n) => n.dataset.id).join('|');
       if (ids === anchors.map((a) => a.id).join('|')) return;
     }

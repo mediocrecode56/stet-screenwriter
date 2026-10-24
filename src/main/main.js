@@ -15,7 +15,7 @@ import { effectiveTheme, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { ClaudeService } from './claude.js';
 import {
   SaveQueue, Recovery, readDocument, isValidDocument, atomicWrite, cleanTemps,
-  backupDirFor, createBackup, listBackups, pruneBackups, docBase,
+  backupDirFor, createBackup, listBackups, pruneBackups, deleteBackup, docBase,
 } from './files.js';
 import { Updater, installKind, cleanupPortable, UpdateError, REPO_URL, RELEASES_URL } from './update.js';
 import { patchRoot, confirmLaunch, cleanupPatches } from './patch.js';
@@ -325,6 +325,7 @@ function registerIpc() {
     } catch (e) { return { ok: false, error: e.message }; }
   });
   handle('backup:list', (ref) => listBackups(backupDirOf(ref)));
+  handle('backup:delete', ({ ref, file }) => deleteBackup(backupDirOf(ref), file)); // (only this screenplay's own backups)
   handle('backup:prune', async (ref) => {
     const dir = backupDirOf(ref);
     const primaryValid = ref.path ? await isValidDocument(ref.path) : await isValidDocument(path.join(recovery.dir, ref.id + '.stet'));

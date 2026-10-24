@@ -225,10 +225,13 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   assert.equal(await top(), 0, 'Ctrl alone moves nothing');
   // The mouse wanders up over the toolbar while it moves 400px: ever further on, wherever it goes up or down.
   for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 4); // (up into the toolbar, within the window)
+  // (Chromium hands mouse moves on with the next frame: a busy machine may still be on its way there)
+  await app.until(`__stet.timeline.stepping.t >= ${t0 + 10}`, { what: 'ten seconds on' }).catch(() => {});
   assert.equal(await tl('t.stepping.t'), t0 + 10, '120px with Ctrl held is ten seconds on');
   for (let i = 11; i <= 34; i++) await app.move(x + i * 12, y - (i % 10) * 4);
   assert.equal(await tl('t.drawn'), await tl('t.fit'), 'Ctrl steps, it does not zoom');
-  assert.ok(await top() > 300, 'the script follows the line');
+  await app.until(`__stet.timeline.stepping.t >= ${t0 + 34}`, { what: 'thirty-four seconds on' });
+  await app.until(async () => (await top()) > 300, { what: 'the script follows the line' });
   // Nothing outside the bar lights up or takes the pointer: no hover, nothing selected.
   const hovered = await app.eval(`[...document.querySelectorAll(':hover')].map((e) => e.id || e.className).filter(Boolean).at(-1)`);
   assert.ok(['tl-inner', 'tl-cover'].includes(hovered), `the pointer is the timeline's while Ctrl is held (hovering ${hovered})`);

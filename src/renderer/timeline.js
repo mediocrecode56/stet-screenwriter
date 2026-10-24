@@ -46,6 +46,7 @@ export class Timeline {
     this.shift = 0; // px the strip is slid past where it scrolls to, to keep a stepped line under the pointer
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
+      + '<div class="tl-fade" hidden></div>' // (under the reset button: the strip fades out softly behind it while the pointer is on the bar)
       + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
     this.scroll = host.querySelector('.tl-scroll');
     this.inner = host.querySelector('.tl-inner');
@@ -57,6 +58,7 @@ export class Timeline {
     this.cur = host.querySelector('.tl-cur');
     this.band = host.querySelector('.tl-view');
     this.reset = host.querySelector('.tl-reset');
+    this.fade = host.querySelector('.tl-fade');
     this.reset.addEventListener('click', () => this.whole());
 
     this.inner.addEventListener('mousedown', (e) => this.down(e));
@@ -373,9 +375,10 @@ export class Timeline {
     if (!mod(e)) return f.locked ? undefined : this.endStep();
     if (document.pointerLockElement === this.inner) {
       // On Windows the first move after the lock is measured from where the system put the cursor
-      // to lock it, a jump of hundreds of pixels that was never made: that one is left out.
+      // to lock it, a jump of hundreds of pixels that was never made: that one is left out. (Chromium
+      // may send a move of nothing first, as the lock takes hold: the first that moves is the one.)
       const jump = f.fresh && Math.abs(e.movementX) > 64;
-      f.fresh = false;
+      if (e.movementX) f.fresh = false;
       if (!jump) f.at += e.movementX;
     } else { f.at = f.ax = e.clientX; f.ay = e.clientY; }
     this.step(f.at);
@@ -542,7 +545,7 @@ export class Timeline {
     if (!again) this.time = timeScale(anchors);
     const tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages), this.time, len)); // each on its second, never between two
     this.paintRuler();
-    this.reset.hidden = !this.zoomed;
+    this.reset.hidden = this.fade.hidden = !this.zoomed;
 
     // The script as a line, coloured where it is highlighted; a tick across it for each scene; the
     // notes under it; a line down the bar for each timecode, fainter for one outside a scene heading.

@@ -331,6 +331,15 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 @keyframes tl-fine { from { transform: scale(.94); opacity: .5; } } /* stepping: the readout steps up a little */
 .tl-reset { position: absolute; right: 8px; top: 13px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--rule); background: var(--bar); color: var(--ink-3); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); } /* like the timecode editor's small buttons */
 .tl-reset[hidden] { display: none; }
+/* Zoomed in, with the pointer on the bar: the right end of the strip softens into a blur behind the
+   reset button, so it stands clear of the marks and labels passing under it. Only the compositor works. */
+.tl-fade { position: absolute; right: 0; top: 0; bottom: 0; width: 120px; pointer-events: none; opacity: 0;
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bar) 88%, transparent) 62%);
+  backdrop-filter: blur(3px); -webkit-mask-image: linear-gradient(to right, transparent, #000 55%); mask-image: linear-gradient(to right, transparent, #000 55%);
+  transition: opacity var(--dur-tl) var(--ease-out); }
+.tl-fade[hidden] { display: none; }
+#timeline:hover .tl-fade { opacity: 1; }
+#timeline:hover .tl-reset { color: var(--ink-2); border-color: var(--ink-3); }
 @starting-style { .tl-reset { opacity: 0; } }
 .tl-reset:hover { color: var(--ink); background: var(--hover); border-color: var(--ink-3); }
 .tl-reset:focus-visible { outline: 1px solid var(--rule-strong); }
@@ -547,6 +556,34 @@ table.recent-t { table-layout: fixed; width: 100%; }
 tr:hover .ra, tr.on .ra, tr:focus-within .ra, .ra:focus-visible { opacity: 1; }
 .ra:hover, .ra:focus-visible { color: var(--ink); background: var(--hover-on); }
 table.t tr.missing td:first-child { text-decoration: line-through; color: var(--ink-3); }
+
+/* File > Restore Backup: the backups by day, each a row of when, how long ago, words (against now)
+   and size, its RESTORE and DELETE showing on the row you point at or have chosen. */
+.bk-dlg { width: min(660px, 92vw); }
+.dlg .body.bk { padding: 10px 0 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.bk-lead { margin: 0 16px 8px; }
+.bk-count { color: var(--ink-2); }
+.bk-list { overflow-y: auto; max-height: 56vh; min-height: 120px; border-top: 1px solid var(--rule); }
+.bk-day { position: sticky; top: 0; z-index: 1; padding: 8px 16px 5px; background: var(--page); border-bottom: 1px solid var(--rule); font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.bk-row { display: grid; grid-template-columns: 74px 84px 1fr 64px 158px; align-items: center; gap: 8px; padding: 6px 16px; border-bottom: 1px solid var(--rule); cursor: default; transition: background-color var(--dur-fast) var(--ease-out); }
+.bk-row:hover { background: var(--hover); transition: none; }
+.bk-row.on { background: var(--hover-on); box-shadow: inset 2px 0 0 var(--ink); }
+.bk-row:last-child { border-bottom: 0; }
+.bk-time { font-variant-numeric: tabular-nums; color: var(--ink); letter-spacing: .04em; }
+.bk-ago, .bk-size { color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bk-size { text-align: right; }
+.bk-words { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bk-words small { margin-left: 8px; font-size: 10px; color: var(--ink-3); }
+.bk-row.bad .bk-words { color: var(--ink-3); text-decoration: line-through; }
+.bk-acts { display: flex; justify-content: flex-end; gap: 4px; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.bk-row:hover .bk-acts, .bk-row.on .bk-acts, .bk-acts:focus-within, .bk-acts:has(.armed) { opacity: 1; }
+.bk-acts .tb { padding: 2px 8px; font-size: 9px; letter-spacing: .12em; border: 1px solid var(--rule); }
+.bk-acts .tb:hover { border-color: var(--ink-3); }
+.bk-acts .bk-restore { border-color: var(--ink); color: var(--ink); }
+.bk-acts .tb:disabled { opacity: .35; }
+.bk-list:focus { outline: 0; }
+.bk-list .empty { padding: 22px 16px; }
+.bk-foot { display: flex; gap: 8px; }
 
 /* English revision */
 #rev { border-right: 0; border-left: 1px solid var(--rule); width: 360px; }

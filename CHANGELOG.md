@@ -2,6 +2,16 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.39.0 · 24 Oct 2026
+
+- File > Restore Backup (Ctrl+Shift+B) is redesigned. It lists the backups of the screenplay you have open, newest first and grouped by day (Today, Yesterday, then the date). Each row shows when the backup was made, how long ago, how many words it holds, how that compares with your script now ("−120 vs now"), and its size.
+- Restore and delete a backup right on its row. Point at a row (or pick one with the arrow keys) and RESTORE and DELETE appear. Each takes a second press, as DELETE does on a note, so one click never loses anything. Restoring keeps what you have now as a backup first. BACKUP NOW adds one at the top, and OPEN FOLDER shows them on disk. A backup that can't be read is marked as such and can't be restored, but can still be deleted.
+- Timeline: zoomed in, with the pointer on the bar, the right end of the bar softly fades and blurs behind the button that shows the whole script, so the button stands clear of the marks and labels passing under it.
+- Fix: a note started with +NOTE could lose what you typed into it. If the notes list refreshed itself a moment after the note opened (as it does), while you were already typing, the rest of your typing went elsewhere.
+- Fix: opening a screenplay and starting a note straight away could send the note's first keys into the script.
+- Fix: on Windows, holding Ctrl over the timeline could still jump the line when the system sent an empty move first, as the pointer locked.
+- Releases come out faster: the Mac version is built at the same time as the Windows one instead of after it, the installer is compressed on every core, and Electron's own download is kept between builds.
+
 ## 0.38.1 · 24 Oct 2026
 
 - Timeline: on Windows, holding Ctrl to step through the script no longer makes the line jump about 20 seconds on the first move.

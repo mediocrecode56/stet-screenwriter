@@ -23,8 +23,9 @@
 #
 # The release never waits for a Mac: the Windows job publishes it (with the previous
 # release's STET-macOS.dmg, so the download link always works; that STET updates itself
-# when opened) and deletes the older releases. The Mac job then builds and tests this
-# version's STET-macOS.dmg and puts it in place whenever GitHub has a Mac free.
+# when opened) and deletes the older releases. The Mac job builds and tests this version's
+# STET-macOS.dmg at the same time, whenever GitHub has a Mac free, and puts it in place as
+# soon as the Windows job has published (never before: that would be overwritten).
 #
 # Run by hand with "publish" unticked, it only builds and tests the Mac app, and keeps
 # STET-macOS.dmg with the run (Artifacts), to try a change to the Mac build.
@@ -48,6 +49,7 @@ on:
 
 permissions:
   contents: write
+  actions: read # (the Mac job waits for the Windows job of the same run)
 
 # One release at a time; a second push waits for the first instead of racing it.
 jobs:
@@ -112,6 +114,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # build-exe.js builds from the tag via a git worktree
+          filter: blob:none # (all the history, the files' contents only as they are needed: a faster checkout)
           fetch-tags: true
 
       # A new version is tagged here first, but the tag only goes to GitHub with the release.
@@ -123,6 +126,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      # Electron itself (a 100 MB download for npm ci, and again for packaging), kept between runs.
+      - uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/electron/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
 
       - run: npm ci
 
@@ -207,9 +217,9 @@ jobs:
           }
 
   mac:
-    needs: [check, release]
-    # After the release is out (or, publish unticked, on its own); it never holds it up.
-    if: always() && needs.check.outputs.build == 'true' && (needs.release.result == 'success' || needs.release.result == 'skipped')
+    needs: check
+    # Alongside the Windows job (it never holds the release up); only its last step waits for it.
+    if: needs.check.outputs.build == 'true'
     runs-on: macos-15 # Apple silicon
     timeout-minutes: 60
     concurrency: # a newer version's disk image replaces one still waiting for a Mac
@@ -221,6 +231,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # build-mac.js builds from the tag via a git worktree
+          filter: blob:none
           fetch-tags: true
 
       - name: Tag the new version here, unless the release already did
@@ -230,6 +241,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      # Electron itself (a 100 MB download for npm ci, and again for packaging), kept between runs.
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
 
       - run: npm ci
 
@@ -272,7 +290,19 @@ jobs:
           retention-days: 7
 
       - name: Put this version's STET-macOS.dmg in the release
-        if: needs.release.result == 'success'
+        if: github.event_name != 'workflow_dispatch' || inputs.publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$TAG" STET-macOS.dmg --clobber
+        run: |
+          # Once the Windows job has published (it puts the previous disk image in, for now).
+          jobs="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs"
+          for i in $(seq 1 180); do
+            st=$(gh api "$jobs" -q '.jobs[] | select(.name == "release") | .status + " " + (.conclusion // "")')
+            case "$st" in
+              "completed success") break ;;
+              completed*) echo "::error::The Windows job did not publish ($st), so neither does this one."; exit 1 ;;
+            esac
+            [ "$i" = 180 ] && { echo "::error::The Windows job did not finish in 30 minutes."; exit 1; }
+            sleep 10
+          done
+          gh release upload "$TAG" STET-macOS.dmg --clobber

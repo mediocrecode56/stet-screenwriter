@@ -6,7 +6,7 @@ const INVOKE = new Set([
   'doc:open-dialog', 'doc:import-fdx', 'doc:read', 'doc:save', 'doc:save-dialog', 'doc:known', 'doc:forget', 'doc:rename', 'doc:exists',
   'dialog:folder', 'path:join', 'path:default-dir',
   'recovery:write', 'recovery:clear', 'recovery:list', 'recovery:read',
-  'backup:create', 'backup:list', 'backup:prune', 'backup:read', 'backup:dir', 'backup:reveal',
+  'backup:create', 'backup:list', 'backup:delete', 'backup:prune', 'backup:read', 'backup:dir', 'backup:reveal',
   'stats:get', 'stats:add', 'stats:flush', 'stats:reset', 'e2e:close-window',
   'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'perf:scratch', 'perf:cleanup','shell:reveal', 'app:pending-open',
   'recent:list', 'recent:dismiss', 'recent:trash',

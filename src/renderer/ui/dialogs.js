@@ -1,6 +1,9 @@
 // Application dialogs. Each returns a promise and never blocks typing state.
 
 import { h, open, esc, alertBox } from './dialog.js';
+import { arm } from './arm.js';
+import { reducedMotion, DUR_PANEL, EASE_IN_OUT } from './motion.js';
+import { dayLabel, ago } from '../../core/when.js';
 import { MAC, macKeys, comboOf, showKeys, unusable, MAX_STEPS, SEQ_MS } from '../../core/keys.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
 import { paginate } from '../../core/layout.js';
@@ -163,32 +166,126 @@ export async function preferencesDialog(settings, doc) {
   };
 }
 
-/** Lists backups; resolves with the chosen backup file or null. */
-export async function backupsDialog(ref, currentName) {
-  const list = await api.invoke('backup:list', ref);
+/**
+ * File > Restore Backup: this screenplay's backups, newest first, grouped by day. Each row says
+ * when (and how long ago), how many words it holds against the script now, and its size; RESTORE
+ * and DELETE are on the row, each taking a second press (ui/arm.js), so nothing is lost to one
+ * click. Arrow keys move through the rows, Enter arms RESTORE on the chosen one, Delete arms
+ * DELETE. BACKUP NOW adds one at the top; OPEN FOLDER shows them where they are.
+ * Resolves with { file } to restore, or null. `io` = { words, readWords(file), backupNow(), remove(file), reveal() }.
+ */
+export async function backupsDialog(ref, currentName, io) {
+  let list = await api.invoke('backup:list', ref);
   const dir = await api.invoke('backup:dir', ref);
-  let chosen = list[0] ? list[0].file : null;
-  const rows = list.map((b) => {
-    const tr = h('tr', { class: 'pick' + (b.file === chosen ? ' on' : '') }, h('td', {}, fmtTime(b.time)), h('td', {}, fmtSize(b.size)), h('td', {}, b.name));
-    tr.addEventListener('click', () => { chosen = b.file; for (const r of tbody.children) r.classList.remove('on'); tr.classList.add('on'); });
-    tr.addEventListener('dblclick', () => { chosen = b.file; document.querySelector('.dlg .btn.primary').click(); });
-    return tr;
+  const words = new Map(); // file -> words in it (null: unreadable), filled in as they are read
+  let chosen = list[0] ? list[0].file : null, done = null, alive = true;
+  const listEl = h('div', { class: 'bk-list', tabindex: '0', role: 'listbox', 'aria-label': 'Backups' });
+  const count = h('span', { class: 'bk-count' });
+  const delta = (n) => (n == null || io.words == null ? '' : n === io.words ? 'same as now' : `${n > io.words ? '+' : '−'}${Math.abs(n - io.words).toLocaleString()} vs now`);
+  const wordsText = (f) => (!words.has(f) ? '…' : words.get(f) == null ? 'unreadable' : `${words.get(f).toLocaleString()} words`);
+  const wordsHTML = (f) => `${esc(wordsText(f))}<small>${esc(words.get(f) == null ? '' : delta(words.get(f)))}</small>`;
+
+  const render = () => {
+    count.textContent = !list.length ? 'No backups yet' : list.length === 1 ? '1 backup' : `${list.length} backups, newest first`;
+    if (!list.length) { listEl.innerHTML = '<div class="empty">No backups of this screenplay yet.<span class="hint">STET makes one every few minutes while you write; BACKUP NOW makes one at once.</span></div>'; return; }
+    if (!list.some((b) => b.file === chosen)) chosen = list[0].file;
+    let html = '', day = '';
+    for (const b of list) {
+      const d = dayLabel(b.time);
+      if (d !== day) { day = d; html += `<div class="bk-day">${esc(d)}</div>`; }
+      const bad = words.has(b.file) && words.get(b.file) == null;
+      html += `<div class="bk-row${b.file === chosen ? ' on' : ''}${bad ? ' bad' : ''}" role="option" aria-selected="${b.file === chosen}" data-file="${esc(b.file)}" title="${esc(b.name)}">`
+        + `<span class="bk-time">${esc(new Date(b.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</span>`
+        + `<span class="bk-ago">${esc(ago(b.time))}</span>`
+        + `<span class="bk-words">${wordsHTML(b.file)}</span>`
+        + `<span class="bk-size">${esc(fmtSize(b.size))}</span>`
+        + `<span class="bk-acts"><button class="tb bk-restore" data-x="restore"${bad ? ' disabled title="This backup cannot be read"' : ' title="Restore this backup (press twice). What you have now is backed up first."'}>RESTORE</button>`
+        + '<button class="tb bk-del" data-x="delete" title="Delete this backup (press twice)">DELETE</button></span></div>';
+    }
+    listEl.innerHTML = html;
+  };
+  const rowOf = (f) => listEl.querySelector(`.bk-row[data-file="${CSS.escape(f)}"]`);
+  const choose = (f, scroll = true) => {
+    chosen = f;
+    for (const r of listEl.querySelectorAll('.bk-row')) { const on = r.dataset.file === f; r.classList.toggle('on', on); r.setAttribute('aria-selected', on); }
+    const r = rowOf(f);
+    if (r && scroll) r.scrollIntoView({ block: 'nearest' });
+  };
+  // The words in each backup, read one after another while the window is open (newest first).
+  const readAll = async () => {
+    for (const b of list) {
+      if (!alive) return;
+      if (words.has(b.file)) continue;
+      words.set(b.file, await io.readWords(b.file).catch(() => null));
+      const r = rowOf(b.file);
+      if (!r || !alive) continue;
+      r.querySelector('.bk-words').innerHTML = wordsHTML(b.file);
+      if (words.get(b.file) == null) {
+        r.classList.add('bad');
+        const btn = r.querySelector('.bk-restore');
+        btn.disabled = true; btn.title = 'This backup cannot be read';
+      }
+    }
+  };
+  const remove = async (f) => {
+    if (!(await io.remove(f))) return alertBox('NOT DELETED', 'This backup could not be deleted. It may be open in another program.');
+    const r = rowOf(f);
+    const go = () => { list = list.filter((b) => b.file !== f); render(); listEl.focus({ preventScroll: true }); };
+    if (!r || reducedMotion()) return go();
+    r.style.pointerEvents = 'none';
+    const a = r.animate([{ height: r.offsetHeight + 'px', opacity: 1 }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0 }], { duration: DUR_PANEL, easing: EASE_IN_OUT, fill: 'forwards' });
+    let over = false;
+    const fin = () => { if (!over) { over = true; go(); } };
+    a.onfinish = fin;
+    setTimeout(fin, DUR_PANEL + 80); // (a background window runs no animations)
+  };
+  listEl.addEventListener('mousedown', (e) => {
+    const row = e.target.closest('.bk-row');
+    if (!row) return;
+    const btn = e.target.closest('[data-x]');
+    if (!btn) { choose(row.dataset.file, false); return; }
+    e.preventDefault();
+    if (btn.disabled) return;
+    choose(row.dataset.file, false);
+    if (btn.dataset.x === 'restore') arm(btn, () => done({ file: row.dataset.file }));
+    else arm(btn, () => remove(row.dataset.file));
   });
-  const tbody = h('tbody', {}, ...rows);
-  const body = h('div', { class: 'body' },
-    h('div', { class: 'hint', style: 'margin-bottom:8px' }, dir),
-    list.length ? h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'saved'), h('th', {}, 'size'), h('th', {}, 'file'))), tbody)
-      : h('div', { class: 'empty' }, 'No backups yet. One is made every few minutes while you write, or use Backup Now.'),
-  );
+  listEl.addEventListener('keydown', (e) => {
+    const i = list.findIndex((b) => b.file === chosen);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const j = Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+      if (list[j]) choose(list[j].file);
+    } else if (e.key === 'Enter' && chosen) {
+      e.preventDefault(); e.stopPropagation(); // (not the window's Close)
+      const f = chosen, btn = rowOf(f)?.querySelector('.bk-restore');
+      if (btn && !btn.disabled) arm(btn, () => done({ file: f }));
+    } else if (e.key === 'Delete' && chosen) {
+      e.preventDefault();
+      const f = chosen, btn = rowOf(f)?.querySelector('.bk-del');
+      if (btn) arm(btn, () => remove(f));
+    }
+  }, true);
+  const now = h('button', { class: 'btn', title: 'Back up the screenplay as it is now' }, 'BACKUP NOW');
+  now.addEventListener('click', async () => {
+    now.disabled = true;
+    const r = await io.backupNow();
+    now.disabled = false;
+    if (r && !r.ok) return alertBox('BACKUP FAILED', 'The backup could not be written.', r.error);
+    list = await api.invoke('backup:list', ref);
+    chosen = list[0] ? list[0].file : null;
+    render(); readAll();
+  });
+  const folder = h('button', { class: 'btn', title: dir }, 'OPEN FOLDER');
+  folder.addEventListener('click', () => io.reveal());
+  render();
+  const body = h('div', { class: 'body bk' }, h('p', { class: 'hint bk-lead' }, count, ' · Restoring one keeps what you have now as a backup first.'), listEl);
   return open({
-    title: 'BACKUPS', sub: currentName, body,
-    buttons: [
-      { label: 'Open folder', value: 'reveal' },
-      { label: 'Backup now', value: 'now' },
-      { label: 'Close', value: null },
-      { label: 'Restore…', value: () => (chosen ? { file: chosen } : null), primary: true, disabled: !list.length },
-    ],
-  });
+    title: 'RESTORE BACKUP', sub: currentName, body, cls: 'bk-dlg',
+    foot: h('span', { class: 'bk-foot' }, now, folder),
+    buttons: [{ label: 'Close', value: null, primary: true }],
+    init: (dlg, close) => { done = close; readAll(); setTimeout(() => listEl.focus({ preventScroll: true }), 0); },
+  }).finally(() => { alive = false; });
 }
 
 /** Startup recovery prompt. Resolves with { action: 'restore'|'discard'|'later', item }. */

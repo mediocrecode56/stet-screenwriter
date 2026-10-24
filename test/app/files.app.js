@@ -243,7 +243,7 @@ test('Open Recent: × removes an entry and keeps the file; the bin asks, then mo
   await app.dialogMatching(/RECYCLE BIN/);
   await app.press('Move to Bin');
   await app.until(async () => !(await rows()).some((x) => x.name === 'Bin'), { what: 'the list without it' });
-  await assert.rejects(fs.access(files[2]), 'moved out of its folder');
+  await app.until(() => fs.access(files[2]).then(() => false, () => true), { what: 'moved out of its folder' }); // (Windows may show it there a moment longer)
   await fs.access(path.join(bin, 'Bin.stet')); // into the (test) bin, not deleted
   await rowAction('Gone', '.ra-trash');
   await app.dialogMatching(/RECYCLE BIN/);
@@ -254,6 +254,41 @@ test('Open Recent: × removes an entry and keeps the file; the bin asks, then mo
   await fs.access(files[0]);
   await app.key('Escape');
   await app.noDialog();
+});
+
+test('File > Restore Backup: this screenplay\'s backups by day, with their words; delete and restore each take a second press', async () => {
+  const file = path.join(tmp, 'Backed Up.stet');
+  const json = async (text) => { await app.load([['action', text]]); return app.eval('__stet.session.serialize()'); };
+  const alpha = await json('Alpha one two.'), beta = await json('Beta words here now.');
+  await app.load([['action', 'Gamma.']]);
+  assert.equal((await app.saveTo(file)).ok, true);
+  const ref = await app.eval('JSON.stringify(__stet.session.ref())');
+  for (const j of [alpha, beta]) assert.equal((await app.eval(`__stet.api.invoke('backup:create', { ...${ref}, json: ${JSON.stringify(j)} })`)).ok, true);
+  const dir = await app.eval(`__stet.api.invoke('backup:dir', ${ref})`);
+  const onDisk = async () => (await fs.readdir(dir)).filter((n) => n.endsWith('.stet')).length;
+  assert.equal(await onDisk(), 2);
+  assert.ok(await app.eval(`__stet.cmd.all().some((c) => c.id === 'backups' && c.label === 'Restore Backup…')`), 'in the File menu as Restore Backup');
+  await app.eval(`__stet.cmd.run('backups')`);
+  await app.until(`document.querySelectorAll('.bk-row').length === 2 && ![...document.querySelectorAll('.bk-words')].some((w) => w.textContent.startsWith('…'))`, { what: 'the backups with their words' });
+  const rows = await app.eval(`[...document.querySelectorAll('.bk-list > *')].map((n) => n.classList.contains('bk-day') ? 'day ' + n.textContent : n.querySelector('.bk-words').textContent)`);
+  assert.equal(rows[0], 'day Today');
+  assert.deepEqual(rows.slice(1).sort(), ['3 words+2 vs now', '4 words+3 vs now'], 'each with its words, against the script now');
+  const row = (w) => `[...document.querySelectorAll('.bk-row')].find((r) => r.querySelector('.bk-words').textContent.startsWith('${w}'))`;
+  const press = async (w, which) => { const r = await app.eval(`(() => { const b = ${row(w)}.querySelector('${which}').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`); await app.click(r.x, r.y); };
+  // DELETE: the first press only asks; the second removes the backup from the disk, and its row folds away.
+  await press('3 words', '.bk-del');
+  assert.equal(await app.eval(`${row('3 words')}.querySelector('.bk-del').textContent`), 'CONFIRM');
+  assert.equal(await onDisk(), 2, 'one press deletes nothing');
+  await press('3 words', '.bk-del');
+  await app.until(`document.querySelectorAll('.bk-row').length === 1`, { what: 'the row gone' });
+  assert.equal(await onDisk(), 1);
+  // RESTORE: the second press brings it back; what was open is kept as a backup first.
+  await press('4 words', '.bk-restore');
+  assert.equal(await app.eval(`!!document.querySelector('.bk-dlg')`), true, 'one press restores nothing');
+  await press('4 words', '.bk-restore');
+  await app.until(`__stet.editor.blocks[0].text === 'Beta words here now.' && !document.querySelector('.bk-dlg')`, { what: 'the backup restored' });
+  assert.equal(await app.eval('__stet.session.path'), file, 'the same screenplay, restored in place');
+  await app.until(async () => (await onDisk()) === 2, { what: 'what was open kept as a backup first' });
 });
 
 test('Tools > Run Performance Probe gives a score and leaves no trace', async () => {
