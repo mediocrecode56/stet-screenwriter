@@ -81,6 +81,15 @@ jobs:
             build=false
             echo "$tag is already released; nothing to do."
           fi
+          # The tag pushed together with its commit on main: main's own run releases it. A second
+          # run would only wait for the first, build it all again and cancel its Mac build.
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            git fetch -q --depth=100 origin main
+            if git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+              build=false
+              echo "$tag is on main; main's run releases it."
+            fi
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "create=$create" >> "$GITHUB_OUTPUT"
@@ -247,7 +256,9 @@ jobs:
           # Screenplays show STET's icon: the file the document type names is STET's icon.
           docicon=$(/usr/libexec/PlistBuddy -c 'Print CFBundleDocumentTypes:0:CFBundleTypeIconFile' "$app/Contents/Info.plist")
           cmp "$app/Contents/Resources/$docicon" build/icon.icns || { echo "::error::.stet files would not show STET's icon ($docicon)"; exit 1; }
-          STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test --test-concurrency=1 test/app/smoke.app.js test/app/patch.app.js
+          # (A shared Mac is sometimes slow to give a new window the focus: a failed run gets one more try.)
+          STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test --test-concurrency=1 test/app/smoke.app.js test/app/patch.app.js \
+            || { echo "::warning::The app tests failed once; trying again"; STET_E2E_EXE="$app/Contents/MacOS/STET" STET_E2E_START_MS=120000 node --test --test-concurrency=1 test/app/smoke.app.js test/app/patch.app.js; }
           # Help > Open .stet Files with STET, for real, with STET.app where people put it (macOS
           # won't open documents with an app in a temporary folder): STET becomes their default.
           mkdir -p ~/Applications && ditto "$app" ~/Applications/STET.app

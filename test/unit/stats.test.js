@@ -287,8 +287,11 @@ test('performance: a year of heavy use books and summarises quickly', () => {
   for (let i = 0; i < 100; i++) book.summary({ daily: 1000, weekly: 5000 });
   const sum = (performance.now() - t1) / 100;
   assert.equal(book.data.total, 365 * 600);
-  assert.ok(booked < 600, `booking 219k credits took ${booked.toFixed(0)} ms`);
-  assert.ok(sum < 5, `summary took ${sum.toFixed(2)} ms`);
+  // A shared CI runner can be several times slower for a moment: there the budget only catches a
+  // real slowdown (a release failing on a busy runner waited for a re-run).
+  const slack = process.env.CI ? 3 : 1;
+  assert.ok(booked < 600 * slack, `booking 219k credits took ${booked.toFixed(0)} ms`);
+  assert.ok(sum < 5 * slack, `summary took ${sum.toFixed(2)} ms`);
   assert.equal(JSON.stringify(book.data).length < 400000, true, 'the saved file stays small');
 });
 
