@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
 import { paginate } from '../../src/core/layout.js';
 import { newDocument, makeBlock } from '../../src/core/model.js';
 import { serialize, deserialize } from '../../src/core/serialize.js';
@@ -47,6 +47,20 @@ test('the timeline shows each scene, highlights (one across blocks) and notes', 
   assert.ok(tl.highlights[0].x1 > scriptPos(p, 2), 'the yellow runs on into the next block');
   assert.equal(tl.highlights[1].color, 'pink');
   assert.deepEqual(tl.notes.map((n) => [n.id, n.b]), [['n1', 2]]);
+});
+
+test('scenes, notes and highlights sit on whole seconds, the nearest one, never between two', () => {
+  const time = timeScale([{ x: 2, t: 100 }]); // 50 s a page up to the timecode, then the same pace
+  const tl = { scenes: [{ x: 0.51, b: 3 }], notes: [{ x: 1.009, id: 'n' }], highlights: [{ x0: 0.3, x1: 0.304, color: 'pink' }, { x0: 2.95, x1: 3.2, color: 'blue' }] };
+  const on = onSeconds(tl, time, 3);
+  const whole = (x) => Math.abs(time.at(x) - Math.round(time.at(x))) < 1e-9;
+  for (const x of [on.scenes[0].x, on.notes[0].x, ...on.highlights.flatMap((h) => [h.x0, h.x1])]) assert.ok(whole(x) || x === 3, `${x} on a second`);
+  assert.equal(time.at(on.scenes[0].x), 26); // 25.5 s: the nearer second up
+  assert.equal(time.at(on.notes[0].x), 50); // 50.45 s: the nearer one down
+  assert.equal(on.scenes[0].b, 3, 'what it is stays');
+  assert.equal(on.scenes[0].at, 0.51, 'and where it really is');
+  assert.ok(on.highlights[0].x1 > on.highlights[0].x0, 'a highlight within one second still spans one');
+  assert.ok(on.highlights[1].x1 <= 3, 'nothing past the end of the script');
 });
 
 test('the ruler counts a minute a page until a timecode is pinned', () => {

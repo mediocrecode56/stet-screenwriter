@@ -261,7 +261,11 @@ editor names the scene. A click or right-click on a timecode (the
 pointer turns into a pencil over one) opens the
 same small editor under the bar (`editTimecode`): the exact time as HH:MM:SS (Up and Down nudge
 it a second, ten with Shift), an optional tag shown beside it on the ruler, one of the
-highlight colours, and a bin to remove it; Enter or a click away keeps it, Esc doesn't. A
+highlight colours, a check that keeps it (as does Enter) and a bin that removes it (or, for a
+new one, drops it). Nothing else keeps it: Esc or a click away leaves everything as it was, so a
+scene right-clicked for the first time gets no timecode unless the check is clicked. Scenes, notes
+and highlights are drawn on the whole second nearest to them (`onSeconds`), never between two,
+and the pointer is drawn to them there; a click still goes to the line itself. A
 timecode has to be later than the ones before it and earlier than the ones after; the editor
 says so under the time when it isn't. Each timecode is drawn as a line the height of the
 bar, in its colour, and draws the pointer like the other marks; one outside a scene heading is

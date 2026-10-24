@@ -19,7 +19,7 @@ function life() {
   const night = Date.parse('2026-10-21T22:30:00');
   for (const [seed, mk, hours] of [[41, (s) => world(s), 3], [42, (s) => world(s, { clock: () => night }), 3], [404, (s) => wide(s), 2]]) {
     const c = mk(seed), rng = seeded(seed);
-    const L = { c, hours, n: 0, away: 0, outer: 0, middle: 0, walked: 0, activities: {}, reactions: new Set(), events: [], floating: 0, gusts: 0, shifts: 0, suns: 0, times: {} };
+    const L = { c, hours, n: 0, away: 0, outer: 0, middle: 0, walked: 0, activities: {}, reactions: new Set(), events: [], floating: 0, gusts: 0, shifts: 0, suns: 0, times: {}, back: 0 };
     const orig = c.startEvent.bind(c);
     c.startEvent = (kind, now) => { assert.equal(c.event, null, `${kind} while ${c.event?.kind} is still going`); L.events.push({ kind, now }); return orig(kind, now); };
     let writingUntil = 0, nextBurst = 0, dark = false, last = '', awayUntil = 0;
@@ -34,6 +34,7 @@ function life() {
       if (c.activity !== last) { last = c.activity; L.activities[last] = (L.activities[last] || 0) + 1; (L.times[last] ||= []).push(now); }
       L.n++;
       if (c.away()) L.away++;
+      if (c.step && (c.step.f === 'fallen' || c.step.flip)) L.back++;
       const f = c.x / c.maxX;
       if (f < 0.08 || f > 0.92) L.outer++;
       if (f > 0.25 && f < 0.75) L.middle++;
@@ -57,6 +58,8 @@ test('hours of use — writing bursts, idle spells, click storms, the weather, t
   assert.ok(sum((L) => L.shifts) > 4 && acts.has('nightfall') && acts.has('daybreak'), 'the theme turned, and it watched');
   assert.ok(life().every((L) => L.suns <= 2), 'never a sky full of suns');
   for (const a of ['backScratch', 'strut']) assert.ok(acts.has(a), `${a} turns up on its own`);
+  const back = sum((L) => L.back) / sum((L) => L.n);
+  assert.ok(back < 0.01, `on its back or upside down only now and then (${(100 * back).toFixed(2)} % of the time)`);
 });
 
 test('it walks whenever it moves (checked on every frame), lives at home around TODAY, and goes exploring now and then', () => {

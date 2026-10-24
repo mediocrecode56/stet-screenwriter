@@ -277,7 +277,8 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-inner.editing::after { content: ''; position: absolute; left: var(--edit-x); top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }
 .tl-head.dim { opacity: .35; }
 /* The timecode editor: a small panel under the bar, its notch on the timecode. */
-.tc-pop { position: fixed; z-index: 50; background: var(--page); border: 1px solid var(--rule-strong); box-shadow: 4px 4px 0 var(--rule); padding: 5px; }
+.tc-pop { position: fixed; z-index: 50; background: var(--page); border: 1px solid var(--rule-strong); box-shadow: 4px 4px 0 var(--rule); padding: 5px; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+@starting-style { .tc-pop { opacity: 0; transform: translateY(-3px); } } /* drops in from the bar */
 .tc-pop::before { content: ''; position: absolute; top: -5px; left: calc(var(--notch) - 4px); width: 7px; height: 7px; background: var(--page); border: solid var(--rule-strong); border-width: 1px 0 0 1px; transform: rotate(45deg); }
 .tc-row { display: flex; align-items: center; gap: 5px; }
 .tc-head { max-width: 300px; padding: 1px 2px 5px; font-size: 9px; letter-spacing: .08em; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* a scene's own timecode: which scene */
@@ -288,10 +289,11 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tc-tag::placeholder { color: var(--ink-3); }
 .tc-pop.bad .tc-time { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .tc-sws { display: flex; gap: 1px; margin-left: 1px; }
-.tc-sw, .tc-del { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; border-radius: 3px; }
-.tc-sw:hover, .tc-del:hover { background: var(--hover); color: var(--ink); }
+.tc-sw, .tc-ok, .tc-del { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; border-radius: 3px; }
+.tc-sw:hover, .tc-ok:hover, .tc-del:hover { background: var(--hover); color: var(--ink); }
 .tc-sw.on { box-shadow: inset 0 0 0 1px var(--ink); }
-.tc-del { margin-left: 2px; }
+.tc-ok { margin-left: 2px; color: var(--ink-2); }
+.tc-ok:focus-visible, .tc-del:focus-visible { outline: 1px solid var(--rule-strong); }
 .tc-err { display: none; max-width: 300px; padding: 4px 2px 0; font-size: 10px; letter-spacing: .04em; color: var(--ink-2); }
 .tc-pop.bad .tc-err { display: block; }
 .tl-head { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); pointer-events: none; }

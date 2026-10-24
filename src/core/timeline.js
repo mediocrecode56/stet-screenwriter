@@ -73,6 +73,21 @@ export function timelineOf(blocks, pages) {
   return { scenes, highlights, notes };
 }
 
+/** The timeline with every scene, note and highlight moved onto the nearest whole second of `time`
+ *  (never past `len`, the end of the script), so none sits between two; `at` keeps where it really is. */
+export function onSeconds({ scenes, highlights, notes }, time, len) {
+  const sec = (x) => Math.max(0, Math.min(len, time.pos(Math.round(time.at(x)))));
+  const put = (m) => ({ ...m, at: m.x, x: sec(m.x) });
+  return {
+    scenes: scenes.map(put),
+    notes: notes.map(put),
+    highlights: highlights.map((hl) => {
+      const x0 = sec(hl.x0), x1 = sec(hl.x1);
+      return { ...hl, at: hl.x0, x0, x1: x1 > x0 ? x1 : Math.min(len, time.pos(Math.round(time.at(hl.x0)) + 1)) }; // at least a second long
+    }),
+  };
+}
+
 /** The target nearest x within `tol` (all in pages), or null: what the pointer is drawn to. */
 export function snapTo(targets, x, tol) {
   let best = null;

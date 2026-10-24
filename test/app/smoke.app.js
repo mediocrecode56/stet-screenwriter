@@ -149,6 +149,10 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   await app.move(s5.left + 4, s5.top + 6);
   assert.ok(await app.eval(`document.querySelectorAll('#timeline .tl-scene')[4].classList.contains('near')`), 'drawn to the scene');
   assert.ok(Math.abs(await tl('t.hover.getBoundingClientRect().left') - s5.left) < 1, 'the line on the tick');
+  assert.equal(await tl('[...t.tl.scenes, ...t.tl.notes].concat(t.tl.highlights.map((h) => ({ x: h.x0 }))).every((m) => Math.abs(t.time.at(m.x) - Math.round(t.time.at(m.x))) < 1e-6)'), true, 'every mark on a whole second');
+  const pink = await app.rect('#timeline .tl-hl.hl-pink');
+  await app.move(pink.left + 1, pink.top + 3);
+  assert.match(await tl('t.hover.textContent'), /pink highlight/, 'a highlight says which');
 });
 
 test('the timeline: zoom by dragging the ruler, the whole script again by double-clicking it, scroll by dragging the band', async () => {
@@ -288,16 +292,21 @@ test('the timeline: a click on a timecode edits it; a right-click on a scene giv
   assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-time').value`), hms(t0));
   await app.clickOn('.tc-pop .tc-del');
   assert.equal(await app.eval('__stet.session.doc.timecodes.length + document.querySelectorAll(".tc-pop, #timeline .tl-tcm").length'), 0, 'the bin removes it');
-  // A right-click on the tick for scene 4: the editor names the scene; typed in, Enter keeps it.
+  // A right-click on the tick for scene 4: the editor names the scene and offers its second. A click
+  // away makes nothing; typed in, the check keeps it.
   const s4 = await app.rect('#timeline .tl-scene', 3);
   await app.click(s4.left + 1, s4.top + 6, { button: 'right' });
   assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-head').textContent`), 'INT. ROOM 4 - DAY');
+  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-time').value`), hms(await tl('Math.round(t.time.at(t.tl.scenes[3].x))')), 'on its second');
+  await app.click(s4.left + 200, s4.bottom + 120); // (on the script)
+  assert.equal(await app.eval('__stet.session.doc.timecodes.length + document.querySelectorAll(".tc-pop").length'), 0, 'not confirmed: no timecode');
+  await app.click(s4.left + 1, s4.top + 6, { button: 'right' });
   assert.equal(await app.eval('document.activeElement.className'), 'tc-time', 'the time, ready to type over');
   await app.type('00:09:00');
   await app.eval(`document.querySelector('.tc-pop .tc-tag').value = 'Turn'`);
-  await app.key('Enter');
+  await app.clickOn('.tc-pop .tc-ok');
   assert.deepEqual(await app.eval(`(() => { const b = __stet.editor.blocks; return __stet.session.doc.timecodes.map((t) => [b.find((x) => x.id === t.id).text, t.line, t.t, t.tag]); })()`), [['INT. ROOM 4 - DAY', 0, 540, 'Turn']]);
-  assert.equal(await app.eval('document.querySelector("#timeline .tl-tcm").className'), 'tl-tcm sc', 'on a scene: the stronger line');
+  assert.equal(await app.eval('document.querySelector("#timeline .tl-tcm").classList.contains("sc")'), true, 'on a scene: the stronger line');
   await app.caret(18, 0);
   await app.until(`[...document.querySelectorAll('#content .sctc')].map((e) => e.textContent).join() === '00:09:00 · Turn'`, { what: 'the timecode beside the heading' });
   const beside = await app.eval(`(() => { const t = document.querySelector('#content .sctc'), h = [...document.querySelectorAll('#content .l')].find((e) => e.textContent === 'INT. ROOM 4 - DAY');

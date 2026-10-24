@@ -361,6 +361,11 @@ export const PROPS = {
     ['...#...', '#..#..#', '.#.#.#.', '.##.##.'],
   ],
   worm: [['.....', '.....', '#####'], ['..#..', '..#..', '#####'], ['.##..', '..#..', '#####']],
+  // Small finds: an acorn, a cricket (sitting, hopping), a feather (swaying), a gem (dug up, glinting in the sand).
+  acorn: [['..#.', '####', '.##.', '.##.']],
+  cricket: [['#....', '.###.', '#.#.#'], ['#....', '.###.', '.#.#.']],
+  feather: [['...#', '.##.', '#...'], ['#...', '.##.', '...#']],
+  gem: [['.#.', '###', '.#.'], ['...', '...', '.#.']],
 };
 // Drawn lighter: water, light and things far off.
 export const ALPHA = { doodle: 0.55, puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8 };

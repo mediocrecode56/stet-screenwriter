@@ -228,8 +228,8 @@ test('the everyday activities come out a little different each time', () => {
   }
 });
 
-test('visitors now and then: a balloon, a paper plane, a frog, a ladybird, a dandelion, a worm — each comes, plays its part and goes', () => {
-  const kinds = { balloon: ['balloon'], paperPlane: ['plane'], frog: ['frog'], ladybug: ['ladybug'], dandelion: ['dandelion', 'seed'], worm: ['worm'] };
+test('visitors and finds now and then: a balloon, a paper plane, a frog, a ladybird, a dandelion, a worm, an acorn, a cricket, a feather, a gem — each comes, plays its part and goes', () => {
+  const kinds = { balloon: ['balloon'], paperPlane: ['plane'], frog: ['frog'], ladybug: ['ladybug'], dandelion: ['dandelion', 'seed'], worm: ['worm'], acorn: ['acorn'], cricket: ['cricket'], feather: ['feather'], gem: ['gem'] };
   for (const [a, props] of Object.entries(kinds)) {
     for (let seed = 0; seed < 6; seed++) {
       const c = wide(seed * 17 + a.length);
@@ -248,6 +248,10 @@ test('visitors now and then: a balloon, a paper plane, a frog, a ladybird, a dan
   const n = {};
   for (let i = 0; i < 12000; i++) { c.recent = []; c.lastEnv = {}; c.energy = c.rng(); const a = c.pickActivity(1e9); n[a] = (n[a] || 0) + 1; }
   for (const k of Object.keys(kinds)) assert.ok(n[k] > 0 && n[k] / 12000 < 0.02, `${k} turns up now and then (${n[k]})`);
+  let w = null; // each find has its own odds, the gem the rarest
+  c.pick = ((pick) => (o) => { if ('gem' in o) w = { ...o }; return pick(o); })(c.pick.bind(c));
+  c.recent = []; c.lastEnv = {}; c.mood = 'content'; c.pickActivity(1e9);
+  assert.ok(w.acorn > w.cricket && w.cricket > w.feather && w.feather > w.gem && w.gem > 0, `odds: ${['acorn', 'cricket', 'feather', 'gem'].map((k) => w[k])}`);
 });
 
 // ---- plants that come and go ----------------------------------------------------------------------

@@ -42,7 +42,7 @@
 // falls at night, a cactus or a tuft of grass comes up (it notices, in its own
 // time, and may go over to see) — and the dinosaur may grow a palm tree, find a flower, a
 // mushroom or a snail, or meet a balloon, a paper plane, a frog, a ladybird,
-// a dandelion or a worm. When the theme turns dark or light on its schedule,
+// a dandelion or a worm; or come across an acorn, a cricket, a feather or, rarely, a gem. When the theme turns dark or light on its schedule,
 // it sees the sun go down or come up. Each has a beginning, its part for the dinosaur, and a
 // natural end; only one event runs at a time, and one starts only when the
 // dinosaur can take part.
@@ -88,7 +88,7 @@ export const TIMING = {
   dormantTick: 60000,           // dormant (see Critter.dormant): at most this long between ticks
 };
 // Things that float or fly about: only a few at a time, so the scene never gets busy.
-const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug']);
+const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug', 'feather']);
 // What tends to follow what: a romp leaves it ready for a sit, a long rest for a stretch and a stroll.
 const LIVELY = new Set(['zoomies', 'hop', 'dance', 'fetch', 'pounce', 'workout', 'chaseTail', 'juggle', 'somersault', 'patrol', 'explore', 'shadowbox', 'skateboard', 'tightrope']);
 const RESTFUL = new Set(['rest', 'sleep', 'doze', 'daydream', 'treeShade', 'stargaze', 'sunbathe', 'yoga', 'settleIn']);
@@ -366,7 +366,7 @@ export class Critter {
       scratch: 0.45,
       doze: 0.05 + 0.8 * (1 - e) * (1 - e),              // nods off more the calmer things are
       ponder: 0.3,
-      sunbathe: !night && e < 0.6 ? 0.3 : 0,
+      sunbathe: !night && e < 0.6 ? 0.12 : 0,
       watchWriter: writing ? 0.8 : 0.12,
       readScript: idle > 20 && idle < 600 ? 0.6 : 0.15,  // reads over your page when you stop for a bit
       coffeeBreak: 0.2 + (morning ? 0.4 : 0),
@@ -378,12 +378,12 @@ export class Critter {
       hop: 2.5 * e * e,
       zoomies: e > 0.5 ? 0.5 * e : 0,
       pounce: 0.15 + 0.4 * e,
-      roll: 0.12 + 0.2 * e,
+      roll: 0.08 + 0.12 * e,
       somersault: 0.06 + 0.3 * e,
-      headstand: 0.06 + 0.2 * e,
+      headstand: 0.03 + 0.1 * e,
       dance: e > 0.45 ? 2 * e * e : 0,
       roar: 0.1 + 0.25 * e,
-      trip: 0.08 + 0.25 * e,                             // gags stay occasional
+      trip: 0.05 + 0.15 * e,                             // gags stay occasional
       moonwalk: e > 0.35 ? 0.35 * e : 0,
       chaseTail: 0.08 + 0.35 * e,
       sneeze: 0.15,
@@ -416,7 +416,7 @@ export class Critter {
       graze: tuft ? 1.4 + 0.25 * this.tufts().length : 0,
       // Shameless: a roll on its back (the more after the rain), a swagger (the more once today's goal is
       // met), a burp after a meal, and posing in front of whatever is worth a look.
-      backScratch: 0.15 + 0.25 * (1 - e) + (now < this.wetUntil ? 0.8 : 0),
+      backScratch: 0.05 + 0.08 * (1 - e) + (now < this.wetUntil ? 0.5 : 0),
       strut: 0.08 + 0.3 * e + (goalMet ? 0.45 : 0),
       burp: now - this.fed < 2 * MIN ? 2.4 : 0,
       photobomb: this.since('photobomb') > 5 * MIN && this.sight() ? 0.5 : 0,
@@ -437,6 +437,11 @@ export class Critter {
       ladybug: free && calmSky && this.envOk('ladybug', 4 * MIN) ? 0.15 : 0,
       dandelion: free && calmSky && !this.find('dandelion') && this.envOk('dandelion', 5 * MIN) ? 0.1 : 0,
       worm: free && this.envOk('worm', 5 * MIN) ? 0.12 : 0,
+      // Small finds, each with its own odds: an acorn now and then, a feather seldom, a gem only rarely.
+      acorn: free && this.envOk('acorn', 5 * MIN) ? 0.14 : 0,
+      cricket: free && this.envOk('cricket', 5 * MIN) ? 0.09 : 0,
+      feather: free && calmSky && this.envOk('feather', 6 * MIN) ? 0.06 : 0,
+      gem: free && this.envOk('gem', 10 * MIN) ? 0.03 : 0,
       // Unlocked by the writing streak.
       skateboard: this.unlocked >= 1 && free ? 0.3 : 0,
       fireworks: this.unlocked >= 2 && free ? 0.22 : 0,
@@ -1128,7 +1133,7 @@ export class Critter {
           if (p.y === 0) { p.vx *= Math.exp(-s * 8); if (Math.abs(p.vx) < 3) { p.vx = 0; p.frame = 1; } }
           if (p.x < -M || p.x > W2 + M - cols * u || (p.vx && this.gone(p, Math.sign(p.vx)))) { p.x = inView(p, cols); p.vx = 0; this.fadeOut(p, 400); }
           break;
-        case 'frog': {
+        case 'frog': case 'cricket': {
           if (!p.vx && !p.bounce) { p.y = 0; p.frame = 0; break; }
           p.live = true;
           if (p.vx) p.face = Math.sign(p.vx);
@@ -1149,6 +1154,14 @@ export class Critter {
           }
           p.frame = 0;
           if (p.tx != null && Math.abs(p.tx - p.x) > 0.5) { p.live = true; p.x += Math.sign(p.tx - p.x) * Math.min(6 * s, Math.abs(p.tx - p.x)); }
+          break;
+        case 'feather':
+          p.live = true;
+          p.frame = Math.sin((now - p.born) / 500 + p.sway) > 0 ? 0 : 1;
+          p.x = inView({ x: p.x + Math.cos((now - p.born) / 500 + p.sway) * 7 * s + (p.tx != null ? (p.tx - p.x) * (1 - Math.exp(-s * 0.8)) : 0) }, cols);
+          if (p.rise) { p.y = Math.min(H + 26, p.y + 9 * s); if (p.y >= H + 22) this.fadeOut(p, 900); } // blown up and away
+          else if (p.y > 0) p.y = Math.max(0, p.y - 3 * s);
+          else p.live = false;
           break;
         case 'seed':
           p.live = true;
@@ -1176,7 +1189,7 @@ export class Critter {
           if (p.vx) {
             p.live = true;
             p.x += p.vx * s;
-            if (p.y === 0) p.vx *= Math.exp(-s * (p.kind === 'ball' || p.kind === 'coconut' ? 1.1 : 6));
+            if (p.y === 0) p.vx *= Math.exp(-s * (p.kind === 'ball' || p.kind === 'coconut' ? 1.1 : p.kind === 'acorn' ? 2.5 : 6));
             const right = W2 - cols * u;
             if (p.x < 0) { p.x = 0; p.vx = Math.abs(p.vx) * 0.5; }
             if (p.x > right) { p.x = right; p.vx = -Math.abs(p.vx) * 0.5; }
@@ -1506,7 +1519,7 @@ export class Dino {
       const art = PROPS[q.kind][q.frame] || PROPS[q.kind][0];
       const jitter = q.wobble ? (Math.round(now / 90) % 2 ? p : -p) : 0;
       g.globalAlpha = (ALPHA[q.kind] ?? 1) * (q.alpha ?? 1);
-      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0) || ((q.kind === 'plane' || q.kind === 'frog') && q.face < 0);
+      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0) || ((q.kind === 'plane' || q.kind === 'frog' || q.kind === 'cricket') && q.face < 0);
       grid(art, snap(q.x) + jitter, ground - Math.round(q.y) * p, p, mirror);
       if (q.kind === 'ufo' && q.beam) {
         const bx = snap(q.x) + 4 * p;

@@ -439,7 +439,7 @@ test('a long while in the background: it settles into a deep sleep, sleeps on qu
     c.setFocus(true, c.now);
     const frames = [];
     until(c, () => c.inReaction === 'deepWake', 5000, 'starts to wake');
-    until(c, () => c.inReaction !== 'deepWake', 20000, 'wakes up', () => { frames.push(c.frame); assert.ok(Math.abs(c.x - x) < 0.01, 'no teleport'); });
+    until(c, () => c.inReaction !== 'deepWake', 20000, 'wakes up', () => { if (c.inReaction !== 'deepWake') return; frames.push(c.frame); assert.ok(Math.abs(c.x - x) < 0.01, 'no teleport'); }); // (only while waking: not the first step of what comes next)
     for (const f of ['lieUp', 'lieUpHowl', 'sitChew', 'stretch']) assert.ok(frames.includes(f), `wakes with ${f}`);
     assert.ok(!c.deep);
     run(c, 30000, { from: c.now, dt: 100 });

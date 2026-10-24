@@ -258,9 +258,10 @@ events, and ticks only at each 1.5 s breath. If no ticks ran meanwhile
 first); grazing waits for writing after the return plus `grazeAfter`.
 Things floating about (`floating()`) are kept to a few: floating visitors and
 events wait while two are already up, and a breeze is one or two faint gusts.
-Things that grow (palm, flower, mushroom, dandelion) and visitors (a balloon,
-a paper plane, a frog, a ladybird, a worm) are activities it starts itself,
-each on its own cooldown. When AUTO turns the theme, `app.js` tells the
+Things that grow (palm, flower, mushroom, dandelion), visitors (a balloon,
+a paper plane, a frog, a ladybird, a worm) and small finds (an acorn, a cricket,
+a feather and, rarest, a gem, each weighted differently) are activities it starts
+itself, each on its own cooldown. When AUTO turns the theme, `app.js` tells the
 companion (`Dino.themeChanged`, ignored in the first seconds after launch):
 `Critter.themeShift()` queues `nightfall` or `daybreak` as the next
 activity and ends the current one at its next step, unless it is something

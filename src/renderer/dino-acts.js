@@ -10,7 +10,9 @@
 // The engine (dino.js) plays them one at a time, slots reactions in between
 // steps, and bridges postures so nothing ever jumps. `d` is the Critter.
 
-import { postureOf } from './dino-art.js';
+import { postureOf, H } from './dino-art.js';
+
+const H_SKY = H + 18; // where things drift down from
 
 export const ACTIVITIES = {
   // -- idle, rest and personality --
@@ -44,10 +46,10 @@ export const ACTIVITIES = {
       yield { f: 'lie', t: 500 };
     }
     const n = d.deep ? 0 : d.rint(12, 30);
-    const turn = d.chance(0.4) ? d.rint(3, n - 3) : -1, back = d.chance(0.25) ? d.rint(2, n - 4) : -1;
+    const turn = d.chance(0.4) ? d.rint(3, n - 3) : -1, back = d.chance(0.08) ? d.rint(2, n - 4) : -1;
     for (let i = 0; i < n; i++) {
       if (i === turn) { yield { f: 'lieBreath', t: 400 }; yield { f: 'fallen', t: 500 }; yield { f: 'lie', t: 500, face: -d.face }; } // turns over
-      if (i === back) for (let k = 0; k < 3; k++) yield { f: 'fallen', t: 900, fx: k === 1 ? 'z' : null }; // a while on its back, feet in the air
+      if (i === back) for (let k = 0; k < 2; k++) yield { f: 'fallen', t: 800, fx: k === 1 ? 'z' : null }; // a while on its back, feet in the air
       const dream = d.chance(0.06) ? d.pick({ note: 1, heart: 1, '?': 0.6 }) : null;
       yield { f: 'lie', t: 600, fx: dream || (i % 3 === 0 ? 'z' : null) };
       yield { f: 'lieBreath', t: 600 };
@@ -172,8 +174,8 @@ export const ACTIVITIES = {
     yield* d.getTo('lie');
     yield { f: 'lie', t: 800 };
     yield { f: 'fallen', t: 400 }; // rolls onto its back
-    const n = d.rint(4, 8);
-    for (let i = 0; i < n; i++) yield { f: 'fallen', t: d.rnd(700, 1100), fx: i === 1 ? 'heart' : null };
+    const n = d.rint(2, 4);
+    for (let i = 0; i < n; i++) yield { f: 'fallen', t: d.rnd(600, 900), fx: i === 1 ? 'heart' : null };
     yield { f: 'lie', t: 500, face: -d.face }; // and back, the other way round
     yield { f: 'lieBreath', t: 600 };
     yield { f: 'lie', t: 400 };
@@ -465,8 +467,7 @@ export const ACTIVITIES = {
     yield { f: 'stand', t: 100, face: dir };
     for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'walk2' : 'walk1', t: 170, dx: 3 * dir };
     yield { f: 'walk1', t: 120, dx: 2 * dir };
-    yield { f: 'fallen', t: 900, fx: 'star' };
-    yield { f: 'fallen', t: 700 };
+    yield { f: 'fallen', t: 800, fx: 'star' };
     yield { f: 'sit', t: 400 };
     yield { f: 'stand', t: 300 };
     yield { f: 'stand', t: 500, face: -d.face, fx: 'dots' }; // nobody saw that
@@ -894,12 +895,12 @@ export const ACTIVITIES = {
     yield { f: 'sitBlink', t: 300, fx: d.chance(0.4) ? 'hash' : null };
     yield { f: 'lie', t: 250 };
     yield { f: 'fallen', t: 300, fx: '!' }; // flop
-    for (let i = 0, n = d.rint(5, 9); i < n; i++) {
+    for (let i = 0, n = d.rint(3, 5); i < n; i++) {
       yield { f: 'fallen', t: d.rnd(150, 220), face: -d.face, do: (c) => c.dirt(1) }; // a wriggle one way…
       yield { f: 'fallen', t: d.rnd(150, 220), face: -d.face, fx: i === 2 && d.chance(0.6) ? 'heart' : null }; // …and the other
       if (d.chance(0.15)) yield { f: 'fallen', t: d.rnd(600, 1000), fx: 'dots' }; // bliss
     }
-    if (d.chance(0.3)) { // stuck: a rock or two to get over
+    if (d.chance(0.15)) { // stuck: a rock or two to get over
       for (let k = 0; k < 3; k++) { yield { f: 'fallen', t: 200, face: -d.face }; yield { f: 'lie', t: 160 }; }
       yield { f: 'fallen', t: 300, fx: '?' };
     }
@@ -1392,6 +1393,90 @@ export const ACTIVITIES = {
     yield { f: 'up', t: 500, fx: d.chance(0.5) ? 'hash' : 'dots' };
     yield { f: 'stand', t: 300 };
   },
+  // Four small finds, from the commonest to the rarest: an acorn, a cricket, a feather, a gem.
+  *acorn(d) {
+    // An acorn drops out of nowhere with a bonk. A sniff, a nudge with the nose to see it roll, after it,
+    // and then it digs a little hole and buries it for later.
+    yield* d.getTo('stand');
+    d.envMark('acorn');
+    const ac = d.spawn('acorn', { x: d.clampProp(d.center() + (d.inward() || d.face) * d.rnd(30, 50), 4), y: 26, gravity: true, life: 40000 });
+    yield { f: 'stand', t: 700 };
+    yield { f: 'up', t: 400, fx: '!', face: d.dirTo(ac) };
+    yield* d.walkTo(() => d.reach(ac), 1, { max: 60 });
+    yield { f: 'sniff', t: 600, fx: '?' };
+    for (let i = 0, n = d.rint(1, 3); i < n && d.has(ac); i++) {
+      yield { f: 'sniff', t: 250, do: (c) => { ac.vx = c.face * c.rnd(30, 45); } }; // a nudge, and off it rolls
+      yield { f: 'stand', t: 500 };
+      yield* d.walkTo(() => d.reach(ac), 1, { max: 40 });
+    }
+    yield { f: 'sniff', t: 300, do: (c) => c.pickUp(ac) };
+    yield { f: 'up', t: 500, fx: 'heart' };
+    yield { f: 'sniff', t: 300, do: (c) => c.drop(ac, 0) };
+    for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'sniff' : 'crouch', t: 150, do: (c) => { c.dirt(2); if (i === 5) c.remove(ac); } };
+    yield { f: 'stand', t: 400, fx: 'dots' };
+  },
+  *cricket(d) {
+    // A cricket hops up and chirps. It listens, creeps in and pounces: the cricket is long gone, chirping
+    // somewhere else.
+    yield* d.getTo('stand');
+    const side = d.inward() || (d.chance(0.5) ? 1 : -1);
+    const cr = d.spawn('cricket', { x: d.clampProp(d.center() + side * d.rnd(80, 100), 5), vx: -side * 26, face: -side, tx: d.clampProp(d.center() + side * d.rnd(34, 46), 5), alpha: 0, fadeIn: true, life: 45000 });
+    d.envMark('cricket');
+    for (let i = 0; i < 20 && d.has(cr) && cr.vx; i++) yield { f: 'stand', t: 300 };
+    for (let k = 0, n = d.rint(1, 2); k <= n && d.has(cr); k++) {
+      yield { f: 'up', t: 700, face: d.dirTo(cr), fx: 'note' }; // chirp
+      yield { f: 'hunch', t: 500 };
+      yield { f: 'crouch', t: 300 };
+      if (k === n) break;
+      yield { f: 'jump', t: 400, jump: 6, dx: d.clampX(d.x + d.dirTo(cr) * 14) - d.x, do: (c) => { if (c.has(cr)) cr.vx = c.dirTo(cr) * 30; } }; // too late: it hops off
+      yield { f: 'stand', t: 300, fx: '?' };
+      for (let i = 0; i < 6 && d.has(cr) && cr.vx; i++) yield { f: 'stand', t: 300, face: d.dirTo(cr) };
+    }
+    yield { f: 'stand', t: 300, do: (c) => { if (c.has(cr)) { cr.vx = c.dirTo(cr) * 30; cr.tx = null; } } };
+    for (let i = 0; i < 6 && d.has(cr); i++) yield { f: 'up', t: 300, face: d.dirTo(cr) };
+    yield { f: 'stand', t: 400, fx: 'dots' };
+    if (d.has(cr)) d.fadeOut(cr, 1200);
+  },
+  *feather(d) {
+    // A feather drifts down, this way and that. It watches it all the way and it lands on its head;
+    // that tickles, a sneeze, and up it goes again.
+    yield* d.getTo('stand');
+    d.envMark('feather');
+    const fe = d.spawn('feather', { x: d.clampProp(d.headX() + d.rnd(-20, 20), 4), y: H_SKY, sway: d.rnd(0, 6), life: 40000 });
+    yield { f: 'up', t: 600, fx: '?' };
+    for (let i = 0; i < 24 && d.has(fe) && fe.y > d.height() + 1; i++) {
+      fe.tx = d.headX() - 2 * d.u;
+      yield { f: i % 3 === 2 ? 'blink' : 'up', t: 400, face: d.dirTo(fe) };
+    }
+    if (d.has(fe)) { d.remove(fe); d.wear('feather', 6000); }
+    yield { f: 'stand', t: 800, fx: 'heart' };
+    yield { f: 'up', t: 300 };
+    yield { f: 'yawn', t: 400 }; // aah…
+    yield { f: 'crouch', t: 300, fx: 'puff', dx: -2 * d.face, jump: 2, do: (c) => { c.unwear(); c.spawn('feather', { x: c.clampProp(c.headX() - 2 * c.u, 4), y: c.height(), rise: true, sway: 0, life: 9000 }); } }; // …choo
+    for (let i = 0; i < 4; i++) yield { f: 'up', t: 400 };
+    yield { f: 'stand', t: 400, fx: 'dots' };
+  },
+  *gem(d) {
+    // Something glints in the sand. It digs it up, holds it up to the light, admires it a long while,
+    // and buries it again, for nobody else to find.
+    yield* d.getTo('stand');
+    d.envMark('gem');
+    const x = d.clampProp(d.center() + (d.inward() || d.face) * d.rnd(35, 55), 3);
+    const glint = (c) => c.spark(x + 1.5 * c.u, 1, 3);
+    yield { f: 'stand', t: 500, do: glint };
+    yield { f: 'up', t: 500, fx: '!', face: Math.sign(x - d.center()) || d.face };
+    yield { f: 'stand', t: 400, do: glint };
+    const gm = d.spawn('gem', { x, frame: 1, life: 40000 });
+    yield* d.walkTo(() => d.reach(gm), 0.9, { max: 60 });
+    for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'sniff' : 'crouch', t: 150, do: (c) => c.dirt(2) };
+    yield { f: 'sniff', t: 300, do: (c) => { gm.frame = 0; c.pickUp(gm); } };
+    for (let i = 0; i < 3; i++) yield { f: 'up', t: 600, fx: i === 1 ? 'star' : null, do: (c) => { const m = c.mouthAt(); c.spark(m.x, m.y + 1, 2); } };
+    yield { f: 'up', t: 500, fx: 'heart' };
+    yield { f: 'sniff', t: 300, do: (c) => c.drop(gm, 0) };
+    for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'sniff' : 'crouch', t: 150, do: (c) => { c.dirt(2); if (i === 5) c.remove(gm); } };
+    yield { f: 'stand', t: 300 };
+    yield { f: 'stand', t: 500, face: -d.face, fx: 'dots' }; // nobody saw
+  },
 
   // -- the theme turning dark or light on its schedule --
   *nightfall(d) {
@@ -1659,7 +1744,7 @@ export const ACTIVITIES = {
 };
 
 // Activities that start something of their own in the environment.
-export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm']);
+export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm', 'acorn', 'cricket', 'feather', 'gem']);
 // Activities in the middle of which nothing else should happen in the environment.
 export const ABSORBED = new Set([...ENV_ACTIVITIES, 'cornerBite', 'tightrope', 'plantSeed', 'egg', 'ufo', 'skateboard', 'fireworks', 'grow', 'shrink', 'celebrate', 'zoomies', 'nightfall', 'daybreak']);
 // The streak's special loops, in the order they are unlocked.
@@ -2258,11 +2343,11 @@ export const CATEGORY = {
 // Moods drift every several minutes and tilt the odds.
 export const MOODS = {
   content: { act: {}, react: {} },
-  playful: { act: { photobomb: 1.6, backScratch: 1.3, doodle: 1.3, tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
-  curious: { act: { doodle: 1.6, sniffTrail: 2, explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
-  sleepy: { act: { backScratch: 1.3, strut: 0.4, doodle: 0.6, groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
+  playful: { act: { photobomb: 1.6, doodle: 1.3, tightrope: 1.4, gatherPebbles: 1.2, balloon: 1.6, frog: 1.8, worm: 1.6, cricket: 1.6, acorn: 1.3, fetch: 2.5, hop: 1.6, dance: 1.5, juggle: 2, peekaboo: 1.6, butterfly: 1.4, zoomies: 2, pounce: 2, bubbles: 1.6, pebbleToss: 1.5, somersault: 1.5, wag: 1.5 }, react: { normal: 1.3, absurd: 1.3, big: 1.2 } },
+  curious: { act: { doodle: 1.6, sniffTrail: 2, explore: 2.2, visitPlant: 2, gatherPebbles: 1.6, plantSeed: 1.5, ladybug: 2, dandelion: 1.8, gem: 1.6, feather: 1.5, paperPlane: 1.6, inspect: 2.5, look: 1.5, leaf: 2, butterfly: 2, dig: 1.8, patrol: 1.5, readScript: 1.8, sandcastle: 1.5, ponder: 1.8, watchWriter: 1.5 }, react: { subtle: 1.4, context: 1.3 } },
+  sleepy: { act: { strut: 0.4, doodle: 0.6, groom: 1.4, explore: 0.4, settleIn: 2, tightrope: 0.5, daydream: 2, rest: 1.8, sleep: 2, stretch: 1.5, stargaze: 1.4, doze: 2.5, sunbathe: 1.6, coffeeBreak: 1.5, yoga: 1.4, dance: 0.4, hop: 0.4, zoomies: 0.2 }, react: { none: 2, subtle: 1.3, big: 0.6 } },
   grumpy: { act: { strut: 0.5, photobomb: 0.4, roar: 2.5, look: 1.3, dance: 0.3, rest: 1.2, scratch: 1.5, wag: 0.3, sing: 0.4 }, react: { normal: 1.2, none: 1.6, big: 0.8 } },
-  silly: { act: { strut: 2.2, photobomb: 2, burp: 1.5, backScratch: 1.5, tightrope: 2, trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 2.5, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
+  silly: { act: { strut: 2.2, photobomb: 2, burp: 1.5, tightrope: 2, trip: 2.5, moonwalk: 2, chaseTail: 2, flamingo: 2.5, hiccups: 2, shadowbox: 2, headstand: 1.6, somersault: 2, roll: 2, sing: 1.6 }, react: { absurd: 2, big: 1.4 } },
 };
 
 /** The audit baseline: what 0.8.0 had (activities + click reactions + the cursor glance). */

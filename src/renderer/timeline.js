@@ -3,11 +3,11 @@
 // minute a page until timecodes are pinned to it. Clicking goes there; dragging sideways zooms,
 // dragging the band moves the window, and holding Ctrl (Cmd) steps second by second (a right-click
 // then pins a timecode at that second). A click on a timecode edits it; a right-click on a scene
-// gives it its own timecode, which the script shows beside the heading.
+// gives it its own timecode (kept once confirmed with the check), which the script shows beside the heading.
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
@@ -19,6 +19,7 @@ const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the p
 const FINE_PX = 12; // fewest pixels of mouse travel a second while stepping
 const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.6 5.2A5 5 0 1 1 2 7.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M1.2 1.8v4h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.4l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const NOTE_ICON = '<svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M0.5 0.5h8v5.5H4L1.8 8.2V6H0.5z" fill="currentColor"/></svg>';
 // Stepping is held with Ctrl, or Cmd on a Mac (where Ctrl + click is a right-click).
 const mod = (e) => (MAC ? e.metaKey : e.ctrlKey);
@@ -239,7 +240,7 @@ export class Timeline {
       if (note) return this.openNote(note.id, note.b, note.s, note.e);
       if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, 'top'); // to its heading
       if (near && near.kind === 'tc') { this.go(near.x); return this.editTimecode(near.x, near); }
-      this.go(near ? near.x : at0);
+      this.go(near ? near.at ?? near.x : at0); // (a highlight: its first line, though drawn on its second)
     };
     addEventListener('mousemove', move, true);
     addEventListener('mouseup', up, true);
@@ -471,9 +472,9 @@ export class Timeline {
     const s = this.drawn = this.scale, len = this.length; // positions are read back at the scale they were drawn
     const w = Math.max(this.scroll.clientWidth - PADX * 2, len * s);
     this.inner.style.width = w + 'px';
-    const tl = this.tl = timelineOf(this.ed.blocks, this.view.pages);
     const anchors = this.anchorsDrawn = this.anchors();
     this.time = timeScale(anchors);
+    const tl = this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages), this.time, len); // each on its second, never between two
     this.paintRuler();
     this.reset.hidden = !this.ppp;
 
@@ -488,7 +489,7 @@ export class Timeline {
     const els = this.marks.children; // in the order drawn: the line, the highlights, the scenes, the notes, the timecodes
     const nh = tl.highlights.length, ns = tl.scenes.length, nn = tl.notes.length;
     this.targets = [
-      ...tl.highlights.map((hl, i) => ({ x: hl.x0, kind: 'hl', el: els[1 + i] })),
+      ...tl.highlights.map((hl, i) => ({ x: hl.x0, at: hl.at, color: hl.color, kind: 'hl', el: els[1 + i] })),
       ...tl.scenes.map((sc, i) => ({ ...sc, kind: 'scene', el: els[1 + nh + i] })),
       ...tl.notes.map((n, i) => ({ ...n, kind: 'note', el: els[1 + nh + ns + i] })),
       ...anchors.map((a, i) => ({ ...a, kind: 'tc', el: els[1 + nh + ns + nn + i] })), // last: on a scene, its timecode wins
@@ -544,12 +545,13 @@ export class Timeline {
     let text = formatTime(t ?? this.time.at(x));
     const sceneAt = () => {
       let sc = -1;
-      for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-9; i++) sc = i;
+      for (let i = 0; i < this.tl.scenes.length && this.tl.scenes[i].x <= x + 1e-6; i++) sc = i;
       return sc >= 0 ? this.tl.scenes[sc].text || 'SCENE' : '';
     };
     let more;
     if (near && near.kind === 'tc') more = [near.scene ? sceneAt() : '', near.tag].filter(Boolean).join(' · ') || sceneAt();
     else if (near && near.kind === 'note') more = ((this.session.doc.comments[near.id] || {}).text || 'Note').replace(/\s+/g, ' ').slice(0, 60);
+    else if (near && near.kind === 'hl') more = [sceneAt(), `${near.color} highlight`].filter(Boolean).join(' · ');
     else more = sceneAt();
     if (more) text += '   ' + more;
     this.hover.hidden = false;
@@ -614,14 +616,20 @@ export class Timeline {
     const r = this.withTimecode(at, t);
     if (!r.list) { this.endStep(); return this.editTimecode(x, null, t, r.why); }
     this.setTimecodes(r.list);
+    this.flash(at);
+  }
+
+  /** A moment's flash on the timecode at { b, line }, just pinned or kept. */
+  flash(at) {
     const el = this.targets.find((m) => m.kind === 'tc' && m.id === at.b.id && m.line === at.line)?.el;
     if (el) el.classList.add('new');
   }
 
   /** A small editor under the timecode at x (or at { id, line }, or a new one at x): its exact
    *  time (Up and Down nudge it a second, ten with Shift), an optional tag and a colour; a scene's
-   *  own names the scene. Enter or a click away keeps it, Esc leaves it as it was. Offers t0, or
-   *  the time there now; shows `err` at once. */
+   *  own names the scene. Only the check (or Enter) keeps it; the bin removes it, or drops a new one;
+   *  Esc or a click away leaves everything as it was, so a new one not confirmed is never made.
+   *  Offers t0, or the whole second there now; shows `err` at once. */
   editTimecode(x, existing = null, t0 = null, err = '') {
     this.closeEditor();
     this.endStep();
@@ -629,15 +637,20 @@ export class Timeline {
     if (!at) return;
     const old = this.tcs().find((tc) => tc.id === at.b.id && tc.line === at.line);
     let color = old ? old.color || null : null;
-    const time = h('input', { class: 'tc-time', value: formatTime(t0 ?? (old ? old.t : this.time ? this.time.at(at.here) : at.here * 60)), spellcheck: false, 'aria-label': 'Time (HH:MM:SS)' });
+    const time = h('input', { class: 'tc-time', value: formatTime(t0 ?? (old ? old.t : this.time ? Math.round(this.time.at(at.here)) : at.here * 60)), spellcheck: false, 'aria-label': 'Time (HH:MM:SS)' });
     const tag = h('input', { class: 'tc-tag', value: old && old.tag || '', placeholder: 'Tag', maxlength: 40, spellcheck: false, 'aria-label': 'Tag (optional)' });
     const sws = [null, ...HIGHLIGHT_COLORS].map((c) => h('button', { class: 'tc-sw' + (c === color ? ' on' : ''), title: c ? `Mark ${c}` : 'No colour', 'aria-label': c || 'none', onmousedown: (e) => e.preventDefault(), onclick: () => { color = c; sws.forEach((b, i) => b.classList.toggle('on', i === [null, ...HIGHLIGHT_COLORS].indexOf(c))); } }, h('span', { class: 'sw ' + (c || 'none') })));
     const msg = h('div', { class: 'tc-err' });
-    const del = old ? h('button', { class: 'tc-del', title: 'Remove timecode', 'aria-label': 'Remove timecode', html: TRASH_ICON, onmousedown: (e) => e.preventDefault(), onclick: () => { this.closeEditor(); this.setTimecodes(this.tcs().filter((tc) => tc !== old)); } }) : null;
-    const scene = isSceneTimecode({ id: at.b.id, line: at.line }, [at.b]) ? h('div', { class: 'tc-head', title: at.b.text }, at.b.text || 'SCENE') : null;
-    const pop = h('div', { class: 'tc-pop', role: 'dialog', 'aria-label': scene ? 'Scene timecode' : 'Timecode' }, scene, h('div', { class: 'tc-row' }, time, tag, h('div', { class: 'tc-sws' }, sws), del), msg);
-    const fail = (why) => { msg.textContent = why; pop.classList.add('bad'); time.focus(); };
     const doc = this.session.doc; // another script opened meanwhile: nothing is kept
+    const button = (cls, label, html, run) => h('button', { class: cls, title: label, 'aria-label': label, html, onmousedown: (e) => e.preventDefault(), onclick: run });
+    const ok = button('tc-ok', old ? 'Keep (Enter)' : 'Add timecode (Enter)', CHECK_ICON, () => commit());
+    const del = button('tc-del', old ? 'Remove timecode' : 'Discard (Esc)', TRASH_ICON, () => {
+      this.closeEditor();
+      if (old && this.session.doc === doc) this.setTimecodes(this.tcs().filter((tc) => tc !== old));
+    });
+    const scene = isSceneTimecode({ id: at.b.id, line: at.line }, [at.b]) ? h('div', { class: 'tc-head', title: at.b.text }, at.b.text || 'SCENE') : null;
+    const pop = h('div', { class: 'tc-pop', role: 'dialog', 'aria-label': scene ? 'Scene timecode' : 'Timecode' }, scene, h('div', { class: 'tc-row' }, time, tag, h('div', { class: 'tc-sws' }, sws), ok, del), msg);
+    const fail = (why) => { msg.textContent = why; pop.classList.add('bad'); time.focus(); };
     const commit = () => {
       if (this.session.doc !== doc) return this.closeEditor();
       const t = parseTime(time.value);
@@ -646,6 +659,7 @@ export class Timeline {
       if (!r.list) return fail(r.why);
       this.closeEditor();
       this.setTimecodes(r.list);
+      this.flash(at);
     };
     time.addEventListener('input', () => pop.classList.remove('bad'));
     pop.addEventListener('keydown', (e) => {
@@ -658,13 +672,8 @@ export class Timeline {
         pop.classList.remove('bad');
       }
     });
-    // A click elsewhere keeps it (when it can be kept).
-    const away = (e) => {
-      if (pop.contains(e.target)) return;
-      const t = parseTime(time.value), r = t != null && this.session.doc === doc && this.withTimecode(at, t, tag.value, color);
-      this.closeEditor();
-      if (r && r.list) this.setTimecodes(r.list);
-    };
+    // A click elsewhere changes nothing (only the check keeps it).
+    const away = (e) => { if (!pop.contains(e.target)) this.closeEditor(); };
     document.body.appendChild(pop);
     // Zoomed in, the bar brings the timecode into view first.
     this.reveal(at.here * this.drawn + PADX);
@@ -674,9 +683,9 @@ export class Timeline {
     pop.style.left = left + 'px';
     pop.style.top = hr.bottom + 6 + 'px';
     pop.style.setProperty('--notch', Math.max(8, Math.min(pop.offsetWidth - 8, ax - left)) + 'px');
-    this.editing = { pop, away, x: at.here };
+    this.editing = { pop, away, x: old || !this.time ? at.here : Math.min(this.length, this.time.pos(Math.round(this.time.at(at.here)))) }; // on the second it offers
     this.showEditing();
-    setTimeout(() => { if (this.editing && this.editing.pop === pop) addEventListener('mousedown', away, true); }, 0);
+    addEventListener('mousedown', away, true); // (at once: whatever opened it is past its press, and a listener added while a press is dispatched doesn't hear that one)
     time.focus();
     time.select();
     if (err) fail(err);

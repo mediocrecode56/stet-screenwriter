@@ -97,7 +97,9 @@ line with the cap is where you're typing. **Ctrl+Shift+T** shows or hides it.
   **double-click the ruler** to see the whole script again.
 - **Timecodes** set the clock. The ruler counts a minute a page until you pin real times; then it
   spreads the time between them. **Right-click a scene** to give it its own timecode, shown beside
-  its heading; right-click anywhere else to add one there; click one to change it.
+  its heading; right-click anywhere else to add one there; click one to change it. The **check**
+  (or Enter) keeps it and the **bin** removes it; click away and nothing changes.
+- Scenes, notes and highlights sit on **whole seconds**, never between two.
 - **Hold Ctrl** (**Cmd** on a Mac) over the strip to step through the script a second at a time.
   Only the script moves: the pointer stays put and your caret stays where it was, so nothing else
   in the window reacts. **Click** to put the caret there; a **right-click** pins a timecode at that

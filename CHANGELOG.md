@@ -2,6 +2,15 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.35.0 · 24 Oct 2026
+
+- Timeline: right-clicking a scene opens its timecode with a check and a bin. The check (or Enter) keeps it and the bin removes it. Clicking away or pressing Esc changes nothing, so a scene you right-click for the first time only gets a timecode once you click the check. The same goes for every timecode you add or edit.
+- Timeline: scenes, notes and highlights now sit on the nearest whole second instead of between two, and the time shown when you point at one is that second. Clicking one still takes you to exactly that line.
+- Timeline: a timecode flashes briefly when you keep it, pointing at a highlight says which colour it is, and the timecode editor drops in gently from the bar.
+- The dinosaur spends much less time lying on its back: about a third as often as before.
+- The dinosaur has four new finds, each with its own odds: an acorn that drops out of nowhere (it nudges it along and buries it), a cricket that chirps and is always one hop ahead, a feather that drifts down onto its head and makes it sneeze, and, only rarely, a gem glinting in the sand, which it digs up, admires and buries again.
+- Fix: clicking away from the timecode editor too quickly after it opened could be missed.
+
 ## 0.34.3 · 24 Oct 2026
 
 - Timeline: when you let go of Ctrl (Cmd on a Mac) after stepping, the pointer is on the line, at the place you stepped to, instead of back where you started. While you step, the line stays under the pointer and the timeline slides beneath it.
