@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.34.3 · 24 Oct 2026
+
+- Timeline: when you let go of Ctrl (Cmd on a Mac) after stepping, the pointer is on the line, at the place you stepped to, instead of back where you started. While you step, the line stays under the pointer and the timeline slides beneath it.
+- Timeline: gentler motion. The time readout fades in, scenes, notes and highlights lift slightly as the pointer nears them, the line glides to where you click, and showing the whole script settles in with a slight zoom.
+- Fix: opening a screenplay could delete a recovery copy or backup STET was writing at that very moment.
+- Updates inside STET are about a quarter smaller.
+- Behind the scenes: a tidier code base and a leaner, faster test suite.
+
 ## 0.34.2 · 24 Oct 2026
 
 - Timeline: holding Ctrl (Cmd on a Mac) to step through the script now does only that. The script follows the line, but your caret stays where it was, so nothing else in the window changes, not while you step and not when you let go: not the elements or the alignment in the toolbar, not the status bar, the scene list or the notes. Click while stepping to put the caret there. Let go to stay at that place in the script, or press Esc to go back.
