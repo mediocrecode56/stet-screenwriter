@@ -2,6 +2,10 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.34.1 · 24 Oct 2026
+
+- Timeline: while you hold Ctrl (Cmd on a Mac) to step through the script, the toolbar no longer flickers through ACTION, CHARACTER and the other elements, and the alignment, the status bar, the scene list and the notes stay as they were. Only the line on the timeline and the script move. Everything shows where you are as soon as you let go.
+
 ## 0.34.0 · 23 Oct 2026
 
 - Timeline: holding Ctrl (Cmd on a Mac) now holds the pointer still while you step through the script, so it can no longer drift onto the toolbar or the script and light up or click something there. When you let go it is back on the timeline, where you started. Esc while stepping puts the caret back, and stepping waits until you press Ctrl again.
