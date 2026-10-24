@@ -479,6 +479,7 @@ tabTypesEl.addEventListener('mousedown', (e) => {
     return best;
   };
   const move = (ev) => {
+    if (!(ev.buttons & 1)) return up(); // (let go where no mouseup reached us)
     const i = at(ev.clientX);
     const [na, nz] = left ? [Math.min(i, z), z] : [a, Math.max(i, a)];
     setTabTypes([...outside, ...TYPES.slice(na, nz + 1)], false);
@@ -486,12 +487,14 @@ tabTypesEl.addEventListener('mousedown', (e) => {
   const up = () => {
     removeEventListener('mousemove', move, true);
     removeEventListener('mouseup', up, true);
+    removeEventListener('blur', up);
     tabDrag = null;
     document.body.classList.remove('cyc-dragging');
     setTabTypes(editor.tabTypes || TYPES);
   };
   addEventListener('mousemove', move, true);
   addEventListener('mouseup', up, true);
+  addEventListener('blur', up); // (Alt+Tab mid-drag: no mouseup comes)
 });
 addEventListener('resize', () => renderTabTypes());
 for (const c of HIGHLIGHT_COLORS) {

@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.38.1 · 24 Oct 2026
+
+- Timeline: on Windows, holding Ctrl to step through the script no longer makes the line jump about 20 seconds on the first move.
+- Fix: switching to another window in the middle of a drag (selecting text, widening a side panel, moving the Tab cycle's ends) left the drag going: the selection kept following the pointer with no button held. The drag now ends there.
+- Releases are quicker and more reliable: a new version is built once instead of twice, and a busy build machine no longer stops a release.
+
 ## 0.38.0 · 24 Oct 2026
 
 - Revise works in any language. Claude works out the language of each passage and judges it by that language's own grammar and idiom (and its regional variety, such as Brazilian Portuguese or British English). A character who speaks another language on purpose is reviewed in that language, never translated. Explanations come in the language your script is written in. Passages in Chinese, Japanese, Thai and other languages written without spaces are matched exactly, and an accented letter is found however it is stored.

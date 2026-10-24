@@ -28,16 +28,18 @@ export function resizable(el, { edge, base, locked, onDone }) {
     const x0 = e.clientX, w0 = el.getBoundingClientRect().width, dir = edge === 'right' ? 1 : -1;
     document.body.classList.add('rs-drag');
     el.classList.add('rs-near');
-    const move = (m) => set(w0 + (m.clientX - x0) * dir);
+    const move = (m) => (m.buttons & 1 ? set(w0 + (m.clientX - x0) * dir) : up()); // (let go where no mouseup reached us)
     const up = () => {
       removeEventListener('mousemove', move, true);
       removeEventListener('mouseup', up, true);
+      removeEventListener('blur', up);
       document.body.classList.remove('rs-drag');
       el.classList.remove('rs-near');
       onDone(el.getBoundingClientRect().width);
     };
     addEventListener('mousemove', move, true);
     addEventListener('mouseup', up, true);
+    addEventListener('blur', up); // (Alt+Tab mid-drag: no mouseup comes)
   }, true);
   el.addEventListener('dblclick', (e) => { if (near(e)) { e.preventDefault(); e.stopPropagation(); set(base); onDone(base); } }, true);
   return { set, max };

@@ -297,6 +297,24 @@ test('+NOTE again on the same selection goes back to its note; a new selection m
   await app.until('document.getElementById("right").hidden');
 });
 
+test('a selecting drag let go out of sight ends: the selection stays, it no longer follows the pointer', async () => {
+  await app.load([['action', 'One line to select across, and on.']]);
+  const line = await app.eval(`(() => { const r = [...document.querySelectorAll('.page:not(.metric-probe) .l')].find((l) => l.textContent.startsWith('One line')).getBoundingClientRect(); return { left: r.left, y: r.top + r.height / 2 }; })()`);
+  const sel = () => app.eval('JSON.stringify(__stet.editor.sel)');
+  for (const away of ['blur', 'buttons']) {
+    await app.mouse('mousePressed', line.left + 2, line.y, { button: 'left', buttons: 1, clickCount: 1 });
+    await app.move(line.left + 60, line.y, { buttons: 1 });
+    // Alt+Tab mid-drag (the window loses the focus), or the button let go where no mouseup came.
+    if (away === 'blur') await app.eval(`window.dispatchEvent(new Event('blur'))`);
+    else await app.move(line.left + 70, line.y);
+    const held = await sel();
+    assert.equal(await app.eval('__stet.input.drag'), null, `${away}: the drag is over`);
+    await app.move(line.left + 160, line.y);
+    assert.equal(await sel(), held, `${away}: the selection no longer follows the pointer`);
+    await app.mouse('mouseReleased', line.left + 160, line.y, { button: 'left', clickCount: 1 });
+  }
+});
+
 test('the caret, the selection and clicks sit on the drawn letters at display scales 1 and 1.5 and every zoom', async () => {
   // Regression: v0.3.0 drew the caret into the text (inherited letter-spacing).
   const LINE = 'INT. COFFEE SHOP - NIGHT AND THE RAIN KEEPS FALLING ON IT';

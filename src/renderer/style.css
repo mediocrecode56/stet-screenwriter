@@ -572,7 +572,6 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-stage { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 18px; }
 .rv-stage-t { color: var(--ink); }
 .rv-el { color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.rv-err { color: var(--ink); border-left: 2px solid var(--ink); padding-left: 6px; display: block; }
 .rv-lost { color: var(--ink-3); font-size: 10px; margin: 0 0 6px; border-left: 2px solid var(--rule); padding-left: 8px; }
 .rv-dec { color: var(--ink-3); margin-right: 6px; text-transform: uppercase; letter-spacing: .14em; font-size: 9px; }
 .rv-fail { padding: 7px 14px; border-bottom: 1px solid var(--rule); box-shadow: inset 2px 0 0 var(--ink); line-height: 1.5; overflow-wrap: anywhere; }

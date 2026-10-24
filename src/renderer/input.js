@@ -46,7 +46,9 @@ export class Input {
     const sc = view.scroller;
     sc.addEventListener('mousedown', (e) => this.mousedown(e));
     window.addEventListener('mousemove', (e) => this.mousemove(e));
-    window.addEventListener('mouseup', () => { if (this.drag) { this.drag = null; clearInterval(this.autoScroll); } });
+    window.addEventListener('mouseup', () => this.endDrag());
+    // The button let go while the window was away (Alt+Tab mid-drag): no mouseup ever comes.
+    window.addEventListener('blur', () => this.endDrag());
     const wz = new WheelZoom();
     sc.addEventListener('wheel', (e) => {
       if (!e.ctrlKey && !(MAC && e.metaKey)) return; // a trackpad pinch arrives with ctrlKey
@@ -265,8 +267,16 @@ export class Input {
     this.after();
   }
 
+  /** A selecting drag is over: the selection stays, the edge scrolling stops. */
+  endDrag() {
+    if (!this.drag) return;
+    this.drag = null;
+    clearInterval(this.autoScroll);
+  }
+
   mousemove(e) {
     if (!this.drag) return;
+    if (!(e.buttons & 1)) return this.endDrag(); // (let go where no mouseup reached us)
     this.lastMouse = e;
     this.extendTo(e.clientX, e.clientY);
   }
