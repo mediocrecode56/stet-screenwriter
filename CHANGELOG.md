@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.39.1 · 24 Oct 2026
+
+- Timeline: the fade behind the whole-script button is subtler. It is narrower, has no blur, blends smoothly into the bar with no visible edge, and clears quickly when the pointer leaves the bar. The grid clears just as quickly.
+- Notices (a dictionary installed, say) rise in from the status bar and sink back down, centred the whole time. Before, they jerked sideways as they appeared and left. A newer notice now replaces the text in the same box instead of the box vanishing and arriving again.
+- Smoother timeline marks: a highlight or scene tick under the pointer now eases in like the rest, instead of snapping its glow.
+- Hover is consistent everywhere: a note, a Revise card, the spelling menu's actions and the recent-files buttons light up at once under the pointer and fade out as it leaves, like every other row and button.
+
 ## 0.39.0 · 24 Oct 2026
 
 - File > Restore Backup (Ctrl+Shift+B) is redesigned. It lists the backups of the screenplay you have open, newest first and grouped by day (Today, Yesterday, then the date). Each row shows when the backup was made, how long ago, how many words it holds, how that compares with your script now ("−120 vs now"), and its size.

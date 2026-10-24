@@ -142,6 +142,16 @@ test('every panel, bar, dialog and menu arrives with the same slide; Find search
   assert.equal(await anims('.menu'), 1, 'a menu drops in');
   await app.key('Escape');
   await app.until('document.querySelectorAll(".menu").length === 0');
+  // A notice rises in centred (its own transform kept, no sideways jump); a newer one takes the same box.
+  const t = await app.eval(`(() => { __stet.spelling.notify('one'); const el = document.querySelector('.toast'); const a = el.getAnimations()[0]; a.pause(); a.currentTime = 1;
+    const r = { transform: getComputedStyle(el).transform, translate: getComputedStyle(el).translate }; a.play(); __stet.spelling.notify('two'); r.boxes = document.querySelectorAll('.toast').length; r.text = el.textContent; return r; })()`);
+  assert.match(t.transform, /^matrix\(1, 0, 0, 1, -\d/, `still centred while it arrives (${t.transform})`);
+  assert.ok(parseFloat(t.translate.split(' ')[1]) > 0, `from below (${t.translate})`);
+  assert.deepEqual([t.boxes, t.text], [1, 'two']);
+  // The timeline's fade behind the reset button: no blur, and it clears faster than it came.
+  const fade = await app.eval(`(() => { const f = document.querySelector('#timeline .tl-fade'), s = getComputedStyle(f); return { blur: s.backdropFilter, out: parseFloat(s.transitionDuration), into: parseFloat(getComputedStyle(document.querySelector('#timeline .tl-hover') || f).getPropertyValue('--dur-tl')) }; })()`);
+  assert.equal(fade.blur, 'none');
+  assert.ok(fade.out > 0 && fade.out * 1000 < fade.into, `out ${fade.out}s, in ${fade.into}ms`);
   // Reduced motion: no movement at all.
   await app.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await app.key('Mod+F');

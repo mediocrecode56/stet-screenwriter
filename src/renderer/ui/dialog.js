@@ -65,7 +65,7 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
       ov.removeEventListener('mousedown', onDown);
       active = null;
       dlg.inert = true;
-      if (!reducedMotion()) dlg.animate([{ transform: 'none' }, { transform: 'translateY(-4px)' }], { duration: DUR_FAST, easing: EASE_IN_OUT, fill: 'forwards' });
+      if (!reducedMotion()) dlg.animate([{ translate: '0 0' }, { translate: '0 -4px' }], { duration: DUR_FAST, easing: EASE_IN_OUT, fill: 'forwards' });
       leaving = leave(ov, () => { leaving = null; ov.hidden = true; ov.replaceChildren(); }, { dist: 0 });
       restoreTo = prevFocus;
       if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });

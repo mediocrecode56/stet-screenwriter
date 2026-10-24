@@ -55,10 +55,13 @@ export function setPanel(el, want) {
   setTimeout(() => { if (el._anim === a) { a.cancel(); done(); } }, dur + 80);
 }
 
-/** A floating surface (dialog, menu) arrives: a short drop into place, a touch of scale, while it fades in. */
+// The moves use the individual translate and scale properties, never transform, so a surface that
+// places itself with a transform of its own (the toast, centred with translateX(-50%)) keeps it.
+
+/** A floating surface (dialog, menu) arrives: a short drop into place (a negative dist rises), a touch of scale, while it fades in. */
 export function arrive(el, { dist = 6, dur = DUR_PANEL, scale = 1 } = {}) {
   if (reduced.matches) return;
-  el.animate([{ opacity: 0, transform: `translateY(${-dist}px) scale(${scale})` }, { opacity: 1, transform: 'none' }], { duration: dur, easing: EASE_OUT });
+  el.animate([{ opacity: 0, translate: `0 ${-dist}px`, scale: String(scale) }, { opacity: 1, translate: '0 0', scale: '1' }], { duration: dur, easing: EASE_OUT });
 }
 
 /**
@@ -70,7 +73,7 @@ export function leave(el, done, { dist = 4, dur = DUR_FAST } = {}) {
   if (reduced.matches) { done(); return () => {}; }
   el.style.pointerEvents = 'none';
   let over = false;
-  const a = el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateY(${-dist}px)` }], { duration: dur, easing: EASE_IN_OUT, fill: 'forwards' });
+  const a = el.animate([{ opacity: 1, translate: '0 0' }, { opacity: 0, translate: `0 ${-dist}px` }], { duration: dur, easing: EASE_IN_OUT, fill: 'forwards' });
   const finish = () => { if (over) return; over = true; a.cancel(); el.style.pointerEvents = ''; done(); };
   a.onfinish = finish;
   const t = setTimeout(finish, dur + 80);
