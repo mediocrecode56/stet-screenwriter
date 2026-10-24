@@ -2,6 +2,17 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## Unreleased
+
+- Spelling: a new SPELLING menu on the toolbar. It uses the dictionaries already installed on your computer (from LibreOffice, Firefox or your system; on a Mac, its own checker): pick the language there, and switch spelling on or off.
+- Spelling: only obvious slips are marked, with a thin pale red underline. Names, all-caps words, scene headings and cues are left alone. Right-click a marked word for the fix, or use the small Dictionary button to add it to your dictionary (every screenplay) or Ignore to leave it be in this script. STET remembers both; Tools > Dictionary & Ignored lists them.
+- Spelling: with Auto on, those same slips are corrected as you press Space. Ctrl+Z takes a correction back.
+- Timeline: the little cap on the line is centred again (it sat half a pixel to the left), and the scene you're in is drawn as a slightly thicker stretch of the line, so you can see where you are and how long the scene runs.
+- The dinosaur's new routines: it crumples up a page of its own draft and tosses it over its shoulder (sometimes it has second thoughts), laps at a puddle after the rain (more so after a run about), and, rarely, finds a stick and settles down to chew it.
+- The dinosaur answers clicks more quietly: sitting, lying down or busy with something, it looks round at you from where it is instead of leaping up, and leaps come more as the clicks keep coming.
+- While STET rests in the background (the dinosaur in a deep sleep), the clock in the status bar checks the time once a minute instead of every second. A minimised window, or one with the companion turned off, now rests the same way.
+- Fix: right-clicking the page moved the keyboard away from the script, so the next keys you typed went nowhere until you clicked the page.
+
 ## 0.35.0 · 24 Oct 2026
 
 - Timeline: right-clicking a scene opens its timecode with a check and a bin. The check (or Enter) keeps it and the bin removes it. Clicking away or pressing Esc changes nothing, so a scene you right-click for the first time only gets a timecode once you click the check. The same goes for every timecode you add or edit.

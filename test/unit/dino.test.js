@@ -553,7 +553,7 @@ test('a scratch on its back, a strut, a burp after a meal, a photobomb: each whe
     ['photobomb', ['up', 'armsUp'], (d) => { d.spawn('palm', { x: d.clampProp(d.center() + 90, 11), frame: 3, life: 1e9 }); }],
   ]) for (const start of ['sit', 'stand', 'lie']) {
     const d = doing('look', name.length * 3 + start.length, setup);
-    d.frame = start; d.pending = name; d.gen = null;
+    d.frame = start; d.step = null; d.pending = name; d.gen = null; // (no step left over from another posture)
     const seen = new Set();
     let lens = 0;
     until(d, () => d.recent.includes(name) && d.activity !== name, 60000, `${name} from ${start}`, () => { if (d.activity === name) { seen.add(d.frame); lens++; } walksNotSlides(d); inView(d); });
@@ -577,4 +577,54 @@ test('a scratch on its back, a strut, a burp after a meal, a photobomb: each whe
     run(g, 20 * MINUTE, { from: g.now, dt: 150, each: () => { writer(g, rng)(); if (g.activity === 'graze') ate = true; if (ate && g.activity === 'burp') burps++; } });
   }
   assert.ok(burps > 0, 'a burp after grazing');
+});
+
+test('a crumpled page, a drink at the puddle, a stick to chew: each when it fits, each plays through and tidies up', () => {
+  // When: the page often, the stick seldom, the drink only with a puddle (the more after a run about).
+  const c = world(640);
+  const k = chosen(c, 12000, 1e9, (d) => { d.lastEnv = {}; });
+  assert.ok(k.crumple > k.stick && k.stick > 0, `the page more often than the stick (${k.crumple}, ${k.stick})`);
+  assert.ok(!k.drink, 'no drink without a puddle');
+  const pd = c.spawn('puddle', { x: c.clampProp(c.center() + 80, 9), life: 1e12 });
+  const calm = chosen(c, 6000).drink || 0, after = chosen(c, 6000, 1e9, (d) => { d.activity = 'zoomies'; }).drink || 0;
+  assert.ok(calm > 0 && after > 1.5 * calm, `a drink, the more after a run (${calm} → ${after})`);
+  c.remove(pd);
+  // How: from any posture, with its own props and frames, and nothing of it left behind.
+  for (const [name, props, frames, setup] of [
+    ['crumple', ['page', 'wad'], ['sitUp', 'up']],
+    ['drink', [], ['sniff', 'sniffBlink'], (d) => { d.spawn('puddle', { x: d.clampProp(d.center() + 70, 9), life: 1e12 }); }],
+    ['stick', ['stick'], ['chomp', 'lie']],
+  ]) for (const start of ['sit', 'stand', 'lie']) {
+    const d = doing('look', name.length * 5 + start.length, setup);
+    d.frame = start; d.step = null; d.pending = name; d.gen = null;
+    const seen = new Set(), kinds = new Set();
+    until(d, () => d.recent.includes(name) && d.activity !== name, 60000, `${name} from ${start}`, () => { if (d.activity === name) { seen.add(d.frame); for (const p of d.props) kinds.add(p.kind); } walksNotSlides(d); inView(d); });
+    assert.ok(frames.every((f) => seen.has(f)) && props.every((p) => kinds.has(p)), `${name} from ${start}: ${[...seen]} / ${[...kinds]}`);
+    run(d, 70000, { from: d.now + 50, each: () => { d.pending = d.pending || 'look'; } });
+    assert.ok(!d.props.some((p) => props.includes(p.kind)), `${name}: tidied up (${d.props.map((p) => p.kind)})`);
+  }
+});
+
+test('clicks are answered quietly and from where it is: few leaps when settled, more as the clicks keep coming', () => {
+  const lively = Object.keys(REACTIONS).filter((n) => REACTIONS[n].lively);
+  const leaps = (c, a = 1) => {
+    let n = 0, now = c.now;
+    const saved = { history: c.history, lastUsed: c.lastUsed };
+    for (let i = 0; i < 600; i++) { now += 9000; c.history = []; c.lastUsed = {}; if (lively.includes(c.chooseReaction(now, a, c.context()))) n++; }
+    Object.assign(c, saved);
+    return n / 600;
+  };
+  const standing = doing('look', 11);
+  const first = leaps(standing), more = leaps(standing, 4);
+  assert.ok(first < 0.12, `a first click on its feet: mostly no leap (${first})`);
+  assert.ok(more > 1.3 * first, `the clicks keep coming: livelier (${first} → ${more})`);
+  for (const a of ['readScript', 'daydream', 'sleep']) {
+    const c = doing(a, 12);
+    run(c, 4000, { from: c.now + 50, dt: 50 });
+    assert.ok(leaps(c) < 0.03, `${a} (${c.frame}): hardly ever leaps up (${leaps(c)})`);
+  }
+  // Settled, it looks round from where it is: up from lying, up from sitting.
+  const lying = doing('daydream', 13);
+  run(lying, 3000, { from: lying.now + 50, dt: 50 });
+  assert.ok(share(answers(lying), ['glance', 'smile', 'ack', 'tilt']) > 0.2, 'a look round from where it lies');
 });

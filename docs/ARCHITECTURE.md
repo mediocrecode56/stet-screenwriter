@@ -20,17 +20,20 @@ src/
     stats.js       writing-statistics ledger (pure);  plaintext.js  clipboard interchange
     streak.js      the writing streak: day rules, milestones, growth and unlocks
     chart.js       the weekly chart's adaptive scale and number formatting
+    spell.js       spelling with Hunspell dictionaries: affix rules, obvious slips, the words worth checking
   main/        Electron main process: all disk I/O
     main.js        window, stet:// protocol, IPC handlers, print, close flow
     container.js   binary container (header, CRC-32, gzip)
     files.js       atomic writes, save queue, backups, retention, recovery
     store.js       settings JSON store;  statsstore.js  the saved statistics (backups, upgrades, reset)
     pdf-worker.js  worker thread: JSON -> pages -> PDF bytes
+    spell.js       the dictionaries installed on the computer;  spell-worker.js  the worker thread that checks words
   renderer/    sandboxed UI (no Node access)
     app.js         composition root, commands, document operations
     view.js        virtualised page renderer, caret/selection overlays, hit testing, zoom
     input.js       keyboard, mouse, clipboard, IME
     session.js     save / autosave / recovery / backup orchestration
+    spelling.js    spelling: underlines, the right-click fixes, Auto, the toolbar menu
     dino.js        the writing companion: behaviour engine and canvas;  dino-acts.js  its repertoire;  dino-art.js  its pixel art
     ui/            menus + palette (one command registry), dialogs, panels, find bar
   preload.cjs  whitelisted IPC bridge
@@ -217,12 +220,16 @@ else going on (`Critter.dormant`), the sleep loop yields one still `lie` step of
 `TIMING.dormantTick` (60 s) instead of breaths, `tickDelay()` ticks only when
 something is due (a tuft, at most once a minute), and `Dino.onDormant` lets the
 app rest: `:root.dormant` pauses every CSS animation, the goal poll stops and the
-theme poll slows to a minute. Autosave, backups and saving are untouched. Focus
-ends the still step at once (a breath on the next tick), clears the class, restarts
-the polls and refreshes the goal and theme; the deep wake-up follows as before.
+theme poll and the status bar clock slow to a minute (the clock on the turn of
+each minute). A window minimised, or the companion turned off, rests the app the
+same way once it has been `deepSleep` in the background: with no ticks to notice it,
+`Dino.schedule()` arms one timer for that moment. Autosave, backups and saving are
+untouched. Focus ends the still step at once (a breath on the next tick), clears the
+class, restarts the polls and refreshes the goal and theme; the deep wake-up follows
+as before.
 
 The pixel art (`dino-art.js`: frames, props, glyphs as character grids) and
-the repertoire (`dino-acts.js`: 79 activities and 102 reactions, generator
+the repertoire (`dino-acts.js`: 93 activities and 105 reactions, generator
 functions yielding short steps of ≤ 1.5 s) are data for the engine in
 `dino.js`. `Critter` is the behaviour engine, pure and simulated in tests for
 hours at a time: props with a little physics, a drifting mood and a memory of
@@ -231,7 +238,9 @@ recent activities and reactions that tilt weighted choices. A click captures
 carries or wears, what is near (a ball, a flower, a puddle, the palm), the
 rain, the time of day — and picks a reaction by weight (category × agitation ×
 mood × fit to that context × how recently it was used × cooldown); context
-reactions only exist where they fit. At most two queue, they run at the next
+reactions only exist where they fit. Leaps (`lively`) are rare while it is settled (sitting,
+lying, absorbed, carrying something), where it answers from where it is (`glance`),
+and come more as clicks keep coming. At most two queue, they run at the next
 step boundary, and the interrupted activity then resumes. The pointer is not
 tracked at all: only a click tells it where you are.
 
@@ -318,3 +327,37 @@ JavaScript, and slower on accented and non-Latin text. The JavaScript version sh
 (`src/core/text.js`, 2.5× faster than the old regex, fuzz-tested against it); the experiment is in
 git history (`git checkout v0.18.5 -- bench/native-experiment`). A future native-shaped workload
 would follow the same shape: one batched call, behind a worker like `src/main/pdf-worker.js`.
+
+## Spelling
+
+Spelling uses the dictionaries already installed on the computer: Hunspell `.dic`
+files with their `.aff`, as LibreOffice, Firefox, the Windows spelling folder
+(`%APPDATA%\Microsoft\Spelling`), a Mac's `~/Library/Spelling` and Linux
+(`/usr/share/hunspell`) keep them (`src/main/spell.js` looks one or two folders
+down). A Mac can also use its own checker ("macOS (automatic)"), through
+Chromium's (`webFrame.isWordMisspelled`, enabled only then). Electron's own
+checker downloads Hunspell files from Google on Windows and Linux, so it isn't
+used there.
+
+`src/core/spell.js` (pure, unit-tested) reads the `.aff` (flags in any of the
+four notations, aliases, prefixes and suffixes with their conditions, `REP`,
+`TRY`, `NEEDAFFIX`, `FORBIDDENWORD`) and checks a word by taking a suffix
+and/or a prefix off by those rules and looking the stem up with the right flag,
+never by listing every form: a large dictionary stays a few megabytes. Only an
+obvious slip is flagged: a word it doesn't know that is one edit (a swapped
+pair, a known slip, a doubled letter, a wrong, missing or extra letter) from
+words it does. Auto corrects only when one fix stands out. Words under three
+letters, all caps, with a capital inside, capitalised mid-sentence (names),
+by a digit, a slash or a dot are never checked, nor the cast's names. Scene
+headings, cues and transitions aren't checked at all.
+
+The checking runs in a worker thread (`spell-worker.js`); the renderer
+(`src/renderer/spelling.js`) sends each word it hasn't seen yet once, keeps the
+answers, and recomputes the underlines from them on every edit or caret move
+(the word being typed is underlined once the caret leaves it). The words added
+to the dictionary are the same list Claude's revision uses
+(`settings.dictionary`), and the words ignored are kept with the script in
+`doc.revision.ignored` (category `spelling`), so Tools > Dictionary & Ignored
+lists both. The tests use a small dictionary of their own
+(`test/fixtures/hunspell`, via `STET_DICT_DIRS` and `STET_DICT_ONLY`), the same
+on every machine.

@@ -18,7 +18,7 @@ import { cueName } from './model.js';
 
 export const MODEL = 'claude-opus-5-5';
 export const CATEGORIES = ['grammar', 'non_native', 'awkward'];
-export const CATEGORY_LABEL = { grammar: 'Grammar Error', non_native: 'Non-Native Construction', awkward: 'Awkward Phrasing' };
+export const CATEGORY_LABEL = { grammar: 'Grammar Error', non_native: 'Non-Native Construction', awkward: 'Awkward Phrasing', spelling: 'Spelling' }; // (spelling: words ignored by Spelling)
 export const CONFIDENCE = ['high', 'medium', 'low'];
 
 // Elements Claude may flag. Scene headings, cues, transitions and shots are

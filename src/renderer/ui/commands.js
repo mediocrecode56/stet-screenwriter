@@ -110,6 +110,7 @@ function showMenu(btn, items) {
   const switching = !!openMenu; // moving along the menu bar: the next menu is simply there
   closeMenu(false);
   const el = h('div', { class: 'menu' });
+  el.addEventListener('mousedown', (e) => e.preventDefault()); // the script keeps the keyboard
   for (const it of typeof items === 'function' ? items() : items) {
     if (it === '-') { el.appendChild(h('div', { class: 'msep' })); continue; }
     const c = typeof it === 'string' ? commands.get(it) : it;

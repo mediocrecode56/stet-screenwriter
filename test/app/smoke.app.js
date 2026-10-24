@@ -144,6 +144,10 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   const s9 = await app.rect('#timeline .tl-scene', 8);
   await app.click(s9.left + 1, s9.top + 6);
   assert.equal(await app.eval('__stet.editor.block.text'), 'INT. ROOM 9 - DAY');
+  // Its scene: a thicker stretch of the line from its tick to the next; the playhead's cap centred on the line.
+  const s10 = await app.rect('#timeline .tl-scene', 9);
+  await app.until(async () => { const c = await app.rect('#timeline .tl-cur'); return Math.abs(c.left - s9.left) < 1 && Math.abs(c.right - s10.left) < 1; }, { what: 'the stretch of scene 9' });
+  assert.equal(await app.eval(`(() => { const h = document.querySelector('#timeline .tl-head').getBoundingClientRect(), c = getComputedStyle(document.querySelector('#timeline .tl-head'), '::before'); return h.left + h.width / 2 - (h.left + parseFloat(c.left) + (parseFloat(c.width) + parseFloat(c.borderLeftWidth) + parseFloat(c.borderRightWidth)) / 2); })()`), 0, 'the cap centred on the line');
   // Pointing a few pixels off a scene: the tick lights up and the line sits on it.
   const s5 = await app.rect('#timeline .tl-scene', 4);
   await app.move(s5.left + 4, s5.top + 6);
@@ -333,6 +337,50 @@ test('the timeline: a timecode sets the pace of the ruler; crowded labels give w
   await app.key('Mod+Shift+T');
   assert.equal(await app.eval('document.getElementById("timeline").hidden'), true);
   await app.key('Mod+Shift+T');
+});
+
+// ---- spelling ----
+
+/** Click a row of the open menu by its text, for real (not one still fading out). */
+async function menuRow(text) {
+  const r = await app.eval(`(() => { const m = [...document.querySelectorAll('.menu .mi, .sp-menu .sp-act')].find((x) => x.closest('.menu').style.pointerEvents !== 'none' && x.textContent.trim().startsWith(${JSON.stringify(text)})); if (!m) return null; const b = m.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+  assert.ok(r, 'a menu row ' + text);
+  await app.click(r.x, r.y);
+}
+
+test('spelling: obvious slips underlined (names left alone), fixed, added or ignored from a right-click; Auto corrects on Space', async () => {
+  await app.load([['action', 'Mara opens teh door. Rain on the glass, dorr open.'], ['character', 'MARA'], ['dialogue', 'I recieve nothing, Mara.']]);
+  const flagged = () => app.eval('__stet.spelling.marks.map((m) => m.word)');
+  await app.until(`document.querySelectorAll('.spr').length === 3`, { what: 'three underlines' });
+  assert.deepEqual(await flagged(), ['teh', 'dorr', 'recieve'], 'the slips, not the name');
+  const rightClick = async () => { const r = await app.rect('.spr'); await app.click(r.x, r.y, { button: 'right' }); await app.until(`[...document.querySelectorAll('.sp-menu')].some((m) => m.style.pointerEvents !== 'none')`, { what: 'the spelling menu' }); };
+  // A fix from the menu: one undo step, the caret where it was.
+  await rightClick();
+  assert.equal(await app.eval(`[...document.querySelectorAll('.sp-menu .sp-fix')].map((x) => x.textContent).join()`), 'the', 'its one fix');
+  await menuRow('the');
+  await app.until(`__stet.editor.blocks[0].text.startsWith('Mara opens the door.')`, { what: 'the fix' });
+  // Ignored in this script (kept with it), added to the dictionary (every script).
+  const drawn = (n) => app.until(`document.querySelectorAll('.spr').length === ${n}`, { what: n + ' underlines drawn' });
+  await drawn(2);
+  assert.deepEqual(await flagged(), ['dorr', 'recieve']);
+  await rightClick(); await menuRow('IGNORE');
+  await drawn(1);
+  assert.deepEqual(await flagged(), ['recieve'], 'dorr ignored');
+  assert.deepEqual(await app.eval('__stet.session.doc.revision.ignored'), [{ text: 'dorr', category: 'spelling' }]);
+  await rightClick(); await menuRow('DICTIONARY');
+  await drawn(0);
+  assert.ok((await app.eval('__stet.settings().dictionary')).includes('recieve'));
+  // Auto, from the toolbar's SPELLING menu: Space corrects the word just finished; Ctrl+Z takes it back.
+  await app.clickOn('#btn-spell'); await menuRow('Auto');
+  await app.until('__stet.spelling.opts.auto');
+  const end = await app.eval('__stet.editor.blocks[0].text.length');
+  await app.caret(0, end);
+  await app.type(' Rain wlak ');
+  await app.until(`__stet.editor.blocks[0].text.endsWith(' Rain walk ')`, { what: 'wlak corrected (and the keyboard still with the script after the menus)' });
+  await app.key('Mod+Z');
+  assert.ok((await app.eval('__stet.editor.blocks[0].text')).endsWith(' Rain wlak '), 'undone, the space kept');
+  await app.clickOn('#btn-spell'); await menuRow('Auto');
+  await app.until('!__stet.spelling.opts.auto');
 });
 
 test('a changed shortcut works, and the old keys no longer do', async () => {

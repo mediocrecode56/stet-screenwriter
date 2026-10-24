@@ -19,6 +19,7 @@ import * as dialogs from './ui/dialogs.js';
 import { initUpdates } from './ui/update.js';
 import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
+import { Spelling } from './spelling.js';
 import { Timeline } from './timeline.js';
 import { launchOrder } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
@@ -83,6 +84,17 @@ const revision = new Revision({
   onShow: (on) => { $('btn-rev').classList.toggle('on', on); view.layoutDirty = true; view.schedule(); },
 });
 
+// Spelling with the dictionaries installed on the computer (the toolbar's SPELLING menu).
+const spelling = new Spelling({
+  api, editor, view, session,
+  getSettings: () => settings,
+  setSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
+  after: () => { input.after(); input.focus(); },
+  onState: () => renderSpelling(),
+});
+input.onSpace = () => spelling.spaced();
+view.scroller.addEventListener('contextmenu', (e) => spelling.contextMenu(e));
+
 const timeline = new Timeline($('timeline'), {
   editor, view, session, jump,
   openNote: (id, b, s, e) => { jump(pos(b, s), true, pos(b, e), true); view.activeComment = id; openNote(id); view.invalidate(); },
@@ -106,7 +118,9 @@ editor.onChange = () => {
     notes.refresh();
     if (find.open) find.schedule();
     revision.documentChanged();
+    spelling.changed();
   }
+  spelling.paint(); // (the word being typed is flagged only once the caret leaves it)
   // Caret inside commented text makes that note current.
   const b = editor.block;
   {
@@ -132,6 +146,7 @@ function onDocLoaded(s) {
   lastRev = editor.rev;
   scenes.lastKey = ''; notes.lastKey = '';
   revision.reset();
+  spelling.changed();
   scenes.refresh(); notes.refresh(true);
   renderTitle();
   if (find.open) find.search(true);
@@ -251,13 +266,16 @@ function renderGoal() {
   if (dino && key !== streakShown) { dino.setStreak({ growth: k.growth, unlocked: k.unlocked }, streakShown != null); streakShown = key; }
 }
 // The streak ends at midnight after a day without writing: check now and then, not only when writing.
-// The theme schedule is checked on a short poll too (refreshTheme). While the dinosaur is dormant (deep
-// asleep, the app long in the background) both rest: no goal check, the theme once a minute.
+// The theme schedule is checked on a short poll too (refreshTheme). While the app rests (the dinosaur
+// dormant, or the window long in the background) they rest too: no goal check, the theme and the
+// clock once a minute.
 let goalPoll = 0, themePoll = 0;
 function polls(resting = false) {
   clearInterval(goalPoll); clearInterval(themePoll);
   goalPoll = resting ? 0 : setInterval(() => { if (!document.hidden) renderGoal(); }, 60000);
   themePoll = setInterval(refreshTheme, resting ? 60000 : 15000);
+  clockRest = resting;
+  tickClock();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) renderGoal(); });
 
@@ -274,13 +292,15 @@ function renderSaveState(s) {
 }
 
 // A plain digital clock in the status bar. Checked every second, so it is right again at once
-// after sleep or a change of time or time zone.
+// after sleep or a change of time or time zone; while the app rests, just as each minute turns.
+let clockTimer = 0, clockRest = false;
 function tickClock() {
-  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  clearTimeout(clockTimer);
+  const now = new Date(), t = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if ($('st-clock').textContent !== t) $('st-clock').textContent = t;
+  clockTimer = setTimeout(tickClock, clockRest ? 60050 - (now.getTime() % 60000) : 1000);
 }
 tickClock();
-setInterval(tickClock, 1000);
 
 function renderTitle() {
   const name = session.path ? session.name : (session.doc && session.doc.titlePage.title) || 'Untitled';
@@ -481,6 +501,16 @@ for (const s of STYLE_CMDS) {
 const alignBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-align', title: 'Alignment', 'aria-haspopup': 'menu', html: alignIcon('left') + '<span class="dn">▾</span>' });
 alignBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(alignBtn, ALIGN_CMDS.map((x) => 'align-' + x.a)); });
 $('albar').appendChild(alignBtn);
+// Spelling: its switch, Suggestions, Auto and the dictionaries installed, in a small menu.
+const spellBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-spell', title: 'Spelling', 'aria-haspopup': 'menu', html: 'SPELLING<span class="dn">▾</span>' });
+spellBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(spellBtn, () => spelling.menuItems()); });
+$('btn-comment').after(dlg.h('div', { class: 'sep' }), spellBtn);
+function renderSpelling() {
+  const o = spelling.opts, lang = spelling.lang;
+  spellBtn.classList.toggle('off', !o.on || !spelling.ready);
+  spellBtn.title = !spelling.list.length ? 'Spelling: no dictionaries installed on this computer'
+    : !o.on ? 'Spelling: off' : `Spelling: ${lang ? lang.label : 'no dictionary'}${o.suggest ? '' : ', no suggestions'}${o.auto ? ', corrects as you type' : ''}`;
+}
 tip($('btn-comment'), 'Comment on selection', 'note-add');
 tip($('btn-rev'), 'English revision with Claude', 'revise-next', ' next suggestion');
 tip($('btn-scenes'), 'Scene navigator', 'panel-scenes');
@@ -1007,7 +1037,10 @@ cmd.register([
   { id: 'revise-run', cat: 'Tools', label: 'Review English with Claude…', run: () => { revision.show(true); revision.start(); } },
   { id: 'revise-next', cat: 'Tools', label: 'Next Suggestion', keys: 'F7', global: true, run: () => revision.step(1) },
   { id: 'revise-prev', cat: 'Tools', label: 'Previous Suggestion', keys: 'Shift+F7', global: true, run: () => revision.step(-1) },
-  { id: 'revise-dict', cat: 'Tools', label: 'Dictionary & Ignored…', run: () => dictionaryDialog(revision) },
+  { id: 'spell-toggle', cat: 'Tools', label: 'Spelling', checked: () => spelling.opts.on, run: () => spelling.set({ on: !spelling.opts.on }) },
+  { id: 'spell-suggest', cat: 'Tools', label: 'Spelling Suggestions', checked: () => spelling.opts.suggest, enabled: () => spelling.opts.on, run: () => spelling.set({ suggest: !spelling.opts.suggest }) },
+  { id: 'spell-auto', cat: 'Tools', label: 'Correct Spelling as You Type', checked: () => spelling.opts.auto, enabled: () => spelling.opts.on, run: () => spelling.set({ auto: !spelling.opts.auto }) },
+  { id: 'revise-dict', cat: 'Tools', label: 'Dictionary & Ignored…', run: async () => { await dictionaryDialog(revision); spelling.paint(); } },
   { id: 'claude-key', cat: 'Tools', label: 'Claude Connection…', run: () => keyDialog() },
   { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, writing, api, report: false, ...(info.e2e && window.__stetPerfSizes ? { sizes: window.__stetPerfSizes } : {}) }) },
 
@@ -1036,7 +1069,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
   { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'panel-scenes', 'panel-notes', 'timeline', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
-  { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'perf'] },
+  { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-dict', 'claude-key', '-', 'spell-toggle', 'spell-suggest', 'spell-auto', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
 ]);
 
@@ -1095,7 +1128,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, timeline, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, cmd, revision, timeline, spelling, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 
@@ -1109,8 +1142,9 @@ setTabTypes(Array.isArray(settings.tabTypes) ? settings.tabTypes : TYPES, false)
 if (document.fonts) document.fonts.ready.then(renderTabTypes);
 // The writing companion above TODAY: fed by trackWords() and the TODAY numbers.
 dino = new Dino({ anchor: $('st-goal'), area: $('scroller'), getProgress: () => goalState });
-// Dormant (deep asleep, the app long in the background): the app rests with it. CSS animations
-// pause and the polls slow down; focus brings everything back at once (Dino tells us first).
+// Dormant (deep asleep, the app long in the background, or just long minimised): the app rests with
+// it. CSS animations pause and the polls and the clock slow down; focus brings everything back at
+// once (Dino tells us first).
 dino.onDormant = (on) => {
   document.documentElement.classList.toggle('dormant', on);
   polls(on);
@@ -1121,6 +1155,7 @@ if (settings.panels?.notes) showPanel('notes', true);
 if (settings.timeline) timeline.show(true);
 
 session.newUntitled();
+spelling.init();
 renderGoal();
 input.focus();
 

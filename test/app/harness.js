@@ -75,7 +75,8 @@ export class App {
   static async launch({ userData, args = [], hidden = false, env = {} }) {
     const screen = XVFB ? await display() : null;
     const child = spawn(ELECTRON, [...APP_ARGS, '--e2e', ...(hidden ? ['--hidden'] : []), '--remote-debugging-port=0', ...args], {
-      env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0', ...(screen ? { DISPLAY: screen.name } : {}), ...env },
+      // Spelling with the tests' own small dictionary (test/fixtures/hunspell), whatever the machine has installed.
+      env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0', STET_DICT_DIRS: path.join(ROOT, 'test', 'fixtures', 'hunspell'), STET_DICT_ONLY: '1', ...(screen ? { DISPLAY: screen.name } : {}), ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     live.add(child);

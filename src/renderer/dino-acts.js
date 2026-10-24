@@ -998,6 +998,63 @@ export const ACTIVITIES = {
     if (!d.pending && d.energy < 0.2 && d.chance(0.35)) d.pending = 'sleep'; // so comfortable it drops off
     yield { f: 'lie', t: 500, fx: d.chance(0.3) ? 'heart' : null };
   },
+  *crumple(d) {
+    // A page of its own draft: read, a frown, crumpled up and tossed over its shoulder. Now and then a
+    // look back at it, and once in a while it trots over and has another go.
+    yield* d.getTo('sit');
+    let pg, wad;
+    yield { f: 'sit', t: 300, do: (c) => { pg = c.spawn('page', { carried: true }); } };
+    for (let i = 0, n = d.rint(2, 4); i < n; i++) { yield { f: 'sitUp', t: d.rnd(700, 1100) }; yield { f: 'sit', t: 300 }; }
+    yield { f: 'sitUp', t: 600, fx: d.pick({ hash: 1, dots: 1.4, '?': 0.8 }) };
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'sitChew' : 'sitBlink', t: 140, do: i === 3 ? (c) => { c.remove(pg); wad = c.spawn('wad', { carried: true, life: 30000 }); } : undefined };
+    yield* d.getTo('stand');
+    yield { f: 'up', t: 200, do: (c) => { const m = c.mouthAt(); wad.carried = false; wad.x = c.clampProp(m.x, 4); wad.y = m.y; wad.vx = -c.face * c.rnd(45, 70); wad.vy = c.rnd(35, 50); wad.gravity = true; } };
+    yield { f: 'stand', t: 700 };
+    if (d.chance(0.5)) { yield { f: 'up', t: 600, face: -d.face, fx: '?' }; yield { f: 'stand', t: 300, face: -d.face }; }
+    if (d.chance(0.3) && d.has(wad)) { // second thoughts
+      yield* d.walkTo(() => d.reach(wad), 1, { max: 80 });
+      yield { f: 'sniff', t: 500, do: (c) => c.pickUp(wad) };
+      yield* d.getTo('sit');
+      yield { f: 'sitUp', t: 900, fx: d.chance(0.5) ? '!' : 'dots' };
+      yield { f: 'sit', t: 300, do: (c) => { c.remove(wad); c.puffAt(c.center()); } };
+    } else d.expire(wad, 15000);
+    yield { f: 'stand', t: 300 };
+  },
+  *drink(d) {
+    // A drink at the puddle: up to the edge, a sniff, and a good long lap, with a look up now and then.
+    const pd = d.find('puddle');
+    if (!pd) return yield* ACTIVITIES.look(d);
+    yield* d.walkTo(() => d.reach(pd, 2), 0.9, { max: 80 });
+    yield { f: 'sniff', t: 500, face: d.dirTo(pd) };
+    for (let i = 0, n = d.rint(2, 3); i < n; i++) {
+      for (let k = 0, m = d.rint(4, 7); k < m; k++) yield { f: k % 2 ? 'sniffBlink' : 'sniff', t: 150, do: k % 3 === 2 ? (c) => c.splashAt(c.nose(), 1) : undefined };
+      yield { f: 'up', t: d.rnd(500, 900), fx: i === n - 1 && d.chance(0.4) ? 'heart' : null }; // a look round, chin dripping
+    }
+    yield { f: 'blink', t: 200 };
+    yield { f: 'stand', t: 300 };
+  },
+  *stick(d) {
+    // Rarely: a stick turns up. It fetches it as proud as anything, settles down with it between its paws
+    // and has a good chew, then leaves it where it lies.
+    yield* d.getTo('stand');
+    d.envMark('stick');
+    const st = d.spawn('stick', { x: d.clampProp(d.center() + (d.inward() || d.face) * d.rnd(35, 60), 7), life: 60000 });
+    yield { f: 'stand', t: 500 };
+    yield { f: 'up', t: 500, fx: '!', face: d.dirTo(st) };
+    yield* d.walkTo(() => d.reach(st), 1.3, { max: 80 });
+    yield { f: 'sniff', t: 400 };
+    yield { f: 'chomp', t: 250, do: (c) => c.pickUp(st) };
+    yield { f: 'up', t: 600, fx: 'heart' };
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'wag' : 'stand', t: 160 };
+    yield* d.getTo('lie');
+    for (let i = 0, n = d.rint(6, 12); i < n; i++) {
+      yield { f: i % 2 ? 'lieBreath' : 'lie', t: d.rnd(220, 340), do: i % 4 === 3 ? (c) => c.puffAt(c.nose(), 0) : undefined };
+      if (d.chance(0.12)) yield { f: 'lieUp', t: 700 }; // a look round between chews
+    }
+    yield* d.getTo('sit');
+    yield { f: 'sit', t: 300, do: (c) => { c.drop(st, 0); c.expire(st, 20000); } };
+    yield { f: 'sitBlink', t: 300 };
+  },
   *gatherPebbles(d) {
     // Lines up pebbles: finds them one by one along the ground and sets each down next to the last,
     // in a neat little row. Then it stands back to look, and is proud of it, sits and admires it, or
@@ -1744,7 +1801,7 @@ export const ACTIVITIES = {
 };
 
 // Activities that start something of their own in the environment.
-export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm', 'acorn', 'cricket', 'feather', 'gem']);
+export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm', 'acorn', 'cricket', 'feather', 'gem', 'stick']);
 // Activities in the middle of which nothing else should happen in the environment.
 export const ABSORBED = new Set([...ENV_ACTIVITIES, 'cornerBite', 'tightrope', 'plantSeed', 'egg', 'ufo', 'skateboard', 'fireworks', 'grow', 'shrink', 'celebrate', 'zoomies', 'nightfall', 'daybreak']);
 // The streak's special loops, in the order they are unlocked.
@@ -1763,7 +1820,7 @@ export const SPECIALS = ['skateboard', 'fireworks', 'rainDance'];
 // env reactions are never chosen for a click: the environment picks them.
 
 const DANCING = new Set(['dance', 'sing', 'celebrate', 'rainDance']);
-const QUIET = new Set(['writeAlong', 'readScript', 'stargaze', 'watchWriter', 'coffeeBreak', 'yoga', 'treeShade', 'daydream']);
+export const QUIET = new Set(['writeAlong', 'readScript', 'stargaze', 'watchWriter', 'coffeeBreak', 'yoga', 'treeShade', 'daydream']);
 const sitOr = (d, sitting, standing) => (d.sitting() ? sitting : standing);
 
 export const REACTIONS = {
@@ -1772,6 +1829,13 @@ export const REACTIONS = {
   lookUp: { cat: 'subtle', w: 1, *fn(d) { yield { f: 'up', t: 700, face: d.towardCursor() }; yield { f: 'blink', t: 150 }; } },
   wave: { cat: 'subtle', w: 1, *fn(d) { yield { f: 'stand', t: 120, face: d.towardCursor() }; for (let i = 0; i < 2; i++) { yield { f: 'armsUp', t: 220 }; yield { f: 'stand', t: 180 }; } } },
   tilt: { cat: 'subtle', w: 0.9, stay: true, *fn(d) { yield { f: sitOr(d, 'sitUp', 'up'), t: 600, fx: '?' }; yield { f: sitOr(d, 'sit', 'stand'), t: 300 }; } },
+  // A look round at you, whatever it is doing: up from lying, up from sitting, up on its feet.
+  glance: { cat: 'subtle', w: 1, stay: true, lying: true, ctx: (k) => (k.posture === 'stand' ? 0.6 : 2.2), *fn(d) {
+    const face = d.towardCursor(), pose = postureOf(d.frame), fx = d.chance(0.25) ? 'heart' : null;
+    if (pose === 'lie') { yield { f: 'lieUp', t: 700, face, fx }; yield { f: 'lieUpBlink', t: 220 }; yield { f: 'lieUp', t: 500 }; yield { f: 'lie', t: 300 }; }
+    else if (pose === 'sit') { yield { f: 'sitUp', t: 700, face, fx }; yield { f: 'sitBlink', t: 220 }; yield { f: 'sitUp', t: 400 }; }
+    else { yield { f: 'up', t: 600, face, fx }; yield { f: 'blink', t: 160 }; }
+  } },
   nod: { cat: 'subtle', w: 0.8, *fn() { for (let i = 0; i < 2; i++) { yield { f: 'sniff', t: 160 }; yield { f: 'stand', t: 180 }; } } },
   wagHappy: { cat: 'subtle', w: 0.9, mood: { playful: 1.5 }, *fn(d) { yield { f: 'stand', t: 150, face: d.towardCursor() }; for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'wag' : 'stand', t: 160, fx: i === 2 ? 'heart' : null }; } },
   scratchHead: { cat: 'subtle', w: 0.7, stay: true, mood: { curious: 1.5 }, *fn(d) {
@@ -1794,16 +1858,16 @@ export const REACTIONS = {
   peek: { cat: 'subtle', w: 0.7, *fn(d) { yield { f: 'sniff', t: 400, face: d.towardCursor() }; yield { f: 'sniffBlink', t: 200 }; yield { f: 'up', t: 500, fx: '?' }; yield { f: 'stand', t: 200 }; } },
   // normal
   achoo: { cat: 'normal', w: 0.6, *fn(d) { yield { f: 'up', t: 250, face: d.towardCursor() }; yield { f: 'yawn', t: 250 }; yield { f: 'yawn', t: 200 }; yield { f: 'crouch', t: 160, jump: 2, dx: -2 * d.face, fx: 'puff' }; yield { f: 'blink', t: 300, fx: '?' }; } },
-  startle: { cat: 'normal', w: 1, asleep: true, *fn() { yield { f: 'crouch', t: 80 }; yield { f: 'jump', t: 420, jump: 8, fx: '!' }; yield { f: 'crouch', t: 120 }; yield { f: 'stand', t: 300 }; yield { f: 'blink', t: 150 }; } },
-  love: { cat: 'normal', w: 1, *fn(d) { yield { f: 'crouch', t: 100, face: d.towardCursor() }; yield { f: 'jump', t: 360, jump: 4, fx: 'heart' }; yield { f: 'stand', t: 400 }; } },
+  startle: { cat: 'normal', w: 1, lively: true, asleep: true, *fn() { yield { f: 'crouch', t: 80 }; yield { f: 'jump', t: 420, jump: 8, fx: '!' }; yield { f: 'crouch', t: 120 }; yield { f: 'stand', t: 300 }; yield { f: 'blink', t: 150 }; } },
+  love: { cat: 'normal', w: 1, lively: true, *fn(d) { yield { f: 'crouch', t: 100, face: d.towardCursor() }; yield { f: 'jump', t: 360, jump: 4, fx: 'heart' }; yield { f: 'stand', t: 400 }; } },
   spin: { cat: 'normal', w: 0.9, *fn(d) { for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'walk1' : 'walk2', t: 110, face: -d.face }; yield { f: 'stand', t: 500, fx: 'star' }; } },
   confused: { cat: 'normal', w: 0.9, asleep: true, *fn(d) { yield { f: 'stand', t: 300, fx: '?' }; yield { f: 'stand', t: 300, face: -d.face }; yield { f: 'stand', t: 300, face: -d.face }; yield { f: 'blink', t: 150 }; } },
   roarBack: { cat: 'normal', w: 0.8, *fn(d) { yield { f: 'up', t: 200, face: d.towardCursor() }; yield { f: 'roar', t: 600, fx: '!' }; yield { f: 'roar', t: 300 }; yield { f: 'stand', t: 300 }; } },
   boogie: { cat: 'normal', w: 0.8, *fn() { for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'armsUp' : 'walk2', t: 180, fx: i === 0 ? 'note' : null }; yield { f: 'stand', t: 250 }; } },
-  hopAway: { cat: 'normal', w: 0.8, *fn(d) { const dir = -d.towardCursor(); yield { f: 'crouch', t: 90, face: dir }; yield { f: 'jump', t: 380, jump: 6, dx: 10 * dir, fx: '!' }; yield { f: 'stand', t: 300, face: -dir }; } },
+  hopAway: { cat: 'normal', w: 0.8, lively: true, *fn(d) { const dir = -d.towardCursor(); yield { f: 'crouch', t: 90, face: dir }; yield { f: 'jump', t: 380, jump: 6, dx: 10 * dir, fx: '!' }; yield { f: 'stand', t: 300, face: -dir }; } },
   giggle: { cat: 'normal', w: 0.8, *fn() { for (let i = 0; i < 3; i++) { yield { f: 'crouch', t: 120 }; yield { f: 'stand', t: 120, fx: i === 1 ? 'note' : null }; } yield { f: 'blink', t: 200 }; } },
   shy: { cat: 'normal', w: 0.6, *fn(d) { yield { f: 'stand', t: 200, face: -d.towardCursor() }; yield { f: 'sniffBlink', t: 900, fx: 'heart' }; yield { f: 'stand', t: 300, face: d.towardCursor() }; } },
-  pounceCursor: { cat: 'normal', w: 0.7, mood: { playful: 2 }, *fn(d) {
+  pounceCursor: { cat: 'normal', w: 0.7, lively: true, mood: { playful: 2 }, *fn(d) {
     const dir = d.towardCursor();
     yield { f: 'crouch', t: 300, face: dir };
     for (let i = 0; i < 4; i++) yield { f: 'crouch', t: 110, dx: i % 2 ? 1 : -1 };
@@ -1811,7 +1875,7 @@ export const REACTIONS = {
     yield { f: 'sniff', t: 400, fx: '?' };
     yield { f: 'stand', t: 300 };
   } },
-  highFive: { cat: 'normal', w: 0.7, *fn(d) { yield { f: 'crouch', t: 120, face: d.towardCursor() }; yield { f: 'armsUp', t: 400, jump: 9, fx: 'star' }; yield { f: 'crouch', t: 150 }; yield { f: 'stand', t: 300 }; } },
+  highFive: { cat: 'normal', w: 0.7, lively: true, *fn(d) { yield { f: 'crouch', t: 120, face: d.towardCursor() }; yield { f: 'armsUp', t: 400, jump: 9, fx: 'star' }; yield { f: 'crouch', t: 150 }; yield { f: 'stand', t: 300 }; } },
   cower: { cat: 'normal', w: 0.6, mood: { sleepy: 1.3 }, *fn() {
     yield { f: 'cower', t: 200, fx: '!' };
     for (let i = 0; i < 4; i++) yield { f: 'cower', t: 100, dx: i % 2 ? 1 : -1 };
@@ -1842,7 +1906,7 @@ export const REACTIONS = {
   // big — exaggerated
   faint: { cat: 'big', w: 0.8, *fn() { yield { f: 'up', t: 250 }; yield { f: 'armsUp', t: 250, fx: '!' }; yield { f: 'fallen', t: 1400 }; yield { f: 'fallen', t: 500, fx: 'star' }; yield { f: 'sit', t: 350 }; yield { f: 'stand', t: 300 }; } },
   flatten: { cat: 'big', w: 0.7, *fn() { yield { f: 'crouch', t: 120 }; yield { f: 'lie', t: 900 }; yield { f: 'lie', t: 400, fx: '?' }; yield { f: 'sit', t: 250 }; yield { f: 'stand', t: 250 }; } },
-  backflip: { cat: 'big', w: 0.7, cool: 30000, *fn() {
+  backflip: { cat: 'big', w: 0.7, lively: true, cool: 30000, *fn() {
     yield { f: 'crouch', t: 140 };
     yield { f: 'jump', t: 200, lift: [0, 7] };
     yield { f: 'jump', t: 170, lift: [7, 9], flip: true };
@@ -1852,7 +1916,7 @@ export const REACTIONS = {
     yield { f: 'armsUp', t: 500, fx: 'star' };
     yield { f: 'stand', t: 250 };
   } },
-  bigJump: { cat: 'big', w: 0.7, *fn() { yield { f: 'crouch', t: 200 }; yield { f: 'jump', t: 600, jump: 13, fx: '!' }; yield { f: 'crouch', t: 160 }; yield { f: 'stand', t: 300, fx: 'star' }; } },
+  bigJump: { cat: 'big', w: 0.7, lively: true, *fn() { yield { f: 'crouch', t: 200 }; yield { f: 'jump', t: 600, jump: 13, fx: '!' }; yield { f: 'crouch', t: 160 }; yield { f: 'stand', t: 300, fx: 'star' }; } },
   runAway: { cat: 'big', w: 0.5, cool: 60000, *fn(d) {
     // Bolts off towards the roomier side, sulks with its back turned, then peeks round.
     const dir = d.x < d.zone(0.5) ? 1 : -1;
@@ -1874,7 +1938,7 @@ export const REACTIONS = {
     yield { f: 'crouch', t: 120, do: (c) => c.dirt(2) };
     yield { f: 'armsUp', t: 400, fx: 'star', face: d.towardCursor() };
   } },
-  cartwheel: { cat: 'big', w: 0.5, cool: 30000, *fn(d) {
+  cartwheel: { cat: 'big', w: 0.5, lively: true, cool: 30000, *fn(d) {
     const dir = d.inward() || -d.towardCursor();
     yield { f: 'stand', t: 150, face: dir };
     for (let i = 0; i < 2; i++) {
@@ -1885,7 +1949,7 @@ export const REACTIONS = {
     yield { f: 'armsUp', t: 500, fx: 'star', face: -dir };
     yield { f: 'stand', t: 250 };
   } },
-  showOff: { cat: 'big', w: 0.5, cool: 45000, mood: { playful: 2, silly: 2 }, *fn(d) {
+  showOff: { cat: 'big', w: 0.5, lively: true, cool: 45000, mood: { playful: 2, silly: 2 }, *fn(d) {
     // A whole routine, just for you.
     yield { f: 'up', t: 300, face: d.towardCursor(), fx: '!' };
     yield { f: 'crouch', t: 110 };
@@ -1900,7 +1964,7 @@ export const REACTIONS = {
     yield { f: 'stand', t: 300, fx: 'heart' };
   } },
   // absurd — completely unexpected
-  partyHat: { cat: 'absurd', w: 0.6, cool: 120000, *fn() { yield { f: 'crouch', t: 150, do: (c) => c.wear('party', 45000) }; yield { f: 'jump', t: 380, jump: 5, fx: 'star' }; yield { f: 'armsUp', t: 400, fx: 'note' }; yield { f: 'stand', t: 300 }; } },
+  partyHat: { cat: 'absurd', w: 0.6, lively: true, cool: 120000, *fn() { yield { f: 'crouch', t: 150, do: (c) => c.wear('party', 45000) }; yield { f: 'jump', t: 380, jump: 5, fx: 'star' }; yield { f: 'armsUp', t: 400, fx: 'note' }; yield { f: 'stand', t: 300 }; } },
   statue: { cat: 'absurd', w: 0.6, cool: 40000, *fn() { yield { f: 'stand', t: 1300 }; yield { f: 'stand', t: 1200, fx: 'dots' }; yield { f: 'blink', t: 250 }; yield { f: 'stand', t: 300, fx: 'heart' }; } },
   playDead: { cat: 'absurd', w: 0.6, cool: 40000, *fn() { yield { f: 'armsUp', t: 250, fx: '!' }; yield { f: 'fallen', t: 1500 }; yield { f: 'fallen', t: 800, fx: 'dots' }; yield { f: 'sitBlink', t: 300 }; yield { f: 'lie', t: 400 }; yield { f: 'sit', t: 300 }; yield { f: 'stand', t: 300, fx: '?' }; } },
   pretendSleep: { cat: 'absurd', w: 0.5, cool: 40000, *fn(d) { yield* d.getTo('lie'); for (let i = 0; i < 3; i++) { yield { f: 'lie', t: 450, fx: i === 0 ? 'z' : null }; yield { f: 'lieBreath', t: 450 }; } yield { f: 'sitBlink', t: 250, fx: '!' }; yield* d.getTo('stand'); } },
@@ -1928,7 +1992,7 @@ export const REACTIONS = {
     yield { f: 'blink', t: 150 };
     yield { f: 'stand', t: 200, face: -d.face };
   } },
-  skip: { cat: 'context', w: 1, ctx: (k) => (k.moving ? 3 : 0), *fn(d) {
+  skip: { cat: 'context', w: 1, lively: true, ctx: (k) => (k.moving ? 3 : 0), *fn(d) {
     const dir = d.face;
     for (let i = 0; i < 2; i++) { yield { f: 'crouch', t: 100 }; yield { f: 'jump', t: 300, jump: 4, dx: 6 * dir, fx: i ? 'note' : null }; }
     yield { f: 'stand', t: 250 };
@@ -2010,7 +2074,7 @@ export const REACTIONS = {
     yield { f: sitOr(d, 'sitUp', 'up'), t: 600, face: -d.face, fx: 'star' };
     yield { f: sitOr(d, 'sitBlink', 'blink'), t: 200 };
   } },
-  treeHide: { cat: 'context', w: 1, ctx: (k) => (k.tree ? 4 : 0), *fn(d) {
+  treeHide: { cat: 'context', w: 1, lively: true, ctx: (k) => (k.tree ? 4 : 0), *fn(d) {
     // Hides behind the (very thin) trunk. Nobody can see it there.
     const tree = d.grownTree();
     if (!tree) { yield { f: 'cower', t: 800, fx: 'dots' }; return; }
@@ -2021,7 +2085,7 @@ export const REACTIONS = {
     yield { f: 'jump', t: 360, jump: 6, fx: '!', face: d.towardCursor() };
     yield { f: 'armsUp', t: 400, fx: 'heart' };
   } },
-  bumpTree: { cat: 'context', w: 1, ctx: (k) => (k.tree ? 3 : 0), *fn(d) {
+  bumpTree: { cat: 'context', w: 1, lively: true, ctx: (k) => (k.tree ? 3 : 0), *fn(d) {
     // Jumps in surprise, straight into the palm; a frond lands on its head.
     const tree = d.grownTree();
     yield { f: 'crouch', t: 80 };
@@ -2030,7 +2094,7 @@ export const REACTIONS = {
     yield { f: 'stand', t: 500, fx: 'star' };
     yield { f: 'up', t: 400, fx: '?' };
   } },
-  splash: { cat: 'context', w: 1, ctx: (k) => (k.near.puddle ? 4 : k.raining ? 3 : 0), *fn(d) {
+  splash: { cat: 'context', w: 1, lively: true, ctx: (k) => (k.near.puddle ? 4 : k.raining ? 3 : 0), *fn(d) {
     yield { f: 'crouch', t: 120, face: d.towardCursor() };
     yield { f: 'jump', t: 360, jump: 5 };
     yield { f: 'crouch', t: 150, do: (c) => c.splashAt(c.center(), 7, c.towardCursor()) };
@@ -2117,6 +2181,7 @@ export const REACTIONS = {
   hideFace: { cat: 'escalate', w: 1, *fn(d) { yield { f: 'cower', t: 1200, face: -d.towardCursor(), fx: 'dots' }; yield { f: 'cower', t: 900 }; yield { f: 'up', t: 300, fx: '?' }; yield { f: 'cower', t: 600 }; } },
 
   // asleep — clicks on a sleeping dinosaur
+  stir: { cat: 'asleep', w: 1.3, asleep: true, wakes: false, stay: true, *fn(d) { yield { f: 'lieBreath', t: 500 }; yield { f: 'lieUpBlink', t: 500, face: d.towardCursor() }; yield { f: 'lie', t: 600, fx: 'z' }; } }, // half wakes, and back to sleep
   snore: { cat: 'asleep', w: 1, asleep: true, wakes: false, stay: true, *fn() { yield { f: 'lieBreath', t: 500, fx: 'z' }; yield { f: 'lie', t: 400, fx: 'z' }; } },
   grumble: { cat: 'asleep', w: 0.8, asleep: true, wakes: false, stay: true, *fn() { yield { f: 'sitBlink', t: 300 }; yield { f: 'sit', t: 400, fx: 'hash' }; yield { f: 'lie', t: 400 }; } },
   sleepTalk: { cat: 'asleep', w: 0.8, asleep: true, wakes: false, stay: true, *fn() { yield { f: 'lie', t: 500, fx: 'note' }; yield { f: 'lieBreath', t: 500 }; yield { f: 'lie', t: 500, fx: '?' }; yield { f: 'lieBreath', t: 500 }; } },

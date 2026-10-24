@@ -68,13 +68,15 @@ export class View {
     this.findLayer = el('div', 'layer');
     this.revLayer = el('div', 'layer');
     this.revision = null; // { marks: [{b, s, e, cat, cur, hov}] } from the English revision panel
+    this.spellLayer = el('div', 'layer');
+    this.spelling = null; // { marks: [{b, s, e}] } obvious misspellings (spelling.js), in script order
     this.caretEl = el('div', '');
     this.caretEl.id = 'caret';
     this.scrubAt = null;    // a position: stepping along the timeline, the caret is drawn there instead (the editor's stays put)
     this.ghost = null;      // { b, o, text }: the rest of a character name, suggested after the caret
     this.ghostEl = el('div', 'ghost');
     this.ghostEl.setAttribute('aria-hidden', 'true');
-    content.append(this.revLayer, this.findLayer, this.selLayer, this.ghostEl, this.caretEl);
+    content.append(this.spellLayer, this.revLayer, this.findLayer, this.selLayer, this.ghostEl, this.caretEl);
     this.titleEl = null;
 
     // Moving between monitors changes the display scale; web fonts may settle late.
@@ -329,7 +331,9 @@ export class View {
     let selHTML = '';
     let findHTML = '';
     let revHTML = '';
+    let spHTML = '';
     const rm = this.revision && this.revision.marks;
+    const sm = this.spelling && this.spelling.marks;
     const [s, e] = ed.ordered();
     const hasSel = cmp(s, e) !== 0;
     const fm = this.find && this.find.matches;
@@ -345,7 +349,9 @@ export class View {
         let rk = -1;
         if (rm && rm.length) rk = firstMatch(rm, it.bi);
         const hasRev = rk !== -1 && rm[rk].b === it.bi;
-        if (!inSel && !hasFind && !hasRev) continue;
+        const sk = sm && sm.length ? firstMatch(sm, it.bi) : -1;
+        const hasSp = sk !== -1 && sm[sk].b === it.bi;
+        if (!inSel && !hasFind && !hasRev && !hasSp) continue;
         const b = blocks[it.bi];
         const starts = linesOf(b);
         for (let l = it.l0; l < it.l1; l++) {
@@ -381,12 +387,20 @@ export class View {
               revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}${m.hov ? ' hov' : ''}" style="left:${left + cx(a)}px;top:${y}px;width:${cx(z) - cx(a)}px;height:${this.row}px"></div>`;
             }
           }
+          if (hasSp) {
+            for (let k = sk; k < sm.length && sm[k].b === it.bi; k++) {
+              const m = sm[k];
+              const a = Math.max(m.s, ls), z = Math.min(m.e, le);
+              if (z > a) spHTML += `<div class="spr" style="left:${left + cx(a)}px;top:${y}px;width:${cx(z) - cx(a)}px;height:${this.row}px"></div>`;
+            }
+          }
         }
       }
     }
     if (this.selLayer._h !== selHTML) { this.selLayer.innerHTML = selHTML; this.selLayer._h = selHTML; }
     if (this.findLayer._h !== findHTML) { this.findLayer.innerHTML = findHTML; this.findLayer._h = findHTML; }
     if (this.revLayer._h !== revHTML) { this.revLayer.innerHTML = revHTML; this.revLayer._h = revHTML; }
+    if (this.spellLayer._h !== spHTML) { this.spellLayer.innerHTML = spHTML; this.spellLayer._h = spHTML; }
     this.paintCaret(left);
   }
 

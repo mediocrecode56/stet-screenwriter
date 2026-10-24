@@ -42,7 +42,7 @@ export class Timeline {
     this.editing = null; // see editTimecode()
     this.unlocked = false; // stepping just ended with the pointer locked, and it hasn't moved since
     this.shift = 0; // px the strip is slid past where it scrolls to, to keep a stepped line under the pointer
-    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
+    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-view"></div><div class="tl-grid"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
       + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
     this.scroll = host.querySelector('.tl-scroll');
@@ -52,6 +52,7 @@ export class Timeline {
     this.ruler = host.querySelector('.tl-ruler');
     this.hover = host.querySelector('.tl-hover');
     this.head = host.querySelector('.tl-head');
+    this.cur = host.querySelector('.tl-cur');
     this.band = host.querySelector('.tl-view');
     this.reset = host.querySelector('.tl-reset');
     this.reset.addEventListener('click', () => this.whole());
@@ -439,6 +440,7 @@ export class Timeline {
     const x = scriptPos(pages, c.b, l) * this.drawn;
     this.head.classList.toggle('glide', !redraw && !this.dragging); // a jump glides; a zoom or a new script doesn't
     this.head.style.left = x + 'px';
+    this.showScene(c.b, !redraw && !this.dragging);
     this.showBand();
     // Zoomed in, the bar follows the caret when it leaves the part in view.
     const at = c.b + ':' + l;
@@ -446,6 +448,19 @@ export class Timeline {
       this.caretSeen = at;
       this.reveal(x + PADX);
     }
+  }
+
+  /** The caret's scene, drawn as a thicker stretch of the line from its tick to the next. */
+  showScene(b, glide) {
+    const sc = this.tl?.scenes || [];
+    let i = -1;
+    while (i + 1 < sc.length && sc[i + 1].b <= b) i++;
+    this.cur.hidden = i < 0;
+    if (i < 0) return;
+    const s = this.drawn, a = sc[i].x * s, z = (i + 1 < sc.length ? sc[i + 1].x : this.length) * s;
+    this.cur.classList.toggle('glide', glide);
+    this.cur.style.left = a + 'px';
+    this.cur.style.width = Math.max(1, z - a) + 'px';
   }
 
   /** The part of the script in the window, as a soft band. */
@@ -495,6 +510,7 @@ export class Timeline {
       ...anchors.map((a, i) => ({ ...a, kind: 'tc', el: els[1 + nh + ns + nn + i] })), // last: on a scene, its timecode wins
     ];
     this.marked = null;
+    this.showScene(this.ed.caret.b, false);
     this.showEditing();
   }
 

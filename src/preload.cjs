@@ -1,5 +1,5 @@
 // Narrow bridge between the sandboxed renderer and the main process.
-const { contextBridge, ipcRenderer, webUtils } = require('electron');
+const { contextBridge, ipcRenderer, webUtils, webFrame } = require('electron');
 
 const INVOKE = new Set([
   'settings:get', 'settings:set', 'app:info', 'app:changelog', 'app:close-ready', 'app:close-cancel',
@@ -12,6 +12,7 @@ const INVOKE = new Set([
   'recent:list', 'recent:dismiss', 'recent:trash',
   'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel',
   'app:open-url', 'app:link-files', 'update:check', 'update:download', 'update:cancel', 'update:install', 'pointer:lock',
+  'spell:list', 'spell:load', 'spell:check', 'spell:off',
 ]);
 const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress', 'app:fullscreen']);
 
@@ -26,4 +27,7 @@ contextBridge.exposeInMainWorld('stet', {
   },
   pathForFile(file) { return webUtils.getPathForFile(file); },
   platform: process.platform,
+  // A Mac's own spelling checker (Spelling, with "macOS (automatic)" chosen).
+  misspelled: (word) => webFrame.isWordMisspelled(word),
+  suggestions: (word) => webFrame.getWordSuggestions(word),
 });

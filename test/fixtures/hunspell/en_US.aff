@@ -1,0 +1,23 @@
+# A tiny English dictionary for the tests (the shape of a real Hunspell one): plurals, -ed, -ing, un-.
+SET UTF-8
+TRY esianrtolcdugmphbyfvkwz
+REP 2
+REP ie ei
+REP ei ie
+
+PFX U Y 1
+PFX U 0 un .
+
+SFX S Y 3
+SFX S y ies [^aeiou]y
+SFX S 0 s [aeiou]y
+SFX S 0 s [^y]
+
+SFX D Y 3
+SFX D 0 d e
+SFX D y ied [^aeiou]y
+SFX D 0 ed [^ey]
+
+SFX G Y 2
+SFX G e ing e
+SFX G 0 ing [^e]

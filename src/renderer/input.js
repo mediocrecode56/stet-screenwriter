@@ -25,6 +25,7 @@ export class Input {
     this.drag = null;
     this.names = () => [];  // the cast in suggestion order (app.js)
     this.onCue = null;      // a character cue was finished: its name
+    this.onSpace = null;    // Space typed after a word (spelling.js)
 
     const ta = textarea;
     ta.addEventListener('keydown', (e) => this.keydown(e));
@@ -82,6 +83,7 @@ export class Input {
     this.ed.insertText(text);
     this.suggest();
     this.after();
+    if (text.endsWith(' ') && this.onSpace) this.onSpace(); // spelling: Auto corrects the word just finished
   }
 
   // ---- character cues ------------------------------------------------------------
@@ -231,6 +233,7 @@ export class Input {
   // ---- mouse -----------------------------------------------------------------------
 
   mousedown(e) {
+    if (e.button === 2 && e.target.closest?.('.page')) { e.preventDefault(); this.focus(); return; } // a right-click (spelling) leaves the keyboard with the script
     if (e.button !== 0) return;
     if (this.view.ghost) this.view.setGhost(null);
     const t = e.target;

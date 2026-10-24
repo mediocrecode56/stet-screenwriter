@@ -29,6 +29,7 @@ It formats as you type, saves as you go, and stays out of your way.</p>
 | **Your work is always safe** | Saved as you type, backed up on a schedule, and brought back if the computer shuts down unexpectedly. |
 | **The whole script at a glance** | A timeline above the page shows every scene, note and highlight, with an estimated running time you can pin to real timecodes. |
 | **A goal for every day** | Daily and weekly goals, a week of progress at a glance, and a writing streak to keep going. |
+| **Spelling that stays out of the way** | Obvious slips get a thin pale red underline; right-click for the fix, or let Auto correct them as you type. It uses the dictionaries already on your computer. |
 | **Day or night** | A light page, a dark one, or both, switching by themselves at the times you choose. |
 | **Comes in, goes out** | Imports Final Draft (.fdx) scripts; prints or saves a PDF with the title page, ready to send. |
 
@@ -41,7 +42,8 @@ It formats as you type, saves as you go, and stays out of your way.</p>
 naps when you're idle, livens up when you write, reacts when you click it, watches the weather
 roll by, and grows a pixel with every milestone of your streak. It has no shame either: now and
 then it scratches its back in the dust, struts about, burps after a snack or photobombs a palm
-tree. You can hide it from the View menu.
+tree. Some days it crumples up a page of its own and tosses it over its shoulder, laps at a
+puddle after the rain, or settles down with a stick to chew. You can hide it from the View menu.
 
 **A second pair of eyes (optional).** If you use Claude, it can read your dialogue and action and
 suggest fixes to the English. Nothing in the script changes until you accept a suggestion.
@@ -82,6 +84,16 @@ Security**, scroll down and click **Open Anyway** next to STET. You only need to
 **Updating** is built in. When there is a new version, **UPDATE** appears at the bottom right:
 click it, then **Update now**. STET downloads it while you keep writing (usually about a megabyte)
 and asks to restart when it's ready. Your screenplays, settings and statistics stay as they are.
+
+## Spelling
+
+The **SPELLING** menu on the toolbar switches spelling on or off and picks the language from the
+dictionaries installed on your computer (those LibreOffice, Firefox or your system installed; on
+a Mac, its own). Only obvious slips are marked, with a thin pale red underline: names, all-caps
+words and scene headings are left alone. Right-click a marked word for the fix, or to add it to
+your dictionary or ignore it in this script; STET remembers both (Tools > Dictionary & Ignored
+lists them). With **Auto** on, the same slips are corrected as you press Space, and Ctrl+Z
+takes a correction back.
 
 ## The timeline
 

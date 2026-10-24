@@ -20,6 +20,7 @@ import {
 import { Updater, installKind, cleanupPortable, UpdateError, REPO_URL, RELEASES_URL } from './update.js';
 import { patchRoot, confirmLaunch, cleanupPatches } from './patch.js';
 import { linkFiles } from './assoc.js';
+import { SpellService, findDictionaries, pickDictionary } from './spell.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
@@ -44,6 +45,7 @@ let allowClose = false;
 let closeAsked = 0;
 let settings, stats, recovery, claude, updater;
 const queue = new SaveQueue();
+const spell = new SpellService();
 
 const defaultDir = () => path.join(app.getPath('documents'), 'STET');
 
@@ -78,7 +80,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
-      spellcheck: false,
+      spellcheck: process.platform === 'darwin', // a Mac's own checker (spelling.js); elsewhere the installed dictionaries, checked in a worker
       backgroundThrottling: false,
     },
   });
@@ -189,6 +191,20 @@ function registerIpc() {
 
   handle('settings:get', () => settings.get());
   handle('settings:set', (patch) => settings.set(patch));
+
+  // Spelling: the dictionaries installed on this computer (and, on a Mac, its own checker).
+  handle('spell:list', async () => {
+    const list = await findDictionaries();
+    if (process.platform === 'darwin') list.unshift({ id: 'macos', code: 'auto', label: 'macOS (automatic)' });
+    return { list, pick: pickDictionary(list, app.getLocale())?.id ?? null };
+  });
+  handle('spell:load', (id) => {
+    const mac = id === 'macos';
+    win.webContents.session.setSpellCheckerEnabled(mac); // the Mac's own checker answers webFrame (preload)
+    return mac ? (spell.stop(), true) : spell.load(id);
+  });
+  handle('spell:check', (words) => spell.check(words));
+  handle('spell:off', () => { spell.stop(); win.webContents.session.setSpellCheckerEnabled(false); });
 
   handle('path:default-dir', () => settings.get().defaultDir || defaultDir());
   handle('path:join', (...parts) => path.join(...parts));

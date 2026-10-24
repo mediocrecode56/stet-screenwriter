@@ -167,6 +167,9 @@ Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 
 How the tests stay fast and dependable:
 
+- **The same dictionary everywhere.** The app tests check spelling against a small dictionary of
+  their own (`test/fixtures/hunspell`, passed as `STET_DICT_DIRS` with `STET_DICT_ONLY`), never
+  whatever the machine has installed, so they flag the same words on Windows, macOS and Linux.
 - **One start per file, and no sleeping.** Each `test/app` file starts STET once (again only
   where a restart is the point) and every wait ends the moment what it waits for is true
   (`app.until`, in `test/app/harness.js`). Delays that are only there for the writer's sake are

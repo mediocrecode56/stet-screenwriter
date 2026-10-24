@@ -58,7 +58,7 @@
 // 32 days in a row) and unlocks a special routine at every second one.
 
 import { W, H, FRAMES, PROPS, GLYPHS, ALPHA, MOUTH, HEAD_TOP, GET_UP, postureOf, spriteEdges } from './dino-art.js';
-import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, BASELINE_0_8 } from './dino-acts.js';
+import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, QUIET, BASELINE_0_8 } from './dino-acts.js';
 
 const MIN = 60000;
 // Poses that are merely held: one of these can be cut short (never a move, a jump or a lift).
@@ -411,6 +411,9 @@ export class Critter {
       daydream: (night ? 0.3 : 0.45) + 0.5 * (1 - e),
       settleIn: 0.2 + 0.55 * (1 - e),                     // makes its bed before a rest
       gatherPebbles: free ? 0.35 + 0.25 * e : 0,          // lines up pebbles
+      crumple: free ? 0.16 : 0,                           // a page of its own, tossed over its shoulder
+      drink: this.find('puddle') ? 0.9 + (LIVELY.has(this.activity) ? 1.5 : 0) : 0, // at the puddle, the more after a run about
+      stick: free && this.envOk('stick', 8 * MIN) ? 0.05 : 0, // seldom: a stick to chew
       tightrope: this.since('tightrope') > 35 * MIN ? 0.05 + 0.05 * e : 0, // less common: a balancing act on the line
       plantSeed: this.focused && free && !this.find('flower') && this.since('plantSeed') > 35 * MIN ? 0.06 : 0, // less common: it plants a flower
       graze: tuft ? 1.4 + 0.25 * this.tufts().length : 0,
@@ -584,6 +587,7 @@ export class Critter {
     else if (agitation >= 8 && agitation % 3 === 2) name = this.pick({ dizzy: 1, storm: 1, runAway: this.lastUsed.runAway && now - this.lastUsed.runAway < 60000 ? 0 : 1, playDead: 0.7, hideFace: 0.8 });
     if (!name) {
       const sleeping = k.asleep;
+      const settled = k.posture !== 'stand' || QUIET.has(k.activity) || !!k.carrying;
       const moodW = MOODS[this.mood].react;
       const w = {};
       for (const [n, R] of Object.entries(REACTIONS)) {
@@ -591,6 +595,10 @@ export class Critter {
         if (sleeping ? !R.asleep : R.cat === 'asleep') continue;
         let x = R.w * (sleeping ? 1 : CATEGORY[R.cat](agitation)) * (moodW[R.cat] || 1) * ((R.mood && R.mood[this.mood]) || 1);
         if (R.ctx) x *= R.ctx(k, this);
+        // Quieter when settled (sitting, lying, absorbed in something, carrying something): it answers
+        // from where it is rather than leaping up; on its feet, the leaps come as the clicks keep coming.
+        if (R.lively) x *= settled ? 0.12 : R.cat === 'context' ? 1 : Math.min(1, 0.3 + 0.12 * agitation); // (a leap that fits what is there stays)
+        else if (settled && R.stay) x *= 1.5;
         if (R.cool && now - (this.lastUsed[n] ?? -1e12) < R.cool) x = 0;
         if (n === 'gift' && !this.cursor) x = 0;
         const i = this.history.lastIndexOf(n);
@@ -1363,7 +1371,7 @@ export class Dino {
     for (const el of anchor.parentElement.children) ro.observe(el);
     if (area) ro.observe(area);
     window.addEventListener('resize', () => this.place());
-    document.addEventListener('visibilitychange', () => this.schedule(0));
+    document.addEventListener('visibilitychange', () => { this.dormancy(); this.schedule(0); });
     new MutationObserver(() => { this.lastSig = ''; this.draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     this.place();
     this.schedule(0);
@@ -1372,7 +1380,8 @@ export class Dino {
   setEnabled(on) {
     this.enabled = on;
     this.root.hidden = !on;
-    if (on) { this.place(); this.schedule(0); } else clearTimeout(this.timer);
+    if (on) this.place();
+    this.schedule(0);
     this.dormancy();
   }
 
@@ -1458,7 +1467,11 @@ export class Dino {
 
   schedule(delay) {
     clearTimeout(this.timer);
-    if (document.hidden || !this.enabled) return; // no work at all in the background
+    if (document.hidden || !this.enabled) { // no work at all in the background: just one look when the app may rest
+      const c = this.c, now = performance.now();
+      if (!this.dormantShown && !c.focused && c.blurAt != null) this.timer = setTimeout(() => this.dormancy(), Math.max(0, c.blurAt + c.T.deepSleep - now) + 50);
+      return;
+    }
     this.timer = setTimeout(() => this.tick(), delay);
   }
 
@@ -1472,9 +1485,12 @@ export class Dino {
     this.schedule(this.c.tickDelay(now, moving));
   }
 
-  /** Tell the app when the dinosaur turns dormant or stops being so (it rests with it). */
+  /** Tell the app when the dinosaur turns dormant or stops being so (it rests with it). Minimised,
+   *  or with the companion turned off, the app rests once the window has been long in the background. */
   dormancy() {
-    const on = this.enabled && this.c.dormant;
+    const c = this.c, idle = !c.focused && c.deepDue(performance.now());
+    // (back on screen, still resting until its first tick catches up with the deep sleep it is due)
+    const on = this.enabled && !document.hidden ? c.dormant || (idle && !c.deep && this.dormantShown) : idle;
     if (on === this.dormantShown) return;
     this.dormantShown = on;
     if (this.onDormant) this.onDormant(on);

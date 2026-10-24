@@ -323,6 +323,8 @@ export const PROPS = {
   bubble: [['.#.', '#.#', '.#.']],
   firefly: [['#']],
   page: [['####', '#..#', '####']],
+  wad: [['.##.', '#.##', '.##.']], // a page crumpled up
+  stick: [['#......', '.######', '...#...']], // a twig with a stub of a branch
   mug: [['###.', '#.##', '#.#.', '###.']],
   // A squiggle scratched into the sand, a stroke at a time.
   doodle: [['.......', '#......'], ['.#.....', '#.#....'], ['.#...#.', '#.#.#..'], ['.#...#.', '#.#.#.#']],
