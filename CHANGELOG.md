@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.34.2 · 24 Oct 2026
+
+- Timeline: holding Ctrl (Cmd on a Mac) to step through the script now does only that. The script follows the line, but your caret stays where it was, so nothing else in the window changes, not while you step and not when you let go: not the elements or the alignment in the toolbar, not the status bar, the scene list or the notes. Click while stepping to put the caret there. Let go to stay at that place in the script, or press Esc to go back.
+- Fix: STET reported an error behind the scenes on every key you pressed (harmless, but wasteful).
+- Behind the scenes: the tests now fail on any error STET reports while they run, even one nobody sees, and two of the tests' own mix-ups that could make them check the wrong window are gone.
+
 ## 0.34.1 · 24 Oct 2026
 
 - Timeline: while you hold Ctrl (Cmd on a Mac) to step through the script, the toolbar no longer flickers through ACTION, CHARACTER and the other elements, and the alignment, the status bar, the scene list and the notes stay as they were. Only the line on the timeline and the script move. Everything shows where you are as soon as you let go.

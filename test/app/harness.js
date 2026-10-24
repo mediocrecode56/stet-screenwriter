@@ -11,7 +11,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { rmSync, existsSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,16 +48,18 @@ export async function scratch(name = 'stet') {
 // (STET_E2E_DISPLAY=shared keeps them on the current display: to watch them, or to drive them with xdotool.)
 const XVFB = process.platform === 'linux' && process.env.STET_E2E_DISPLAY !== 'shared' && spawnSync('which', ['Xvfb']).status === 0;
 async function display() {
-  for (let tries = 0; tries < 20; tries++) {
-    const n = 200 + Math.floor(Math.random() * 3000);
-    if (existsSync(`/tmp/.X11-unix/X${n}`) || existsSync(`/tmp/.X${n}-lock`)) continue;
-    const x = spawn('Xvfb', [`:${n}`, '-screen', '0', '1280x900x24', '-nolisten', 'tcp'], { stdio: 'ignore' });
-    live.add(x);
-    x.once('exit', () => live.delete(x));
-    for (let i = 0; i < 100 && x.exitCode === null; i++) { if (existsSync(`/tmp/.X11-unix/X${n}`)) return { name: `:${n}`, x }; await sleep(20); }
-    x.kill();
-  }
-  throw new Error('no virtual display');
+  // Xvfb picks a free display itself and says which (-displayfd), so two never share one.
+  const x = spawn('Xvfb', ['-displayfd', '3', '-screen', '0', '1280x900x24', '-nolisten', 'tcp'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe'] });
+  live.add(x);
+  x.once('exit', () => live.delete(x));
+  const n = await new Promise((resolve) => {
+    let out = '';
+    x.stdio[3].on('data', (d) => { out += d; if (out.includes('\n')) resolve(out.trim()); });
+    x.once('exit', () => resolve(null));
+    setTimeout(() => resolve(null), 5000);
+  });
+  if (!n) { x.kill(); throw new Error('no virtual display'); }
+  return { name: ':' + n, x };
 }
 
 const KEYS = {
@@ -70,20 +72,25 @@ const KEYS = {
 const BIT = { Alt: 1, Ctrl: 2, Control: 2, Meta: 4, Cmd: 4, Shift: 8 };
 
 export class App {
-  static async launch({ userData, port = 9300 + Math.floor(Math.random() * 600), args = [], hidden = false, env = {} }) {
+  static async launch({ userData, args = [], hidden = false, env = {} }) {
     const screen = XVFB ? await display() : null;
-    const child = spawn(ELECTRON, [...APP_ARGS, '--e2e', ...(hidden ? ['--hidden'] : []), `--remote-debugging-port=${port}`, ...args], {
+    const child = spawn(ELECTRON, [...APP_ARGS, '--e2e', ...(hidden ? ['--hidden'] : []), '--remote-debugging-port=0', ...args], {
       env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0', ...(screen ? { DISPLAY: screen.name } : {}), ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     live.add(child);
     child.once('exit', () => { live.delete(child); screen?.x.kill(); });
     child.stdout.on('data', () => {});
-    let err = '';
-    child.stderr.on('data', (d) => { err = (err + d).slice(-2000); });
+    // The system picks a free port for each app (two picking the same one would leave the second
+    // driven through the first), and Chromium says which: "DevTools listening on ws://127.0.0.1:PORT/…".
+    let err = '', port = 0;
+    // What the main process reports going wrong (an error it didn't catch, a write that failed, the page gone) fails the file as a page error does.
+    const failed = child.failed = [];
+    child.stderr.on('data', (d) => { err = (err + d).slice(-2000); port ||= +(/DevTools listening on ws:\/\/[^/]*:(\d+)\//.exec(err)?.[1] || 0); for (const l of String(d).split('\n')) if (/Uncaught|JavaScript error|Error occurred in handler|renderer gone|write failed|could not start/.test(l)) failed.push(l.trim()); });
     let target = null;
     for (const end = Date.now() + START_MS; Date.now() < end && !target && child.exitCode === null;) {
       await sleep(100);
+      if (!port) continue;
       try {
         const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
         target = list.find((t) => t.type === 'page' && t.url.startsWith('stet://app/'));
@@ -99,7 +106,10 @@ export class App {
     return app;
   }
 
-  constructor(child, wsUrl, userData) { this.child = child; this.wsUrl = wsUrl; this.userData = userData; this.id = 0; this.pending = new Map(); this.mods = 0; }
+  constructor(child, wsUrl, userData) { this.child = child; this.wsUrl = wsUrl; this.userData = userData; this.id = 0; this.pending = new Map(); this.mods = 0; this.errors = []; this.expected = []; }
+
+  /** An error the main process will report on purpose (a test of how STET copes with it). */
+  expect(re) { this.expected.push(re); }
 
   open() {
     return new Promise((resolve, reject) => {
@@ -110,6 +120,7 @@ export class App {
       this.ws.onclose = () => { for (const { rej } of this.pending.values()) rej(new Error('connection closed')); this.pending.clear(); };
       this.ws.onmessage = (m) => {
         const msg = JSON.parse(m.data);
+        if (msg.method === 'Runtime.exceptionThrown') { const d = msg.params.exceptionDetails; this.errors.push(d.exception?.description || d.text); }
         if (msg.id && this.pending.has(msg.id)) {
           const { res, rej } = this.pending.get(msg.id);
           this.pending.delete(msg.id);
@@ -250,8 +261,17 @@ export class App {
 
   get exited() { return this.child.exitCode !== null || this.child.signalCode !== null; }
 
-  /** Quit the way STET does on closing its window (statistics flushed, nothing asked). */
+  /** Quit the way STET does on closing its window (statistics flushed, nothing asked). Fails if
+   *  anything in the page threw without being caught while it ran, or the main process reported an
+   *  error, whatever the tests checked. */
   async close() {
+    try { await this.quit(); } finally { this.ws.onmessage = null; }
+    const failed = this.child.failed.filter((l) => !this.expected.some((re) => re.test(l)));
+    if (failed.length) throw new Error('the main process reported:\n' + [...new Set(failed)].slice(0, 5).join('\n'));
+    if (this.errors.length) throw new Error(`the page threw ${this.errors.length} uncaught error(s):\n` + [...new Set(this.errors.map((e) => e.split('\n').slice(0, 2).join(' ')))].slice(0, 5).join('\n'));
+  }
+
+  async quit() {
     if (!this.exited) {
       const gone = new Promise((r) => this.child.once('exit', r));
       try { await Promise.race([this.eval('window.stet.invoke("app:close-ready")'), sleep(3000)]); } catch { /* gone */ }

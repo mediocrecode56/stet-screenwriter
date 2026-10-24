@@ -63,7 +63,7 @@ export class Timeline {
       if (this.zone(e) !== 'zoom' || this.onRuler(e)) { this.ppp = 0; this.update(true); }
     });
     // Ctrl pressed with the pointer on the bar starts stepping right there; letting go ends it,
-    // and Esc puts the caret back where it was (and no more stepping until Ctrl is pressed again).
+    // and Esc puts the script back where it was (and no more stepping until Ctrl is pressed again).
     addEventListener('keydown', (e) => {
       if (this.stepping && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return this.cancelStep(); }
       if (isMod(e.key) && !e.repeat && this.pointer != null) { this.cancelled = false; this.startStep(this.pointer); }
@@ -73,9 +73,8 @@ export class Timeline {
     // The pointer is locked while stepping (see startStep()); the main process asks for it, as a
     // modifier key alone is no user gesture. Chromium lets go of it itself on Esc (and the page never
     // sees that key), so losing it while the window has the focus is an Esc; without the focus, the
-    // writer switched windows, which keeps the caret where it stepped to.
+    // writer switched windows, which leaves the script where it stepped to.
     window.__stetPointerLock = () => this.lock();
-    addEventListener('blur', () => L('blur'), true); document.addEventListener('pointerlockchange', () => L('plc'), true); addEventListener('keydown', (e) => L('kd ' + e.key), true);
     document.addEventListener('pointerlockchange', () => {
       const f = this.stepping;
       if (!f) return;
@@ -228,15 +227,17 @@ export class Timeline {
    *  nothing. The line moves slower than the mouse, so the pointer is locked where stepping began
    *  and only its movement counts: it can't wander off over the toolbar or the script, nothing there
    *  lights up or takes a click, and when Ctrl is let go it is back on the bar where it was. (Should
-   *  the lock be refused, a cover over the window takes the pointer instead.) The caret and the
-   *  window follow; a right-click pins a timecode at that second; letting go of Ctrl leaves the
-   *  caret there, Esc puts it back. */
+   *  the lock be refused, a cover over the window takes the pointer instead.) The script follows the
+   *  line, with the caret drawn where it is, but the caret itself stays put: nothing that shows where
+   *  it is (the element in the toolbar, the status bar, the scene list, the notes) changes, then or
+   *  after. A click puts the caret there; a right-click pins a timecode at that second; letting go
+   *  of Ctrl leaves the script there, Esc puts it back. */
   startStep(clientX) {
     if (!this.time || !this.visible || this.stepping || this.editing || this.dragging) return;
-    const c = this.ed.caret, t0 = Math.round(this.time.at(this.posAt(clientX)));
-    // The line shows at once; the caret moves only once the line does, so a shortcut pressed with
+    const t0 = Math.round(this.time.at(this.posAt(clientX)));
+    // The line shows at once; the script moves only once the line does, so a shortcut pressed with
     // the pointer resting on the bar leaves it where it is.
-    this.stepping = { caret: { b: c.b, o: c.o }, t: t0, x: Math.min(this.length, this.time.pos(t0)), at: clientX, moved: false, locked: false };
+    this.stepping = { top: this.view.scroller.scrollTop, t: t0, x: Math.min(this.length, this.time.pos(t0)), at: clientX, moved: false, locked: false };
     this.rebase(clientX, t0);
     // Every pointer event is the stepping's until it ends, wherever it lands.
     const off = this.stepOff = new AbortController(), opts = { capture: true, signal: off.signal };
@@ -244,7 +245,7 @@ export class Timeline {
     addEventListener('mousemove', (e) => { e.stopPropagation(); this.move(e); }, opts);
     for (const type of ['mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu']) addEventListener(type, take, opts);
     // A right-click pins on the press: with the pointer locked there is no context menu event.
-    addEventListener('mousedown', (e) => { take(e); if (e.button === 2) this.pinStep(); }, opts);
+    addEventListener('mousedown', (e) => { take(e); if (e.button === 2) this.pinStep(); else if (e.button === 0) this.placeStep(); }, opts);
     addEventListener('wheel', (e) => { take(e); this.wheel(e); if (this.stepping) this.rebase(this.stepping.at, this.stepping.t); }, { ...opts, passive: false });
     this.cover = document.body.appendChild(h('div', { class: 'tl-cover' }));
     document.body.classList.add('tl-fine');
@@ -294,7 +295,7 @@ export class Timeline {
     this.readout(f.x, t);
   }
 
-  /** Stop stepping: the caret stays where it stepped to (`keep`), or goes back to where it was. */
+  /** Stop stepping: the script stays where it stepped to (`keep`), or goes back to where it was. */
   endStep(keep = true) {
     const f = this.stepping;
     if (!f) return;
@@ -306,31 +307,38 @@ export class Timeline {
     document.body.classList.remove('tl-fine');
     this.hover.classList.remove('fine');
     this.hover.hidden = true; // until the pointer moves over the bar again
+    const v = this.view;
+    v.scrubAt = null;
     if (!f.moved) return;
-    if (!keep) this.ed.setSel(f.caret, f.caret);
-    const c = this.ed.caret;
-    this.jump(pos(c.b, c.o));
+    if (!keep) v.scroller.scrollTop = f.top;
+    v.frame();
   }
 
-  /** Esc: stop stepping and put the caret back; Ctrl has to be let go and pressed again to step on. */
+  /** Esc: stop stepping and put the script back; Ctrl has to be let go and pressed again to step on. */
   cancelStep() {
     this.cancelled = true;
     this.endStep(false);
   }
 
-  /** The caret and the window follow the line at once. */
+  /** The script follows the line at once, with the caret drawn there (the editor's stays put). */
   scrub(x) {
     const { bi, line } = placeAt(this.view.pages, x);
     const b = this.ed.blocks[bi];
     if (!b) return;
     const p = pos(bi, linesOf(b)[line] || 0);
     const v = this.view;
-    this.ed.setSel(p, p);
+    this.stepping.p = v.scrubAt = p;
     v.stopGlide();
     v.relayout();
     const r = v.caretRect(p);
     if (r) v.scroller.scrollTop = r.y - v.scroller.clientHeight / 3;
     v.frame();
+  }
+
+  /** A click while stepping: the caret goes to the line, to write there. */
+  placeStep() {
+    const p = this.stepping?.p;
+    if (p) this.jump(p);
   }
 
   /** A right-click while stepping: a timecode at that second, at once. */

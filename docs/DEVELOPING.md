@@ -182,8 +182,12 @@ How the tests stay fast and dependable:
   (`test/unit/dino-life.test.js`) with every rule checked on every frame, and the tests read what
   happened from it; how often something happens is read from its choices directly rather than
   waited for. `test/helpers/dino-sim.js` has the shared simulation.
+- **Nothing fails quietly.** Every app test fails if, while it ran, anything in the page threw an
+  error nobody caught or the main process reported one (an error it didn't catch, a write that
+  failed, the page gone), even when what the test checks came out right. A test of how STET copes
+  with an error says so with `app.expect(/…/)`.
 - **Broken on purpose.** The suite was checked by breaking STET in turn (no pointer lock while
-  stepping, Esc keeping the caret, a dialog leaving the focus behind it, a routine sliding instead
+  stepping, the caret or the toolbar following the stepping, Esc keeping the script where it stepped to, a dialog leaving the focus behind it, a routine sliding instead
   of walking, autosave off, an undo keeping its word credit, a streak day counted twice, a burp
   without a meal, Save As during an autosave): each made the tests that cover it fail, and only those.
 

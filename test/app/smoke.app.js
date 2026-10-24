@@ -131,7 +131,6 @@ test('scene navigation glides to the heading, nothing of the scene before it in 
 const lbl = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, p2 = (n) => String(n).padStart(2, '0'); return h ? `${h}:${p2(m)}:${p2(sec % 60)}` : `${m}:${p2(sec % 60)}`; };
 const hms = (sec) => [Math.floor(sec / 3600), Math.floor(sec / 60) % 60, sec % 60].map((n) => String(n).padStart(2, '0')).join(':');
 const LOCKS = process.platform === 'linux';
-const caretB = () => app.eval('__stet.editor.caret.b');
 const tl = (expr) => app.eval(`(() => { const t = __stet.timeline; return ${expr}; })()`);
 
 test('the timeline: a tick for each scene, note and highlight; a click goes there, drawn to what is near', async () => {
@@ -171,8 +170,19 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   assert.ok(await app.eval('__stet.view.scroller.scrollTop') > 300, 'dragging the band moves the window');
 });
 
-test('the timeline: holding Ctrl steps a second at a time with the pointer locked, so nothing else in the window can be reached', async () => {
-  await app.eval(`__stet.cmd.run('panel-scenes')`); // (the scene list open, to see it hold still)
+// What shows where the caret is: the element and alignment in the toolbar, the status bar, the current scene.
+const shown = () => app.eval(`[...document.querySelectorAll('#eltypes .tb.on, #stbar .on')].map((b) => b.dataset.t || b.dataset.s).join() + '|' + document.getElementById('btn-align').dataset.a + '|' + ['st-el', 'st-page', 'st-scene'].map((id) => document.getElementById(id).textContent).join('|') + '|' + document.querySelector('#scenes .cur')?.dataset.b`);
+// Every change anywhere in the window but the script, the timeline and what lives on its own (the dinosaur, the clock).
+const watch = () => app.eval(`(() => { const log = window.__changed = [];
+  window.__watch?.disconnect();
+  window.__watch = new MutationObserver((ms) => { for (const m of ms) { const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+    if (t === document.body || t.closest('#content, #timeline, #dino, #st-clock, .tl-cover') || [...m.addedNodes, ...m.removedNodes].some((n) => n.classList?.contains('tl-cover'))) continue;
+    log.push((t.id || t.className || t.nodeName) + ' ' + (m.attributeName || m.type)); } });
+  window.__watch.observe(document.body, { attributes: true, childList: true, characterData: true, subtree: true }); })()`);
+const changed = async () => { await app.frame(); return app.eval('[...new Set(window.__changed)].join(", ")'); };
+
+test('the timeline: holding Ctrl steps a second at a time with the pointer locked; the script follows, nothing else in the window changes', async () => {
+  await app.eval(`__stet.cmd.run('panel-scenes')`); // (the scene list open, to see it stay as it is)
   await app.caret(0, 0);
   await app.until(`document.querySelector('#scenes .cur')?.dataset.b === '0'`, { what: 'the scene list' });
   await app.eval('__stet.view.scroller.scrollTop = 0');
@@ -180,57 +190,72 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   const bar = await app.rect('#timeline .tl-inner');
   const x = bar.left + bar.width * 0.3, y = bar.top + 12; // clear of the band at the start
   await app.move(x, y);
-  const before = await caretB(), tab = await app.eval('JSON.stringify(__stet.editor.tabTypes)');
-  // What shows where the caret is: the element and alignment in the toolbar, the status bar, the current scene.
-  const shown = () => app.eval(`[...document.querySelectorAll('#eltypes .tb.on, #stbar .on')].map((b) => b.dataset.t || b.dataset.s).join() + '|' + document.getElementById('btn-align').dataset.a + '|' + document.getElementById('st-el').textContent + '|' + document.getElementById('st-scene').textContent + '|' + document.querySelector('#scenes .cur')?.dataset.b`);
-  const shown0 = await shown();
+  const tab = await app.eval('JSON.stringify(__stet.editor.tabTypes)'), shown0 = await shown();
   const t0 = await tl(`Math.round(t.time.at(t.posAt(${x})))`);
-  // Ctrl pressed with the pointer resting on the bar: the line shows, the pointer is locked to the
-  // bar, and the caret stays put until the line moves (Ctrl+S and the like leave it alone).
+  const top = () => app.eval('__stet.view.scroller.scrollTop');
+  const caretAt = () => app.eval('JSON.stringify(__stet.editor.sel)'), caret0 = await caretAt();
+  await watch();
+  // Ctrl pressed with the pointer resting on the bar: the line shows and the pointer is locked to
+  // the bar; the script stays put until the line moves (Ctrl+S and the like leave it alone).
   await app.down('Mod');
   await app.until('!!__stet.timeline.stepping', { what: 'stepping' });
   // The system grants the lock only to the window with the focus, which a writer's always is; so is
   // each one here on Linux (a display of its own). A CI Mac's may not be: there the cover stands in.
   if (LOCKS) await app.until('document.pointerLockElement === __stet.timeline.inner', { what: 'the pointer locked to the bar' });
-  assert.equal(await caretB(), before, 'Ctrl alone moves nothing');
-  // The mouse wanders up over the toolbar while it moves 120px: ten seconds on, wherever it goes up or down.
+  assert.equal(await top(), 0, 'Ctrl alone moves nothing');
+  // The mouse wanders up over the toolbar while it moves 400px: ever further on, wherever it goes up or down.
   for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 4); // (up into the toolbar, within the window)
   assert.equal(await tl('t.stepping.t'), t0 + 10, '120px with Ctrl held is ten seconds on');
-  assert.ok(await caretB() > before, 'the caret follows');
-  assert.notEqual(await app.eval('__stet.editor.block.type'), 'scene', 'into another element');
-  await app.frame();
-  assert.equal(await shown(), shown0, 'the toolbar, the status bar and the scene list hold still while Ctrl is held');
+  for (let i = 11; i <= 34; i++) await app.move(x + i * 12, y - (i % 10) * 4);
   assert.equal(await tl('t.drawn'), await tl('t.fit'), 'Ctrl steps, it does not zoom');
-  // Nothing outside the bar lights up or takes the click: no hover, no Ctrl+click on an element type.
+  assert.ok(await top() > 300, 'the script follows the line');
+  // Nothing outside the bar lights up or takes the pointer: no hover, nothing selected.
   const hovered = await app.eval(`[...document.querySelectorAll(':hover')].map((e) => e.id || e.className).filter(Boolean).at(-1)`);
   assert.ok(['tl-inner', 'tl-cover'].includes(hovered), `the pointer is the timeline's while Ctrl is held (hovering ${hovered})`);
-  const type = await app.rect('.tb[data-t="character"]');
-  await app.click(type.x, type.y);
-  assert.equal(await app.eval('JSON.stringify(__stet.editor.tabTypes)'), tab, 'a Ctrl+click on the toolbar does nothing');
-  assert.equal(await app.eval('getSelection().toString()'), '', 'and selects nothing');
-  const stepped = await caretB();
-  // A right-click pins a timecode at that second, at once.
-  await app.click(type.x, type.y, { button: 'right' });
-  assert.deepEqual(await app.eval('__stet.session.doc.timecodes.map((t) => t.t)'), [t0 + 10], 'Ctrl + right-click pins the second stepped to');
-  // Letting go ends it: the pointer is free again (back where it was locked, on the bar), the caret stays.
+  assert.equal(await caretAt(), caret0, 'the caret itself stays put');
+  assert.equal(await changed(), '', 'nothing else in the window changes while Ctrl is held');
+  assert.equal(await app.eval(`(() => { const p = __stet.view.scrubAt || {}, r = __stet.view.caretRect(p), c = document.getElementById('caret');
+    return p.b > 6 && c.style.display !== 'none' && parseFloat(c.style.top) === r.y; })()`), true, 'the caret drawn on the line stepped to');
+  // Letting go ends it: the pointer is free again (back where it was locked, on the bar), the script
+  // stays where it stepped to, and still nothing else changes: not the caret, not the toolbar.
+  const stepped = await top();
   await app.up('Mod');
   await app.until('!__stet.timeline.stepping && !document.pointerLockElement && !document.querySelector(".tl-cover")', { what: 'stepping to end' });
-  assert.equal(await caretB(), stepped, 'the caret stays where it stepped to');
-  await app.until(async () => (await shown()) !== shown0, { what: 'the toolbar to catch up' });
-  assert.match(await shown(), /^action\|/, 'and then show where the caret is');
-  // Esc while stepping puts the caret back.
+  assert.equal(await top(), stepped, 'the script stays where it stepped to');
+  assert.equal(await caretAt(), caret0);
+  assert.equal(await shown(), shown0);
+  assert.equal(await changed(), '', 'nor after letting go of Ctrl');
+  // Esc while stepping puts the script back.
   await app.move(x, y);
   await app.down('Mod');
   await app.until('!!__stet.timeline.stepping');
-  for (let i = 1; i <= 5; i++) await app.move(x + i * 12, y);
-  assert.notEqual(await caretB(), stepped, 'stepped on');
+  for (let i = 1; i <= 30; i++) await app.move(x + i * 12, y);
+  await app.until(async () => (await top()) !== stepped, { what: 'stepped on' });
   await app.key('Escape'); // (Chromium takes it to let go of the pointer; the page never sees the key)
   await app.until('!__stet.timeline.stepping && !document.pointerLockElement', { what: 'Esc to end stepping' });
-  assert.equal(await caretB(), stepped, 'Esc: back where it was');
+  assert.equal(await top(), stepped, 'Esc: back where it was');
   await app.move(x + 80, y); // Ctrl still held: no stepping again until it is pressed afresh
   assert.equal(await tl('!!t.stepping'), false, 'not again until Ctrl is pressed afresh');
-  assert.equal(await caretB(), stepped);
+  assert.equal(await top(), stepped);
   await app.up('Mod');
+  assert.equal(await changed(), '', 'nor with Esc');
+  // A right-click pins a timecode at that second, at once; a click puts the caret there, and only
+  // then does the toolbar show where it is.
+  await app.move(x, y);
+  await app.down('Mod');
+  await app.until('!!__stet.timeline.stepping');
+  for (let i = 1; i <= 10; i++) await app.move(x + i * 12, y - i * 4);
+  const type = await app.rect('.tb[data-t="character"]');
+  await app.click(type.x, type.y, { button: 'right' });
+  assert.deepEqual(await app.eval('__stet.session.doc.timecodes.map((t) => t.t)'), [t0 + 10], 'Ctrl + right-click pins the second stepped to');
+  assert.equal(await caretAt(), caret0, 'pinning leaves the caret');
+  await app.click(type.x, type.y);
+  assert.equal(await app.eval('JSON.stringify(__stet.editor.tabTypes)'), tab, 'a click over the toolbar is no Ctrl+click on an element type');
+  assert.equal(await app.eval('JSON.stringify(__stet.editor.sel.f) === JSON.stringify(__stet.view.scrubAt)'), true, 'a click puts the caret on the line');
+  await app.up('Mod');
+  await app.until('!__stet.timeline.stepping');
+  assert.equal(await app.eval('getSelection().toString()'), '', 'and selects nothing');
+  await app.until(async () => /^action\|/.test(await shown()), { what: 'the toolbar to show where the caret went' });
   // With Ctrl held nothing draws the pointer: right beside the timecode it starts where the pointer is.
   const tc = await app.rect('#timeline .tl-tcm');
   await app.move(tc.left + 4, y);
@@ -238,7 +263,7 @@ test('the timeline: holding Ctrl steps a second at a time with the pointer locke
   await app.until('!!__stet.timeline.stepping');
   assert.equal(await tl(`t.stepping.t0 === Math.round(t.time.at(t.posAt(${tc.left + 4}))) && t.stepping.t0 !== ${t0 + 10}`), true, 'no magnetism with Ctrl held');
   await app.up('Mod');
-  await app.eval(`__stet.cmd.run('panel-scenes')`);
+  await app.eval(`(() => { window.__watch.disconnect(); __stet.cmd.run('panel-scenes'); })()`);
 });
 
 test('the timeline: a click on a timecode edits it; a right-click on a scene gives it its own, shown beside the heading', async () => {

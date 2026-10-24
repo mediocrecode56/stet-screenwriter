@@ -99,8 +99,9 @@ line with the cap is where you're typing. **Ctrl+Shift+T** shows or hides it.
   spreads the time between them. **Right-click a scene** to give it its own timecode, shown beside
   its heading; right-click anywhere else to add one there; click one to change it.
 - **Hold Ctrl** (**Cmd** on a Mac) over the strip to step through the script a second at a time.
-  The pointer stays put and the toolbar holds still while you do, so nothing else in the window reacts. A **right-click** pins
-  a timecode at that second. Let go to stay there, or press **Esc** to go back.
+  Only the script moves: the pointer stays put and your caret stays where it was, so nothing else
+  in the window reacts. **Click** to put the caret there; a **right-click** pins a timecode at that
+  second. Let go to stay there, or press **Esc** to go back.
 
 ## Handy keys
 

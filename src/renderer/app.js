@@ -107,11 +107,6 @@ editor.onChange = () => {
     if (find.open) find.schedule();
     revision.documentChanged();
   }
-  // While Ctrl steps along the timeline the caret follows the line through the script, but what
-  // shows where the caret is (the element and alignment in the toolbar, the status bar, the
-  // current scene and note) holds still: nothing lights up but the line. It catches up when
-  // stepping ends.
-  if (timeline.stepping) return;
   // Caret inside commented text makes that note current.
   const b = editor.block;
   {
@@ -180,7 +175,6 @@ function scheduleStats() {
 
 let statusKey = '';
 function renderStatus() {
-  if (timeline.stepping) return; // (see editor.onChange)
   const p = editor.caret;
   const b = editor.block;
   const page = view.currentPage() + 1;

@@ -70,6 +70,7 @@ export class View {
     this.revision = null; // { marks: [{b, s, e, cat, cur, hov}] } from the English revision panel
     this.caretEl = el('div', '');
     this.caretEl.id = 'caret';
+    this.scrubAt = null;    // a position: stepping along the timeline, the caret is drawn there instead (the editor's stays put)
     this.ghost = null;      // { b, o, text }: the rest of a character name, suggested after the caret
     this.ghostEl = el('div', 'ghost');
     this.ghostEl.setAttribute('aria-hidden', 'true');
@@ -407,10 +408,10 @@ export class View {
   }
 
   paintCaret() {
-    const c = this.caretEl;
-    const r = this.caretRect();
-    this.paintGhost(r);
-    if (!r || this.editor.hasSelection() || !this.focused) { c.style.display = 'none'; return; }
+    const c = this.caretEl, at = this.scrubAt;
+    const r = this.caretRect(at || undefined);
+    this.paintGhost(at ? null : r);
+    if (!r || (!at && (this.editor.hasSelection() || !this.focused))) { c.style.display = 'none'; return; }
     c.style.display = '';
     const key = `${r.x},${r.y},${r.h},${devicePixelRatio}`;
     if (c._k !== key) {

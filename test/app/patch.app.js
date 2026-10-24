@@ -68,6 +68,7 @@ test('a patch: offered with its small size, unpacked, then run on the next start
   await fs.writeFile(path.join(broken, '.stet-patch.json'), JSON.stringify({ version: '99.0.1', electron: ELECTRON }));
   await fs.writeFile(path.join(broken, 'src', 'main', 'main.js'), 'this is not JavaScript (');
   app = await App.launch({ userData: ud, env: env({ STET_PATCH_DIR: patches }) });
+  app.expect(/the update could not start/);
   assert.match(await version(), /β$/, 'STET is up');
   await fs.access(path.join(broken, '.failed'));
   await app.close();
