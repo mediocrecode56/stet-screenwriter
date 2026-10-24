@@ -39,6 +39,31 @@ export function placeAt(pages, x) {
   return { bi: best.bi, line: Math.min(best.l1 - 1, best.l0 + Math.floor(row - best.y)) };
 }
 
+/**
+ * Where a view whose top edge is at row `row` (from the top of the body, fractional) of page pi begins
+ * in the script: the first printed line at or below it, read the way the marks are (scriptPos). Rows with
+ * no line on them (the blank before a heading, a margin, the gap between pages) belong to the line after
+ * them, so a heading at the top of the view is where the view begins, exactly on its tick.
+ */
+export function lineFrom(pages, pi, row) {
+  if (!pages.length || pi < 0) return 0;
+  for (; pi < pages.length; pi++, row = 0) {
+    for (const it of pages[pi].items) if (row < it.y + it.l1 - it.l0) return pi + Math.max(row, it.y) / BODY;
+  }
+  return pages.length;
+}
+
+/** Where a view whose bottom edge is at row `row` of page pi ends: just after the last printed line above it. */
+export function lineTo(pages, pi, row) {
+  if (!pages.length || pi < 0) return 0;
+  for (pi = Math.min(pi, pages.length - 1); pi >= 0; pi--, row = Infinity) {
+    let x = null;
+    for (const it of pages[pi].items) { if (it.y >= row) break; x = pi + Math.min(row, it.y + it.l1 - it.l0) / BODY; }
+    if (x != null) return x;
+  }
+  return 0;
+}
+
 /** Line of block b that offset o is on. */
 function lineOf(b, o) {
   const starts = linesOf(b);

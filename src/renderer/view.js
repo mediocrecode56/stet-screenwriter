@@ -479,6 +479,13 @@ export class View {
     return { x: clientX - r.left + this.scroller.scrollLeft, y: clientY - r.top + this.scroller.scrollTop };
   }
 
+  /** The script page (pi: negative on the title page) and body row at content y, the row fractional:
+   *  negative above the body, past PAGE.bodyRows below it (the timeline's band reads the window with it). */
+  rowAt(y) {
+    const vi = Math.max(0, Math.floor((y - PAD) / (this.PH + this.gap)));
+    return { pi: vi - this.offset, row: (y - this.pageTop(vi)) / this.row - PAGE.topRows };
+  }
+
   /** Document position nearest to a client point (title page maps to document start). */
   posAt(clientX, clientY) {
     const { x, y } = this.toContent(clientX, clientY);
@@ -531,12 +538,14 @@ export class View {
    * there: with no frames at all (a hidden window) it is put there when the time is up.
    * A wheel or a press on the script takes over at once; reduced motion goes straight there.
    * With `top`, the passage goes to the top of the view instead (a scene: its heading, with the
-   * blank line before it and one more above), as far as the end of the script allows.
+   * blank line before it and one more above), as far as the end of the script allows. With `y`, to
+   * the scroll position it gives instead (read again every frame).
    */
-  glideTo(a, b = a, { top = false } = {}) {
+  glideTo(a, b = a, { top = false, y = null } = {}) {
     const sc = this.scroller;
     this.stopGlide();
     const goal = () => {
+      if (y) return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(y())));
       const r0 = this.caretRect(a), r1 = this.caretRect(b);
       if (!r0) return sc.scrollTop;
       const mid = r1 && r1.y >= r0.y ? (r0.y + r1.y + r1.h) / 2 : r0.y + r0.h / 2;

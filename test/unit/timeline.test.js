@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
 import { paginate } from '../../src/core/layout.js';
 import { newDocument, makeBlock } from '../../src/core/model.js';
 import { serialize, deserialize } from '../../src/core/serialize.js';
@@ -184,4 +184,24 @@ test("a scene's own timecode: on the first line of its heading, shown by block i
   // It sets the ruler like any other timecode.
   const time = timeScale(anchorsOf(tcs, blocks, pages));
   assert.equal(Math.round(time.at(scriptPos(pages, 13))), 90);
+});
+
+test('the window on the script, as the glass band shows it: from the first line in view to the last, a heading at the top exactly on its tick', () => {
+  const { blocks, pages } = script(12, 14);
+  for (let bi = 0; bi < blocks.length; bi++) {
+    if (blocks[bi].type !== 'scene') continue;
+    const x = scriptPos(pages, bi), pi = Math.floor(x), row = Math.round((x - pi) * 54);
+    // The view's top in the blank rows before the heading (or exactly on it): the band begins at the heading.
+    for (const top of [row - 0.9, row - 0.4, row]) if (top >= 0 || pi > 0) assert.equal(lineFrom(pages, pi, top), x, `scene ${bi} from row ${top}`);
+    // Its bottom just past the heading's line: the band ends right after it.
+    assert.ok(Math.abs(lineTo(pages, pi, row + 1) - (x + 1 / 54)) < 1e-9);
+  }
+  // Within a line it moves with the scroll; past the last line on a page it waits at the next page's first.
+  const p = pages[1], it = p.items[0];
+  assert.ok(Math.abs(lineFrom(pages, 1, it.y + 0.5) - (1 + (it.y + 0.5) / 54)) < 1e-9);
+  assert.equal(lineFrom(pages, 1, 60), lineFrom(pages, 2, 0));
+  assert.equal(lineTo(pages, 2, -3), lineTo(pages, 1, Infinity), 'above the body of a page: the last line of the page before');
+  assert.equal(lineFrom(pages, -1, 0), 0, 'the title page: the start');
+  assert.equal(lineFrom(pages, pages.length, 0), pages.length, 'past the end: the end');
+  assert.equal(lineTo(pages, 0, -5), 0);
 });

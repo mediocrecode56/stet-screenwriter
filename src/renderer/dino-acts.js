@@ -10,7 +10,7 @@
 // The engine (dino.js) plays them one at a time, slots reactions in between
 // steps, and bridges postures so nothing ever jumps. `d` is the Critter.
 
-import { postureOf, H, PROPS } from './dino-art.js';
+import { postureOf, H, PROPS, rockArt } from './dino-art.js';
 
 const H_SKY = H + 18; // where things drift down from
 export const CRITTERS = { mouse: 1.2, lizard: 0.8, bunny: 0.6 }; // what lives in the grass, and how often each shows
@@ -1824,10 +1824,252 @@ export const ACTIVITIES = {
     for (let i = 0; i < n; i++) yield { f: i % 2 ? 'armsUp' : 'stand', t: 140, jump: 1, dx: i % 4 < 2 ? 1.5 : -1.5, fx: i === 4 ? 'star' : null };
     yield { f: 'stand', t: 300, fx: 'drop' };
   },
+
+  // -- five newer neighbours (0.43), each met its own way: snapped at, run from, held on to, climbed, helped --
+  *dragonfly(d) {
+    // A dragonfly darts in and hovers about its head, here, then there. It snaps at it, a moment too late
+    // every time (a hop for the last try); now and then it settles on its head, and it holds quite still,
+    // eyes up, until the dragonfly is off again.
+    yield* d.getTo('stand');
+    d.envMark('dragonfly');
+    const df = d.spawn('dragonfly', d.arrive({ y: 18, aim: 'head', life: 40000 }, 7, d.chance(0.5) ? 1 : -1));
+    yield { f: 'stand', t: 600 };
+    yield { f: 'up', t: 500, face: d.dirTo(df), fx: '!' };
+    for (let i = 0; i < 12 && d.has(df) && d.gap(df) > 30; i++) yield { f: 'up', t: 300, face: d.dirTo(df) };
+    const n = d.rint(2, 4);
+    for (let k = 0; k < n && d.has(df); k++) {
+      for (let i = 0, m = d.rint(2, 4); i < m && d.has(df); i++) yield { f: i % 2 ? 'blink' : 'up', t: d.rnd(250, 420), face: d.dirTo(df) };
+      if (k < n - 1) yield { f: 'chomp', t: 200, face: d.dirTo(df), do: (c) => { df.dodge = c.now; } }; // snap — too slow
+      else { yield { f: 'crouch', t: 120 }; yield { f: 'jump', t: 380, jump: 6, do: (c) => { df.dodge = c.now; } }; }
+      yield { f: 'stand', t: 300, fx: k === n - 1 ? 'dots' : null };
+    }
+    if (d.has(df) && d.chance(0.4)) {
+      yield { f: 'stand', t: 400, do: (c) => { c.remove(df); c.wear('dragonfly', 6000); } }; // it lands on its head
+      yield { f: 'up', t: 1000, fx: '!' }; // hold still…
+      yield { f: 'up', t: 1100 };
+      yield { f: 'blink', t: 300 };
+      yield { f: 'stand', t: 600, do: (c) => { c.unwear(); c.spawn('dragonfly', { x: c.clampProp(c.headX() - 3.5 * c.u, 7), y: c.height() + 1, aim: 'away', life: 6000 }); } };
+      yield { f: 'up', t: 800, fx: 'heart' };
+    } else if (d.has(df)) df.aim = 'away';
+    yield { f: 'stand', t: 400 };
+  },
+  *bee(d) {
+    // A bee comes buzzing to a flower (or just about the place). It creeps up for a sniff; the bee takes
+    // that the wrong way and comes at it. It turns tail and runs, hides its face till the buzzing has gone,
+    // and peeks out.
+    yield* d.getTo('stand');
+    d.envMark('bee');
+    const fl = d.bloom();
+    const side = fl ? Math.sign(d.propCenter(fl) - d.center()) || 1 : d.inward() || d.face;
+    const b = d.spawn('bee', d.arrive({ y: 12, aim: fl ? 'flower' : 'about', at: fl, life: 40000 }, 5, side));
+    yield { f: 'stand', t: 500 };
+    yield { f: 'up', t: 500, face: d.dirTo(b), fx: '?' };
+    for (let i = 0; i < 14 && d.has(b) && d.gap(b) > 60; i++) yield { f: 'up', t: 300, face: d.dirTo(b) };
+    if (!d.has(b)) return;
+    yield* d.walkTo(() => (d.has(b) ? d.clampX(d.propCenter(b) - d.dw / 2 - d.dirTo(b) * 16) : null), 0.8, { max: 24, creep: true });
+    yield { f: 'sniff', t: 500, face: d.dirTo(b) };
+    yield { f: 'sniff', t: 300, do: () => { b.aim = 'dino'; } }; // bzz!
+    yield { f: 'up', t: 250, fx: '!' };
+    const away = -d.dirTo(b);
+    yield { f: 'crouch', t: 100, face: away };
+    yield* d.walkTo(d.clampX(d.x + away * d.rnd(90, 140)), 3, { max: 60 });
+    yield { f: 'cower', t: 900, face: -away, fx: 'dots', do: (c) => { if (c.has(b)) b.aim = 'away'; } }; // hides its face
+    yield { f: 'cower', t: 800 };
+    yield { f: 'up', t: 500, fx: '?' };
+    yield { f: 'blink', t: 200 };
+    yield { f: 'stand', t: 400, fx: d.chance(0.4) ? 'hash' : null };
+  },
+  *kite(d) {
+    // Seldom: a breeze gets up and brings a kite tumbling along. It grabs the string; the kite tugs it
+    // along a few steps, a gust lifts it right off its feet for a moment, and in the end it lets go and
+    // watches the kite sail away (or the string slips, and it sits down hard).
+    yield* d.getTo('stand');
+    d.envMark('kite');
+    const dir = d.inward() || (d.chance(0.5) ? 1 : -1); // the way the breeze blows
+    d.wind = { dir, t0: d.now, until: d.now + 25000 };
+    const k = d.spawn('kite', d.arrive({ y: 14, dir, come: true, life: 60000 }, 5, -dir));
+    yield { f: 'stand', t: 600, face: -dir };
+    yield { f: 'up', t: 600, fx: '!' };
+    for (let i = 0; i < 20 && d.has(k) && Math.abs(d.propCenter(k) - d.center() - dir * 24) > 6; i++) yield { f: 'up', t: 300, face: d.dirTo(k) };
+    if (!d.has(k)) return;
+    yield { f: 'crouch', t: 150, face: dir };
+    yield { f: 'jump', t: 380, jump: 5, do: () => { k.come = false; k.held = true; } }; // got it
+    yield { f: 'up', t: 500, fx: 'heart' };
+    for (let i = 0, n = d.rint(5, 8); i < n && d.has(k); i++) yield { f: i % 2 ? 'creep2' : 'creep1', t: 260, dx: dir * 1.4 * d.du, face: dir }; // tugged along
+    yield { f: 'armsUp', t: 300, do: () => { k.gust = true; } };
+    yield { f: 'armsUp', t: 700, lift: [0, 3], fx: '!' }; // up it goes…
+    yield { f: 'armsUp', t: 600, lift: [3, 3] };
+    yield { f: 'up', t: 600, lift: [3, 0], do: () => { k.gust = false; } };
+    if (d.chance(0.7)) {
+      yield { f: 'up', t: 600 };
+      yield { f: 'up', t: 300, do: () => { k.held = false; } }; // lets it go
+      for (let i = 0; i < 6 && d.has(k); i++) yield { f: 'up', t: 400, face: dir };
+      yield { f: 'armsUp', t: 500, fx: 'star' };
+    } else {
+      yield { f: 'up', t: 200, do: () => { k.held = false; } }; // it slips
+      yield { f: 'crouch', t: 150, fx: '!' };
+      yield* d.getTo('sit');
+      yield { f: 'sitBlink', t: 600, fx: 'star' };
+      yield { f: 'sitUp', t: 800, face: dir, fx: 'dots' };
+    }
+    yield { f: d.sitting() ? 'sit' : 'stand', t: 300 };
+  },
+  *boulder(d) {
+    // Seldom: it scrapes at the sand and a rock comes up, never the same shape twice. Up it climbs, stands
+    // tall on top and has a look round — a roar from up there, or a little dance — and jumps down. The rock
+    // stays a good while: something to climb again, to hide behind, to pose by.
+    yield* d.getTo('stand');
+    let rock = d.find('rock');
+    if (!rock) {
+      d.envMark('boulder');
+      const art = rockArt(d.rng), w = art[0].length;
+      const x = d.clearSpot(w * d.u, 0.05, 4) ?? d.front(w, 3);
+      yield { f: 'sniff', t: 600, fx: '?', face: Math.sign(x + (w * d.u) / 2 - d.center()) || d.face };
+      for (let i = 0; i < 6; i++) yield { f: i % 2 ? 'sniff' : 'crouch', t: 150, do: (c) => c.dirt(2) };
+      yield { f: 'up', t: 600, fx: '!', do: (c) => { rock = c.spawn('rock', { x, art, alpha: 0, fadeIn: true, life: c.rnd(6, 12) * 60000 }); c.puffAt(x + (w * c.u) / 2); } };
+      yield { f: 'stand', t: 500 };
+    }
+    yield* d.walkTo(() => (d.has(rock) ? d.reach(rock) : null), 1, { max: 160 });
+    if (!d.has(rock)) return;
+    const h = rock.art.length, side = d.dirTo(rock);
+    yield { f: 'up', t: 400, face: side };
+    yield { f: 'crouch', t: 200 };
+    yield { f: 'jump', t: 420, jump: 5, lift: [0, h], dx: d.centreOn(rock) - d.x };
+    const top = (o) => ({ lift: [h, h], ...o });
+    yield top({ f: 'crouch', t: 150 });
+    yield top({ f: 'stand', t: 500 });
+    const show = d.pick({ roar: 1.2, look: 1, dance: 0.7 });
+    if (show === 'roar') { yield top({ f: 'up', t: 400 }); yield top({ f: 'roar', t: 800, fx: '!' }); yield top({ f: 'stand', t: 400 }); }
+    else if (show === 'look') { for (let i = 0; i < 3; i++) yield top({ f: 'up', t: d.rnd(500, 800), face: i % 2 ? side : -side }); yield top({ f: 'blink', t: 200, fx: 'heart' }); }
+    else for (let i = 0; i < 6; i++) yield top({ f: i % 2 ? 'armsUp' : 'wag', t: 200, fx: i === 1 ? 'note' : null });
+    yield top({ f: 'armsUp', t: 500, fx: 'star' });
+    yield top({ f: 'crouch', t: 150 });
+    const off = d.clampX(side > 0 ? rock.x + d.propW(rock) + 2 : rock.x - d.dw - 2);
+    yield { f: 'jump', t: 420, jump: 4, lift: [h, 0], dx: off - d.x };
+    yield { f: 'crouch', t: 120 };
+    yield { f: 'stand', t: 400 };
+  },
+  *beetle(d) {
+    // A dung beetle comes by, rolling its ball. It watches nose down, follows it a few steps, and gives the
+    // ball a helpful nudge: off it rolls, the beetle scurrying after it. Or it just watches it on its way.
+    yield* d.getTo('stand');
+    d.envMark('beetle');
+    const dir = d.inward() || (d.chance(0.5) ? 1 : -1);
+    const bx = d.clampProp(d.center() - dir * d.rnd(70, 90), 4);
+    const ball = d.spawn('dung', { x: bx + (dir > 0 ? 4 : -3) * d.u, alpha: 0, fadeIn: true, life: 70000 });
+    const bt = d.spawn('beetle', { x: bx, dir, face: dir, speed: 16, ball, alpha: 0, fadeIn: true, life: 70000 });
+    yield { f: 'stand', t: 700, face: -dir };
+    yield { f: 'sniff', t: 600, fx: '?' };
+    for (let i = 0; i < 20 && d.has(bt) && d.gap(bt) > 24 && Math.sign(d.center() - d.propCenter(bt)) === dir; i++) yield { f: i % 3 ? 'sniff' : 'sniffBlink', t: 300 };
+    yield { f: 'up', t: 400, fx: 'heart', face: dir };
+    for (let i = 0, n = d.rint(4, 7); i < n && d.has(bt); i++) yield { f: i % 2 ? 'creep2' : 'creep1', t: 300, dx: dir * 1.2 * d.du, face: dir }; // alongside it
+    if (d.has(ball) && d.chance(0.65)) {
+      yield* d.walkTo(() => (d.has(ball) ? d.reach(ball) : null), 1, { max: 30 });
+      yield { f: 'sniff', t: 300, face: dir, do: (c) => { if (c.has(ball)) ball.vx = dir * c.rnd(45, 60); } }; // a helping nudge
+      yield { f: 'up', t: 400, fx: '!' };
+      for (let i = 0; i < 6 && d.has(bt); i++) yield { f: 'up', t: 300, face: d.dirTo(bt) };
+      yield { f: 'stand', t: 400, fx: d.chance(0.5) ? 'star' : 'dots' };
+    } else {
+      for (let i = 0; i < 6 && d.has(bt); i++) yield { f: 'stand', t: 400, face: d.dirTo(bt) };
+      yield { f: 'blink', t: 300, fx: 'dots' };
+    }
+    yield { f: 'stand', t: 300 };
+  },
+
+  // -- three newer habits (0.43) --
+  *leafPile(d) {
+    // Leaves lie about (after a breeze, under a palm): it noses them together one by one into a heap —
+    // then a run, a leap, and in it goes, leaves everywhere. A shake, and a happy sit among them.
+    yield* d.getTo('stand');
+    let leaves = d.groundLeaves();
+    if (leaves.length < 2) { // the breeze brought a few down: they drift down around it first
+      for (let i = leaves.length; i < 3; i++) d.spawn('leaf', { x: d.clampProp(d.center() + d.rnd(-70, 70), 4), y: d.rnd(14, 24), fall: true, life: 60000 });
+      yield { f: 'up', t: 500, fx: '?' };
+      for (let i = 0; i < 16 && d.props.some((p) => p.kind === 'leaf' && p.fall); i++) yield { f: 'up', t: 400 };
+      leaves = d.groundLeaves();
+    }
+    const spot = d.clampProp(d.center() + (d.inward() || d.face) * 30, 8);
+    for (const lf of leaves.slice(0, 4)) {
+      if (!d.has(lf) || Math.abs(lf.x - spot) < 4) continue;
+      yield* d.walkTo(() => (d.has(lf) ? d.reach(lf) : null), 1, { max: 120 });
+      if (!d.has(lf)) continue;
+      const to = Math.sign(spot - lf.x) || 1;
+      yield { f: 'sniff', t: 300, face: to, do: (c) => { if (c.has(lf)) { lf.vx = to * Math.min(90, 3 * Math.abs(spot - lf.x)); c.expire(lf, 60000); } } }; // a nudge towards the heap
+      yield { f: 'stand', t: 500 };
+    }
+    let pile = null;
+    yield { f: 'stand', t: 300, do: (c) => {
+      for (const lf of c.groundLeaves()) if (Math.abs(lf.x - spot) < 24) c.remove(lf);
+      pile = c.spawn('pile', { x: spot, life: 40000 });
+    } };
+    yield { f: 'up', t: 500, face: d.dirTo(pile), fx: 'heart' };
+    yield* d.walkTo(d.clampX(d.x - d.dirTo(pile) * 30), 1.2, { max: 30 }); // a run-up
+    yield { f: 'stand', t: 300, face: d.dirTo(pile) };
+    yield* d.walkTo(() => (d.has(pile) ? d.reach(pile) : null), 2.6, { max: 30 });
+    yield { f: 'crouch', t: 120 };
+    yield { f: 'jump', t: 420, jump: 7, dx: d.has(pile) ? d.centreOn(pile) - d.x : 0, fx: '!', do: (c) => {
+      if (!c.has(pile)) return;
+      c.remove(pile);
+      for (let i = 0; i < 4; i++) c.spawn('leaf', { x: c.clampProp(spot + c.rnd(-6, 10), 4), y: c.rnd(6, 12), fall: true, vx: c.rnd(-30, 30), life: c.rnd(12000, 20000) });
+    } };
+    yield { f: 'crouch', t: 150 };
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'wag' : 'stand', t: 150 }; // a shake
+    yield* d.getTo('sit');
+    yield { f: 'sitUp', t: 900, fx: 'heart' };
+    yield { f: 'sit', t: 500 };
+  },
+  *hideSeek(d) {
+    // Hide and seek, all by itself: it tiptoes behind something big enough (in its own mind: a grown palm,
+    // a cactus, a rock), crouches there, peeks out one side, ducks back, peeks out the other — and out it
+    // jumps: boo!
+    const spot = d.hideout();
+    if (!spot) return yield* ACTIVITIES.peekaboo(d);
+    yield* d.getTo('stand');
+    yield { f: 'up', t: 400, face: d.dirTo(spot), fx: '?' };
+    yield* d.walkTo(() => (d.has(spot) ? d.centreOn(spot) : null), 0.9, { max: 240, creep: true });
+    if (!d.has(spot)) return;
+    d.hideIn = spot;
+    yield { f: 'crouch', t: 700, hide: true };
+    for (let i = 0, n = d.rint(2, 3); i < n; i++) {
+      const side = i % 2 ? -1 : 1;
+      yield { f: 'cower', t: d.rnd(700, 1200), hide: true, fx: i === 0 ? 'dots' : null };
+      yield { f: 'creep1', t: 260, dx: side * 2 * d.du, face: side, hide: true }; // a peek out…
+      yield { f: 'sniff', t: d.rnd(500, 800), hide: true };
+      yield { f: 'creep2', t: 260, dx: -side * 2 * d.du, hide: true }; // …and back
+    }
+    yield { f: 'crouch', t: d.rnd(400, 900), hide: true };
+    yield { f: 'jump', t: 400, jump: 7, dx: (d.inward() || d.face) * 6 * d.du, fx: '!', do: (c) => { c.hideIn = null; } }; // boo!
+    yield { f: 'armsUp', t: 500, fx: d.chance(0.5) ? 'heart' : 'star' };
+    yield { f: 'stand', t: 400 };
+  },
+  *tidyUp(d) {
+    // Things left lying about (pebbles, a stick, a crumpled page, a ball…): it tidies up, one at a time in
+    // its mouth to the end of its home stretch, where each goes into a little hole; then a dust-off, and a
+    // look back at the clean ground.
+    const items = d.litter();
+    if (!items.length) return yield* ACTIVITIES.look(d);
+    yield* d.getTo('stand');
+    yield { f: 'up', t: 500, fx: 'dots' };
+    const side = d.x < d.zone(0.5) ? -1 : 1, dump = d.zone(side < 0 ? 0.04 : 0.96);
+    for (const p of items.slice(0, 3)) {
+      if (!d.has(p) || p.carried) continue;
+      yield* d.walkTo(() => (d.has(p) ? d.reach(p) : null), 1.1, { max: 240 });
+      if (!d.has(p)) continue;
+      yield { f: 'sniff', t: 300, face: d.dirTo(p), do: (c) => c.pickUp(p) };
+      yield { f: 'up', t: 300 };
+      yield* d.walkTo(dump, 1.1, { max: 300 });
+      yield { f: 'stand', t: 200, face: side };
+      yield { f: 'sniff', t: 300, do: (c) => c.drop(p, 0) };
+      for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'sniff' : 'crouch', t: 150, do: (c) => { c.dirt(1); if (i === 3) c.remove(p); } };
+    }
+    yield { f: 'stand', t: 300, face: -side };
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'wag' : 'stand', t: 150 }; // a dust-off
+    yield { f: 'up', t: 600, fx: 'heart' };
+  },
 };
 
 // Activities that start something of their own in the environment.
-export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm', 'acorn', 'cricket', 'feather', 'gem', 'stick', 'critter']);
+export const ENV_ACTIVITIES = new Set(['visitPlant', 'palmTree', 'flower', 'mushroom', 'snail', 'fireflies', 'rainDance', 'balloon', 'paperPlane', 'frog', 'ladybug', 'dandelion', 'worm', 'acorn', 'cricket', 'feather', 'gem', 'stick', 'critter', 'dragonfly', 'bee', 'kite', 'boulder', 'beetle']);
 // Activities in the middle of which nothing else should happen in the environment.
 export const ABSORBED = new Set([...ENV_ACTIVITIES, 'cornerBite', 'tightrope', 'plantSeed', 'egg', 'ufo', 'skateboard', 'fireworks', 'grow', 'shrink', 'celebrate', 'zoomies', 'nightfall', 'daybreak']);
 // The streak's special loops, in the order they are unlocked.

@@ -2,6 +2,19 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.43.0 · 25 Oct 2026
+
+- A screenplay now opens where you left it, whether STET reopens it at launch or you open it again: the caret where it was, and the page scrolled just as it was.
+- Timeline: clicking a scene, a note or any spot outside the glass box glides the script so the box starts exactly there; a scene's box now begins right on its tick. Clicking something already inside the box glides it to the middle of the box (and of the page).
+- Timeline: the glass box has no bright line along its top any more. Its top and bottom are the same faint edge, its sides fade out towards them, and it brightens softly when you point at it or drag it.
+- Timeline: when the caret leaves the zoomed-in part of the bar, the bar glides along instead of jumping.
+- Cursors: on the timeline, pointing at a note, scene or highlight shows the hand even on the ruler row (a click goes there); before, it could still show the resize cursor. After a drag or Ctrl-stepping, the cursor matches where the pointer is. Scene rows and Revise cards show the hand, like note cards; small buttons (the timecode editor, the spelling menu, the whole-script button) show the arrow, like every other button.
+- Highlights on the page are a little more muted.
+- The dinosaur has five new neighbours: a dragonfly it snaps at (mostly near puddles; sometimes it lands on its head), a bee it runs away from (mostly near flowers), a kite on the breeze it hangs on to (seldom; a gust lifts it off its feet), a rock it digs up and climbs (seldom, and a different shape every time), and a dung beetle whose ball it nudges along.
+- Three new habits: it sweeps fallen leaves into a heap and leaps in, plays hide and seek behind a palm, cactus or rock, and tidies away the things it left lying around.
+- The dinosaur is a little calmer overall, and its rare moments (an egg, a UFO, a gem, the corner bite and others) are a little less rare. What it does next now always depends on its surroundings (weather, time of day, what's lying or growing around it) and on what it just did. A new test checks that every behaviour and event can actually happen.
+- Clicking the dinosaur while it stands on something (a rock, its skateboard) gets a reaction once it's back down, instead of it dropping to the ground at once.
+
 ## 0.42.0 · 24 Oct 2026
 
 - Notes: giving a note a colour now also highlights its passage in the script in that colour, and its marker in the page's right margin takes the colour too. With highlights turned on, the passage prints highlighted as well.

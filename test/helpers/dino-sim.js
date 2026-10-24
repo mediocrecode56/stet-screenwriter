@@ -54,7 +54,7 @@ export function run(c, ms, { from = 0, dt = 100, each, stop } = {}) {
 export function inView(c) {
   for (const p of c.props) {
     if (p.carried || p.balance) continue;
-    const w = PROPS[p.kind][0][0].length * c.u, h = Math.max(...PROPS[p.kind].map((f) => f.length));
+    const w = (p.art || PROPS[p.kind][0])[0].length * c.u, h = p.art ? p.art.length : Math.max(...PROPS[p.kind].map((f) => f.length));
     assert.ok(p.x >= -c.margin - 0.5 && p.x + w <= c.stripW + c.margin + 0.5, `${p.kind} stays in view (x=${p.x.toFixed(1)})`);
     assert.ok(p.y >= 0 && p.y + h <= H + HEADROOM, `${p.kind} stays below the top (y=${p.y.toFixed(1)})`);
   }

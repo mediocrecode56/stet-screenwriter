@@ -326,6 +326,33 @@ test('launching opens the last screenplay edited: not one only looked at since, 
   await app.until(`__stet.session.path === ${JSON.stringify(edited)}`, { what: 'the last one edited to open', timeout: 10000 });
 });
 
+test('a screenplay opens again where it was left, at launch and from Open Recent: the caret and the window as they were', async () => {
+  const far = path.join(tmp, 'Long Way.stet'), other = path.join(tmp, 'Other.stet');
+  const list = [];
+  for (let s = 0; s < 30; s++) { list.push(['scene', `INT. ROOM ${s} - DAY`]); for (let a = 0; a < 6; a++) list.push(['action', `Line ${a} of scene ${s}.`]); }
+  await app.load([['action', 'Another one.']]);
+  assert.equal((await app.saveTo(other)).ok, true);
+  await app.load(list);
+  assert.equal((await app.saveTo(far)).ok, true);
+  await app.caret(150, 4);
+  await app.frame();
+  const top = await app.eval('__stet.view.scroller.scrollTop');
+  assert.ok(top > 2000, 'well into the script');
+  await app.until('(__stet.settings().places || []).some((p) => p.id === __stet.session.doc.meta.id && p.caret.b === 150)', { what: 'the place kept' });
+  await app.close();
+  app = await launch();
+  await app.until(`__stet.session.path === ${JSON.stringify(far)} && __stet.editor.caret.b === 150 && __stet.editor.caret.o === 4`, { what: 'back at the caret', timeout: 10000 });
+  await app.frame();
+  assert.ok(Math.abs(await app.eval('__stet.view.scroller.scrollTop') - top) <= 2, 'the window where it was');
+  // Another screenplay and back: each opens where it was left.
+  assert.equal(await app.eval(`__stet.openPath(${JSON.stringify(other)})`), true);
+  await app.until(`__stet.session.path === ${JSON.stringify(other)} && __stet.editor.caret.b === 0`, { what: 'the other at its start' });
+  assert.equal(await app.eval(`__stet.openPath(${JSON.stringify(far)})`), true);
+  await app.until('__stet.editor.caret.b === 150', { what: 'back where it was' });
+  await app.frame();
+  assert.ok(Math.abs(await app.eval('__stet.view.scroller.scrollTop') - top) <= 2, 'and the window too');
+});
+
 test('a crash: the unsaved work comes back on the next start', async () => {
   await app.eval('__stet.session.autosaveDelay = 40');
   await app.eval('__stet.session.newUntitled()');

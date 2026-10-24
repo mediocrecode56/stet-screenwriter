@@ -7,7 +7,7 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
@@ -17,6 +17,7 @@ const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a pa
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const COVER = 0.62; // the part of the fade at the right end (zoomed in) dense enough that nothing under it is in play
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
+const ON_LINE = 0.5 / 54; // the band's start this close to a mark's own line is on that mark (half a row)
 const FINE_PX = 12; // fewest pixels of mouse travel a second while stepping
 const END_PX = 20; // how far before the fade the pointer has brought it all the way up
 const END_RAMP = 40; // over how many pixels before that it comes up, with the pointer
@@ -140,16 +141,37 @@ export class Timeline {
     return b ? pos(bi, linesOf(b)[line] || 0) : null;
   }
 
-  /** Go to the line at position x. */
+  /** Go to the line at position x: one in the window glides to its middle (and the band's), one
+   *  outside it to the top, where the band then begins. */
   go(x) {
     const p = this.lineStart(x);
-    if (p) this.jump(p, false, null, 'top');
+    if (p) this.jump(p, false, null, this.glideFor(x));
+  }
+
+  /** How the script glides to position x (view.glideTo): to the middle of the band when x is in the
+   *  window already (the middle of the window too, but where a page break is in view), else to the top. */
+  glideFor(x) { return x >= this.bandA - 1e-6 && x <= this.bandB + 1e-6 ? { y: () => this.centreTop(x) } : 'top'; }
+
+  /** The scroll position that puts position x in the middle of the band, as near as the ends allow. */
+  centreTop(x) {
+    const v = this.view, sc = v.scroller, h = sc.clientHeight, pages = v.pages;
+    const mid = (y) => { const t = v.rowAt(y), e = v.rowAt(y + h); return (lineFrom(pages, t.pi, t.row) + lineTo(pages, e.pi, e.row)) / 2; };
+    let lo = 0, hi = Math.max(0, sc.scrollHeight - h);
+    for (let i = 0; i < 32 && hi - lo > 0.5; i++) { const m = (lo + hi) / 2; if (mid(m) < x) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  }
+
+  /** Scroll the bar to `left`, gliding there unless a zoom is under way. */
+  glideBar(left) {
+    const sc = this.scroll;
+    if (this.zoomRaf || matchMedia('(prefers-reduced-motion: reduce)').matches) sc.scrollLeft = left;
+    else sc.scrollTo({ left, behavior: 'smooth' });
   }
 
   /** Scroll the bar so that cx (in the strip) is in view, a third of the way in, unless it is. */
   reveal(cx) {
     const sc = this.scroll;
-    if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = cx - sc.clientWidth / 3;
+    if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) this.glideBar(cx - sc.clientWidth / 3);
   }
 
   /** Zoom by factor f, keeping the point under clientX where it is. Wheel turns in a row add up
@@ -307,15 +329,17 @@ export class Timeline {
       if (mode === 'zoom') this.zoomTo(ppp0 * 2 ** (dx / 50), at0, px0, { tau: 40 });
       else { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); }
     };
-    const up = () => {
+    const up = (ev) => {
       removeEventListener('mousemove', move, true);
       removeEventListener('mouseup', up, true);
       removeEventListener('blur', up);
       this.dragging = false;
       document.body.classList.remove('tl-dragging', 'tl-drag-zoom', 'tl-drag-band');
+      if (ev && ev.clientX != null) this.settle(ev); // the cursor and readout for where the pointer is now
       if (mode || !this.visible) return;
-      if (note) return this.openNote(note.id, note.b, note.s, note.e);
-      if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, 'top'); // to its heading
+      // Inside the band, to the middle of the window (and of the band); outside it, to the top, where the band then begins.
+      if (note) return this.openNote(note.id, note.b, note.s, note.e, this.glideFor(note.at ?? note.x));
+      if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, this.glideFor(near.at ?? near.x)); // to its heading
       if (near && near.kind === 'tc') { this.go(near.x); return this.editTimecode(near.x, near); }
       this.go(near ? near.at ?? near.x : at0); // (a highlight: its first line, though drawn on its second)
     };
@@ -331,6 +355,14 @@ export class Timeline {
     this.pointer = e.clientX;
     this.pointerY = e.clientY;
     if (mod(e)) return this.cancelled ? undefined : this.startStep(e.clientX); // (only Ctrl's own key events clear `cancelled`: letting go of the lock sends a move without it)
+    this.showHover(e);
+  }
+
+  /** After a press: the cursor and the readout as they are for the pointer where it is now (off the bar: none). */
+  settle(e) {
+    const r = this.inner.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) { this.inner.dataset.zone = ''; return this.leave(); }
+    this.pointer = e.clientX; this.pointerY = e.clientY;
     this.showHover(e);
   }
 
@@ -451,6 +483,7 @@ export class Timeline {
     document.body.classList.remove('tl-fine');
     this.hover.classList.remove('fine');
     this.hover.hidden = true; // until the pointer moves over the bar again
+    this.inner.dataset.zone = ''; // (and the cursor it shows then)
     this.nearEnd(this.endX);
     // The pointer is back on the bar where it was locked, on the line; without the lock it may be anywhere.
     this.unlocked = f.locked || f.ay == null; // (the lock, or one on its way: a leave that follows is no leave)
@@ -548,15 +581,18 @@ export class Timeline {
     this.cur.style.width = Math.max(1, z - a) + 'px';
   }
 
-  /** The part of the script in the window, as a soft band. */
+  /** The part of the script in the window, as a pane of glass: from the first line in view to just after
+   *  the last, read the way the marks are, so a scene's heading at the top of the window is where the
+   *  band begins, on its tick (drawn on its whole second, as the marks are). */
   showBand() {
-    const v = this.view, sc = v.scroller;
-    const top = v.pageTop(0), span = v.pageTop(1) - top;
-    const at = (y) => Math.max(0, Math.min(this.length, (y - top) / span - v.offset));
-    const a = at(sc.scrollTop), b = at(sc.scrollTop + sc.clientHeight);
+    const v = this.view, sc = v.scroller, pages = v.pages;
+    const t = v.rowAt(sc.scrollTop), e = v.rowAt(sc.scrollTop + sc.clientHeight);
+    const a = Math.min(this.length, lineFrom(pages, t.pi, t.row)), b = Math.max(a, Math.min(this.length, lineTo(pages, e.pi, e.row)));
     this.bandA = a; this.bandB = b;
-    this.band.style.left = a * this.drawn + 'px';
-    this.band.style.width = Math.max(2, (b - a) * this.drawn) + 'px';
+    const mark = this.targets.find((m) => m.kind !== 'tc' && m.at != null && Math.abs(m.at - a) < ON_LINE);
+    const x0 = mark ? mark.x : a;
+    this.band.style.left = x0 * this.drawn + 'px';
+    this.band.style.width = Math.max(2, (b - x0) * this.drawn) + 'px';
   }
 
   repaint(key) {
@@ -645,7 +681,9 @@ export class Timeline {
     const where = this.zone(e);
     const near = this.snapAt(e.clientX);
     this.band.classList.toggle('hot', where === 'band');
-    this.inner.dataset.zone = near && near.kind === 'tc' ? 'tc' : this.onRuler(e) ? 'ruler' : where; // on a timecode a click edits it
+    // The cursor says what a press does: on a timecode it edits it; drawn to a scene, a note or a highlight
+    // it goes there (whatever row it is on); else a drag zooms (on the ruler) or moves the band (on it).
+    this.inner.dataset.zone = near ? (near.kind === 'tc' ? 'tc' : 'mark') : this.onRuler(e) ? 'ruler' : where;
     this.mark(near);
     this.readout(near ? near.x : this.posAt(e.clientX), null, near);
   }

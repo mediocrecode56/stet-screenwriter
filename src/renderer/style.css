@@ -21,9 +21,9 @@
   --inv-fg: #fff;
   --sel: rgba(0, 0, 0, .16);
   --caret: #000;
-  --hl-blue: #c8defb;
-  --hl-yellow: #fbefa0;
-  --hl-pink: #fbcde2;
+  --hl-blue: #cfdcf0; /* a touch muted (0.43): they sit with the grey page rather than on it */
+  --hl-yellow: #f3ebb4;
+  --hl-pink: #f1d4e1;
   --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
   --tl-blue: #4a8ee8;
   --tl-yellow: #e5be14;
@@ -54,9 +54,9 @@
   /* The timeline's glass band (the part of the script in the window). */
   --glass-hi: rgba(255, 255, 255, .62);
   --glass-lo: rgba(255, 255, 255, .30);
-  --glass-edge: rgba(255, 255, 255, .95);
   --glass-foot: rgba(0, 0, 0, .05);
   --glass-side: rgba(0, 0, 0, .09);
+  --glass-lift: rgba(255, 255, 255, .34);
 }
 @media (prefers-reduced-motion: reduce) { :root { --dur-fast: 0ms; --dur-panel: 0ms; --dur-tl: 0ms; --dur-out: 0ms; --dur-fade: 0ms; } }
 
@@ -73,9 +73,9 @@
   --inv-fg: #0f0f0f;
   --sel: rgba(255, 255, 255, .20);
   --caret: #fff;
-  --hl-blue: #24456e;
-  --hl-yellow: #564a08;
-  --hl-pink: #66284a;
+  --hl-blue: #2a4260;
+  --hl-yellow: #4f4719;
+  --hl-pink: #5a2f46;
   --tl-line: #f0f0ed;
   --tl-blue: #5b9cf0;
   --tl-yellow: #f2d33a;
@@ -92,9 +92,9 @@
   --hover-on: rgba(255, 255, 255, .15);
   --glass-hi: rgba(255, 255, 255, .085);
   --glass-lo: rgba(255, 255, 255, .035);
-  --glass-edge: rgba(255, 255, 255, .20);
   --glass-foot: rgba(0, 0, 0, .35);
   --glass-side: rgba(255, 255, 255, .07);
+  --glass-lift: rgba(255, 255, 255, .035);
 }
 
 * { box-sizing: border-box; }
@@ -174,7 +174,7 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .mi.disabled { color: var(--ink-3); pointer-events: none; }
 .sp-menu .sp-fix { min-width: 120px; }
 .sp-acts { display: flex; gap: 2px; margin-top: 3px; padding: 3px 4px 0; border-top: 1px solid var(--rule); }
-.sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: pointer; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .sp-act:hover { background: var(--hover-on); color: var(--ink); }
 .msep { height: 1px; background: var(--rule); margin: 3px 0; }
 /* A menu row with a quick flyout (Open Recent), and the flyout: short, long titles end in "…". */
@@ -259,15 +259,25 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 .tl-scroll::-webkit-scrollbar { display: none; }
 .tl-inner { position: relative; height: 100%; margin: 0 14px; cursor: pointer; }
 /* The part of the script in the window: a pane of glass the full height of the bar. It brightens
-   what is under it a touch and softens the grid there, so the marks on it read clearly; a bright
-   top edge and faint sides give it its thickness. Square, like everything else. */
-.tl-view { position: absolute; top: 0; bottom: 0; pointer-events: none;
-  background: linear-gradient(to bottom, var(--glass-hi), var(--glass-lo));
+   what is under it a touch and softens the grid there, so the marks on it read clearly; its top and
+   bottom edges are the same faint line, meeting the bar's own rules, and its sides give it its
+   thickness, fading out towards both edges so it sits in the bar rather than on it. Square. */
+/* Under the pointer the pane lifts a little (--tl-lift, a lighter tint fading in), held a little more.
+   Both are registered colours, so they ease like any other. */
+@property --tl-side { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --tl-lift { syntax: '<color>'; inherits: true; initial-value: transparent; }
+.tl-view { position: absolute; top: 0; bottom: 0; pointer-events: none; --tl-side: var(--glass-side);
+  background: linear-gradient(var(--tl-lift), var(--tl-lift)), linear-gradient(to bottom, var(--glass-hi), var(--glass-lo));
   -webkit-backdrop-filter: blur(2px) saturate(1.25); backdrop-filter: blur(2px) saturate(1.25);
-  box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 var(--glass-foot), inset 1px 0 0 var(--glass-side), inset -1px 0 0 var(--glass-side);
-  transition: box-shadow var(--dur-tl) var(--ease-out); }
+  box-shadow: inset 0 1px 0 var(--glass-foot), inset 0 -1px 0 var(--glass-foot);
+  transition: --tl-side var(--dur-tl) var(--ease-out), --tl-lift var(--dur-tl) var(--ease-out); }
+.tl-view::before, .tl-view::after { content: ''; position: absolute; top: 0; bottom: 0; width: 1px; background: linear-gradient(to bottom, transparent, var(--tl-side) 18%, var(--tl-side) 82%, transparent); }
+.tl-view::before { left: 0; } .tl-view::after { right: 0; }
 /* The band can be dragged, like the outline in Ableton's overview: its sides firm up when it can. */
-.tl-view.hot, .tl-drag-band .tl-view { box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 var(--glass-foot), inset 1px 0 0 var(--ink-3), inset -1px 0 0 var(--ink-3); }
+.tl-view.hot { --tl-side: var(--ink-3); --tl-lift: color-mix(in srgb, var(--glass-lift) 55%, transparent); }
+.tl-drag-band .tl-view { --tl-side: var(--ink-2); --tl-lift: var(--glass-lift); transition-duration: var(--dur-fast); }
+#timeline:not(:hover) .tl-view { transition-duration: var(--dur-out); }
+.tl-inner[data-zone="mark"] { cursor: pointer; } /* drawn to a scene, a note or a highlight: a click goes there */
 .tl-inner[data-zone="band"] { cursor: grab; }
 .tl-inner[data-zone="ruler"] { cursor: ew-resize; }
 .tl-inner[data-zone="covered"] { cursor: default; } /* under the fade at the right end: out of play */
@@ -335,7 +345,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tc-tag::placeholder { color: var(--ink-3); }
 .tc-pop.bad .tc-time { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .tc-sws { display: flex; gap: 1px; margin-left: 1px; }
-.tc-sw, .tc-ok, .tc-del { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; }
+.tc-sw, .tc-ok, .tc-del { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: default; }
 .tc-sw:hover, .tc-ok:hover, .tc-del:hover { background: var(--hover); color: var(--ink); }
 .tc-sw.on { box-shadow: inset 0 0 0 1px var(--ink); }
 .tc-ok { margin-left: 2px; color: var(--ink-2); }
@@ -356,7 +366,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-hover.fine span { color: var(--ink); box-shadow: 0 0 0 1px var(--ink-3); animation: tl-fine var(--dur-tl) var(--ease-out); transform-origin: 0 100%; }
 .tl-hover.fine.flip span { transform-origin: 100% 100%; }
 @keyframes tl-fine { from { transform: scale(.94); opacity: .5; } } /* stepping: the readout steps up a little */
-.tl-reset { position: absolute; right: 8px; top: 13px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--rule); background: var(--bar); color: var(--ink-3); cursor: pointer; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); } /* like the timecode editor's small buttons */
+.tl-reset { position: absolute; right: 8px; top: 13px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--rule); background: var(--bar); color: var(--ink-3); cursor: default; transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-tl) var(--ease-out); } /* like the timecode editor's small buttons */
 .tl-reset[hidden] { display: none; }
 /* Zoomed in, with the pointer near the right end: the strip there eases into the bar's own colour
    behind the reset button, so it stands clear of the marks passing under it. The ramp follows an
@@ -386,7 +396,7 @@ aside.rs-near[data-edge="left"] { box-shadow: inset 1px 0 0 var(--ink-3); }
 body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none; }
 .panel-head { padding: 8px 10px 6px; letter-spacing: .2em; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
 .list { overflow-y: auto; flex: 1; }
-.row { padding: 4px 10px 4px 6px; display: flex; gap: 8px; cursor: default; border-bottom: 1px solid transparent; transition: background-color var(--dur-fast) var(--ease-out); }
+.row { padding: 4px 10px 4px 6px; display: flex; gap: 8px; cursor: pointer; border-bottom: 1px solid transparent; transition: background-color var(--dur-fast) var(--ease-out); }
 .row:hover { background: var(--hover); }
 .row.cur { box-shadow: inset 2px 0 0 var(--ink); }
 .row .n { color: var(--ink-3); min-width: 4.5ch; flex: none; text-align: right; font-size: 10px; line-height: 16px; letter-spacing: .04em; font-variant-numeric: tabular-nums; } /* the scene's time on the timeline */
@@ -669,7 +679,8 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-gh { display: flex; align-items: center; padding: 8px 10px 6px; border-bottom: 1px solid var(--rule); min-height: 30px; }
 .rv-gh .tb { font-size: 9px; letter-spacing: .14em; color: var(--ink-3); padding: 2px 6px; }
 .rv-gh .tb:hover { color: var(--ink); }
-.rv-item { cursor: default; }
+.rv-item { cursor: pointer; } /* a place in the script, like a scene row or a note card (its buttons keep the arrow) */
+.rv-item button, .rv-item .ra { cursor: default; }
 .rv-item.decided .rv-diff, .rv-item.decided .rv-why { opacity: .6; }
 .rv-item .nh { gap: 6px; }
 .rv-acts .tb:disabled { opacity: .35; }

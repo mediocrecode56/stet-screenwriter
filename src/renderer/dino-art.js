@@ -376,9 +376,45 @@ export const PROPS = {
   cricket: [['#....', '.###.', '#.#.#'], ['#....', '.###.', '.#.#.']],
   feather: [['...#', '.##.', '#...'], ['#...', '.##.', '...#']],
   gem: [['.#.', '###', '.#.'], ['...', '...', '.#.']],
+  // Five newer neighbours (0.43). Three fly: a dragonfly (wings up, down), a bee, a kite (its tail
+  // swaying; the string is drawn to whoever holds it). A rock comes out of the sand different every
+  // time (rockArt, below: this one only gives its kind a size). A dung beetle rolls its ball along.
+  dragonfly: [['..#.#..', '#######', '.......'], ['.......', '#######', '..#.#..']],
+  bee: [['..##.', '#.#.#', '.###.'], ['.....', '#.#.#', '.###.']],
+  kite: [['..#..', '.#.#.', '#.#.#', '.#.#.', '..#..', '..#..', '.#...'], ['..#..', '.#.#.', '#.#.#', '.#.#.', '..#..', '..#..', '...#.']],
+  rock: [['..####..', '.######.', '########']],
+  beetle: [['.###', '#.#.'], ['.###', '.#.#']],
+  dung: [['.#.', '###', '.#.'], ['.##', '###', '##.']],
+  pile: [['..#.#...', '.######.', '########']], // leaves swept together
 };
 // Drawn lighter: water, light and things far off.
-export const ALPHA = { doodle: 0.55, puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8 };
+export const ALPHA = { doodle: 0.55, puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8, kite: 0.9 };
+
+/**
+ * A rock as it comes out of the sand, never the same twice: 7 to 12 columns wide and 3 to 5 rows high,
+ * its top a rounded random profile (highest somewhere near the middle), a few dents in its face, and
+ * always a solid bottom row to stand on. `rnd` gives numbers in [0, 1).
+ */
+export function rockArt(rnd) {
+  const w = 7 + Math.floor(rnd() * 6), h = 3 + Math.floor(rnd() * 3), peak = (0.3 + rnd() * 0.4) * (w - 1);
+  const tops = [];
+  for (let i = 0; i < w; i++) {
+    const d = Math.abs(i - peak) / Math.max(peak, w - 1 - peak); // 0 at the peak, 1 at the far end
+    tops.push(Math.max(1, Math.min(h, Math.round(h * (1 - d * d * 0.8) + (rnd() - 0.5)))));
+  }
+  tops[0] = Math.min(tops[0], h - 1); tops[w - 1] = Math.min(tops[w - 1], h - 1); // rounded off at both ends
+  const rows = [];
+  for (let r = 0; r < h; r++) {
+    let row = '';
+    for (let i = 0; i < w; i++) {
+      const fill = h - r <= tops[i];
+      const dent = fill && r > 0 && r < h - 1 && i > 0 && i < w - 1 && h - r < tops[i] && rnd() < 0.12;
+      row += fill && !dent ? '#' : '.';
+    }
+    rows.push(row);
+  }
+  return rows;
+}
 
 // 3×5 pixel glyphs for little effects above the head.
 export const GLYPHS = {

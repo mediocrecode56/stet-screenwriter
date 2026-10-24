@@ -77,7 +77,7 @@ const LUSH = { fern: 1, bloom: 1, reed: 1 }; // the plants of a very long sleep
 // The large plants: they last a good while, and their time stands still while the window is in the background.
 const LARGE = new Set(['cactus', 'palm']);
 // What it will pose in front of (photobomb): grown plants, a rainbow, its own handiwork.
-const SIGHTS = new Set(['palm', 'flower', 'cactus', 'mushroom', 'rainbow', 'mound', 'doodle']);
+const SIGHTS = new Set(['palm', 'flower', 'cactus', 'mushroom', 'rainbow', 'mound', 'doodle', 'rock']);
 // While the window is in the background (another application has the focus) small tufts of grass creep
 // up, slowly and only so many, and after a long while it falls into a deep sleep; back at work, it wakes
 // and in its own time eats the grass. All in ms; Critter's `timing` option overrides any of them.
@@ -97,12 +97,170 @@ export const TIMING = {
   lushGrow: 3 * MIN / GROWTH,   // per stage of their growth
 };
 // Things that float or fly about: only a few at a time, so the scene never gets busy.
-const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug', 'feather']);
-// What tends to follow what: a romp leaves it ready for a sit, a long rest for a stretch and a stroll.
-const LIVELY = new Set(['zoomies', 'hop', 'dance', 'fetch', 'pounce', 'workout', 'chaseTail', 'juggle', 'somersault', 'patrol', 'explore', 'shadowbox', 'skateboard', 'tightrope']);
-const RESTFUL = new Set(['rest', 'sleep', 'doze', 'daydream', 'treeShade', 'stargaze', 'sunbathe', 'yoga', 'settleIn']);
-const AFTER_LIVELY = { rest: 2, daydream: 1.6, look: 1.4, wag: 1.3, sleep: 1.2, scratch: 1.2 };
-const AFTER_REST = { stretch: 2.4, walk: 1.6, look: 1.4, explore: 1.4, wag: 1.2 };
+const FLOATING = new Set(['butterfly', 'bubble', 'seed', 'firefly', 'balloon', 'bird', 'plane', 'ladybug', 'feather', 'dragonfly', 'bee', 'kite']);
+// What lies about after it has played (it may tidy it away), and what it can hide behind.
+const LITTER = new Set(['pebble', 'stick', 'wad', 'shell', 'ball', 'bone', 'acorn', 'coconut']);
+
+// ---- what it does next ----------------------------------------------------------------------------
+//
+// Every activity it chooses for itself has an entry: its tempo, and how much it feels like it in the
+// world as it is now (`s`, Critter.world(): its energy, the time of day, the weather, what lies about,
+// grows or flies there, what it ate and when). The tempo, with what it did just before, colours every
+// choice (TEMPO_AFTER): a romp leaves it ready for a sit, a long rest for a stretch and a stroll. Some
+// follow on from particular ones (FOLLOWS). Since 0.43 the lively ones weigh a quarter less, and the
+// rare ones a little more. A weight of 0 means it can't, here and now: every one can, somewhere
+// (test/unit/dino-reach.test.js finds the world for each). The theme's sunset and sunrise, today's goal
+// and the streak's growth come by other ways (Critter.pending).
+const LIVE = 0.75; // the lively ones, against what they were
+const CHOICES = {
+  sleep: ['calm', (s) => (s.e < 0.15 ? (s.idle > 240 ? 6 : 0.8) : 0) * (s.night ? 1.3 : 1)],
+  rest: ['calm', (s) => (4 * (1 - s.e) + 0.6) * (s.raining ? 1.2 : 1)],
+  look: ['easy', (s) => 2.2 + (s.floating ? 0.4 : 0) + (s.idle > 120 ? 0.3 : 0)], // a look round, the more with something about, or nothing to do
+  walk: ['easy', (s) => (0.6 + 3.2 * s.e) * (s.raining ? 0.5 : 1)],
+  stretch: ['easy', (s) => 0.5 + 0.8 * (1 - s.e) + (s.morning ? 0.3 : 0)],
+  wag: ['easy', (s) => 0.3 + 0.5 * s.e + (s.goalMet ? 0.2 : 0)],
+  scratch: ['easy', (s) => 0.45 + (s.wet ? 0.2 : 0)],
+  doze: ['calm', (s) => 0.05 + 0.9 * (1 - s.e) * (1 - s.e) + (s.late ? 0.3 : 0)], // nods off more the calmer things are
+  ponder: ['easy', (s) => 0.3 + (s.writing ? 0 : 0.15)],
+  sunbathe: ['calm', (s) => (!s.night && s.e < 0.6 && !s.cloud ? 0.12 + (s.wet ? 0.3 : 0) : 0)], // drying off in the sun
+  watchWriter: ['calm', (s) => (s.writing ? 0.8 : 0.12)],
+  readScript: ['calm', (s) => (s.idle > 20 && s.idle < 600 ? 0.6 : 0.15)], // reads over your page when you stop for a bit
+  coffeeBreak: ['calm', (s) => 0.2 + (s.morning ? 0.4 : 0)],
+  howl: ['easy', (s) => (s.late ? 0.3 + (s.moon ? 0.3 : 0) : 0)],
+  sing: ['lively', (s) => (0.12 + 0.3 * s.e) * LIVE * (s.raining ? 0.6 : 1)],
+  yoga: ['calm', (s) => 0.05 + 0.2 * (1 - s.e) + (s.morning ? 0.08 : 0)],
+  workout: ['lively', (s) => (0.08 + 0.3 * s.e) * LIVE * (s.goalMet ? 1.3 : 1)],
+  shakeOff: ['easy', (s) => 0.1 + (s.wet ? 3 : 0)],
+  hop: ['lively', (s) => 2.5 * s.e * s.e * LIVE * (s.raining ? 0.5 : 1)],
+  zoomies: ['lively', (s) => (s.e > 0.5 ? 0.5 * s.e : 0) * LIVE * (s.free ? 1 : 0.6)],
+  pounce: ['lively', (s) => (0.15 + 0.4 * s.e) * LIVE * (s.floating ? 1.4 : 1)],
+  roll: ['lively', (s) => (0.08 + 0.12 * s.e) * LIVE * (s.wet ? 0.5 : 1)],
+  somersault: ['lively', (s) => (0.06 + 0.3 * s.e) * LIVE * (s.free ? 1 : 0.6)],
+  headstand: ['lively', (s) => (0.03 + 0.1 * s.e) * LIVE * (s.free ? 1 : 0.6)],
+  dance: ['lively', (s) => (s.e > 0.45 ? 2 * s.e * s.e : 0) * LIVE * (s.goalMet ? 1.4 : 1)],
+  roar: ['lively', (s) => (0.1 + 0.25 * s.e) * LIVE * (s.night ? 0.6 : 1)],
+  trip: ['lively', (s) => (0.05 + 0.15 * s.e) * LIVE * (s.litter ? 1.4 : 1)], // gags stay occasional; something to trip over helps
+  moonwalk: ['lively', (s) => (s.e > 0.35 ? 0.35 * s.e : 0) * LIVE * (s.moon ? 1.5 : 1)],
+  chaseTail: ['lively', (s) => (0.08 + 0.35 * s.e) * LIVE * (s.free ? 1 : 0.7)],
+  sneeze: ['easy', (s) => 0.15 + (s.bloom ? 0.25 : 0)], // flowers about
+  fetch: ['lively', (s) => (s.free ? 0.1 + 1.2 * s.e : 0) * LIVE],
+  dig: ['easy', (s) => (s.free ? 0.25 + 0.25 * s.e : 0) * (s.wet ? 1.4 : 1)], // digging takes some energy, and soft ground
+  leaf: ['easy', (s) => (s.free ? 0.15 + 0.4 * (1 - s.e) : 0) * (s.windAgo < 5 * MIN ? 1.8 : 1)],
+  butterfly: ['lively', (s) => (s.free && s.calmSky ? 0.3 * (s.bloom ? 1.8 : 1) : 0) * (s.night ? 0.3 : 1)],
+  inspect: ['easy', (s) => (s.resting ? 1.4 : 0)],
+  writeAlong: ['calm', (s) => (s.writing ? 0.5 + 1.5 * s.e : 0)],
+  juggle: ['lively', (s) => (s.free ? 0.08 + 0.5 * s.e * s.e : 0) * LIVE],
+  pebbleToss: ['easy', (s) => (s.free ? 0.18 : 0)],
+  sandcastle: ['easy', (s) => (s.free ? 0.18 * (s.wet ? 1.8 : 1) : 0)], // wet sand holds
+  bubbles: ['easy', (s) => (s.free && s.calmSky ? 0.12 + 0.2 * s.e : 0) * (s.windy ? 0.3 : 1)],
+  hiccups: ['easy', (s) => 0.08 + (s.fedAgo < 3 * MIN ? 0.15 : 0)],
+  flamingo: ['easy', (s) => 0.1 * (s.puddle ? 1.6 : 1)],
+  peekaboo: ['lively', (s) => (0.12 + 0.2 * s.e) * LIVE * (s.hideout ? 0.6 : 1)],
+  shadowbox: ['lively', (s) => (0.08 + 0.35 * s.e) * LIVE * (s.night ? 0.7 : 1)],
+  groom: ['calm', (s) => 0.4 + 0.3 * (1 - s.e) + (s.fedAgo < 3 * MIN ? 0.3 : 0)], // everyday habits
+  sniffTrail: ['easy', (s) => 0.25 + 0.25 * s.e + (s.wet ? 0.15 : 0)], // scents carry after the rain
+  doodle: ['easy', (s) => (s.free ? 0.5 + 0.3 * s.e : 0) * (s.raining ? 0.3 : 1)], // draws in the sand
+  patrol: ['lively', (s) => (0.2 + 0.3 * s.e) * LIVE * (s.night ? 1.3 : 1)],
+  explore: ['lively', (s) => (s.roomOut ? 0.1 + 0.1 * s.e : 0) * (s.raining ? 0.3 : 1)],
+  cornerBite: ['lively', (s) => (s.corner && s.cornerAgo > 40 * MIN ? 0.005 * Math.min(4, s.cornerAgo / (60 * MIN)) : 0)], // very rare
+  stargaze: ['calm', (s) => (s.late ? 0.8 * (s.cloud ? 0.3 : 1) : 0)],
+  daydream: ['calm', (s) => (s.night ? 0.3 : 0.45) + 0.5 * (1 - s.e)],
+  settleIn: ['calm', (s) => 0.2 + 0.55 * (1 - s.e) + (s.late ? 0.2 : 0)], // makes its bed before a rest
+  gatherPebbles: ['easy', (s) => (s.free ? 0.35 + 0.25 * s.e : 0)], // lines up pebbles
+  crumple: ['easy', (s) => (s.free ? 0.16 + (s.idle > 60 && s.idle < 900 ? 0.1 : 0) : 0)], // a page of its own, tossed over its shoulder
+  drink: ['calm', (s) => (s.puddle ? 0.9 : 0)], // at the puddle (the more after a run about: FOLLOWS)
+  stick: ['calm', (s) => (s.free && s.ok('stick', 8 * MIN) ? 0.05 : 0)], // seldom: a stick to chew
+  tightrope: ['lively', (s, c) => (c.since('tightrope') > 35 * MIN ? 0.06 + 0.06 * s.e : 0) * (s.windy ? 0.4 : 1)], // less common: a balancing act on the line
+  plantSeed: ['easy', (s, c) => (s.focused && s.free && !s.flower && c.since('plantSeed') > 35 * MIN ? 0.075 * (s.wet ? 1.5 : 1) : 0)], // less common: it plants a flower
+  graze: ['calm', (s) => (s.tuft ? 1.4 + 0.25 * s.tufts : 0)],
+  // Shameless: a roll on its back (the more after the rain), a swagger (the more once today's goal is
+  // met), a burp after a meal, and posing in front of whatever is worth a look.
+  backScratch: ['easy', (s) => 0.05 + 0.08 * (1 - s.e) + (s.wet ? 0.5 : 0)],
+  strut: ['lively', (s) => (0.08 + 0.3 * s.e) * LIVE + (s.goalMet ? 0.45 : 0)],
+  burp: ['easy', (s) => (s.fedAgo < 2 * MIN ? 2.4 : 0)],
+  photobomb: ['easy', (s, c) => (c.since('photobomb') > 5 * MIN && s.sight ? 0.5 : 0)],
+  // The environment: new things now and then, and what it does with them while they last.
+  palmTree: ['easy', (s) => (!s.palm && s.ok('palm', 6 * MIN) ? 0.12 * (s.wet ? 1.5 : 1) : 0)],
+  treeShade: ['calm', (s) => (s.tree ? 1.1 * (s.night ? 0.6 : 1) : 0)],
+  shakeTree: ['easy', (s) => (s.tree ? 0.5 : 0)],
+  flower: ['easy', (s) => (!s.flower && s.ok('flower') ? 0.13 * (s.wet ? 1.5 : 1) : 0)],
+  mushroom: ['easy', (s) => (!s.mushroom && s.ok('mushroom') ? 0.1 * (s.wet ? 2 : 1) : 0)], // after the rain
+  snail: ['easy', (s) => (s.ok('snail', 6 * MIN) ? 0.09 * (s.wet ? 2 : 1) : 0)],
+  fireflies: ['easy', (s) => (s.night && s.calmSky && s.ok('fireflies') ? 0.35 : 0)],
+  puddleJump: ['lively', (s) => (s.puddle ? 2 * LIVE : 0)],
+  visitPlant: ['easy', (s, c) => (s.plant ? (c.gapTo(s.plant) > 300 ? 1 : 2.6) : 0)], // not every plant, and not at once
+  // Visitors now and then.
+  balloon: ['lively', (s) => (s.free && s.calmSky && s.ok('balloon', 5 * MIN) ? 0.12 * (s.windy ? 0.3 : 1) : 0)],
+  paperPlane: ['easy', (s) => (s.free && s.calmSky && s.ok('paperPlane', 5 * MIN) ? 0.12 * (s.writing ? 1.3 : 1) : 0)],
+  frog: ['lively', (s) => (s.free && s.ok('frog', 5 * MIN) ? 0.12 * (s.puddle || s.wet ? 2 : 1) : 0)],
+  ladybug: ['easy', (s) => (s.free && s.calmSky && s.ok('ladybug', 4 * MIN) ? 0.15 * (s.bloom ? 1.5 : 1) : 0)],
+  dandelion: ['easy', (s) => (s.free && s.calmSky && !s.dandelion && s.ok('dandelion', 5 * MIN) ? 0.1 : 0)],
+  worm: ['lively', (s) => (s.free && s.ok('worm', 5 * MIN) ? 0.12 * (s.wet ? 2.5 : 1) : 0)], // worms come up in the wet
+  // Small finds, each with its own odds: an acorn now and then, a feather seldom, a gem only rarely.
+  acorn: ['easy', (s) => (s.free && s.ok('acorn', 5 * MIN) ? 0.14 * (s.tree ? 1.3 : 1) : 0)],
+  cricket: ['lively', (s) => (s.free && s.ok('cricket', 5 * MIN) ? 0.09 * (s.night ? 1.6 : 1) : 0)], // they sing at night
+  feather: ['easy', (s) => (s.free && s.calmSky && s.ok('feather', 6 * MIN) ? 0.07 : 0)],
+  gem: ['easy', (s) => (s.free && s.ok('gem', 10 * MIN) ? 0.038 : 0)],
+  // Something small lives in the grass: now and then it darts out, while you're here to see.
+  critter: ['lively', (s) => (s.free && s.focused && s.grass && s.ok('critter', 3 * MIN) ? 0.22 : 0)],
+  // Five newer neighbours (0.43): a dragonfly by the water to snap at, a bee to run from (at the flowers
+  // above all), a kite on the breeze to hang on to (seldom), a rock out of the sand to climb, never the
+  // same shape twice (seldom), and a dung beetle to lend a hand.
+  dragonfly: ['lively', (s) => (s.free && s.calmSky && !s.night && s.ok('dragonfly', 5 * MIN) ? 0.07 * (s.puddle ? 4 : s.wet ? 2 : 1) : 0)],
+  bee: ['lively', (s) => (s.free && s.calmSky && !s.night && s.ok('bee', 5 * MIN) ? (s.bloom ? 0.4 : 0.04) : 0)],
+  kite: ['lively', (s) => (s.free && s.calmSky && !s.night && !s.raining && s.ok('kite', 25 * MIN) ? 0.035 * (s.windAgo < 10 * MIN ? 4 : 1) : 0)],
+  boulder: ['easy', (s) => (s.rock ? 0.35 : s.free && s.ok('boulder', 12 * MIN) ? 0.05 : 0)], // a new rock seldom; one about, often climbed
+  beetle: ['easy', (s) => (s.free && !s.night && s.ok('beetle', 6 * MIN) ? 0.08 * (s.wet ? 0.5 : 1) : 0)],
+  // Three newer habits (0.43): leaves swept into a heap to leap into (after a breeze, under a palm),
+  // hide and seek behind something big, and tidying away what it left lying about.
+  leafPile: ['lively', (s) => (s.leaves >= 2 ? 0.6 : s.windAgo < 4 * MIN && s.free ? 0.25 : 0)],
+  hideSeek: ['lively', (s) => (s.hideout ? 0.3 + 0.2 * s.e : 0)],
+  tidyUp: ['easy', (s) => (s.litter >= 2 ? 0.2 + 0.25 * Math.min(4, s.litter) : 0)],
+  // Unlocked by the writing streak.
+  skateboard: ['lively', (s) => (s.unlocked >= 1 && s.free ? 0.3 * (s.wet ? 0.4 : 1) : 0)],
+  fireworks: ['lively', (s) => (s.unlocked >= 2 && s.free ? 0.22 * (s.night ? 2 : 1) : 0)], // brightest at night
+  rainDance: ['lively', (s) => (s.unlocked >= 3 && !s.tree && !s.cloud && !s.palm && s.ok('rainDance', 8 * MIN) ? 0.24 : 0)],
+  egg: ['easy', (s) => (s.free ? 0.015 * s.luck : 0)], // rare surprises
+  ufo: ['easy', (s) => 0.0125 * s.luck * (s.night ? 1.5 : 1)],
+};
+// The tempo of what it did, against the tempo of what it might do now.
+const TEMPO_AFTER = {
+  lively: { lively: 0.55, easy: 1, calm: 1.6 },
+  easy: { lively: 1, easy: 0.9, calm: 1.1 },
+  calm: { lively: 1.15, easy: 1.25, calm: 0.75 },
+};
+const CHOICE_LIST = Object.entries(CHOICES);
+const TEMPO = { ...Object.fromEntries(Object.entries(CHOICES).map(([k, [t]]) => [k, t])), celebrate: 'lively', grow: 'easy', shrink: 'easy', nightfall: 'calm', daybreak: 'lively' };
+// What tends to follow particular things: { next: { after: factor } }.
+const FOLLOWS = {
+  stretch: { sleep: 2.4, rest: 2, doze: 2, daydream: 1.6, settleIn: 1.8, stargaze: 1.4, treeShade: 1.5, sunbathe: 1.5, yoga: 0.3, workout: 1.5 },
+  walk: { sleep: 1.6, rest: 1.6, daydream: 1.4, readScript: 1.3 },
+  explore: { rest: 1.4, sleep: 1.4, patrol: 0.4 },
+  look: { zoomies: 1.4, hop: 1.4, sniffTrail: 1.3, kite: 1.3 },
+  rest: { zoomies: 2, fetch: 1.5, workout: 1.6, explore: 1.5, patrol: 1.3, kite: 1.6, bee: 1.4, leafPile: 1.3 },
+  daydream: { zoomies: 1.6, kite: 1.4 },
+  wag: { fetch: 1.3, gem: 1.5, acorn: 1.3 },
+  scratch: { dig: 1.3, sandcastle: 1.3, leafPile: 1.8, sniffTrail: 1.2 },
+  drink: { zoomies: 2.5, hop: 2.5, dance: 2.5, fetch: 2.5, pounce: 2.5, workout: 2.5, chaseTail: 2.5, juggle: 2.5, somersault: 2.5, patrol: 2.5, explore: 2.5, shadowbox: 2.5, skateboard: 2.5, tightrope: 2.5, dragonfly: 1.6, leafPile: 1.6 },
+  shakeOff: { leafPile: 2.2, dig: 1.6, puddleJump: 2.5, roll: 1.5 },
+  groom: { graze: 1.6, stick: 1.6, dig: 1.5, roll: 1.4, leafPile: 1.5 },
+  sniffTrail: { dig: 1.5, worm: 1.6, critter: 1.5, beetle: 1.6 },
+  tidyUp: { gatherPebbles: 2.5, pebbleToss: 2.2, juggle: 1.8, crumple: 2.5, stick: 2, fetch: 1.6, dig: 1.5, acorn: 1.3, inspect: 1.4 },
+  photobomb: { doodle: 1.6, sandcastle: 2, palmTree: 1.5, flower: 1.4, boulder: 1.6, strut: 1.3 },
+  hideSeek: { boulder: 1.8, palmTree: 1.5, peekaboo: 0.3, bee: 1.3 },
+  boulder: { dig: 1.3, hideSeek: 1.2 },
+  sleep: { stargaze: 1.6, settleIn: 1.8, nightfall: 1.6, yoga: 1.2 },
+  writeAlong: { coffeeBreak: 1.6, readScript: 1.4, watchWriter: 1.3 },
+  ponder: { readScript: 1.5, crumple: 1.3 },
+  crumple: { writeAlong: 1.6, readScript: 1.3 },
+  rainDance: { sunbathe: 0.5 },
+  sunbathe: { shakeOff: 1.6, daybreak: 1.6 },
+  inspect: { fetch: 1.4, juggle: 1.3 },
+  howl: { nightfall: 1.8, stargaze: 1.4 },
+  strut: { celebrate: 2, grow: 2, photobomb: 1.2 },
+  dance: { celebrate: 1.6 },
+  burp: { graze: 1.2 },
+};
 
 // Environmental events: started by time, only one at a time, and only when the dinosaur can take part.
 const EVENTS = {
@@ -110,7 +268,7 @@ const EVENTS = {
   wind: { cool: 10 * MIN, w: 0.6, ok: (c) => !c.wind && c.floating() < 2 },
   bird: { cool: 7 * MIN, w: 0.8, ok: (c) => !c.find('bird') && c.floating() < 2 && c.hat?.kind !== 'bird' && (!!c.grownTree() || (CALM.has(c.activity) && (postureOf(c.frame) !== 'lie' || c.asleep()))) },
   tumbleweed: { cool: 9 * MIN, w: 0.6, ok: (c) => !c.find('tumbleweed') },
-  shootingStar: { cool: 10 * MIN, w: 1.2, ok: (c) => c.night() && !c.asleep() },
+  shootingStar: { cool: 10 * MIN, w: 1.4, ok: (c) => c.night() && !c.asleep() },
   sprout: { cool: 8 * MIN, w: 0.8, ok: (c) => !c.props.some((p) => p.wild) && c.loose < 4 },
 };
 
@@ -187,6 +345,7 @@ export class Critter {
     // The small touches of something alive: blinks of its own, and the weight of a landing.
     this.blinkAt = null;    // when its next blink starts
     this.landAt = -Infinity; // when it last came down from a jump
+    this.hideIn = null;     // what it is hiding behind (hide and seek)
     this.ownSeed = 0x2545f491;
   }
 
@@ -292,6 +451,22 @@ export class Critter {
       && (!GROW[p.kind] || p.frame === GROW[p.kind][0]) && p.x >= 0 && p.x + this.propW(p) <= this.stripW
       && this.gapTo(p) < 400 && p.life - (this.now - p.born) > 20000) || null;
   }
+  /** A flower, a bloom or a dandelion about, opened (a bee's errand). */
+  bloom() { return this.props.find((p) => (p.kind === 'flower' || p.kind === 'bloom' || p.kind === 'dandelion') && !p.carried && p.frame >= 2 && p.fadeOutAt == null) || null; }
+  /** Leaves lying on the ground (not blowing about). */
+  groundLeaves() { return this.props.filter((p) => p.kind === 'leaf' && !p.carried && !p.blown && !p.fall && p.y === 0 && p.fadeOutAt == null && p.x >= 0 && p.x + this.propW(p) <= this.stripW); }
+  /** Something big enough to hide behind (in its own mind): a grown palm or cactus, or a rock; the nearest. */
+  hideout() {
+    let best = null;
+    for (const p of this.props) {
+      const big = p.kind === 'rock' || ((p.kind === 'palm' || p.kind === 'cactus') && p.frame === GROW[p.kind][0] && !p.withering);
+      if (!big || p.carried || p.fadeOutAt != null || p.x < 0 || p.x + this.propW(p) > this.stripW || p.life - (this.now - p.born) < 30000) continue;
+      if (this.gapTo(p) < 300 && (!best || this.gapTo(p) < this.gapTo(best))) best = p;
+    }
+    return best;
+  }
+  /** What it left lying about after playing, on the ground and staying a while yet (it may tidy it away). */
+  litter() { return this.props.filter((p) => LITTER.has(p.kind) && !p.carried && !p.balance && p.y === 0 && !p.vx && p.fadeOutAt == null && p.life - (this.now - p.born) > 15000 && p.x >= 0 && p.x + this.propW(p) <= this.stripW); }
 
   /** What it is doing right now — the context a click or an event is answered in. */
   context() {
@@ -334,7 +509,7 @@ export class Critter {
     const wpm = this.heat / 2;                                  // ≈ words per minute recently
     const { today = 0, goal = 0 } = this.getProgress() || {};
     const goalPart = goal > 0 ? 0.12 * Math.min(1, today / goal) : 0;
-    const target = Math.min(1, 1 - Math.exp(-wpm / 14) + goalPart * (wpm > 1 ? 1 : 0.3));
+    const target = Math.min(1, 1 - Math.exp(-wpm / 18) + goalPart * (wpm > 1 ? 1 : 0.3));
     this.energy += (target - this.energy) * (1 - Math.exp(-dt / 20000)); // glide, never jump
   }
 
@@ -359,131 +534,67 @@ export class Critter {
   since(a) { return this.now - (this.lastDone[a] ?? -1e12); }
   envMark(kind) { this.lastEnv[kind] = this.now; }
 
+  /** The state of its world as a choice of what to do sees it (CHOICES). */
+  world(now = this.now) {
+    const h = new Date(this.clock()).getHours(), cloud = this.find('cloud');
+    const { today = 0, goal = 0 } = this.getProgress() || {};
+    const tree = this.grownTree();
+    const leaves = this.groundLeaves().length + (tree && tree.withering ? 1 : 0), floating = this.floating();
+    return {
+      e: this.energy,
+      idle: (now - this.lastWrite) / 1000,
+      writing: this.heat > 6,
+      night: h >= 21 || h < 6, late: h >= 22 || h < 5, morning: h >= 6 && h < 11, // (as night() has it)
+      focused: this.focused,
+      free: this.loose < 2,
+      // Back at work after a while away, and writing again: the grass that grew meanwhile.
+      tuft: this.focused && this.lastWrite > this.backAt && now >= this.grazeAt ? this.nearestTuft() : null,
+      tufts: this.tufts().length,
+      grass: this.props.some((p) => (p.tuft || p.lush) && p.frame >= 1),
+      tree, cloud, raining: !!cloud?.raining && !this.sheltered,
+      palm: this.find('palm'), flower: this.find('flower'), mushroom: this.find('mushroom'), dandelion: this.find('dandelion'),
+      bloom: this.bloom(), rock: this.find('rock'), moon: this.find('moon'),
+      puddle: this.find('puddle'), wet: now < this.wetUntil,
+      floating, calmSky: floating < 2,
+      windy: !!this.wind, windAgo: now - (this.lastEnv.wind ?? -1e12),
+      fedAgo: now - this.fed,
+      roomOut: this.zone(0) > 60 || this.zone(1) < this.maxX - 60, // somewhere beyond its home stretch to explore
+      corner: this.cornerOf() && this.zone(0) > 120, cornerAgo: now - this.lastCorner,
+      plant: this.plantToVisit(), sight: this.sight(), resting: this.restingProp(), hideout: this.hideout(),
+      litter: this.litter().length, leaves,
+      goalMet: goal > 0 && today >= goal,
+      unlocked: this.unlocked,
+      luck: Math.min(5, 1 + (now - this.lastRare) / (25 * MIN)), // the longer since the last rare surprise, the likelier the next
+      ok: (kind, cool) => this.envOk(kind, cool),
+    };
+  }
+
+  /** How much it feels like each activity now: its world, its mood, what it just did, and variety. */
+  weights(now = this.now) {
+    const s = this.world(now), prev = this.activity, before = TEMPO[prev], w = {};
+    for (const [a, [tempo, f]] of CHOICE_LIST) {
+      let x = f(s, this);
+      if (!(x > 0)) continue;
+      if (before) x *= TEMPO_AFTER[before][tempo];
+      if (FOLLOWS[a]?.[prev]) x *= FOLLOWS[a][prev];
+      // The weather and the hour: under the rain, and at night, it takes things more quietly.
+      if (s.raining) x *= tempo === 'lively' ? 0.5 : tempo === 'calm' ? 1.2 : 1;
+      if (s.night) x *= tempo === 'lively' ? 0.8 : tempo === 'calm' ? 1.15 : 1;
+      w[a] = x;
+    }
+    const m = MOODS[this.mood].act;
+    for (const k in m) if (w[k]) w[k] *= m[k];
+    if (this.away()) for (const k of ['explore', 'patrol', 'cornerBite']) delete w[k]; // already out on an excursion
+    this.recent.forEach((k, i) => { if (w[k]) w[k] *= i === this.recent.length - 1 ? 0.2 : 0.55; }); // variety
+    return w;
+  }
+
   pickActivity(now) {
     if (this.pending) { const a = this.pending; this.pending = null; return a; }
     if (this.deepDue(now)) { this.deep = true; return 'sleep'; } // long in the background: off to sleep, properly
     if (this.targetG !== this.g) return this.targetG > this.g ? 'grow' : 'shrink';
-    const e = this.energy;
-    const idle = (now - this.lastWrite) / 1000;
-    const writing = this.heat > 6;
-    const h = new Date(this.clock()).getHours();
-    const night = this.night(), late = h >= 22 || h < 5, morning = h >= 6 && h < 11;
-    const free = this.loose < 2;
-    // Back at work after a while away, and writing again: the grass that grew meanwhile.
-    const tuft = this.focused && this.lastWrite > this.backAt && now >= this.grazeAt ? this.nearestTuft() : null;
-    const tree = this.grownTree(), cloud = this.find('cloud');
-    const luck = Math.min(5, 1 + (now - this.lastRare) / (30 * MIN)); // the longer since the last rare surprise, the likelier the next
-    const calmSky = this.floating() < 2;
-    const roomOut = this.zone(0) > 60 || this.zone(1) < this.maxX - 60; // somewhere beyond its home stretch to explore
-    const plant = this.plantToVisit();
-    const { today = 0, goal = 0 } = this.getProgress() || {};
-    const goalMet = goal > 0 && today >= goal;
-    const w = {
-      sleep: e < 0.15 ? (idle > 240 ? 6 : 0.8) : 0,
-      rest: 4 * (1 - e) + 0.4,
-      look: 2,
-      walk: 0.6 + 4 * e,
-      stretch: 0.5 + 0.8 * (1 - e),
-      wag: 0.3 + 0.5 * e,
-      scratch: 0.45,
-      doze: 0.05 + 0.8 * (1 - e) * (1 - e),              // nods off more the calmer things are
-      ponder: 0.3,
-      sunbathe: !night && e < 0.6 ? 0.12 : 0,
-      watchWriter: writing ? 0.8 : 0.12,
-      readScript: idle > 20 && idle < 600 ? 0.6 : 0.15,  // reads over your page when you stop for a bit
-      coffeeBreak: 0.2 + (morning ? 0.4 : 0),
-      howl: late ? 0.3 : 0,
-      sing: 0.12 + 0.3 * e,
-      yoga: 0.05 + 0.2 * (1 - e),
-      workout: 0.08 + 0.3 * e,
-      shakeOff: 0.1 + (now < this.wetUntil ? 3 : 0),
-      hop: 2.5 * e * e,
-      zoomies: e > 0.5 ? 0.5 * e : 0,
-      pounce: 0.15 + 0.4 * e,
-      roll: 0.08 + 0.12 * e,
-      somersault: 0.06 + 0.3 * e,
-      headstand: 0.03 + 0.1 * e,
-      dance: e > 0.45 ? 2 * e * e : 0,
-      roar: 0.1 + 0.25 * e,
-      trip: 0.05 + 0.15 * e,                             // gags stay occasional
-      moonwalk: e > 0.35 ? 0.35 * e : 0,
-      chaseTail: 0.08 + 0.35 * e,
-      sneeze: 0.15,
-      fetch: free ? 0.1 + 1.2 * e : 0,
-      dig: free ? 0.25 + 0.25 * e : 0,                  // digging takes some energy
-      leaf: free ? 0.15 + 0.4 * (1 - e) : 0,
-      butterfly: free && calmSky ? 0.3 : 0,
-      inspect: this.restingProp() ? 1.4 : 0,
-      writeAlong: writing ? 0.5 + 1.5 * e : 0,
-      juggle: free ? 0.08 + 0.5 * e * e : 0,
-      pebbleToss: free ? 0.18 : 0,
-      sandcastle: free ? 0.18 : 0,
-      bubbles: free && calmSky ? 0.12 + 0.2 * e : 0,
-      hiccups: 0.08,
-      flamingo: 0.1,
-      peekaboo: 0.12 + 0.2 * e,
-      shadowbox: 0.08 + 0.35 * e,
-      groom: 0.4 + 0.3 * (1 - e),                         // everyday habits
-      sniffTrail: 0.25 + 0.25 * e,
-      doodle: free ? 0.5 + 0.3 * e : 0,                  // draws in the sand
-      patrol: 0.2 + 0.3 * e,
-      explore: roomOut ? 0.1 + 0.1 * e : 0,
-      cornerBite: this.cornerOf() && this.zone(0) > 120 && now - this.lastCorner > 40 * MIN ? 0.004 * Math.min(4, (now - this.lastCorner) / (60 * MIN)) : 0, // very rare
-      stargaze: late ? 0.8 : 0,
-      daydream: (night ? 0.3 : 0.45) + 0.5 * (1 - e),
-      settleIn: 0.2 + 0.55 * (1 - e),                     // makes its bed before a rest
-      gatherPebbles: free ? 0.35 + 0.25 * e : 0,          // lines up pebbles
-      crumple: free ? 0.16 : 0,                           // a page of its own, tossed over its shoulder
-      drink: this.find('puddle') ? 0.9 + (LIVELY.has(this.activity) ? 1.5 : 0) : 0, // at the puddle, the more after a run about
-      stick: free && this.envOk('stick', 8 * MIN) ? 0.05 : 0, // seldom: a stick to chew
-      tightrope: this.since('tightrope') > 35 * MIN ? 0.05 + 0.05 * e : 0, // less common: a balancing act on the line
-      plantSeed: this.focused && free && !this.find('flower') && this.since('plantSeed') > 35 * MIN ? 0.06 : 0, // less common: it plants a flower
-      graze: tuft ? 1.4 + 0.25 * this.tufts().length : 0,
-      // Shameless: a roll on its back (the more after the rain), a swagger (the more once today's goal is
-      // met), a burp after a meal, and posing in front of whatever is worth a look.
-      backScratch: 0.05 + 0.08 * (1 - e) + (now < this.wetUntil ? 0.5 : 0),
-      strut: 0.08 + 0.3 * e + (goalMet ? 0.45 : 0),
-      burp: now - this.fed < 2 * MIN ? 2.4 : 0,
-      photobomb: this.since('photobomb') > 5 * MIN && this.sight() ? 0.5 : 0,
-      // The environment: new things now and then, and what it does with them while they last.
-      palmTree: !this.find('palm') && this.envOk('palm', 6 * MIN) ? 0.12 : 0,
-      treeShade: tree ? 1.1 : 0,
-      shakeTree: tree ? 0.5 : 0,
-      flower: !this.find('flower') && this.envOk('flower') ? 0.13 : 0,
-      mushroom: !this.find('mushroom') && this.envOk('mushroom') ? 0.1 : 0,
-      snail: this.envOk('snail', 6 * MIN) ? 0.09 : 0,
-      fireflies: night && calmSky && this.envOk('fireflies') ? 0.35 : 0,
-      puddleJump: this.find('puddle') ? 2 : 0,
-      visitPlant: plant ? (this.gapTo(plant) > 300 ? 1 : 2.6) : 0, // not every plant, and not at once
-      // Visitors now and then.
-      balloon: free && calmSky && this.envOk('balloon', 5 * MIN) ? 0.12 : 0,
-      paperPlane: free && calmSky && this.envOk('paperPlane', 5 * MIN) ? 0.12 : 0,
-      frog: free && this.envOk('frog', 5 * MIN) ? 0.12 : 0,
-      ladybug: free && calmSky && this.envOk('ladybug', 4 * MIN) ? 0.15 : 0,
-      dandelion: free && calmSky && !this.find('dandelion') && this.envOk('dandelion', 5 * MIN) ? 0.1 : 0,
-      worm: free && this.envOk('worm', 5 * MIN) ? 0.12 : 0,
-      // Small finds, each with its own odds: an acorn now and then, a feather seldom, a gem only rarely.
-      acorn: free && this.envOk('acorn', 5 * MIN) ? 0.14 : 0,
-      cricket: free && this.envOk('cricket', 5 * MIN) ? 0.09 : 0,
-      feather: free && calmSky && this.envOk('feather', 6 * MIN) ? 0.06 : 0,
-      gem: free && this.envOk('gem', 10 * MIN) ? 0.03 : 0,
-      // Something small lives in the grass: now and then it darts out, while you're here to see.
-      critter: free && this.focused && this.props.some((p) => (p.tuft || p.lush) && p.frame >= 1) && this.envOk('critter', 3 * MIN) ? 0.22 : 0,
-      // Unlocked by the writing streak.
-      skateboard: this.unlocked >= 1 && free ? 0.3 : 0,
-      fireworks: this.unlocked >= 2 && free ? 0.22 : 0,
-      rainDance: this.unlocked >= 3 && !tree && !cloud && !this.find('palm') && this.envOk('rainDance', 8 * MIN) ? 0.2 : 0,
-      egg: free ? 0.012 * luck : 0,   // rare surprises
-      ufo: 0.01 * luck,
-    };
-    const m = MOODS[this.mood].act;
-    for (const k in m) if (w[k]) w[k] *= m[k];
-    const after = LIVELY.has(this.activity) ? AFTER_LIVELY : RESTFUL.has(this.activity) ? AFTER_REST : null; // what it just did colours what comes next
-    if (after) for (const k in after) if (w[k]) w[k] *= after[k];
-    if (LIVELY.has(this.activity)) for (const k of LIVELY) if (w[k]) w[k] *= 0.6;
-    if (this.away()) for (const k of ['explore', 'patrol', 'cornerBite']) w[k] = 0; // already out on an excursion
-    this.recent.forEach((k, i) => { if (w[k]) w[k] *= i === this.recent.length - 1 ? 0.2 : 0.55; }); // variety
-    const a = this.pick(w);
+    const w = this.weights(now);
+    const a = Object.keys(w).length ? this.pick(w) : 'look';
     if (a === 'egg' || a === 'ufo') this.lastRare = now;
     if (a === 'cornerBite') this.lastCorner = now;
     return a;
@@ -666,7 +777,7 @@ export class Critter {
   /** Let something that grows wither away now. */
   wither(p) { if (p && GROW[p.kind]) { p.grows = true; p.life = this.now - p.born + GROW[p.kind][0] * GROW[p.kind][1] + 50; } }
   fadeOut(p, ms) { if (p && p.fadeOutAt == null) { p.fadeOutAt = this.now; p.fadeMs = ms; } }
-  propCols(p) { return PROPS[p.kind][0][0].length; }
+  propCols(p) { return (p.art || PROPS[p.kind][0])[0].length; } // (a rock: its own shape)
   restingProp() { return this.props.find((p) => !p.carried && !p.balance && p.y === 0 && !p.vx && ['ball', 'bone', 'leaf', 'pebble', 'coconut'].includes(p.kind)); }
   pickUp(p) { if (!p) return; p.carried = true; p.vx = p.vy = 0; p.life = Infinity; p.wander = false; }
   mouthAt() {
@@ -919,6 +1030,7 @@ export class Critter {
       if (p.kind === 'cloud' && p.dance && p.phase !== 'leave') this.endRain();
     }
     this.sheltered = false;
+    this.hideIn = null;
   }
 
   startReaction(name) {
@@ -939,6 +1051,9 @@ export class Critter {
     })();
   }
 
+  /** Standing up on something: the last step left it off the ground, and the next carries on up there. */
+  aloft() { const s = this.step; return !!(s && s.lift && s.lift[1] > 0); }
+
   dueNow(now) { return (this.queue.length && this.queue[0].at <= now) || (this.envDue && this.envDue.at <= now); }
 
   nextStep(now) {
@@ -953,7 +1068,8 @@ export class Critter {
     }
     // Reactions go in between steps of the current activity, never through one;
     // its part in the environment comes first, then clicks.
-    if (!this.inReaction && this.onstage()) {
+    // Up on something (a rock, a skateboard, a kite's pull) it gets down first: they wait till then.
+    if (!this.inReaction && this.onstage() && !this.aloft()) {
       if (this.envDue && this.envDue.at <= now) { const { name } = this.envDue; this.envDue = null; if (name !== 'deepWake' || this.deep) this.startReaction(name); }
       else if (this.queue.length && this.queue[0].at <= now) this.startReaction(this.queue.shift().name);
     }
@@ -1228,6 +1344,93 @@ export class Critter {
           p.y = Math.min(H + 24, p.y + p.vy * s);
           if (p.y >= H + 24 || p.x <= -M || p.x >= W2 + M - cols * u) this.fadeOut(p, 600);
           break;
+        case 'dragonfly': {
+          // Darts from one spot to the next about its head, hovering a moment at each (and at once when snapped at).
+          p.live = true;
+          p.frame = Math.floor(now / 60) % 2;
+          if (p.aim === 'away') {
+            p.dir ||= this.propCenter(p) < this.center() ? -1 : 1;
+            p.x += p.dir * 70 * s; p.y = Math.min(H + 24, p.y + 6 * s); p.face = p.dir;
+            if (p.x < -M || p.x > W2 + M - cols * u || this.gone(p, p.dir)) { p.x = inView(p, cols); this.fadeOut(p, 400); p.aim = 'gone'; }
+            break;
+          }
+          if (p.aim === 'gone') break;
+          if (p.tx == null || now >= p.nextDart || (p.dodge && now - p.dodge < 120)) {
+            p.dodge = null;
+            p.tx = this.headX() + this.rnd(-28, 28) - 3.5 * u; p.ty = Math.min(H + 20, this.height() + this.rnd(1, 7));
+            p.nextDart = now + this.rnd(500, 1300);
+          }
+          const k = 1 - Math.exp(-s * 7);
+          if (Math.abs(p.tx - p.x) > 0.5) p.face = Math.sign(p.tx - p.x);
+          p.x = inView({ x: p.x + (p.tx - p.x) * k }, cols); p.y += (p.ty - p.y) * k;
+          break;
+        }
+        case 'bee': {
+          // Buzzes round a flower, round its head (after it, but never as fast as it runs), or off and away.
+          p.live = true;
+          p.frame = Math.floor(now / 70) % 2;
+          const t = (now - p.born) / 1000;
+          if (p.aim === 'gone') break;
+          if (p.aim === 'away') {
+            p.dir ||= this.propCenter(p) < this.center() ? -1 : 1;
+            p.x += p.dir * 40 * s; p.y = Math.min(H + 24, p.y + 5 * s); p.face = p.dir;
+            if (p.x < -M || p.x > W2 + M - cols * u || this.gone(p, p.dir)) { p.x = inView(p, cols); this.fadeOut(p, 400); p.aim = 'gone'; }
+            break;
+          }
+          let tx, ty, rate = 2.2;
+          if (p.aim === 'flower' && this.has(p.at)) {
+            const fl = p.at, rows = (PROPS[fl.kind][fl.frame] || PROPS[fl.kind][0]).length;
+            tx = this.propCenter(fl) - 2.5 * u + Math.cos(t * 3) * 6; ty = rows + 2 + Math.sin(t * 4) * 2;
+          } else if (p.aim === 'dino') { tx = this.headX() - 2.5 * u + Math.cos(t * 5) * 4; ty = this.height() + 1 + Math.sin(t * 6) * 2; rate = 1.6; }
+          else { tx = this.center() + Math.cos(t * 0.9) * 40; ty = 10 + Math.sin(t * 2) * 3; }
+          const dx = (tx - p.x) * (1 - Math.exp(-s * rate));
+          if (Math.abs(dx) > 0.05) p.face = Math.sign(dx);
+          p.x = inView({ x: p.x + Math.max(-55 * s, Math.min(55 * s, dx)) }, cols);
+          p.y = Math.max(1, Math.min(H + 22, p.y + (ty - p.y) * (1 - Math.exp(-s * 3))));
+          break;
+        }
+        case 'kite': {
+          // On the breeze: tumbling in to it, tugging on the string it holds (higher in a gust), or sailing away.
+          p.live = true;
+          p.frame = Math.floor((now - p.born) / 450) % 2;
+          const top = H + 22 - 7, wd = p.dir;
+          if (p.held) {
+            const m = this.mouthAt(), tx = m.x + wd * 34 - 2.5 * u, ty = Math.min(top, 17 + (p.gust ? 5 : 0) + Math.sin((now - p.born) / 600) * 1.5);
+            p.x += (tx - p.x) * (1 - Math.exp(-s * 2)); p.y += (ty - p.y) * (1 - Math.exp(-s * 1.5));
+          } else if (p.come) {
+            const tx = this.center() + wd * 24 - 2.5 * u;
+            p.x += (tx - p.x) * (1 - Math.exp(-s * 1.2)); p.y += (9 + Math.sin((now - p.born) / 400) * 2 - p.y) * (1 - Math.exp(-s));
+          } else {
+            p.x += wd * 26 * s; p.y = Math.min(top, p.y + 5 * s);
+            if ((p.x < -M || p.x > W2 + M - cols * u || this.gone(p, wd)) && p.fadeOutAt == null) this.fadeOut(p, 800);
+          }
+          p.x = inView(p, cols);
+          break;
+        }
+        case 'beetle': {
+          // Rolls its ball along, just behind it; when the ball runs away from it, after it as fast as it can.
+          p.live = true;
+          p.face = p.dir;
+          const b = p.ball && this.has(p.ball) ? p.ball : null;
+          let fast = false;
+          if (b) {
+            const at = p.dir > 0 ? b.x - this.propW(p) : b.x + this.propW(b), d = at - p.x;
+            if (b.vx || Math.abs(d) > 1) { p.x += Math.sign(d) * Math.min(Math.abs(d), 34 * s); fast = true; }
+            else { p.x += p.dir * p.speed * s; b.x = p.dir > 0 ? p.x + this.propW(p) : p.x - this.propW(b); b.frame = ((Math.floor(b.x / (2 * u)) % 2) + 2) % 2; }
+          } else p.x += p.dir * p.speed * s;
+          p.frame = Math.floor(now / (fast ? 70 : 160)) % 2;
+          // Out at the end it heads for (the ball first, ahead of it), or well past home: it fades away there.
+          const lead = b ? (p.dir > 0 ? Math.max(p.x + cols * u, b.x + this.propW(b)) : Math.min(p.x, b.x)) : p.dir > 0 ? p.x + cols * u : p.x;
+          const out = p.dir > 0 ? lead > W2 + M : lead < -M;
+          if (b) b.x = inView(b, this.propCols(b));
+          p.x = inView(p, cols);
+          if ((out || this.gone(p, p.dir)) && p.fadeOutAt == null) { this.fadeOut(p, 600); if (b) this.fadeOut(b, 600); p.speed = 0; p.ball = null; }
+          break;
+        }
+        case 'dung':
+          if (p.vx) { p.live = true; p.x += p.vx * s; p.vx *= Math.exp(-s * 1.6); if (Math.abs(p.vx) < 2) p.vx = 0; p.frame = ((Math.floor(p.x / (2 * u)) % 2) + 2) % 2; }
+          p.x = inView(p, cols);
+          break;
         case 'skateboard':
           if (p.ride) { p.live = true; p.x = this.x + (this.dw - cols * u) / 2; p.y = Math.max(0, this.y - 2); }
           break;
@@ -1400,7 +1603,7 @@ export class Critter {
 // clouds and fireworks.
 const HOME_MAX = 560, MARGIN = 24, HEADROOM = 30;
 // Drawn behind everything else.
-const BACKDROP = ['sun', 'moon', 'rainbow', 'palm', 'cactus', 'grass', 'cloud', 'puddle'];
+const BACKDROP = ['sun', 'moon', 'rainbow', 'palm', 'cactus', 'grass', 'cloud', 'puddle', 'rock', 'pile'];
 
 export class Dino {
   constructor({ anchor, area, getProgress }) {
@@ -1593,7 +1796,7 @@ export class Dino {
     const shut = ack || c.blinking(now);
     const frame = c.landing(now) && c.y < 1 && !c.flip && postureOf(c.frame) === 'stand' && !c.hat && !c.props.some((q) => q.carried) ? 'crouch' : FRAMES[c.frame] ? c.frame : 'stand';
     const air = c.step?.jump && !c.step.lift && c.y >= 1 ? Math.round(c.y) : 0;
-    const sig = `${frame}|${px}|${py}|${c.face}|${c.flip}|${ack}|${shut}|${air}|${c.g}|${fx}|${props}|${parts}|${busy}|${c.hat ? c.hat.kind : ''}${c.step?.hatUp ? '^' : ''}`;
+    const sig = `${frame}|${px}|${py}|${c.face}|${c.flip}|${ack}|${shut}|${air}|${c.step?.hide ? 'h' : ''}|${c.g}|${fx}|${props}|${parts}|${busy}|${c.hat ? c.hat.kind : ''}${c.step?.hatUp ? '^' : ''}`;
     if (sig === this.lastSig) return;
     this.lastSig = sig;
     const g = this.ctx, cw = this.canvas.width, ch = this.canvas.height;
@@ -1616,10 +1819,10 @@ export class Dino {
     };
     const drawProp = (q) => {
       if (q.carried || this.blinkOut(q, now) || (q.kind === 'firefly' && !q.on)) return;
-      const art = PROPS[q.kind][q.frame] || PROPS[q.kind][0];
+      const art = q.art || PROPS[q.kind][q.frame] || PROPS[q.kind][0];
       const jitter = q.wobble ? (Math.round(now / 90) % 2 ? p : -p) : 0;
       g.globalAlpha = (ALPHA[q.kind] ?? 1) * (q.alpha ?? 1);
-      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0) || ((q.kind === 'plane' || q.kind === 'frog' || q.kind === 'cricket' || q.kind in CRITTERS) && q.face < 0);
+      const mirror = (q.kind === 'baby' && q.vx < 0) || (q.kind === 'snail' && q.face < 0) || (q.kind === 'bird' && q.vx < 0) || ((q.kind === 'plane' || q.kind === 'frog' || q.kind === 'cricket' || q.kind === 'dragonfly' || q.kind === 'bee' || q.kind === 'beetle' || q.kind in CRITTERS) && q.face < 0);
       grid(art, snap(q.x) + jitter, ground - Math.round(q.y) * p, p, mirror);
       if (q.kind === 'ufo' && q.beam) {
         const bx = snap(q.x) + 4 * p;
@@ -1627,9 +1830,10 @@ export class Dino {
       }
       g.globalAlpha = 1;
     };
-    // The scenery, then loose props behind the dinosaur.
-    for (const kind of BACKDROP) for (const q of c.props) if (q.kind === kind) drawProp(q);
-    for (const q of c.props) if (!BACKDROP.includes(q.kind)) drawProp(q);
+    // The scenery, then loose props behind the dinosaur; what it is hiding behind, in front of it.
+    const behind = c.step?.hide && c.has(c.hideIn) ? c.hideIn : null;
+    for (const kind of BACKDROP) for (const q of c.props) if (q.kind === kind && q !== behind) drawProp(q);
+    for (const q of c.props) if (!BACKDROP.includes(q.kind) && q !== behind) drawProp(q);
     // The dinosaur, pixel by pixel on edges that keep its face the same shape at any size, either way round.
     let rows = FRAMES[frame];
     if (shut) rows = rows.map((r) => r.replace('o', '#')); // a blink (on a click: noticed!)
@@ -1662,6 +1866,16 @@ export class Dino {
       const art = k === 'butterfly' ? PROPS.butterfly[Math.floor(now / 400) % 2] : k === 'bird' ? PROPS.bird[0] : PROPS[k][0];
       const lift = (k === 'leaf' ? -p : 0) + (c.step?.hatUp ? 2 * p : 0);
       grid(art, colX(col) - Math.floor(art[0].length / 2) * p, top + e.rows[row] - lift, p, k === 'bird' && c.face < 0);
+    }
+    if (behind) drawProp(behind);
+    // A kite's string, from the kite down to its mouth (a dotted line, a little lighter).
+    for (const q of c.props) {
+      if (q.kind !== 'kite' || !q.held) continue;
+      const m = c.mouthAt(), x0 = snap(q.x) + 2 * p, y0 = ground - Math.round(q.y) * p, x1 = snap(m.x), y1 = ground - Math.round(m.y) * p;
+      const n = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / p));
+      g.globalAlpha = 0.55 * (q.alpha ?? 1);
+      for (let i = 1; i < n; i += 2) g.fillRect(Math.round((x0 + ((x1 - x0) * i) / n) / p) * p, Math.round((y0 + ((y1 - y0) * i) / n) / p) * p, p, p);
+      g.globalAlpha = 1;
     }
     for (const q of c.particles) g.fillRect(snap(q.x), ground - (Math.round(q.y) + 1) * p, p, p);
     // Rain, wind and sparks.
@@ -1698,4 +1912,4 @@ export class Dino {
   }
 }
 
-export const _test = { FRAMES, PROPS, GLYPHS, W, H, ACTIVITIES, REACTIONS, MOODS, EVENTS, SPECIALS, ENV_ACTIVITIES, GET_UP, BASELINE_0_8, postureOf, MOUTH, HEAD_TOP };
+export const _test = { CHOICES, TEMPO, FOLLOWS, FRAMES, PROPS, GLYPHS, W, H, ACTIVITIES, REACTIONS, MOODS, EVENTS, SPECIALS, ENV_ACTIVITIES, GET_UP, BASELINE_0_8, postureOf, MOUTH, HEAD_TOP };

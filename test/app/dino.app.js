@@ -94,7 +94,7 @@ test('it livens up with real writing only: not pasting, not opening a screenplay
   await app.type('the quick brown fox jumps over the lazy dog again and again ');
   assert.ok(await c('c.heat') >= 10, 'typing does');
   const e1 = await c('(c.updateEnergy(30000), c.energy)');
-  assert.ok(e1 > 0.2 && e1 < 1, `gradually (${e1})`);
+  assert.ok(e1 > 0.15 && e1 < 1, `gradually (${e1})`); // (calmer since 0.43: it was above 0.2)
   assert.ok(await c('(() => { for (let i = 0; i < 60; i++) c.updateEnergy(10000); return c.energy; })()') < 0.1, 'and calms down without writing');
 });
 

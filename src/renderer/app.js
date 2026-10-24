@@ -24,7 +24,7 @@ import { Spelling } from './spelling.js';
 import { toast } from './ui/toast.js';
 import { resizable } from './ui/resize.js';
 import { Timeline } from './timeline.js';
-import { launchOrder } from '../core/recent.js';
+import { launchOrder, rememberPlace, placeFor } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { MAC, macKeys } from '../core/keys.js';
 import { stepZoom, panelScale } from '../core/wheelzoom.js';
@@ -70,12 +70,13 @@ input.onZoom = () => { renderZoom(); persistZoom(); };
 input.names = () => castOrder(session.doc.cast, editor.characterNames());
 input.onCue = (name) => { session.doc.cast = touchCast(session.doc.cast, name); };
 
-// glide: true glides until the passage is in the middle, 'top' until it is at the top of the view.
+// glide: true glides until the passage is in the middle, 'top' until it is at the top of the view,
+// { y } to the scroll position y() gives (the timeline: the middle of its band).
 const jump = (p, center = false, end = null, glide = false) => {
   editor.setSel(p, end || p);
   view.relayout();
   view.frame();
-  if (glide) view.glideTo(p, end || p, { top: glide === 'top' });
+  if (glide) view.glideTo(p, end || p, typeof glide === 'object' ? glide : { top: glide === 'top' });
   else view.revealCaret(center);
   input.focus();
   input.placeTextarea();
@@ -110,7 +111,7 @@ view.scroller.addEventListener('contextmenu', (e) => spelling.contextMenu(e));
 
 const timeline = new Timeline($('timeline'), {
   editor, view, session, jump,
-  openNote: (id, b, s, e) => { jump(pos(b, s), true, pos(b, e), true); view.activeComment = id; openNote(id); view.invalidate(); },
+  openNote: (id, b, s, e, glide = true) => { jump(pos(b, s), true, pos(b, e), glide); view.activeComment = id; openNote(id); view.invalidate(); },
   onToggle: (on) => api.invoke('settings:set', { timeline: on }),
   lockPointer: () => api.invoke('pointer:lock'),
   onTimecodes: () => scenes.refresh(),
@@ -144,6 +145,7 @@ editor.onChange = () => {
     if (id && id !== view.activeComment) { view.activeComment = id; notes.markCurrent(); }
   }
   if (scenes.visible) scenes.refresh();
+  keepPlace();
 };
 
 view.onFrame = () => { renderStatus(); timeline.update(); };
@@ -165,18 +167,49 @@ function onDocLoaded(s) {
   scenes.refresh(); notes.refresh(true);
   renderTitle();
   if (find.open) find.search(true);
-  // Start writing on the first script page, not the title page.
-  editor.setSel(pos(0, 0));
+  // Back where it was left (the caret, and the line at the top of the window), or else writing on the
+  // first script page, not the title page.
+  const place = s.path ? placeFor(settings.places, s.doc.meta.id, editor.blocks) : null;
+  placeDoc = s.doc;
+  editor.setSel(place ? pos(place.caret.b, place.caret.o) : pos(0, 0));
   // The keyboard goes to the script, unless something else took it meanwhile (a note begun at once):
   // its keys must not end up in the script.
   const had = document.activeElement;
   requestAnimationFrame(() => {
-    view.scrollToPage(0); view.frame();
+    const r = place && place.top && view.caretRect(pos(place.top.b, place.top.o));
+    if (r) view.scroller.scrollTop = r.y + place.dy * view.row;
+    else if (place) view.revealCaret(true);
+    else view.scrollToPage(0);
+    view.frame();
     const now = document.activeElement;
     if (now === had || now === document.body || now === $('input') || !now) input.focus();
     input.placeTextarea();
   });
 }
+
+// ---- where each screenplay was left ------------------------------------------------
+
+// Kept a moment after the caret or the window last moved, and at once before another screenplay opens
+// or STET closes: the caret, and the line at the top of the window (with how far into it), so the
+// screenplay opens again looking just as it did. Only for saved screenplays (by their id).
+let placeDoc = null, placeTimer = 0;
+function placeNow() {
+  const doc = session.doc;
+  if (!doc || doc !== placeDoc || !session.path || !view.pages.length) return null;
+  const sc = view.scroller, r = sc.getBoundingClientRect(), c = editor.caret;
+  const onScript = sc.scrollTop >= view.pageTop(view.offset) - 8; // (the title page at the top: none)
+  const top = onScript ? view.posAt(r.left + sc.clientWidth / 2, r.top + 1) : null, tr = top && view.caretRect(top);
+  return { id: doc.meta.id, caret: { b: c.b, o: c.o }, top: tr ? { b: top.b, o: top.o } : null, dy: tr ? (sc.scrollTop - tr.y) / view.row : 0 };
+}
+function keepPlace(now = false) {
+  clearTimeout(placeTimer);
+  if (!now) { placeTimer = setTimeout(() => keepPlace(true), 800); return; }
+  const place = placeNow();
+  if (!place) return;
+  settings.places = rememberPlace(settings.places, place);
+  return api.invoke('settings:set', { places: settings.places });
+}
+view.scroller.addEventListener('scroll', () => keepPlace(), { passive: true });
 
 // ---- statistics --------------------------------------------------------------------
 
@@ -685,6 +718,7 @@ function hasContent() {
 /** Make the current document safe to leave. Returns false if the user cancelled. */
 async function releaseCurrent() {
   if (!session.doc) return true;
+  keepPlace(true);
   const ok = await session.flushAll();
   if (ok || !session.dirty) return true;
   if (!session.path) {
@@ -1186,6 +1220,7 @@ function isGlobalKey(e) {
 // never-saved one asked about). false if the person cancelled.
 async function prepareQuit() {
   trackWords();
+  await keepPlace(true);
   await writing.flush();
   await api.invoke('stats:flush');
   if (!(await releaseCurrent())) return false;
