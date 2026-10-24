@@ -146,6 +146,8 @@ test('the pointer is drawn to the nearest mark within reach, and to none further
   assert.equal(snapTo(marks, 0.99, 0.05).kind, 'scene');
   assert.equal(snapTo(marks, 2, 0.05), null);
   assert.equal(snapTo([], 1, 1), null);
+  assert.equal(snapTo(marks, 1.03, 0.05, 0, 1.02).kind, 'scene', 'a mark out of sight (scrolled off, or under the fade) is passed over');
+  assert.equal(snapTo(marks, 1.03, 0.05, 1.1, 5), null);
 });
 
 test('fineTime: a second every so many pixels from where Ctrl was pressed, never past either end', () => {

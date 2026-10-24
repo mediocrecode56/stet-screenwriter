@@ -251,6 +251,7 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 .tl-view.hot, .tl-drag-band .tl-view { box-shadow: inset 0 0 0 1px var(--ink-3); }
 .tl-inner[data-zone="band"] { cursor: grab; }
 .tl-inner[data-zone="ruler"] { cursor: ew-resize; }
+.tl-inner[data-zone="covered"] { cursor: default; } /* under the fade at the right end: out of play */
 .tl-inner[data-zone="tc"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Cpath d='M2 16l1-4.2L12.6 2.2a1.6 1.6 0 0 1 2.2 0l1 1a1.6 1.6 0 0 1 0 2.2L6.2 15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M11 3.8l3.2 3.2M3 11.8l3.2 3.2' fill='none' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E") 2 16, pointer; } /* on a timecode: a click edits it */
 body.tl-drag-band, body.tl-drag-band * { cursor: grabbing !important; }
 body.tl-drag-zoom, body.tl-drag-zoom * { cursor: ew-resize !important; }

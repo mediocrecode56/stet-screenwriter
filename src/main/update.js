@@ -73,7 +73,8 @@ export function parseRelease(json) {
 export async function checkForUpdate({ current, fetch, url = LATEST_API, timeoutMs = 15000 }) {
   let res;
   try {
-    res = await fetch(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': `STET/${current}` }, signal: AbortSignal.timeout(timeoutMs) });
+    // Never a cached answer: GitHub lets "latest" be cached for a minute, long enough to miss a release.
+    res = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', 'User-Agent': `STET/${current}` }, signal: AbortSignal.timeout(timeoutMs) });
   } catch {
     return { status: 'error', message: "STET couldn't reach GitHub. Check your internet connection and try again." };
   }

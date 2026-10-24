@@ -44,7 +44,8 @@ export function initUpdates({ api, button, getSettings, saveSettings, prepareQui
 
   /** manual: from Help → Check for Updates (says what it found); otherwise quiet unless there is news. */
   async function check(manual) {
-    if (state === 'downloading' || state === 'ready' || state === 'installing') return show();
+    if (state === 'downloading' || state === 'installing') return show();
+    // A version already downloaded doesn't end the search: a newer one may have come out since.
     let closeChecking = null, dismissed = false;
     if (manual) {
       open({
@@ -55,6 +56,7 @@ export function initUpdates({ api, button, getSettings, saveSettings, prepareQui
     const r = await api.invoke('update:check');
     if (manual) { if (dismissed) return; closeChecking('done'); }
     if (r.status === 'available') {
+      if (state === 'ready' && r.version === found.version) return manual ? show() : undefined;
       found = r;
       state = r.ready ? 'ready' : 'available';
       renderButton();
@@ -67,6 +69,7 @@ export function initUpdates({ api, button, getSettings, saveSettings, prepareQui
       return;
     }
     if (!manual) return;
+    if (state === 'ready') return show();
     if (r.status === 'current') {
       return open({ title: 'UPDATES', body: body(p(`STET ${r.version} is up to date.`)), buttons: [{ label: 'OK', value: null, primary: true }] });
     }

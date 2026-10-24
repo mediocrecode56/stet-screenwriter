@@ -178,6 +178,16 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   const bar = await app.rect('#timeline .tl-inner');
   await app.drag(bar.left + bar.width * 0.3, bar.bottom - 5, bar.left + bar.width * 0.3 + 60, bar.bottom - 5);
   await app.until(`__stet.timeline.drawn > ${fit * 1.9} && !__stet.timeline.zoomRaf`, { what: 'dragging right on the ruler zooms in' });
+  // The right end, under the fade behind the reset button: nothing there lights up, shows its time or takes a click.
+  const sr = await app.rect('#timeline .tl-scroll'), hoverShown = '!document.querySelector("#timeline .tl-hover").hidden';
+  await app.move(sr.right - 120, bar.top + 20);
+  await app.until(hoverShown, { what: 'the readout, clear of the fade' });
+  await app.move(sr.right - 40, bar.top + 20);
+  await app.until(`!(${hoverShown}) && !document.querySelector('#timeline .near') && __stet.timeline.inner.dataset.zone === 'covered'`, { what: 'nothing in play under the fade' });
+  const before = await app.eval('[JSON.stringify(__stet.editor.caret), __stet.timeline.drawn]');
+  await app.click(sr.right - 40, bar.top + 20);
+  await app.frame();
+  assert.deepEqual(await app.eval('[JSON.stringify(__stet.editor.caret), __stet.timeline.drawn]'), before, 'a click under the fade goes nowhere');
   await app.clickOn('#timeline .tl-reset');
   await app.until(`__stet.timeline.drawn === ${fit} && !__stet.timeline.zoomRaf`, { what: 'the corner button: the whole script, in one smooth zoom' });
   await app.drag(bar.left + bar.width * 0.3, bar.bottom - 5, bar.left + bar.width * 0.3 + 60, bar.bottom - 5);

@@ -91,6 +91,9 @@ test('checking: newer, the same, older, and every way GitHub can fail', async ()
   const offline = await checkForUpdate({ current: '0.19.4', fetch: () => Promise.reject(new Error('offline')) });
   assert.equal(offline.status, 'error');
   assert.match(offline.message, /internet connection/);
+  let asked;
+  await checkForUpdate({ current: '0.19.4', fetch: (_u, o) => { asked = o; return Promise.reject(new Error('stop')); } });
+  assert.equal(asked.cache, 'no-store', 'never a cached answer: a release out a minute ago is found');
 });
 
 test('how this copy was installed decides how it updates', () => {

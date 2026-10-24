@@ -89,9 +89,10 @@ export function onSeconds({ scenes, highlights, notes }, time, len) {
 }
 
 /** The target nearest x within `tol` (all in pages), or null: what the pointer is drawn to. */
-export function snapTo(targets, x, tol) {
+export function snapTo(targets, x, tol, lo = -Infinity, hi = Infinity) {
   let best = null;
   for (const t of targets) {
+    if (t.x < lo || t.x > hi) continue; // out of sight
     const d = Math.abs(t.x - x);
     if (d <= tol) { tol = d; best = t; }
   }

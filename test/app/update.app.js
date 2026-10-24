@@ -80,6 +80,13 @@ test('a newer release found on start: the UPDATE button and its window with the 
   assert.equal(await app.eval(`document.getElementById('st-update').textContent`), 'RESTART TO UPDATE');
   assert.equal(await fs.readFile(target, 'utf8'), 'the old STET.exe', 'nothing replaced before the restart');
   assert.deepEqual(await fs.readFile(target + '.new'), EXE, 'the new one unpacked and waiting');
+  // A newer release out since then: Check for Updates offers it, not the one already downloaded.
+  await app.press('Later');
+  latest = release('99.1.0', latest.assets);
+  await app.eval(`void __stet.cmd.run('check-updates')`);
+  await app.dialogMatching(/99\.1\.0 is available/);
+  await app.press('Update now');
+  await app.dialogMatching(/99\.1\.0 is ready/, 20000);
   assert.equal((await app.saveTo(path.join(tmp, 'Draft.stet'))).ok, true);
   await app.eval(`(() => { __stet.editor.insertText('Words before the update.'); __stet.input.after(); })()`);
   await app.press('Restart now');

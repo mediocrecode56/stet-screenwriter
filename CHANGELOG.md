@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.39.2 · 24 Oct 2026
+
+- Help > Check for Updates always finds the newest version. Before, once an update had been downloaded and was waiting for a restart, checking again only offered that one, even if a newer version had come out since. GitHub's answer is also never taken from a cache any more, so a version released a minute ago is found.
+- Timeline: zoomed in, the faded right end of the bar (behind the whole-script button) is out of play. Nothing under it lights up, shows its time or takes a click, so pointing at the corner no longer picks up the next timecode or scene and draws its label half off the bar.
+- Timeline: the pointer is only drawn to marks you can see, never to one scrolled out of view at either end.
+
 ## 0.39.1 · 24 Oct 2026
 
 - Timeline: the fade behind the whole-script button is subtler. It is narrower, has no blur, blends smoothly into the bar with no visible edge, and clears quickly when the pointer leaves the bar. The grid clears just as quickly.

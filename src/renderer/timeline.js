@@ -15,6 +15,7 @@ import { MAC } from '../core/keys.js';
 
 const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a page
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
+const COVER = 0.62; // the part of the fade at the right end (zoomed in) dense enough that nothing under it is in play
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
 const FINE_PX = 12; // fewest pixels of mouse travel a second while stepping
 const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.6 3.6A3.4 3.4 0 1 0 9.4 6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M9.7 2.2v2.2H7.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.3 8.3l3.9 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'; // zoom reset: a magnifier, its lens a turning arrow
@@ -67,7 +68,7 @@ export class Timeline {
     this.inner.addEventListener('contextmenu', (e) => { e.preventDefault(); this.menu(e); });
     // Double-click on the ruler or the band: the whole script, as in Ableton.
     this.inner.addEventListener('dblclick', (e) => {
-      if (this.stepping || this.snapAt(e.clientX)?.kind === 'tc') return;
+      if (this.stepping || this.covered(e.clientX) || this.snapAt(e.clientX)?.kind === 'tc') return;
       if (this.zone(e) !== 'zoom' || this.onRuler(e)) this.whole();
     });
     // Ctrl pressed with the pointer on the bar starts stepping right there; letting go ends it,
@@ -237,7 +238,17 @@ export class Timeline {
   }
 
   /** The scene, note, highlight or timecode close enough to clientX to draw the pointer to it. */
-  snapAt(clientX) { return snapTo(this.targets, this.posAt(clientX), SNAP_PX / this.drawn); }
+  snapAt(clientX) {
+    if (this.covered(clientX)) return null;
+    const r = this.scroll.getBoundingClientRect(), left = this.inner.getBoundingClientRect().left;
+    const at = (cx) => (cx - left) / this.drawn; // only marks in view, clear of the fade
+    return snapTo(this.targets, this.posAt(clientX), SNAP_PX / this.drawn, at(r.left), at(Math.min(r.right, this.coveredFrom)));
+  }
+
+  /** The clientX past which the strip is under the fade, zoomed in (Infinity otherwise): nothing there
+   *  lights up, shows its time or takes a click. The reset button above it is the one thing in play. */
+  get coveredFrom() { return this.zoomed ? this.scroll.getBoundingClientRect().right - this.fade.offsetWidth * COVER : Infinity; }
+  covered(clientX) { return clientX >= this.coveredFrom; }
 
   /** Light up the mark the pointer is drawn to (null: none). */
   mark(t) {
@@ -258,6 +269,7 @@ export class Timeline {
     e.preventDefault(); // the script keeps the focus, and nothing is selected
     if (this.stepping) return;
     if (mod(e)) { this.stopZoom(); return this.startStep(e.clientX); }
+    if (this.covered(e.clientX)) return;
     const x0 = e.clientX, y0 = e.clientY;
     const where = this.zone(e);
     const at0 = this.posAt(x0), ppp0 = this.drawn, top0 = this.view.scroller.scrollTop;
@@ -602,6 +614,12 @@ export class Timeline {
   /** The time and scene under the pointer, drawn to a mark close by. */
   showHover(e) {
     if (!this.time) return;
+    if (this.covered(e.clientX)) {
+      this.hover.hidden = true;
+      this.band.classList.remove('hot');
+      this.inner.dataset.zone = 'covered';
+      return this.mark(null);
+    }
     const where = this.zone(e);
     const near = this.snapAt(e.clientX);
     this.band.classList.toggle('hot', where === 'band');
@@ -645,6 +663,7 @@ export class Timeline {
   menu(e) {
     if (mod(e) && !this.stepping) this.startStep(e.clientX); // Ctrl held without moving yet
     if (this.stepping) return this.pinStep();
+    if (this.covered(e.clientX)) return;
     const near = this.snapAt(e.clientX);
     if (near && near.kind === 'tc') return this.editTimecode(near.x, near);
     if (near && near.kind === 'scene') return this.editTimecode(near.x, { id: this.ed.blocks[near.b].id, line: 0 });
