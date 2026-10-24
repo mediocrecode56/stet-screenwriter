@@ -180,10 +180,16 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   await app.until(`__stet.timeline.drawn > ${fit * 1.9} && !__stet.timeline.zoomRaf`, { what: 'dragging right on the ruler zooms in' });
   // The right end, under the fade behind the reset button: nothing there lights up, shows its time or takes a click.
   const sr = await app.rect('#timeline .tl-scroll'), hoverShown = '!document.querySelector("#timeline .tl-hover").hidden';
+  // The fade comes up only near the right end, not anywhere on the bar.
+  const fading = `document.getElementById('timeline').classList.contains('tl-end-near') && getComputedStyle(document.querySelector('#timeline .tl-fade')).opacity === '1'`;
+  await app.move(bar.left + bar.width * 0.5, bar.top + 20);
+  await app.until(hoverShown, { what: 'the readout in the middle of the bar' });
+  assert.equal(await app.eval(`document.getElementById('timeline').classList.contains('tl-end-near')`), false, 'no fade in the middle of the bar');
   await app.move(sr.right - 120, bar.top + 20);
   await app.until(hoverShown, { what: 'the readout, clear of the fade' });
+  assert.equal(await app.eval(`document.getElementById('timeline').classList.contains('tl-end-near')`), false, 'nor just before it');
   await app.move(sr.right - 40, bar.top + 20);
-  await app.until(`!(${hoverShown}) && !document.querySelector('#timeline .near') && __stet.timeline.inner.dataset.zone === 'covered'`, { what: 'nothing in play under the fade' });
+  await app.until(`!(${hoverShown}) && !document.querySelector('#timeline .near') && __stet.timeline.inner.dataset.zone === 'covered' && ${fading}`, { what: 'nothing in play under the fade, which is up' });
   const before = await app.eval('[JSON.stringify(__stet.editor.caret), __stet.timeline.drawn]');
   await app.click(sr.right - 40, bar.top + 20);
   await app.frame();

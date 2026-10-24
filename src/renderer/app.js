@@ -86,7 +86,7 @@ const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), {
   times: () => timeline.sceneTimes(), // each scene's time, as the timeline has it
   editTime: (b, box) => timeline.editScene(b, box),
 });
-const notes = new NotesPanel($('right'), $('notes'), $('note-count'), { editor, view, session, jump, onChange: () => session.touch() });
+const notes = new NotesPanel($('right'), $('notes'), $('note-count'), { editor, view, session, jump, onChange: () => session.touch(), onMark: () => timeline.update(true) });
 const find = new FindBar({ editor, view, jump, focusEditor: () => input.focus() });
 
 const revision = new Revision({

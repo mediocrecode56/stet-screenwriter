@@ -30,6 +30,20 @@ test('round trip preserves types, text, marks, title page, comments and settings
   assert.equal(back.meta.id, doc.meta.id);
 });
 
+test('a note keeps its colour and pin; neither is written unless set, and a colour of no highlight is dropped', () => {
+  const doc = newDocument();
+  doc.blocks = [makeBlock('action', 'One two three.', [{ s: 0, e: 3, k: 'cm', v: 'a' }, { s: 4, e: 7, k: 'cm', v: 'b' }])];
+  doc.comments.a = { text: 'x', created: '', modified: '', color: 'pink', pinned: true };
+  doc.comments.b = { text: 'y', created: '', modified: '' };
+  const text = serialize(doc);
+  assert.deepEqual(JSON.parse(text).comments.b, { text: 'y', created: '', modified: '' });
+  const { doc: back } = deserialize(text);
+  assert.deepEqual([back.comments.a.color, back.comments.a.pinned], ['pink', true]);
+  const p = JSON.parse(text);
+  p.comments.a.color = 'red'; p.comments.a.pinned = 'yes';
+  assert.deepEqual(deserialize(JSON.stringify(p)).doc.comments.a, { text: 'x', created: '', modified: '' });
+});
+
 test('unreferenced comments are not written', () => {
   const doc = newDocument();
   doc.comments.orphan = { text: 'x', created: '', modified: '' };

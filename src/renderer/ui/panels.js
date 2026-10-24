@@ -2,7 +2,7 @@
 // Both refresh lazily (on idle after edits) and only while visible.
 
 import { pageOf } from '../../core/layout.js';
-import { isOpen, reducedMotion, DUR_PANEL, EASE_IN_OUT } from './motion.js';
+import { isOpen, reducedMotion, DUR_PANEL, EASE_IN_OUT, EASE_OUT } from './motion.js';
 import { arm } from './arm.js';
 import { linesOf } from '../../core/layout.js';
 import { lineIndexOf } from '../../core/nav.js';
@@ -10,6 +10,7 @@ import { pos } from '../../core/editor.js';
 import { esc } from './dialog.js';
 import { keyText } from './commands.js';
 import { rulerLabel } from '../../core/timeline.js';
+import { HIGHLIGHT_COLORS } from '../../core/model.js';
 
 // Scroll a panel's list (only the list) so a row is in view. scrollIntoView would also scroll the
 // panel's own frame, which is offscreen while it slides in, and break the slide.
@@ -77,28 +78,40 @@ export class ScenePanel {
   }
 }
 
+const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+const PIN_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="head" d="M4.2 1.4h3.6l-.5 3.3 1.9 1.8v.9H2.8v-.9l1.9-1.8z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6 7.4v3.4" stroke="currentColor" stroke-width="1.2"/></svg>';
+const NOTE_COLORS = [null, ...HIGHLIGHT_COLORS];
+
 export class NotesPanel {
-  constructor(host, list, count, { editor, view, session, jump, onChange }) {
+  constructor(host, list, count, { editor, view, session, jump, onChange, onMark }) {
     this.host = host; this.list = list; this.count = count;
     this.ed = editor; this.view = view; this.session = session; this.jump = jump; this.onChange = onChange;
+    this.onMark = onMark; // a note's colour changed (the timeline shows it)
     this.pending = false;
     this.lastKey = '';
     list.addEventListener('mousedown', (e) => {
       const q = e.target.closest('.q');
       if (q) { e.preventDefault(); this.select(q.closest('.note').dataset.id, true); return; }
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      e.preventDefault(); // (a note being written keeps the focus)
+      const id = btn.closest('.note').dataset.id;
       // Delete takes a second press (ui/arm.js); then the note folds away.
-      const del = e.target.closest('[data-del]');
-      if (del) { e.preventDefault(); arm(del, () => this.fold(del.dataset.del)); }
+      if (btn.dataset.x === 'del') arm(btn, () => this.fold(id));
+      else if (btn.dataset.x === 'pin') this.pin(id);
+      else if (btn.dataset.x === 'col') this.pick(btn.closest('.note').classList.contains('picking') ? null : id);
+      else if (btn.dataset.sw != null) { this.setColor(id, btn.dataset.sw || null); this.pick(null); }
     });
+    // The swatches close on a press anywhere else, or Esc.
+    addEventListener('mousedown', (e) => { if (!e.target.closest?.('.nsws, [data-x="col"]')) this.pick(null); }, true);
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.list.querySelector('.picking')) { e.stopPropagation(); this.pick(null); } }, true);
     list.addEventListener('input', (e) => {
       const ta = e.target.closest('textarea');
       if (!ta) return;
       const id = ta.closest('.note').dataset.id;
-      // A note pasted in from another screenplay arrives without its text: it starts empty here.
-      const now = new Date().toISOString();
-      const c = this.session.doc.comments[id] ||= { text: '', created: now, modified: now };
+      const c = this.body(id);
       c.text = ta.value;
-      c.modified = now;
+      c.modified = new Date().toISOString();
       this.onChange();
     });
     list.addEventListener('focusin', (e) => {
@@ -118,9 +131,24 @@ export class NotesPanel {
 
   anchors() { return this.ed.commentAnchors(); }
 
+  comment(id) { return this.session.doc.comments[id] || {}; }
+
+  /** Note `id`'s own record, to change. A note pasted in from another screenplay arrives without
+   *  one: it starts empty here. */
+  body(id) {
+    const now = new Date().toISOString();
+    return this.session.doc.comments[id] ||= { text: '', created: now, modified: now };
+  }
+
+  /** The notes in the order listed: the pinned ones first, each part in script order. */
+  listed() {
+    const all = this.anchors(), pinned = all.filter((a) => this.comment(a.id).pinned);
+    return pinned.length ? [...pinned, ...all.filter((a) => !this.comment(a.id).pinned)] : all;
+  }
+
   render() {
-    const anchors = this.anchors();
-    const key = anchors.map((a) => a.id + ':' + a.b).join('|') + '#' + this.view.pages.length;
+    const anchors = this.listed();
+    const key = anchors.map((a) => a.id + ':' + a.b + (this.comment(a.id).pinned ? '*' : '') + (this.comment(a.id).color || '')).join('|') + '#' + this.view.pages.length;
     if (key === this.lastKey) return;
     // Don't rebuild while the user types in a note (the textarea would lose focus, and the next keys
     // with it) or a delete waits for its second press: not even for a forced refresh, such as the one
@@ -143,14 +171,64 @@ export class NotesPanel {
       const quote = b.text.slice(a.s, a.e).replace(/\s+/g, ' ');
       const pg = pageOf(this.view.pages, a.b, lineIndexOf(linesOf(b), a.s)) + 1;
       const when = c.modified ? new Date(c.modified).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-      // A card: where it is and when it was written, the passage it is about, then the note itself.
-      h += `<div class="note${a.id === this.view.activeComment ? ' cur' : ''}" data-id="${esc(a.id)}">
-        <div class="nh"><span class="pg">P.${pg}</span><span class="when">${esc(when)}</span><button class="ndel" data-del="${esc(a.id)}" title="Delete this note (press twice)">DELETE</button></div>
+      // A card: where it is and when it was written (and, on the pointer, its colour, pin and bin),
+      // the passage it is about, then the note itself.
+      const sws = NOTE_COLORS.map((k) => `<button class="nsw" data-sw="${k || ''}" title="${k ? 'Mark ' + k : 'No colour'}" aria-label="${k || 'no colour'}"><span class="sw ${k || 'none'}"></span></button>`).join('');
+      h += `<div class="note${a.id === this.view.activeComment ? ' cur' : ''}${c.color ? ' c-' + c.color : ''}${c.pinned ? ' pinned' : ''}" data-id="${esc(a.id)}">
+        <div class="nh"><span class="pg">P.${pg}</span><span class="when">${esc(when)}</span><span class="nacts"><span class="nsws">${sws}</span><button class="nb ncol" data-x="col" title="Colour" aria-label="Colour"><i></i></button><button class="nb npin" data-x="pin" title="${c.pinned ? 'Unpin' : 'Pin to the top'}" aria-label="${c.pinned ? 'Unpin' : 'Pin'}">${PIN_ICON}</button><button class="nb ndel" data-x="del" title="Delete this note (press twice)" aria-label="Delete">${TRASH_ICON}</button></span></div>
         <div class="q" dir="auto" title="Go to the passage">${esc(quote.slice(0, 160))}</div>
         <textarea spellcheck="true" dir="auto" placeholder="Write a note…">${esc(c.text)}</textarea>
       </div>`;
     }
+    // Rebuilt under a note being written (pinned or unpinned, it moved): it keeps the focus and the caret.
+    const ta = this.list.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA' ? document.activeElement : null;
+    const typing = ta && { id: ta.closest('.note').dataset.id, s: ta.selectionStart, e: ta.selectionEnd };
     this.list.innerHTML = h;
+    if (typing) {
+      const t = this.card(typing.id)?.querySelector('textarea');
+      if (t) { t.focus({ preventScroll: true }); t.setSelectionRange(typing.s, typing.e); }
+    }
+  }
+
+  card(id) { return this.list.querySelector(`.note[data-id="${CSS.escape(id)}"]`); }
+
+  /** Show the colour swatches on note `id` (null: on none). */
+  pick(id) {
+    for (const n of this.list.querySelectorAll('.note.picking')) if (n.dataset.id !== id) n.classList.remove('picking');
+    if (id) this.card(id)?.classList.add('picking');
+  }
+
+  /** Give note `id` a highlight colour (null: none), shown on its card and on the timeline. */
+  setColor(id, color) {
+    const c = this.body(id);
+    if ((c.color || null) === color) return;
+    if (color) c.color = color; else delete c.color;
+    const n = this.card(id);
+    if (n) { for (const k of HIGHLIGHT_COLORS) n.classList.toggle('c-' + k, k === color); }
+    this.onChange();
+    this.onMark?.();
+  }
+
+  /** Pin note `id` to the top of the list, or unpin it back to its place in the script. The cards
+   *  glide to their new places: the note moved over the others, the others making room. */
+  pin(id) {
+    const c = this.body(id);
+    if (c.pinned) delete c.pinned; else c.pinned = true;
+    this.onChange();
+    const before = new Map([...this.list.querySelectorAll('.note')].map((n) => [n.dataset.id, n.getBoundingClientRect().top]));
+    this.lastKey = '';
+    this.render();
+    const moved = this.card(id);
+    if (!moved) return;
+    reveal(this.list, moved);
+    if (reducedMotion()) return;
+    for (const n of this.list.querySelectorAll('.note')) {
+      const dy = before.get(n.dataset.id) - n.getBoundingClientRect().top;
+      if (!dy) continue;
+      if (n === moved) n.classList.add('lift');
+      const a = n.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: n === moved ? 240 : 200, easing: EASE_OUT });
+      if (n === moved) a.onfinish = a.oncancel = () => n.classList.remove('lift');
+    }
   }
 
   markCurrent() {

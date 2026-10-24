@@ -13,7 +13,7 @@ export function disarm(btn) {
     clearTimeout(b._arm);
     if (!b.classList.contains('armed')) continue;
     b.classList.remove('armed');
-    b.textContent = b.dataset.label;
+    b.innerHTML = b.dataset.label; // (its icon, if it had one)
   }
 }
 
@@ -21,7 +21,7 @@ export function disarm(btn) {
 export function arm(btn, confirm, { label = 'CONFIRM', ms = ARM_MS } = {}) {
   if (btn.classList.contains('armed')) { disarm(btn); confirm(); return true; }
   disarm();
-  btn.dataset.label = btn.textContent;
+  btn.dataset.label = btn.innerHTML;
   btn.textContent = label;
   btn.classList.add('armed');
   btn.style.setProperty('--arm-ms', ms + 'ms');

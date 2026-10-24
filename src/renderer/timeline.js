@@ -18,6 +18,7 @@ const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const COVER = 0.62; // the part of the fade at the right end (zoomed in) dense enough that nothing under it is in play
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
 const FINE_PX = 12; // fewest pixels of mouse travel a second while stepping
+const END_PX = 20; // how far before the fade the pointer brings it up
 const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.6 3.6A3.4 3.4 0 1 0 9.4 6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M9.7 2.2v2.2H7.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.3 8.3l3.9 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'; // zoom reset: a magnifier, its lens a turning arrow
 const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.4l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -61,6 +62,9 @@ export class Timeline {
     this.reset = host.querySelector('.tl-reset');
     this.fade = host.querySelector('.tl-fade');
     this.reset.addEventListener('click', () => this.whole());
+    // The fade and the reset button come up only as the pointer nears the right end (the button included).
+    host.addEventListener('mousemove', (e) => this.nearEnd(this.endX = e.clientX));
+    host.addEventListener('mouseleave', () => this.nearEnd(this.endX = null));
 
     this.inner.addEventListener('mousedown', (e) => this.down(e));
     this.inner.addEventListener('mousemove', (e) => this.over(e));
@@ -250,6 +254,16 @@ export class Timeline {
   get coveredFrom() { return this.zoomed ? this.scroll.getBoundingClientRect().right - this.fade.offsetWidth * COVER : Infinity; }
   covered(clientX) { return clientX >= this.coveredFrom; }
 
+  /** Bring up the fade (and the reset button's edge) with the pointer at clientX within END_PX of the
+   *  fade, zoomed in; it stays up a little further out than it came, so it never flickers at the edge.
+   *  Never while stepping: the strip under the pointer is what is in play then. */
+  nearEnd(clientX) {
+    const on = this.host.classList.contains('tl-end-near');
+    const want = clientX != null && this.zoomed && !this.stepping
+      && clientX >= this.host.getBoundingClientRect().right - this.fade.offsetWidth - END_PX - (on ? 12 : 0);
+    if (want !== on) this.host.classList.toggle('tl-end-near', want);
+  }
+
   /** Light up the mark the pointer is drawn to (null: none). */
   mark(t) {
     const el = t && t.el;
@@ -346,7 +360,7 @@ export class Timeline {
    *  after. A click puts the caret there; a right-click pins a timecode at that second; letting go
    *  of Ctrl leaves the script there, Esc puts it back. */
   startStep(clientX) {
-    if (!this.time || !this.visible || this.stepping || this.editing || this.dragging) return;
+    if (!this.time || !this.visible || this.stepping || this.editing || this.dragging || this.covered(clientX)) return; // (not from under the fade)
     const t0 = Math.round(this.time.at(this.posAt(clientX)));
     // The line shows at once; the script moves only once the line does, so a shortcut pressed with
     // the pointer resting on the bar leaves it where it is.
@@ -370,6 +384,7 @@ export class Timeline {
     this.band.classList.remove('hot');
     this.mark(null);
     this.readout(this.stepping.x, t0);
+    this.nearEnd(null);
     this.lockPointer?.();
   }
 
@@ -432,6 +447,7 @@ export class Timeline {
     document.body.classList.remove('tl-fine');
     this.hover.classList.remove('fine');
     this.hover.hidden = true; // until the pointer moves over the bar again
+    this.nearEnd(this.endX);
     // The pointer is back on the bar where it was locked, on the line; without the lock it may be anywhere.
     this.unlocked = f.locked || f.ay == null; // (the lock, or one on its way: a leave that follows is no leave)
     const r = this.inner.getBoundingClientRect();
@@ -558,13 +574,15 @@ export class Timeline {
     const tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages), this.time, len)); // each on its second, never between two
     this.paintRuler();
     this.reset.hidden = this.fade.hidden = !this.zoomed;
+    this.nearEnd(this.endX); // (zoomed in or out under a pointer at the end)
 
     // The script as a line, coloured where it is highlighted; a tick across it for each scene; the
     // notes under it; a line down the bar for each timecode, fainter for one outside a scene heading.
     let m = `<div class="tl-line" style="width:${len * s}px"></div>`;
     for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
     for (const sc of tl.scenes) m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px"></div>`;
-    tl.notes.forEach((n, i) => { m += `<div class="tl-note" data-i="${i}" style="left:${n.x * s}px">${NOTE_ICON}</div>`; });
+    const notes = this.session.doc.comments;
+    tl.notes.forEach((n, i) => { const c = notes[n.id]?.color; m += `<div class="tl-note${c ? ' c-' + c : ''}" data-i="${i}" style="left:${n.x * s}px">${NOTE_ICON}</div>`; }); // in the note's colour, if it has one
     for (const a of anchors) m += `<div class="tl-tcm ${a.scene ? 'sc' : 'loose'}${a.color ? ' c-' + a.color : ''}" style="left:${a.x * s}px"></div>`;
     this.marks.innerHTML = m;
     const els = this.marks.children; // in the order drawn: the line, the highlights, the scenes, the notes, the timecodes

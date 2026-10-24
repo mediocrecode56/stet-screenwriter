@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.40.0 · 24 Oct 2026
+
+- Notes: each note has three small buttons that show when you point at it: a colour, a pin and a bin. The colour button gives the note one of the highlight colours (blue, yellow or pink). The colour shows on the note's passage in the list and on its mark on the timeline. The pin moves the note to the top of the list, where it stays (pinned notes keep their script order among themselves); the cards glide to their new places, and a note you are writing in keeps your typing. The bin replaces DELETE and still takes a second press.
+- Colours and pins are saved with the screenplay. Older versions of STET open the file as before and ignore them.
+- Timeline: zoomed in, the fade and the whole-script button now come up only when the pointer nears the right end of the bar, not anywhere on it.
+- Timeline: the script line is a little thinner.
+- Timeline: holding Ctrl to step through the script no longer starts from under the faded right end, which is out of play.
+
 ## 0.39.2 · 24 Oct 2026
 
 - Help > Check for Updates always finds the newest version. Before, once an update had been downloaded and was waiting for a restart, checking again only offered that one, even if a newer version had come out since. GitHub's answer is also never taken from a cache any more, so a version released a minute ago is found.

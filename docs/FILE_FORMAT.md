@@ -163,6 +163,9 @@ dropped. Written only when there are any; older builds ignore it.
 
 Only comments referenced by at least one anchor are written. Comment text is
 not part of the screenplay and never prints unless explicitly requested.
+A comment may also carry `"color"` (one of the highlight colours) and
+`"pinned": true` (listed first in the notes panel); each is written only
+when set, and older builds ignore them.
 
 ## Validation and repair on open
 

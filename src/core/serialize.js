@@ -29,6 +29,8 @@ export function toPayload(doc, appVersion) {
     if (!used.has(id)) continue;
     const c = doc.comments[id];
     comments[id] = { text: c.text, created: c.created, modified: c.modified };
+    if (HIGHLIGHT_COLORS.includes(c.color)) comments[id].color = c.color; // (both only when set: older files stay as they were)
+    if (c.pinned) comments[id].pinned = true;
   }
   const tp = {};
   for (const k of TITLE_KEYS) tp[k] = doc.titlePage[k] || '';
@@ -154,6 +156,8 @@ export function deserialize(json) {
     for (const [id, c] of Object.entries(p.comments)) {
       if (!c || typeof c !== 'object') continue;
       comments[id] = { text: str(c.text), created: str(c.created), modified: str(c.modified) };
+      if (HIGHLIGHT_COLORS.includes(c.color)) comments[id].color = c.color;
+      if (c.pinned === true) comments[id].pinned = true;
     }
   }
   // Comment anchors without a body keep their anchor and get an empty note.

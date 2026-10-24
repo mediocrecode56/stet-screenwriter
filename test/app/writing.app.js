@@ -301,6 +301,37 @@ test('+NOTE again on the same selection goes back to its note; a new selection m
   await app.until('document.getElementById("right").hidden');
 });
 
+test('a note pinned glides to the top and keeps its writing; its colour shows on the card and the timeline', async () => {
+  await app.load([['scene', 'INT. ROOM - DAY'], ['action', 'A first passage. A second passage.']]);
+  await app.caret(1, 2, 7);
+  await app.clickOn('#btn-comment');
+  await app.until('document.activeElement.tagName === "TEXTAREA"', { what: 'the first note open' });
+  await app.type('One');
+  await app.caret(1, 19, 25);
+  await app.clickOn('#btn-comment');
+  await app.until('document.querySelectorAll("#notes .note").length === 2 && document.activeElement.tagName === "TEXTAREA"', { what: 'the second note open' });
+  await app.type('Two');
+  await app.until('!document.getElementById("right").getAnimations().length', { what: 'the panel in place' });
+  const order = `[...document.querySelectorAll('#notes .note textarea')].map((t) => t.value).join()`;
+  await app.clickOn('#notes .note:nth-child(2) [data-x="pin"]');
+  await app.until(`${order} === 'Two,One'`, { what: 'the pinned note at the top' });
+  assert.equal(await app.eval('document.activeElement.value'), 'Two', 'the note being written keeps the focus');
+  assert.equal(await app.eval('Object.values(__stet.session.doc.comments).filter((c) => c.pinned).length'), 1);
+  await app.type('!');
+  assert.equal(await app.eval('document.activeElement.value'), 'Two!', 'and every key after');
+  await app.eval('__stet.timeline.visible || __stet.timeline.show(true)');
+  await app.clickOn('#notes .note:first-child [data-x="col"]');
+  await app.until('document.querySelector("#notes .note:first-child").classList.contains("picking")', { what: 'the swatches out' });
+  await app.clickOn('#notes .note:first-child [data-sw="pink"]');
+  await app.until(`document.querySelector('#notes .note:first-child').className.includes('c-pink') && !document.querySelector('#notes .picking')`, { what: 'the card in pink, the swatches away' });
+  await app.until(`document.querySelectorAll('#timeline .tl-note.c-pink').length === 1`, { what: 'its mark on the timeline in pink' });
+  assert.deepEqual(await app.eval('Object.values(__stet.session.doc.comments).map((c) => c.color || null).sort()'), [null, 'pink'].sort());
+  await app.clickOn('#notes .note:first-child [data-x="pin"]');
+  await app.until(`${order} === 'One,Two!'`, { what: 'unpinned: back to its place in the script' });
+  await app.eval(`__stet.cmd.run('panel-notes')`);
+  await app.until('document.getElementById("right").hidden');
+});
+
 test('a selecting drag let go out of sight ends: the selection stays, it no longer follows the pointer', async () => {
   await app.load([['action', 'One line to select across, and on.']]);
   const line = await app.eval(`(() => { const r = [...document.querySelectorAll('.page:not(.metric-probe) .l')].find((l) => l.textContent.startsWith('One line')).getBoundingClientRect(); return { left: r.left, y: r.top + r.height / 2 }; })()`);
