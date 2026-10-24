@@ -20,7 +20,9 @@ import {
 import { Updater, installKind, cleanupPortable, UpdateError, REPO_URL, RELEASES_URL } from './update.js';
 import { patchRoot, confirmLaunch, cleanupPatches } from './patch.js';
 import { linkFiles } from './assoc.js';
-import { SpellService, findDictionaries, pickDictionary } from './spell.js';
+import { SpellService, findDictionaries, pickDictionary, dictionaryDirs } from './spell.js';
+import { installDictionary, localeCode } from './dictinstall.js';
+import { languageName } from '../core/spell.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
@@ -193,8 +195,9 @@ function registerIpc() {
   handle('settings:set', (patch) => settings.set(patch));
 
   // Spelling: the dictionaries installed on this computer (and, on a Mac, its own checker).
+  const ownDicts = () => path.join(app.getPath('userData'), 'dictionaries'); // the ones STET installed
   handle('spell:list', async () => {
-    const list = await findDictionaries();
+    const list = await findDictionaries([...dictionaryDirs(), ownDicts()]);
     if (process.platform === 'darwin') list.unshift({ id: 'macos', code: 'auto', label: 'macOS (automatic)' });
     return { list, pick: pickDictionary(list, app.getLocale())?.id ?? null };
   });
@@ -204,6 +207,13 @@ function registerIpc() {
     return mac ? (spell.stop(), true) : spell.load(id);
   });
   handle('spell:check', (words) => spell.check(words));
+  // None installed: one for this computer's language, downloaded in the background once the writer agrees.
+  // (Or another language, chosen from the SPELLING menu's Add a Language.)
+  handle('spell:install-offer', (locale) => { const c = localeCode(locale || app.getLocale()); return { code: c.code, label: languageName(c.code) }; });
+  handle('spell:install', async (locale) => {
+    try { return { ok: true, ...(await installDictionary({ locale: locale || app.getLocale(), dir: ownDicts(), fetch: (url, opts) => net.fetch(url, opts) })) }; }
+    catch (e) { return { ok: false, error: e.message }; }
+  });
   handle('spell:off', () => { spell.stop(); win.webContents.session.setSpellCheckerEnabled(false); });
 
   handle('path:default-dir', () => settings.get().defaultDir || defaultDir());

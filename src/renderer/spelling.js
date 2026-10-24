@@ -6,18 +6,23 @@
 // ignored are kept with the script (doc.revision.ignored, as "spelling"), so neither comes up again.
 
 import { pos } from '../core/editor.js';
-import { SPELLED, wordsToCheck, namesIn, inCaseOf, oneEdit } from '../core/spell.js';
+import { SPELLED, wordsToCheck, namesIn, inCaseOf, oneEdit, languageName } from '../core/spell.js';
 import { normalize } from '../core/revision.js';
 import { h, esc } from './ui/dialog.js';
 import { closeMenu } from './ui/commands.js';
 import { arrive, leave, DUR_FAST } from './ui/motion.js';
 
 const DEFAULTS = { on: true, lang: null, suggest: true, auto: false };
+// The languages Add a Language offers to download (any installed one is simply chosen instead).
+export const LANGUAGES = ['en-US', 'en-GB', 'en-AU', 'en-CA', 'en-ZA', 'fr-FR', 'fr-CA', 'de-DE', 'de-AT', 'de-CH', 'es-ES', 'es-MX', 'it-IT', 'pt-BR', 'pt-PT',
+  'nl-NL', 'sv-SE', 'da-DK', 'nb-NO', 'fi-FI', 'pl-PL', 'cs-CZ', 'sk-SK', 'hu-HU', 'ro-RO', 'el-GR', 'tr-TR', 'ru-RU', 'uk-UA', 'ca-ES'];
 const BOOK = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 3.2C5 2.4 3.6 2 1.5 2v7.4c2.1 0 3.5.4 4.5 1.2 1-.8 2.4-1.2 4.5-1.2V2C8.4 2 7 2.4 6 3.2zm0 0v7.4" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>';
 const IGNORE = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6s1.8-3.4 5-3.4S11 6 11 6 9.2 9.4 6 9.4 1 6 1 6z" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="6" cy="6" r="1.5" fill="currentColor"/><path d="M2 10.5l8-9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>';
 
 export class Spelling {
-  constructor({ api, editor, view, session, getSettings, setSettings, after, onState }) {
+  constructor({ api, editor, view, session, getSettings, setSettings, after, onState, notify }) {
+    this.notify = notify;
+    this.installing = false; // the language of a dictionary on its way (install())
     this.api = api; this.ed = editor; this.view = view; this.session = session;
     this.getSettings = getSettings; this.setSettings = setSettings; this.after = after; this.onState = onState;
     this.list = [];          // the dictionaries installed: [{ id, code, label }]
@@ -230,6 +235,23 @@ export class Spelling {
     if (animated) leave(pop, () => pop.remove(), { dist: 2 }); else pop.remove();
   }
 
+  // ---- installing one ------------------------------------------------------------------------
+
+  /** A dictionary downloaded in the background, for this computer's language when it has none or for
+   *  `locale` (Add a Language); a notice says when it is ready (or why not), and spelling uses it. */
+  async install(locale) {
+    if (this.installing) return;
+    const offer = await this.api.invoke('spell:install-offer', locale);
+    this.installing = offer.label;
+    this.onState();
+    const r = await this.api.invoke('spell:install', locale).catch((e) => ({ ok: false, error: e.message }));
+    this.installing = false;
+    if (!r.ok) { this.onState(); this.notify(`The ${offer.label} dictionary could not be downloaded. Check the connection and try again.`, r.error); return; }
+    await this.setSettings({ spelling: { ...this.opts, on: true, lang: r.path } });
+    await this.init();
+    this.notify(`${offer.label} dictionary installed: spelling is on.`);
+  }
+
   // ---- the toolbar menu -----------------------------------------------------------------------
 
   /** The SPELLING menu: the switch, Suggestions, Auto, and the dictionaries installed. */
@@ -237,12 +259,25 @@ export class Spelling {
     const o = this.opts, off = () => !this.opts.on;
     const langs = this.list.length
       ? this.list.map((d) => ({ label: d.label, checked: () => this.opts.lang === d.id, enabled: () => !off(), run: () => this.set({ lang: d.id }) }))
-      : [{ label: 'No dictionaries installed', enabled: () => false }];
+      : [{ label: 'No dictionary on this computer', enabled: () => false },
+        { label: this.installing ? `Downloading ${this.installing}…` : 'Install Dictionary', enabled: () => !this.installing, run: () => this.install() }];
     return [
       { label: 'Spelling', checked: () => o.on, run: () => this.set({ on: !o.on }) },
       { label: 'Suggestions', checked: () => o.suggest, enabled: () => !off(), run: () => this.set({ suggest: !o.suggest }) },
       { label: 'Auto', checked: () => o.auto, enabled: () => !off(), run: () => this.set({ auto: !o.auto }) },
-      '-', ...langs, '-', 'revise-dict',
+      '-', ...langs,
+      { label: this.installing ? `Downloading ${this.installing}…` : 'Add a Language', enabled: () => !this.installing, sub: () => Promise.resolve(this.languageItems()) },
+      '-', 'revise-dict',
     ];
+  }
+
+  /** Add a Language: the common languages, an installed one chosen at once, any other downloaded. */
+  languageItems() {
+    return LANGUAGES.map((loc) => {
+      const code = loc.replace('-', '_'), have = this.list.find((d) => d.code.toLowerCase() === code.toLowerCase());
+      return have
+        ? { label: languageName(code), current: this.opts.lang === have.id, title: 'Installed', run: () => this.set({ on: true, lang: have.id }) }
+        : { label: languageName(code), title: 'Download this dictionary in the background', run: () => this.install(loc) };
+    }).sort((a, b) => a.label.localeCompare(b.label));
   }
 }

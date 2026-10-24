@@ -20,6 +20,7 @@ import { initUpdates } from './ui/update.js';
 import { runPerfProbe } from './perf.js';
 import { Revision, keyDialog, dictionaryDialog } from './revision.js';
 import { Spelling } from './spelling.js';
+import { toast } from './ui/toast.js';
 import { Timeline } from './timeline.js';
 import { launchOrder } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
@@ -91,6 +92,7 @@ const spelling = new Spelling({
   setSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
   after: () => { input.after(); input.focus(); },
   onState: () => renderSpelling(),
+  notify: (text, detail) => { const t = toast(text, detail ? 6000 : 3500); if (detail) t.title = detail; },
 });
 input.onSpace = () => spelling.spaced();
 view.scroller.addEventListener('contextmenu', (e) => spelling.contextMenu(e));
@@ -508,7 +510,9 @@ $('btn-comment').after(dlg.h('div', { class: 'sep' }), spellBtn);
 function renderSpelling() {
   const o = spelling.opts, lang = spelling.lang;
   spellBtn.classList.toggle('off', !o.on || !spelling.ready);
-  spellBtn.title = !spelling.list.length ? 'Spelling: no dictionaries installed on this computer'
+  spellBtn.classList.toggle('need', o.on && !spelling.list.length); // a dot: none installed, one can be
+  spellBtn.classList.toggle('busy', spelling.installing);
+  spellBtn.title = spelling.installing ? `Spelling: downloading the ${spelling.installing} dictionary…` : !spelling.list.length ? 'Spelling: no dictionary on this computer (click to install one)'
     : !o.on ? 'Spelling: off' : `Spelling: ${lang ? lang.label : 'no dictionary'}${o.suggest ? '' : ', no suggestions'}${o.auto ? ', corrects as you type' : ''}`;
 }
 tip($('btn-comment'), 'Comment on selection', 'note-add');

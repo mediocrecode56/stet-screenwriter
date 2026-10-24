@@ -208,6 +208,10 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 .tb.pressed sup { color: inherit; }
 .tb.on { background: var(--inv-bg); color: var(--inv-fg); }
 #btn-spell.off { color: var(--ink-3); } /* spelling off, or no dictionary */
+#btn-spell.need { position: relative; }
+#btn-spell.need::after { content: ''; position: absolute; top: 5px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--spell); } /* none installed: one can be */
+#btn-spell.busy { animation: spell-busy 1.2s var(--ease-out) infinite alternate; } /* downloading one */
+@keyframes spell-busy { to { opacity: .45; } }
 .tb sup { font-size: 8px; margin-left: 3px; color: var(--ink-3); vertical-align: 2px; }
 .tb.on sup { color: inherit; opacity: .6; }
 .sep { width: 1px; background: var(--rule); margin: 5px 6px; }
@@ -410,6 +414,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; border-
 
 
 /* ---- status bar ------------------------------------------------------ */
+.toast { position: fixed; z-index: 60; left: 50%; bottom: 34px; transform: translateX(-50%); padding: 6px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.18); } /* a short notice (ui/toast.js) */
 #status { height: 24px; flex: none; display: flex; align-items: stretch; border-top: 1px solid var(--rule); background: var(--bar); color: var(--ink-2); padding: 0 4px; }
 .st { display: flex; align-items: center; padding: 0 8px; white-space: nowrap; }
 .st + .st { box-shadow: -1px 0 0 var(--rule); }

@@ -12,7 +12,7 @@ const INVOKE = new Set([
   'recent:list', 'recent:dismiss', 'recent:trash',
   'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel',
   'app:open-url', 'app:link-files', 'update:check', 'update:download', 'update:cancel', 'update:install', 'pointer:lock',
-  'spell:list', 'spell:load', 'spell:check', 'spell:off',
+  'spell:list', 'spell:load', 'spell:check', 'spell:off', 'spell:install-offer', 'spell:install',
 ]);
 const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress', 'app:fullscreen']);
 

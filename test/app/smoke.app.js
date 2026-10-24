@@ -343,7 +343,7 @@ test('the timeline: a timecode sets the pace of the ruler; crowded labels give w
 
 /** Click a row of the open menu by its text, for real (not one still fading out). */
 async function menuRow(text) {
-  const r = await app.eval(`(() => { const m = [...document.querySelectorAll('.menu .mi, .sp-menu .sp-act')].find((x) => x.closest('.menu').style.pointerEvents !== 'none' && x.textContent.trim().startsWith(${JSON.stringify(text)})); if (!m) return null; const b = m.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+  const r = await app.eval(`(() => { const m = [...document.querySelectorAll('.menu .mi, .sp-menu .sp-act')].find((x) => !x.closest('[style*="pointer-events: none"]') && x.textContent.trim().startsWith(${JSON.stringify(text)})); if (!m) return null; const b = m.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
   assert.ok(r, 'a menu row ' + text);
   await app.click(r.x, r.y);
 }
