@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { wrap, lineText, PAGE, ELEMENT } from '../../src/core/format.js';
-import { paginate, linesOf, mergeDirty, pageOf } from '../../src/core/layout.js';
+import { paginate, linesOf, mergeDirty, pageOf, roomRows } from '../../src/core/layout.js';
 import { makeBlock, withText, defaultDocSettings } from '../../src/core/model.js';
 import { generateScript } from '../../src/dev/sample.js';
 
@@ -149,4 +149,12 @@ test('element margins are the industry standard (Final Draft defaults), in inche
   assert.deepEqual(inches('dialogue'), [2.5, 6.0]);
   assert.deepEqual(inches('transition'), [5.5, 7.1]);
   assert.deepEqual(inches('shot'), [1.5, 7.5]);
+});
+
+test('a line sent to the top of the view keeps room above it: the blank rows before it, else a row or two', () => {
+  assert.equal(roomRows(2, 0), 2, 'a scene heading: its blank rows');
+  assert.equal(roomRows(1, 0), 1, 'a paragraph after another: the blank row between, not the line before');
+  assert.equal(roomRows(0, 1), 2, 'in the middle of a paragraph: two rows, its own line before it');
+  assert.equal(roomRows(0, 4), 2);
+  assert.equal(roomRows(0, 0), 1, 'right under a line of text: one row, never against the top');
 });

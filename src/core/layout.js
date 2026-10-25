@@ -233,6 +233,13 @@ export function mergeDirty(d, s, r, a) {
 }
 
 /** Index of the page containing (bi, line). Binary search over page starts. */
+/** Rows of room kept above a line when it goes to the top of the view (view.topOf()): the `blank`
+ *  rows before it, so no line of the text before it shows; with none, on a paragraph's second `line`
+ *  or later two, its own lines before it, and right under a line of text (dialogue under its character) one. */
+export function roomRows(blank, line) {
+  return blank || (line > 0 ? 2 : 1);
+}
+
 export function pageOf(pages, bi, line = 0) {
   let lo = 0, hi = pages.length - 1;
   while (lo < hi) {

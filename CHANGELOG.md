@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.47.0 · 25 Oct 2026
+
+- Highlights in the script are now the same colours as their marks on the timeline and the note colours, instead of a lighter, different shade. In the dark theme they are a deeper version of the same colours, so the text stays readable.
+- Timeline: a note, highlight or timecode chosen outside the glass box never lands right against the toolbar. At the start of a paragraph it keeps the blank space before it, with the line before it still hidden. In the middle of a paragraph it keeps two lines of room, so the paragraph's line before it shows. Right under a line of text with no blank line between (dialogue under its character), it keeps one line.
+- Timeline: while you hold Ctrl over the timeline to step through the script, the pointer is held there even if Windows refuses to lock it the first time (it does for a moment after a lock was just let go). STET asks again until the pointer is locked, so it can't drift out of the window and click something else.
+- Jumping to a point in the script (from the timeline, the scene list, a note or the scene keys) is 10% faster.
+
 ## 0.46.0 · 25 Oct 2026
 
 - Tab cycle: the outline now lies exactly on the edges of the buttons it takes in, drawn inwards, so it never stands out past them or over the toolbar's lines.

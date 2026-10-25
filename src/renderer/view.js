@@ -8,7 +8,7 @@
 
 import { PAGE, ELEMENT, lineText, lineX, lineGaps, colIn, offsetAtCol, setText } from '../core/format.js';
 import { ZOOM_MIN, ZOOM_MAX } from '../core/wheelzoom.js';
-import { linesOf, paginate, pageOf, rowOf } from '../core/layout.js';
+import { linesOf, paginate, pageOf, rowOf, roomRows } from '../core/layout.js';
 import { lineIndexOf, lineEndOffset } from '../core/nav.js';
 import { cmp, pos } from '../core/editor.js';
 import { TITLE_FIELDS_SPEC } from '../core/titlepage.js';
@@ -554,7 +554,7 @@ export class View {
     if (r) { const lx = r.x - sc.scrollLeft; if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2; }
     if (reducedMotion()) { sc.scrollTop = goal(); return; }
     const from = sc.scrollTop, t0 = performance.now();
-    const dur = Math.min(700, 280 + Math.abs(goal() - from) / 10);
+    const dur = 0.9 * Math.min(700, 280 + Math.abs(goal() - from) / 10);
     const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
     const g = this.glide = {};
     const step = () => {
@@ -573,15 +573,15 @@ export class View {
 
   /** The scroll position that puts position p at the top of the view (glideTo's `top`), as far as the
    *  ends allow (null: nowhere). Whatever it is (a scene heading; a note, a highlight or a timecode
-   *  chosen on the timeline), its room above is the blank rows before it and never a line of the text
-   *  before it, the view's top edge on a row's edge so no part of a line shows there, and no more
-   *  than one row of its page's top margin.
+   *  chosen on the timeline), it never lands against the top: its room above (roomAbove()) is the
+   *  blank rows before it, or in the middle of a paragraph the lines of it before, the view's top edge
+   *  on a row's edge so no part of a line shows there, and no more than one row of its page's top margin.
    *  `free`: where that would be without the ends. */
   topOf(p, free = false) {
     const r = this.caretRect(p), sc = this.scroller;
     if (!r) return null;
     const first = this.pageTop(r.page + this.offset) + (PAGE.topRows - 1) * this.row; // (one row above the page's first line)
-    const want = Math.ceil(Math.max(first, r.y - this.blankAbove(p) * this.row));
+    const want = Math.ceil(Math.max(first, r.y - this.roomAbove(p) * this.row));
     return free ? want : Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, want));
   }
 
@@ -605,6 +605,12 @@ export class View {
       if (end <= r && end > above) above = end;
     }
     return r === 0 ? 1 : Math.min(2, r - above);
+  }
+
+  /** Rows of room kept above position p when it goes to the top of the view (core/layout.js roomRows()). */
+  roomAbove(p) {
+    const b = this.editor.blocks[p.b];
+    return b ? roomRows(this.blankAbove(p), lineIndexOf(linesOf(b), p.o)) : 0;
   }
 
   stopGlide() {

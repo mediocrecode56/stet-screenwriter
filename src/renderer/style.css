@@ -21,11 +21,10 @@
   --inv-fg: #fff;
   --sel: rgba(0, 0, 0, .16);
   --caret: #000;
-  /* The three highlights are one set, pastel, like soft pencil on paper: the same lightness and softness
-     (OKLCH ~0.89 / 0.03), the yellow a pale cream, never brighter than the blue or the pink. */
-  --hl-blue: #cfdcee;
-  --hl-yellow: #e4dcc4;
-  --hl-pink: #ebd3dd;
+  /* A highlight in the script is the same colour as its mark on the timeline and a note's (--tl-*). */
+  --hl-blue: var(--tl-blue);
+  --hl-yellow: var(--tl-yellow);
+  --hl-pink: var(--tl-pink);
   --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
   --tl-blue: #75a1dc; /* the marks' colours (timeline, squares, notes): pastel too (~0.70-0.80 / 0.10) */
   --tl-yellow: #d6bc6b;
@@ -75,9 +74,10 @@
   --inv-fg: #0f0f0f;
   --sel: rgba(255, 255, 255, .20);
   --caret: #fff;
-  --hl-blue: #304157;
-  --hl-yellow: #4b3f27; /* (warm, not olive: with the blue and pink, ~0.37 / 0.04-0.05) */
-  --hl-pink: #543544;
+  /* (the same colours, on the dark page as much as keeps the light text readable) */
+  --hl-blue: color-mix(in srgb, var(--tl-blue) 45%, var(--page));
+  --hl-yellow: color-mix(in srgb, var(--tl-yellow) 45%, var(--page));
+  --hl-pink: color-mix(in srgb, var(--tl-pink) 45%, var(--page));
   --tl-line: #f0f0ed;
   --tl-blue: #80aae3;
   --tl-yellow: #dfca7d;

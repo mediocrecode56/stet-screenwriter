@@ -199,6 +199,12 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   assert.ok(top.prevBottom <= 0, `the line before it out of view (${top.prevBottom}px)`);
   assert.ok(Math.abs(top.off % top.row) <= 1 || Math.abs(top.off % top.row - top.row) <= 1, 'no part of a line at the top');
   await app.until(async () => { const h = await app.rect('#timeline .tl-head'), n = await app.rect('#timeline .tl-note'); return Math.abs(h.left + 0.5 - (n.left + n.width / 2)) < 0.5; }, { what: 'the playhead on the note' });
+  // A mark in the middle of a paragraph lands with two rows of room: the paragraph's own line before it.
+  const mid = await app.eval(`(() => { const v = __stet.view, b = 20, t = __stet.editor.blocks[b].text, y0 = v.caretRect({ b, o: 0 }).y;
+    let o = 1; while (o < t.length && v.caretRect({ b, o }).y === y0) o++;
+    return { wraps: o < t.length, off: v.caretRect({ b, o }).y - v.topOf({ b, o }, true), row: v.row }; })()`);
+  assert.ok(mid.wraps, 'the paragraph runs to a second line');
+  assert.ok(Math.abs(mid.off - 2 * mid.row) <= 1, `two rows above a paragraph's second line (${mid.off}px for ${mid.row}px rows)`);
 });
 
 test('the timeline: zoom by dragging the ruler, the whole script again by double-clicking it, scroll by dragging the band', async () => {

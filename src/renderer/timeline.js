@@ -509,7 +509,9 @@ export class Timeline {
   /** Lock the pointer to the bar while stepping (called back from the main process). */
   lock() {
     if (!this.stepping || document.pointerLockElement === this.inner) return;
-    return this.inner.requestPointerLock()?.catch(() => {}); // refused: the cover stands in
+    // Refused (Chromium does, for a moment after the lock was let go): the cover stands in, and it
+    // asks again until it has it, so the pointer never wanders off the window while stepping.
+    return this.inner.requestPointerLock()?.catch(() => { if (this.stepping) setTimeout(() => this.stepping && this.lockPointer?.(), 150); });
   }
 
   /** The mouse moving while stepping: by how much when the pointer is locked, else to where. */
