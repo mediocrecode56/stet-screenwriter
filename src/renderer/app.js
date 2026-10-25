@@ -2,7 +2,7 @@
 // the UI. Document logic lives in ../core, persistence in ./session.js.
 
 import './ui/wake.js'; // (first: the click that wakes the window reaches nothing else)
-import { Editor, pos } from '../core/editor.js';
+import { Editor, pos, cmp } from '../core/editor.js';
 import { makeBlock, TYPES, TYPE_LABEL, HIGHLIGHT_COLORS, STYLES, newDocument, uuid } from '../core/model.js';
 import { buildPrintPages } from '../core/printmodel.js';
 import { printHTML } from '../core/printhtml.js';
@@ -25,6 +25,7 @@ import { Spelling } from './spelling.js';
 import { toast } from './ui/toast.js';
 import { resizable } from './ui/resize.js';
 import { Timeline } from './timeline.js';
+import { selectionMenu } from './ui/selmenu.js';
 import { launchOrder, rememberPlace, placeFor } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { MAC, macKeys } from '../core/keys.js';
@@ -110,7 +111,14 @@ const spelling = new Spelling({
   notify: (text) => toast(text, 5000),
 });
 input.onSpace = () => spelling.spaced();
-view.scroller.addEventListener('contextmenu', (e) => spelling.contextMenu(e));
+// A right-click on a misspelt word: its fixes; on selected text: style, alignment and a note.
+view.scroller.addEventListener('contextmenu', (e) => {
+  if (spelling.contextMenu(e) || !e.target.closest || !e.target.closest('.page') || !editor.hasSelection()) return;
+  const p = view.posAt(e.clientX, e.clientY), [s, z] = editor.ordered();
+  if (!p || cmp(p, s) < 0 || cmp(p, z) > 0) return;
+  e.preventDefault();
+  selectionMenu(e.clientX, e.clientY, { styles: styleCmds.map((c) => c.id), aligns: alignCmds.map((c) => c.id), alignIcon: () => alignIcon(alignOf(editor.block)) });
+});
 
 const timeline = new Timeline($('timeline'), {
   editor, view, session, jump,
@@ -122,6 +130,7 @@ const timeline = new Timeline($('timeline'), {
 
 view.onTitleInput = () => session.touch();
 view.showTitle = settings.showTitlePage !== false;
+document.body.classList.toggle('no-note-lines', settings.noteLines === false);
 
 // ---- change propagation ----------------------------------------------------------
 
@@ -1061,7 +1070,7 @@ const alignCmds = ALIGN_CMDS.map((x) => ({
 const hlCmds = HIGHLIGHT_COLORS.map((c, i) => ({ id: 'hl-' + c, cat: 'Format', label: `Highlight ${c}`, keys: `Alt+${i + 1}`, run: () => highlight(c) }));
 // With a selection a style toggles across it; without one it applies to what is typed next.
 const styleCmds = STYLE_CMDS.map((s) => ({
-  id: 'style-' + s.k, cat: 'Format', label: s.label, keys: s.keys,
+  id: 'style-' + s.k, cat: 'Format', label: s.label, keys: s.keys, checked: () => editor.styleActive(s.k),
   run: () => { editor.toggleStyle(s.k); input.after(); input.focus(); },
 }));
 
@@ -1150,6 +1159,7 @@ cmd.register([
   { id: 'focus', cat: 'View', label: () => (focus.on ? 'Leave Focus Mode' : 'Focus Mode'), keys: 'F11', global: true, run: () => focus.toggle() },
   { id: 'timeline', cat: 'View', label: () => (timeline.visible ? 'Hide Timeline' : 'Timeline'), keys: 'Ctrl+Shift+T', global: true, run: () => timeline.show() },
   { id: 'companion', cat: 'View', label: () => (dino && dino.enabled ? 'Hide Writing Companion' : 'Show Writing Companion'), run: () => { dino.setEnabled(!dino.enabled); api.invoke('settings:set', { companion: dino.enabled }); } },
+  { id: 'note-lines', cat: 'View', label: () => (document.body.classList.contains('no-note-lines') ? 'Show Note Underlines' : 'Hide Note Underlines'), run: async () => { const on = document.body.classList.toggle('no-note-lines'); settings = await api.invoke('settings:set', { noteLines: !on }); } },
   { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => { view.showTitle = !view.showTitle; api.invoke('settings:set', { showTitlePage: view.showTitle }); view.invalidate(); view.revealCaret(); } },
   { id: 'title-edit', cat: 'View', label: 'Edit Title Page', run: () => { if (!view.showTitle) { view.showTitle = true; view.invalidate(); } view.scroller.scrollTop = 0; view.frame(); setTimeout(() => { const f = document.querySelector('.tp-f'); if (f) f.focus(); }, 30); } },
   { id: 'goto-page', cat: 'View', label: 'Go to Page…', keys: 'Ctrl+G', global: true, run: async () => {
@@ -1210,7 +1220,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
-  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'focus', 'toolbar', 'panel-scenes', 'panel-notes', 'timeline', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
+  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'focus', 'toolbar', 'panel-scenes', 'panel-notes', 'timeline', 'note-lines', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-guides', 'claude-key', '-', 'spell-toggle', 'spell-suggest', 'spell-auto', 'spell-dict', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
 ]);

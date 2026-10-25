@@ -6,10 +6,20 @@
 // Positions are in pages: page 3, row 27 of PAGE.bodyRows is 2 + 27 / bodyRows.
 
 import { PAGE } from './format.js';
-import { linesOf, pageOf } from './layout.js';
+import { linesOf, pageOf, KEY_AT } from './layout.js';
 import { HIGHLIGHT_COLORS } from './model.js';
 
 export const SEC_PER_PAGE = 60;
+
+/** The band [x0, x1] for a window reading from a to b, once a key point chosen on the timeline (drawn at
+ *  `mark`) is where it went: as wide as the window, with the mark as far along it (`at`, 0 to 1) as its
+ *  line is down the window: KEY_AT, or nearer an edge at the ends of the script. `w` (0 to 1) is how
+ *  far it has that place: 1 at the key point's own scroll position, letting go to [x0, b] (the band as
+ *  it is drawn otherwise) over a few rows of scrolling. */
+export function keyBand(a, b, mark, w, x0 = a, at = KEY_AT) {
+  const k0 = mark - at * (b - a);
+  return [x0 + (k0 - x0) * w, b + (k0 + (b - a) - b) * w];
+}
 const BODY = PAGE.bodyRows;
 
 /** Position of line `line` of block bi. */

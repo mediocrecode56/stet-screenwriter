@@ -203,6 +203,8 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   const k2 = await keyed();
   assert.ok(Math.abs(k2.px) <= 1 && !k2.end, `the note at 40% of the window (${k2.at.toFixed(3)})`);
   await app.until(async () => { const h = await app.rect('#timeline .tl-head'), n = await app.rect('#timeline .tl-note'); return Math.abs(h.left + 0.5 - (n.left + n.width / 2)) < 0.5; }, { what: 'the playhead on the note' });
+  // The band has the note as far along it as the note's line is down the window (40%).
+  await app.until(async () => { const v = await app.rect('#timeline .tl-view'), n = await app.rect('#timeline .tl-note'); return Math.abs((n.left + n.width / 2 - v.left) / v.width - k2.at) < 0.01; }, { what: 'the note at 40% of the band' });
   // The notes panel goes there the same way: F8 to the note, at 40% of the window.
   await app.caret(0, 0);
   await app.eval('__stet.view.stopGlide(); __stet.view.scroller.scrollTop = 0');
@@ -252,6 +254,49 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   const band = await tl('(() => { const r = t.inner.getBoundingClientRect(); return { x: (t.bandA + t.bandB) / 2 * t.drawn + r.left, y: r.top + 20 }; })()');
   await app.drag(band.x, band.y, band.x + 120, band.y);
   assert.ok(await app.eval('__stet.view.scroller.scrollTop') > 300, 'dragging the band moves the window');
+});
+
+test('a right-click on selected text: style, alignment and a note, as three square icons; note underlines can be hidden', async () => {
+  await app.load(SCRIPT);
+  await app.caret(1, 0, 20);
+  await app.frame();
+  const bar = '.menu.selbar';
+  const rightClick = async () => { const r = await app.rect('.selr'); await app.click(r.left + r.width / 2, r.top + r.height / 2, { button: 'right' }); await app.until(`document.querySelectorAll('${bar} .selb').length === 3`, { what: 'the selection menu' }); };
+  const choose = async (k, label) => {
+    await app.clickOn(`${bar} .selb[data-k="${k}"]`);
+    await app.until(`!!document.querySelector('${bar} .seldrop')`, { what: `the ${k} dropdown` });
+    const i = await app.eval(`[...document.querySelectorAll('${bar} .seldrop .mi')].findIndex((r) => r.firstChild.textContent === ${JSON.stringify(label)})`);
+    assert.ok(i >= 0, `${label} in the ${k} dropdown`);
+    const row = await app.rect(`${bar} .seldrop .mi`, i);
+    await app.click(row.left + 10, row.top + row.height / 2);
+    await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
+  };
+  await rightClick();
+  assert.equal(await app.eval(`getComputedStyle(document.querySelector('${bar}')).borderRadius`), '0px', 'square');
+  await choose('style', 'Bold');
+  await app.until(`__stet.editor.styleActive('b')`, { what: 'the selection bold' });
+  assert.deepEqual(await app.eval('[__stet.editor.sel.a, __stet.editor.sel.f].map((p) => p.o)'), [0, 20], 'the selection kept');
+  await rightClick();
+  await choose('align', 'Center');
+  await app.until(`document.getElementById('btn-align').dataset.a === 'center'`, { what: 'the paragraph centred' });
+  // The note: added on the selection at once, the notes panel open to write it.
+  await rightClick();
+  const before = await app.eval('Object.keys(__stet.session.doc.comments).length');
+  await app.clickOn(`${bar} .selb[data-k="note"]`);
+  await app.until(`Object.keys(__stet.session.doc.comments).length === ${before + 1} && document.getElementById('right').dataset.open === '1' && document.activeElement && document.activeElement.closest('#right')`, { what: 'a note, the panel open to write it' });
+  await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
+  // No selection: a right-click opens nothing of it.
+  await app.caret(3, 2);
+  await app.frame();
+  const c = await app.eval(`(() => { const v = __stet.view, r = v.caretRect(), q = v.scroller.getBoundingClientRect(); return { x: r.x - v.scroller.scrollLeft + q.left + 4, y: r.y - v.scroller.scrollTop + q.top + r.h / 2 }; })()`);
+  await app.click(c.x, c.y, { button: 'right' });
+  await app.frame();
+  assert.equal(await app.eval(`!!document.querySelector('${bar}')`), false, 'no menu without a selection');
+  // View > Hide Note Underlines: the dotted line goes (the setting kept), and comes back.
+  await app.eval(`__stet.cmd.run('note-lines')`);
+  await app.until(`document.body.classList.contains('no-note-lines') && __stet.settings().noteLines === false`, { what: 'note underlines hidden' });
+  await app.eval(`__stet.cmd.run('note-lines')`);
+  await app.until(`!document.body.classList.contains('no-note-lines') && __stet.settings().noteLines === true`, { what: 'and shown again' });
 });
 
 // What shows where the caret is: the element and alignment in the toolbar, the status bar, the current scene.

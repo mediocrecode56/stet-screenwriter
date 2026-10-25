@@ -178,6 +178,15 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .sp-acts { display: flex; gap: 2px; margin-top: 3px; padding: 3px 4px 0; border-top: 1px solid var(--rule); }
 .sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .sp-act:hover { background: var(--hover-on); color: var(--ink); }
+/* The right-click menu on selected text (ui/selmenu.js): three square icons, two with a dropdown under the bar. */
+.menu.selbar { min-width: 0; display: flex; padding: 0; transform-origin: top left; }
+.selb { display: flex; align-items: center; justify-content: center; gap: 3px; height: 26px; min-width: 30px; padding: 0 7px; border: 0; background: none; color: var(--ink-2); cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.selb + .selb { box-shadow: inset 1px 0 0 var(--rule); }
+.selb:hover, .selb.open { background: var(--hover-on); color: var(--ink); }
+.selb svg { display: block; }
+.selb .dn { font-size: 8px; color: var(--ink-3); }
+.seldrop { min-width: 190px; }
+.seldrop > .mi.cur { box-shadow: inset 2px 0 0 var(--ink); }
 .msep { height: 1px; background: var(--rule); margin: 3px 0; }
 /* A menu row with a quick flyout (Open Recent), and the flyout: short, long titles end in "…". */
 .mi.has-sub .k::after { content: '›'; margin-left: 10px; }
@@ -491,8 +500,10 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .mk.hl-blue { background: var(--hl-blue); }
 .mk.hl-yellow { background: var(--hl-yellow); }
 .mk.hl-pink { background: var(--hl-pink); }
-/* A note's passage: a fine dotted line under it, a dot every three pixels, half the ink's strength. */
-.mk.cm { background: linear-gradient(to right, color-mix(in srgb, var(--note-line) 45%, transparent) 1px, transparent 1px) left bottom / 3px 1px repeat-x; z-index: 3; }
+/* A note's passage: a dotted line under it, a two-pixel dot every four pixels, at 70% of the ink's
+   strength. View > Hide Note Underlines leaves it out (the square in the margin stays). */
+.mk.cm { background: linear-gradient(to right, color-mix(in srgb, var(--note-line) 70%, transparent) 2px, transparent 2px) left bottom / 4px 1px repeat-x; z-index: 3; }
+.no-note-lines .mk.cm { background: none; }
 .mk.cmtick { background: var(--ink); z-index: 3; cursor: pointer; } /* a square (view.js sizes it) */
 .mk.cmtick.c-blue { background: var(--tl-blue); } .mk.cmtick.c-yellow { background: var(--tl-yellow); } .mk.cmtick.c-pink { background: var(--tl-pink); } /* in the note's colour */
 .layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 4; }

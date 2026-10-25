@@ -7,7 +7,7 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond, maxScale } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond, maxScale, keyBand } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
@@ -77,7 +77,7 @@ export class Timeline {
     this.editing = null; // see editTimecode()
     this.unlocked = false; // stepping just ended with the pointer locked, and it hasn't moved since
     this.shift = 0; // px the strip is slid past where it scrolls to, to keep a stepped line under the pointer
-    this.pinned = null; // a mark clicked from outside the band: { p, x }, the band begins on it once the script is there
+    this.pinned = null; // a mark clicked: { p, x }, a scene outside the band begins it once the script is there; { key: true, p, x }, a key point sits at KEY_AT of it
     this.bandDrag = null; // the band being dragged: { x, top, k }, see showBand()
     // (the grid under the band, whose glass softens it: the marks over the band read clearly)
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-grid"></div><div class="tl-view"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-lens l"></div><div class="tl-lens r"></div><div class="tl-ruler"></div>'
@@ -178,10 +178,11 @@ export class Timeline {
     return b ? pos(bi, linesOf(b)[line] || 0) : null;
   }
 
-  /** Go to the line at position x: it glides to 10% of the window above its middle, wherever it is. */
-  go(x) {
+  /** Go to the line at position x: it glides to 10% of the window above its middle, wherever it is,
+   *  and the band has `mark` (drawn there) as far along it as its line is down the window. */
+  go(x, mark = x) {
     const p = this.lineStart(x);
-    this.pinned = null;
+    this.pinned = p && { key: true, p, x: mark, rev: this.ed.rev }; // (the band then has it at KEY_AT: showBand())
     if (p) this.jump(p, false, null, 'key');
   }
 
@@ -420,10 +421,10 @@ export class Timeline {
       if (mode || !this.visible) return;
       // A scene: inside the band, to the middle of the window (and of the band); outside it, to the top,
       // where the band then begins, exactly on its tick. Anything else: 10% of the window above its middle.
-      if (note) { this.pinned = null; return this.openNote(note.id, note.b, note.s, note.e); }
+      if (note) { this.pinned = { key: true, p: pos(note.b, note.s), x: note.x, rev: this.ed.rev }; return this.openNote(note.id, note.b, note.s, note.e); }
       if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, this.glideFor(near.at ?? near.x, { p: pos(near.b, 0), x: near.x })); // to its heading
-      if (near && near.kind === 'tc') { this.go(near.x); return this.editTimecode(near.x, near); }
-      this.go(near ? near.at ?? near.x : at0); // (a highlight: its first line, though drawn on its second)
+      if (near && near.kind === 'tc') { this.go(near.x, near.x); return this.editTimecode(near.x, near); }
+      this.go(near ? near.at ?? near.x : at0, near ? near.x : at0); // (a highlight: its first line, though drawn on its second)
     };
     addEventListener('mousemove', move, true);
     addEventListener('mouseup', up, true);
@@ -686,7 +687,16 @@ export class Timeline {
     if (near) x0 += (near.x - near.at) * (1 - smooth(dist * s / Math.max(PULL_PX, 1.6 * Math.abs(near.x - near.at) * s)));
     const pin = this.pinned;
     if (pin && pin.rev !== this.ed.rev) this.pinned = null; // (the script changed since: where it went is no longer where it is)
-    else if (pin) {
+    else if (pin && pin.key) {
+      // A key point: as far along the band as its line is down the window (KEY_AT, or nearer an edge at
+      // the ends of the script), the band as wide as the window.
+      const goal = v.keyOf(pin.p), r = v.caretRect(pin.p);
+      const w = goal != null && r ? 1 - smooth(Math.abs(top - goal) / (PIN_ROWS * v.row)) : 0;
+      if (w > 0) {
+        const [k0, k1] = keyBand(a, b, pin.x, w, x0, Math.max(0, Math.min(1, (r.y + r.h / 2 - top) / sc.clientHeight)));
+        return this.place(k0 * s, Math.max(2, (k1 - k0) * s));
+      }
+    } else if (pin) {
       const goal = v.topOf(pin.p, true), max = sc.scrollHeight - sc.clientHeight;
       const w = goal != null && goal >= 0 && goal <= max ? 1 - smooth(Math.abs(top - goal) / (PIN_ROWS * v.row)) : 0;
       if (w > 0) x0 += (a + pin.x - this.flow(goal) - x0) * w; // (none on the way there, nor once scrolled on from it, nor if it can't reach the top: the end of the script)

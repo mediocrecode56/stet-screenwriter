@@ -496,7 +496,7 @@ app.whenReady().then(async () => {
   const ud = app.getPath('userData');
   settings = new JsonStore(path.join(ud, 'settings.json'), {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
-    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], guidelines: [], reviewConsent: false, showTitlePage: true, timeline: true, panels: { scenes: false, notes: false },
+    goals: { daily: 1000, weekly: 5000 }, schedule: DEFAULT_SCHEDULE, dictionary: [], guidelines: [], reviewConsent: false, showTitlePage: true, noteLines: true, timeline: true, panels: { scenes: false, notes: false },
     updateCheck: true, updateNotified: null,
   });
   // 0.33 shows the timeline by default: once, also for those whose settings still hold the old default.

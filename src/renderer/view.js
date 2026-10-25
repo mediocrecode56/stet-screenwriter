@@ -546,7 +546,7 @@ export class View {
     const goal = () => {
       if (y) return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(y())));
       if (top) return this.topOf(a) ?? sc.scrollTop;
-      if (key) { const r = this.caretRect(a); return r ? keyTop(r.y, r.h, sc.clientHeight, sc.scrollHeight - sc.clientHeight) : sc.scrollTop; }
+      if (key) return this.keyOf(a) ?? sc.scrollTop;
       const r0 = this.caretRect(a), r1 = this.caretRect(b);
       if (!r0) return sc.scrollTop;
       const mid = r1 && r1.y >= r0.y ? (r0.y + r1.y + r1.h) / 2 : r0.y + r0.h / 2;
@@ -571,6 +571,14 @@ export class View {
     g.off = () => { sc.removeEventListener('wheel', takeOver); sc.removeEventListener('pointerdown', takeOver); };
     g.timer = setTimeout(() => { if (this.glide === g) { sc.scrollTop = goal(); this.stopGlide(); } }, dur + 200);
     g.raf = requestAnimationFrame(step);
+  }
+
+  /** The scroll position that puts position p's line at KEY_AT of the view (glideTo's `key`), as far
+   *  as the ends allow (null: nowhere). */
+  keyOf(p) {
+    const r = this.caretRect(p), sc = this.scroller;
+    if (!r) return null;
+    return keyTop(r.y, r.h, sc.clientHeight, sc.scrollHeight - sc.clientHeight);
   }
 
   /** The scroll position that puts position p at the top of the view (glideTo's `top`), as far as the

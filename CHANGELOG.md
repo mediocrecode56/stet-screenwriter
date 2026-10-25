@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.49.0 · 25 Oct 2026
+
+- Right-click on selected text for a small menu of three icons: text style (bold, italic, underline, strikethrough) and alignment each open their own dropdown, and the third adds a note on the selection and opens the notes panel so you can write it straight away. Right-clicking a misspelt word still shows its spelling fixes.
+- On the timeline, the glass box now always lands with the note, highlight or timecode you chose at the same place in it as that line has in the window, a little above the middle. Near the start or end of the script it matches wherever the line actually sits.
+- The dotted line under a note's passage is easier to see. View > Hide Note Underlines turns it off (the note's square in the margin stays), and the choice is kept.
+
 ## 0.48.0 · 25 Oct 2026
 
 - Jumping to a key point is simpler. A note, highlight or timecode chosen on the timeline, a note clicked in the notes panel, or F8 to the next note now always brings it to the same place: a little above the middle of the window (10% of its height higher), whether it was already in view or not. Near the start or end of the script it goes as far as the script scrolls.

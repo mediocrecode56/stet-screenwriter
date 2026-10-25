@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, flowAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, maxScale, ZOOM_MAX_SEC, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, flowAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, maxScale, ZOOM_MAX_SEC, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes, keyBand } from '../../src/core/timeline.js';
 import { paginate } from '../../src/core/layout.js';
 import { newDocument, makeBlock } from '../../src/core/model.js';
 import { serialize, deserialize } from '../../src/core/serialize.js';
@@ -238,4 +238,18 @@ test('a highlight that is only a note\'s colour is shown by the note alone; one 
   const colors = new Map([['n1', 'blue'], ['n2', 'pink']]);
   assert.deepEqual(timelineOf(blocks, p, colors).highlights.map((h) => h.color), ['pink'], 'the blue is the note\'s; the pink runs past its note');
   assert.deepEqual(timelineOf(blocks, p).highlights.map((h) => h.color), ['blue', 'pink'], 'without the notes\' colours, every highlight');
+});
+
+test('a key point chosen on the timeline: the band as wide as the window, the mark as far along it as its line is down the window', () => {
+  // A window reading from 2 to 3, the mark at 2.7: at its place, the band from 2.3 to 3.3 (2.7 at 40% of it).
+  const [a, b] = keyBand(2, 3, 2.7, 1);
+  assert.ok(Math.abs(a - 2.3) < 1e-9 && Math.abs(b - 3.3) < 1e-9);
+  assert.ok(Math.abs((2.7 - a) / (b - a) - 0.4) < 1e-9);
+  // At the end of the script the line is lower down the window: the mark as far along the band.
+  const [c, d] = keyBand(2, 3, 2.9, 1, 2, 0.75);
+  assert.ok(Math.abs((2.9 - c) / (d - c) - 0.75) < 1e-9);
+  // Scrolled on from it: the band as it is drawn otherwise (from x0, pulled to a mark, to b).
+  assert.deepEqual(keyBand(2, 3, 2.7, 0, 2.05), [2.05, 3]);
+  const [e, f] = keyBand(2, 3, 2.7, 0.5);
+  assert.ok(e > 2 && e < 2.3 && f > 3 && f < 3.3, 'halfway between');
 });
