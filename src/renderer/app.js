@@ -502,8 +502,11 @@ function renderTabTypes() {
     const last = runs[runs.length - 1];
     if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]);
   });
+  // Each box stands a pixel clear of the buttons' fill on every side (style.css .cyc-box), from
+  // their exact edges: offsetLeft and offsetWidth round, and the line would miss the fill by a part of a pixel.
+  const x0 = $('eltypes').getBoundingClientRect().left;
   tabTypesEl.replaceChildren(...runs.map(([a, z]) => {
-    const l = btns[a].offsetLeft, r = btns[z].offsetLeft + btns[z].offsetWidth;
+    const l = btns[a].getBoundingClientRect().left - x0 - 2, r = btns[z].getBoundingClientRect().right - x0 + 2;
     const box = dlg.h('div', { class: 'cyc-box' + (tabDrag ? ' drag' : ''), style: `left:${l}px;width:${r - l}px` },
       dlg.h('i', { class: 'cyc-h l', 'data-a': a, 'data-z': z }), dlg.h('i', { class: 'cyc-h r', 'data-a': a, 'data-z': z }));
     box.title = 'Tab steps through the outlined elements. Drag an end to take more in or leave some out.';

@@ -325,6 +325,24 @@ test('comments attach, list in order and detach', () => {
   assert.deepEqual(ed.commentAnchors().map((c) => c.id), ['c1', 'c2']);
 });
 
+test('a note and the highlight on its passage are one colour: it takes it, gives it, and loses it with it', () => {
+  const ed = new Editor([makeBlock('action', 'Rain on the glass.'), makeBlock('action', 'And more.')]);
+  ed.setSel(pos(0, 0), pos(0, 4));
+  ed.highlight('pink');
+  ed.attachComment('a'); // made on highlighted text: pink
+  assert.equal(ed.noteColors().get('a'), 'pink');
+  ed.setSel(pos(0, 5), pos(1, 3));
+  ed.attachComment('b');
+  assert.equal(ed.noteColors().has('b'), false, 'none on text with none');
+  ed.highlight('blue', ed.noteRange('b')); // the note given a colour: its whole passage, over both blocks
+  assert.deepEqual([ed.noteColors().get('b'), ed.blocks[1].marks.find((m) => m.k === 'hl')?.v], ['blue', 'blue']);
+  ed.undo();
+  assert.equal(ed.noteColors().has('b'), false, 'one undoable change');
+  ed.setSel(pos(0, 0), pos(0, 18));
+  ed.highlight(null); // the highlight cleared: the note's colour with it
+  assert.equal(ed.noteColors().has('a'), false);
+});
+
 test('find and replace all is one undo step', () => {
   const ed = new Editor([makeBlock('action', 'Mara looks. Mara waits.'), makeBlock('character', 'MARA')]);
   const m = ed.findAll('mara');
@@ -360,4 +378,17 @@ test('countWords agrees with the independent reference on random and real-world 
     for (let i = 0; i < n; i++) s += alphabet[Math.floor(rnd() * alphabet.length)];
     assert.equal(countWords(s), referenceCount(s), JSON.stringify(s));
   }
+});
+test('Tab round the cycle and round again changes only the element: the text comes back as written, on the same line', () => {
+  for (const [a, z] of [[5, 7], [0, 14]]) for (const reverse of [false, true]) {
+    const ed = new Editor([makeBlock('action', 'Rain on glass.'), makeBlock('action', 'After.')]);
+    ed.setSel(pos(0, a), pos(0, z));
+    for (let i = 0; i < 14; i++) ed.tab(reverse); // twice round all seven
+    const b = ed.blocks.find((x) => x.text.toLowerCase() === 'rain on glass.'.slice(a, z).toLowerCase());
+    assert.deepEqual([b?.type, b?.text], ['action', 'Rain on glass.'.slice(a, z)], `[${a}, ${z}) ${reverse ? 'backwards' : 'forwards'}`);
+  }
+  const ed = new Editor([makeBlock('action', 'Rain.'), makeBlock('action', 'After.')]);
+  ed.setSel(pos(0, 5));
+  for (let i = 0; i < 15; i++) ed.tab();
+  assert.deepEqual(ed.blocks.map((x) => [x.type, x.text]), [['action', 'Rain.'], ['character', ''], ['action', 'After.']], 'one new line, whatever the laps');
 });

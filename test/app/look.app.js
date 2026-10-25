@@ -18,7 +18,8 @@ after(() => app?.close());
 const anims = (sel) => app.eval(`document.querySelector(${JSON.stringify(sel)}).getAnimations().length`);
 const theme = () => app.eval('document.documentElement.dataset.theme');
 const settings = () => app.eval('window.stet.invoke("settings:get")');
-const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+// A time of day `min` minutes from now on the wall clock (not now plus so many hours: on the night the clocks go back, an hour on can read as now).
+const wall = (min) => { const n = new Date(), m = (((n.getHours() * 60 + n.getMinutes() + Math.round(min)) % 1440) + 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
 const refocus = () => app.eval('window.dispatchEvent(new Event("focus"))'); // the schedule is checked on focus (and every minute)
 
 test('the header: File, Edit, Element at the left edge; the title alone, centred, shortened before the menus; icon and version bottom left', async () => {
@@ -77,7 +78,7 @@ test('the theme switch in the status bar shows the theme; buttons show they are 
 
 test('AUTO applies the scheduled theme at once; a manual pick turns it off; a time-zone change moves it at the next check', async () => {
   const now = new Date();
-  const sched = { enabled: false, darkAt: hhmm(new Date(+now - 3600e3)), lightAt: hhmm(new Date(+now + 3600e3)) }; // dark now
+  const sched = { enabled: false, darkAt: wall(-60), lightAt: wall(60) }; // dark now
   await app.clickOn('#th-light');
   await app.eval(`window.stet.invoke('settings:set', { schedule: ${JSON.stringify(sched)} }).then(() => { __stet.settings().schedule = ${JSON.stringify(sched)}; })`);
   await app.clickOn('#th-auto');
@@ -89,7 +90,7 @@ test('AUTO applies the scheduled theme at once; a manual pick turns it off; a ti
   await refocus();
   assert.equal(await theme(), 'light', 'the check on focus does not undo a manual choice');
   // Dark from five hours from now: light here; six hours further east, dark.
-  const later = { enabled: true, darkAt: hhmm(new Date(+now + 5 * 3600e3)), lightAt: hhmm(new Date(+now + 9 * 3600e3)) };
+  const later = { enabled: true, darkAt: wall(300), lightAt: wall(540) };
   await app.eval(`window.stet.invoke('settings:set', { schedule: ${JSON.stringify(later)} }).then(() => { __stet.settings().schedule = ${JSON.stringify(later)}; })`);
   await refocus();
   assert.equal(await theme(), 'light', 'outside the dark hours here');
@@ -104,7 +105,7 @@ test('AUTO applies the scheduled theme at once; a manual pick turns it off; a ti
 
 test('the schedule is kept across a restart and applies at launch; the manual choice waits for AUTO to be turned off', async () => {
   const now = new Date();
-  const sched = { enabled: true, darkAt: hhmm(new Date(+now - 3600e3)), lightAt: hhmm(new Date(+now + 3600e3)) };
+  const sched = { enabled: true, darkAt: wall(-60), lightAt: wall(60) };
   await app.eval(`window.stet.invoke('settings:set', { theme: 'light', schedule: ${JSON.stringify(sched)} })`);
   await app.close();
   app = await App.launch({ userData: ud });

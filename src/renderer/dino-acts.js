@@ -2255,7 +2255,7 @@ export const REACTIONS = {
   // context — only where they fit what it was doing
   stopInTracks: { cat: 'context', w: 1, ctx: (k) => (k.moving ? 5 : 0), *fn(d) {
     // Freezes mid-stride, looks at you, and carries on.
-    yield { f: 'walk1', t: 600, face: d.towardCursor() };
+    yield { f: 'walk1', t: 600, face: d.towardCursor(), still: true };
     yield { f: 'up', t: 500, fx: '?' };
     yield { f: 'blink', t: 150 };
     yield { f: 'stand', t: 200, face: -d.face };

@@ -414,7 +414,7 @@ test('the timeline: a timecode sets the pace of the ruler; crowded labels give w
   assert.equal(await app.eval(`document.querySelector('#timeline .tl-tc.c-pink b').textContent`), 'Act three');
   assert.match(await app.eval('__stet.session.serialize()'), /"timecodes".*"n":"Act three","c":"pink"/s, 'saved with the script');
   await tl(`(() => { const b = __stet.editor.blocks; t.setTimecodes([{ id: b[1].id, line: 0, t: 60, tag: 'Older' }, { id: b[2].id, line: 0, t: 62, tag: 'Newer' }]); })()`);
-  assert.deepEqual(await app.eval(`[...document.querySelectorAll('#timeline .tl-tc')].map((e) => e.classList.contains('mute') + ':' + e.textContent)`), ['true:1:00Older', 'false:1:02Newer']);
+  assert.deepEqual(await app.eval(`[...document.querySelectorAll('#timeline .tl-tc:not(.gone)')].map((e) => e.classList.contains('mute') + ':' + e.textContent)`), ['true:1:00Older', 'false:1:02Newer']);
   await app.key('Mod+Shift+T');
   assert.equal(await app.eval('document.getElementById("timeline").hidden'), true);
   await app.key('Mod+Shift+T');

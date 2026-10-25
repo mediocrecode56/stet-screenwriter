@@ -132,7 +132,7 @@ test('its ink follows the theme; the weather and scenery are drawn whole: a rain
 });
 
 test('when AUTO turns the theme, it sees the sun set and rise; a manual switch leaves it be', async () => {
-  const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const wall = (min) => { const n = new Date(), m = (((n.getHours() * 60 + n.getMinutes() + Math.round(min)) % 1440) + 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; }; // (on the wall clock: the night the clocks go back, an hour on can read as now)
   const now = Date.now();
   await app.eval(`__stet.cmd.run('theme-light')`);
   await doing('look');
@@ -143,11 +143,11 @@ test('when AUTO turns the theme, it sees the sun set and rise; a manual switch l
   await app.eval(`__stet.cmd.run('theme-light')`);
   await doing('look');
   await app.until(`__stet.dino.c.activity === 'look'`);
-  await app.eval(`__stet.settings().schedule = ${JSON.stringify({ enabled: true, darkAt: hhmm(new Date(now - 60e3)), lightAt: hhmm(new Date(now + 3600e3)) })}`);
+  await app.eval(`__stet.settings().schedule = ${JSON.stringify({ enabled: true, darkAt: wall(-1), lightAt: wall(60) })}`);
   await app.eval('window.dispatchEvent(new Event("focus"))'); // the schedule is checked on focus (and every minute)
   assert.equal(await app.eval('document.documentElement.dataset.theme'), 'dark');
   await app.until(`__stet.dino.c.activity === 'nightfall' && !!__stet.dino.c.find('sun')`, { what: 'the sun to go down', timeout: 5000 });
-  await app.eval(`__stet.settings().schedule = ${JSON.stringify({ enabled: true, darkAt: hhmm(new Date(now + 3600e3)), lightAt: hhmm(new Date(now - 60e3)) })}`);
+  await app.eval(`__stet.settings().schedule = ${JSON.stringify({ enabled: true, darkAt: wall(60), lightAt: wall(-1) })}`);
   await app.eval('window.dispatchEvent(new Event("focus"))');
   assert.equal(await app.eval('document.documentElement.dataset.theme'), 'light');
   await app.until(`__stet.dino.c.activity === 'daybreak'`, { what: 'and come up again', timeout: 5000 });

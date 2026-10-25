@@ -7,7 +7,7 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
@@ -17,10 +17,41 @@ const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a pa
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const COVER = 0.62; // the part of the fade at the right end (zoomed in) dense enough that nothing under it is in play
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
-const ON_LINE = 0.5 / 54; // the band's start this close to a mark's own line is on that mark (half a row)
+const PULL_PX = 24; // the band's start is drawn softly to a mark whose line is within this many pixels of it
+const PIN_ROWS = 4; // how many rows of scrolling a mark clicked from outside the band lets go of it over
 const FINE_PX = 12; // fewest pixels of mouse travel a second while stepping
-const END_PX = 20; // how far before the fade the pointer has brought it all the way up
-const END_RAMP = 40; // over how many pixels before that it comes up, with the pointer
+const END_PX = 24; // how far before the fade the pointer has brought it all the way up
+const END_RAMP = 56; // over how many pixels before that it comes up, with the pointer
+// The glass's edges bend what is under them a little, like the rim of a lens: a displacement map
+// across each edge's LENS_PX (style.css .tl-lens), the most a pixel's worth part way in, none at either side.
+const LENS_PX = 10;
+const lensMap = (r) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${LENS_PX}" height="10" preserveAspectRatio="none"><linearGradient id="g"><stop offset="0" stop-color="rgb(128,128,128)"/><stop offset=".4" stop-color="rgb(${r},128,128)"/><stop offset="1" stop-color="rgb(128,128,128)"/></linearGradient><rect width="100%" height="100%" fill="url(#g)"/></svg>`)}`;
+const LENS = '<svg class="tl-defs" width="0" height="0" aria-hidden="true">' + [['l', 200], ['r', 56]].map(([k, r]) => `<filter id="tl-bend-${k}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage href="${lensMap(r).replace(/"/g, '&quot;')}" preserveAspectRatio="none" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="4" xChannelSelector="R" yChannelSelector="G"/></filter>`).join('') + '</svg>';
+const smooth = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); }; // 0 to 1, easing in and out
+
+/** Bring host's children to `items` ({ k, x, cls, html, tag }: x in pages, drawn at s pixels a page),
+ *  keeping each one that stays, so nothing blinks as the scale or the ruler's steps change: a new one
+ *  fades in (style.css), one no longer listed fades out where it is, at the scale (unless not `prune`). */
+function sync(host, items, s, prune = true) {
+  const was = host.keyed || (host.keyed = new Map()), seen = new Set();
+  for (const it of items) {
+    let el = was.get(it.k);
+    if (!el) { el = host.appendChild(document.createElement(it.tag || 'span')); was.set(it.k, el); }
+    else if (el.gone) { clearTimeout(el.gone); el.gone = 0; el.classList.remove('gone'); }
+    seen.add(it.k);
+    if (el.cls !== it.cls) el.className = el.cls = it.cls;
+    if (it.html != null && el.html !== it.html) { el.innerHTML = el.html = it.html; el.w = null; }
+    el.x = it.x;
+    el.style.left = it.x * s + 'px';
+  }
+  for (const [k, el] of was) {
+    if (!prune || seen.has(k)) continue;
+    el.style.left = el.x * s + 'px';
+    if (!el.gone) { el.classList.add('gone'); el.gone = setTimeout(() => { el.remove(); if (was.get(k) === el) was.delete(k); }, 220); }
+  }
+}
+/** An element's width, measured once for what it says (muted, a label has none). */
+const widthOf = (el) => { if (el.w == null) { const m = el.classList.contains('mute'); el.classList.remove('mute'); el.w = el.offsetWidth; if (m) el.classList.add('mute'); } return el.w; };
 const RESET_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3v8M12.5 3v8M4 7h6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.6 5.2L3.8 7l1.8 1.8M8.4 5.2L10.2 7 8.4 8.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="miter"/></svg>'; // the whole script: out to both ends
 const TRASH_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V1.8h3V3M3 3l.6 7.2h4.8L9 3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.4l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -47,10 +78,12 @@ export class Timeline {
     this.editing = null; // see editTimecode()
     this.unlocked = false; // stepping just ended with the pointer locked, and it hasn't moved since
     this.shift = 0; // px the strip is slid past where it scrolls to, to keep a stepped line under the pointer
+    this.pinned = null; // a mark clicked from outside the band: { p, x }, the band begins on it once the script is there
+    this.bandDrag = null; // the band being dragged: { x, top, k }, see showBand()
     // (the grid under the band, whose glass softens it: the marks over the band read clearly)
-    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-grid"></div><div class="tl-view"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-ruler"></div>'
+    host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-grid"></div><div class="tl-view"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-lens l"></div><div class="tl-lens r"></div><div class="tl-ruler"></div>'
       + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
-      + '<div class="tl-fade" hidden></div>' // (under the reset button: the strip fades out softly behind it while the pointer is on the bar)
+      + LENS + '<div class="tl-fade" hidden></div>' // (under the reset button: the strip fades out softly behind it while the pointer is on the bar)
       + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
     this.scroll = host.querySelector('.tl-scroll');
     this.inner = host.querySelector('.tl-inner');
@@ -61,6 +94,7 @@ export class Timeline {
     this.head = host.querySelector('.tl-head');
     this.cur = host.querySelector('.tl-cur');
     this.band = host.querySelector('.tl-view');
+    this.lens = host.querySelectorAll('.tl-lens');
     this.reset = host.querySelector('.tl-reset');
     this.fade = host.querySelector('.tl-fade');
     this.reset.addEventListener('click', () => this.whole());
@@ -100,6 +134,7 @@ export class Timeline {
     this.scroll.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     // The ruler and grid are drawn around the part in view; scrolling far draws the next part.
     this.scroll.addEventListener('scroll', () => {
+      if (this.inner.style.translate && this.scroll.scrollLeft !== this.subAt) this.inner.style.translate = ''; // (scrolled by other means: no part of a pixel to make up)
       if (!this.time) return;
       const l = this.scroll.scrollLeft - PADX, w = this.scroll.clientWidth;
       if ((l < this.rulerA && this.rulerA > 0) || (l + w > this.rulerB && this.rulerB < this.length * this.drawn)) this.paintRuler();
@@ -118,7 +153,7 @@ export class Timeline {
   get visible() { return !this.host.hidden; }
 
   show(on = !this.visible) {
-    if (!on) { this.stopZoom(); this.endStep(); this.closeEditor(); this.leave(); this.slide(0); }
+    if (!on) { this.stopZoom(); this.endStep(); this.closeEditor(); this.leave(); this.slide(0); this.pinned = null; }
     this.host.hidden = !on;
     if (on) this.update(true);
     this.onToggle(on);
@@ -142,20 +177,32 @@ export class Timeline {
   }
 
   /** Go to the line at position x: one in the window glides to its middle (and the band's), one
-   *  outside it to the top, where the band then begins. */
-  go(x) {
-    const { bi, line } = placeAt(this.view.pages, x), p = this.lineStart(x);
-    if (p) this.jump(p, false, null, this.glideFor(x, scriptPos(this.view.pages, bi, line) + 0.5 / 54)); // (the middle of that line)
+   *  outside it to the top, where the band then begins (on `mark`, drawn there, if it is one). */
+  go(x, mark = null) {
+    const { bi, line } = placeAt(this.view.pages, x), p = this.lineStart(x), at = scriptPos(this.view.pages, bi, line);
+    if (p) this.jump(p, false, null, this.glideFor(x, at + 0.5 / 54, { p, x: mark ?? at })); // (the middle of that line)
   }
 
   /** How the script glides to position x (view.glideTo): to the middle of the band when x is in the
-   *  window already (the middle of the window too, but where a page break is in view), else to the top. */
-  glideFor(x, centre = x) { return x >= this.bandA - 1e-6 && x <= this.bandB + 1e-6 ? { y: () => this.centreTop(centre) } : 'top'; }
+   *  window already (the middle of the window too, but where a page break is in view), else to the top,
+   *  where the band then begins exactly on `pin` ({ p: where the script goes, x: the mark drawn there }). */
+  glideFor(x, centre = x, pin = null) {
+    this.pinned = null;
+    if (x >= this.bandA - 1e-6 && x <= this.bandB + 1e-6) return { y: () => this.centreTop(centre) };
+    this.pinned = pin && { ...pin, rev: this.ed.rev };
+    return 'top';
+  }
+
+  /** Where the script is at content y, as the band reads it (core/timeline.js flowAt()). */
+  flow(y) {
+    const v = this.view, r = v.rowAt(y);
+    return Math.min(this.length, flowAt(v.pages, r.pi, r.row, (v.pageTop(1) - v.pageTop(0)) / v.row));
+  }
 
   /** The scroll position that puts position x in the middle of the band, as near as the ends allow. */
   centreTop(x) {
-    const v = this.view, sc = v.scroller, h = sc.clientHeight, pages = v.pages;
-    const mid = (y) => { const t = v.rowAt(y), e = v.rowAt(y + h); return (lineFrom(pages, t.pi, t.row) + lineTo(pages, e.pi, e.row)) / 2; };
+    const v = this.view, sc = v.scroller, h = sc.clientHeight;
+    const mid = (y) => (this.flow(y) + this.flow(y + h)) / 2;
     let lo = 0, hi = Math.max(0, sc.scrollHeight - h);
     for (let i = 0; i < 32 && hi - lo > 0.5; i++) { const m = (lo + hi) / 2; if (mid(m) < x) lo = m; else hi = m; }
     return (lo + hi) / 2;
@@ -174,14 +221,24 @@ export class Timeline {
     if (cx < sc.scrollLeft || cx > sc.scrollLeft + sc.clientWidth) this.glideBar(cx - sc.clientWidth / 3);
   }
 
-  /** Zoom by factor f, keeping the point under clientX where it is. Wheel turns in a row add up
-   *  toward one goal, on the same point while the pointer stays put. */
+  /** Zoom by factor f, keeping the point under clientX where it is (or the mark the pointer is drawn
+   *  to, so the line stays on it). Wheel turns in a row add up toward one goal, on the same point
+   *  while the pointer stays put. */
   zoom(f, clientX) {
     const r = this.scroll.getBoundingClientRect();
     clientX ??= r.left + r.width / 2;
-    const g = this.zoomGoal, px = clientX - r.left;
-    const at = g && Math.abs(g.px - px) < 1 ? g.at : this.posAt(clientX);
-    this.zoomTo((g ? g.ppp : this.drawn) * f, at, px);
+    const g = this.zoomGoal, ptr = clientX - r.left;
+    if (g && g.ptr != null && Math.abs(g.ptr - ptr) < 1) return this.zoomTo(g.ppp * f, g.at, g.px, { ptr });
+    const { at, px } = this.anchor(clientX);
+    this.zoomTo((g ? g.ppp : this.drawn) * f, at, px, { ptr });
+  }
+
+  /** What a zoom around clientX holds still: the mark the pointer is drawn to, else the point under it
+   *  ({ at: position, px: from the bar's left }). */
+  anchor(clientX) {
+    const near = this.snapAt(clientX), left = this.scroll.getBoundingClientRect().left;
+    const at = near ? near.x : this.posAt(clientX);
+    return { at, px: near ? this.inner.getBoundingClientRect().left + at * this.drawn - left : clientX - left };
   }
 
   /**
@@ -190,11 +247,11 @@ export class Timeline {
    * redrawn at its true scale on every frame: the marks, ticks and labels stay crisp and never
    * stretch. A new goal mid-way carries on from where it is, without a restart.
    */
-  zoomTo(ppp, at, px, { tau = 70 } = {}) {
+  zoomTo(ppp, at, px, { tau = 70, ptr = null } = {}) {
     ppp = Math.max(this.fit, Math.min(PPP_MAX, ppp));
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { this.stopZoom(); return this.setScale(ppp, at, px); }
-    const from = { s: this.drawn, px: at * this.drawn + PADX - this.scroll.scrollLeft + (this.shift || 0) }; // where `at` is now
-    this.zoomGoal = { ppp, at, px, tau, from };
+    const from = { s: this.drawn, px: this.inner.getBoundingClientRect().left + at * this.drawn - this.scroll.getBoundingClientRect().left }; // where `at` is now, to the part of a pixel
+    this.zoomGoal = { ppp, at, px, tau, from, ptr };
     if (this.zoomRaf) return;
     let last = performance.now();
     const step = (now) => {
@@ -219,7 +276,13 @@ export class Timeline {
     this.ppp = ppp <= this.fit ? 0 : ppp;
     this.slide(0);
     this.update(true);
-    this.scroll.scrollLeft = at * this.drawn + PADX - px;
+    // The bar scrolls by whole pixels; the part of one left over moves the strip itself, so what the
+    // zoom holds still never shivers by half a pixel from one frame to the next.
+    const want = at * this.drawn + PADX - px, sc = this.scroll;
+    sc.scrollLeft = want;
+    const d = sc.scrollLeft - want;
+    this.subAt = sc.scrollLeft;
+    this.inner.style.translate = Math.abs(d) < 1 && Math.abs(d) > 0.01 ? `${d.toFixed(3)}px` : '';
     this.refreshHover();
   }
 
@@ -313,7 +376,7 @@ export class Timeline {
     const x0 = e.clientX, y0 = e.clientY;
     const where = this.zone(e);
     const at0 = this.posAt(x0), ppp0 = this.drawn, top0 = this.view.scroller.scrollTop;
-    const px0 = x0 - this.scroll.getBoundingClientRect().left;
+    const hold = this.anchor(x0); // (a drag zooms around the mark the pointer is drawn to, or the point pressed)
     const near = this.snapAt(x0);
     const note = e.target.closest('.tl-note') ? this.tl.notes[+e.target.closest('.tl-note').dataset.i] : near && near.kind === 'note' ? near : null;
     let mode = null; // set by the first real movement
@@ -325,9 +388,17 @@ export class Timeline {
         mode = where;
         document.body.classList.add('tl-dragging', 'tl-drag-' + mode);
         this.hover.hidden = true;
+        if (mode === 'band') {
+          // The band goes with the pointer just as it is, the script following it: no waiting on the
+          // script's next frame, and no stretching where page breaks pass the window's edges.
+          const v = this.view;
+          this.view.stopGlide();
+          this.pinned = null;
+          this.bandDrag = { x: parseFloat(this.band.style.left) / ppp0, w: parseFloat(this.band.style.width) / ppp0, top: top0, k: 1 / (v.pageTop(1) - v.pageTop(0)) };
+        }
       }
-      if (mode === 'zoom') this.zoomTo(ppp0 * 2 ** (dx / 50), at0, px0, { tau: 40 });
-      else { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); }
+      if (mode === 'zoom') this.zoomTo(ppp0 * 2 ** (dx / 50), hold.at, hold.px, { tau: 40 });
+      else { const v = this.view; v.scroller.scrollTop = top0 + (dx / ppp0) * (v.pageTop(1) - v.pageTop(0)); this.showBand(); }
     };
     const up = (ev) => {
       removeEventListener('mousemove', move, true);
@@ -335,13 +406,22 @@ export class Timeline {
       removeEventListener('blur', up);
       this.dragging = false;
       document.body.classList.remove('tl-dragging', 'tl-drag-zoom', 'tl-drag-band');
+      if (this.bandDrag) {
+        // Let go: the band eases from where the pointer had it to the window as it is (a page break may be at an edge).
+        this.bandDrag = null;
+        this.inner.classList.add('settle');
+        this.showBand();
+        clearTimeout(this.settling);
+        this.settling = setTimeout(() => this.inner.classList.remove('settle'), 260);
+      }
       if (ev && ev.clientX != null) this.settle(ev); // the cursor and readout for where the pointer is now
       if (mode || !this.visible) return;
-      // Inside the band, to the middle of the window (and of the band); outside it, to the top, where the band then begins.
-      if (note) return this.openNote(note.id, note.b, note.s, note.e, this.glideFor(note.at ?? note.x));
-      if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, this.glideFor(near.at ?? near.x)); // to its heading
-      if (near && near.kind === 'tc') { this.go(near.x); return this.editTimecode(near.x, near); }
-      this.go(near ? near.at ?? near.x : at0); // (a highlight: its first line, though drawn on its second)
+      // Inside the band, to the middle of the window (and of the band); outside it, to the top, where
+      // the band then begins, exactly on what was clicked.
+      if (note) return this.openNote(note.id, note.b, note.s, note.e, this.glideFor(note.at ?? note.x, undefined, { p: pos(note.b, note.s), x: note.x }));
+      if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, this.glideFor(near.at ?? near.x, undefined, { p: pos(near.b, 0), x: near.x })); // to its heading
+      if (near && near.kind === 'tc') { this.go(near.x, near.x); return this.editTimecode(near.x, near); }
+      this.go(near ? near.at ?? near.x : at0, near ? near.x : null); // (a highlight: its first line, though drawn on its second)
     };
     addEventListener('mousemove', move, true);
     addEventListener('mouseup', up, true);
@@ -542,7 +622,7 @@ export class Timeline {
     const tcs = this.tcs();
     const key = `${this.ed.rev}|${pages.length}|${this.scale}|${tcs.map((t) => t.id + ':' + t.line + ':' + t.t).join(',')}`;
     // Another script: nothing carries over. One laid out to more or fewer pages: at once.
-    if (this.session.doc !== this.docSeen) { this.endStep(); this.closeEditor(); }
+    if (this.session.doc !== this.docSeen) { this.endStep(); this.closeEditor(); this.pinned = null; }
     const redraw = force || this.drawn !== this.scale || this.session.doc !== this.docSeen || pages.length !== this.drawnPages;
     if (redraw) this.repaint(key);
     else if (key !== this.key || pages !== this.pagesSeen) {
@@ -581,18 +661,41 @@ export class Timeline {
     this.cur.style.width = Math.max(1, z - a) + 'px';
   }
 
-  /** The part of the script in the window, as a pane of glass: from the first line in view to just after
-   *  the last, read the way the marks are, so a scene's heading at the top of the window is where the
-   *  band begins, on its tick (drawn on its whole second, as the marks are). */
+  /** The part of the script in the window, as a pane of glass: from the top of the window to its bottom,
+   *  read the way the marks are and flowing on through blank rows and page breaks (flow()), so it moves
+   *  with the script without stopping or jumping. Its start is drawn softly to a mark whose line it is
+   *  near (a mark sits on its whole second, a little off its line), the way the pointer is; and once
+   *  the script is where a click on a mark outside the band sent it, it begins exactly on that mark,
+   *  letting go of it again over a few rows of scrolling. Dragged, it simply goes with the pointer. */
   showBand() {
-    const v = this.view, sc = v.scroller, pages = v.pages;
-    const t = v.rowAt(sc.scrollTop), e = v.rowAt(sc.scrollTop + sc.clientHeight);
-    const a = Math.min(this.length, lineFrom(pages, t.pi, t.row)), b = Math.max(a, Math.min(this.length, lineTo(pages, e.pi, e.row)));
+    const v = this.view, sc = v.scroller, top = sc.scrollTop, s = this.drawn;
+    const a = this.flow(top), b = Math.max(a, this.flow(top + sc.clientHeight));
     this.bandA = a; this.bandB = b;
-    const mark = this.targets.find((m) => m.kind !== 'tc' && m.at != null && Math.abs(m.at - a) < ON_LINE);
-    const x0 = mark ? mark.x : a;
-    this.band.style.left = x0 * this.drawn + 'px';
-    this.band.style.width = Math.max(2, (b - x0) * this.drawn) + 'px';
+    const d = this.bandDrag;
+    if (d) {
+      const x = d.x + (top - d.top) * d.k;
+      return this.place(x * s, Math.max(2, d.w * s));
+    }
+    let x0 = a, near = null, dist = Infinity;
+    for (const m of this.targets) if (m.kind !== 'tc' && m.at != null && Math.abs(m.at - a) < dist) { dist = Math.abs(m.at - a); near = m; }
+    if (near) x0 += (near.x - near.at) * (1 - smooth(dist * s / Math.max(PULL_PX, 1.6 * Math.abs(near.x - near.at) * s)));
+    const pin = this.pinned;
+    if (pin && pin.rev !== this.ed.rev) this.pinned = null; // (the script changed since: where it went is no longer where it is)
+    else if (pin) {
+      const goal = v.topOf(pin.p, true), max = sc.scrollHeight - sc.clientHeight;
+      const w = goal != null && goal >= 0 && goal <= max ? 1 - smooth(Math.abs(top - goal) / (PIN_ROWS * v.row)) : 0;
+      if (w > 0) x0 += (a + pin.x - this.flow(goal) - x0) * w; // (none on the way there, nor once scrolled on from it, nor if it can't reach the top: the end of the script)
+    }
+    this.place(x0 * s, Math.max(2, (b - x0) * s));
+  }
+
+  /** The band at `left` for `width` pixels, with the lens over each of its edges. */
+  place(left, width) {
+    const [l, r] = this.lens, w = Math.min(LENS_PX, width / 2);
+    this.band.style.left = l.style.left = left + 'px';
+    this.band.style.width = width + 'px';
+    l.style.width = r.style.width = w + 'px';
+    r.style.left = left + width - w + 'px';
   }
 
   repaint(key) {
@@ -616,19 +719,30 @@ export class Timeline {
     this.reset.hidden = this.fade.hidden = !this.zoomed;
     this.nearEnd(this.endX); // (zoomed in or out under a pointer at the end)
 
+    // Mid-zoom the marks are the same ones, just moved to the new scale: nothing is made again, so
+    // nothing under the pointer blinks.
+    if (again) {
+      this.marks.firstChild.style.width = len * s + 'px';
+      for (const t of this.targets) {
+        t.el.style.left = t.x * s + 'px';
+        if (t.kind === 'hl') t.el.style.width = Math.max(3, (t.x1 - t.x) * s) + 'px';
+      }
+      this.showScene(this.ed.caret.b, false);
+      return this.showEditing();
+    }
     // The script as a line, coloured where it is highlighted; a tick across it for each scene; the
     // notes under it; a line down the bar for each timecode, fainter for one outside a scene heading.
     let m = `<div class="tl-line" style="width:${len * s}px"></div>`;
     for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
     for (const sc of tl.scenes) m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px"></div>`;
-    const notes = this.session.doc.comments;
-    tl.notes.forEach((n, i) => { const c = notes[n.id]?.color; m += `<div class="tl-note${c ? ' c-' + c : ''}" data-i="${i}" style="left:${n.x * s}px"></div>`; }); // a square hung from the line, as on the page; in the note's colour, if it has one
+    const colors = this.ed.noteColors();
+    tl.notes.forEach((n, i) => { const c = colors.get(n.id); m += `<div class="tl-note${c ? ' c-' + c : ''}" data-i="${i}" style="left:${n.x * s}px"></div>`; }); // a square hung from the line, as on the page; in the note's colour, if it has one
     for (const a of anchors) m += `<div class="tl-tcm ${a.scene ? 'sc' : 'loose'}${a.color ? ' c-' + a.color : ''}" style="left:${a.x * s}px"></div>`;
     this.marks.innerHTML = m;
     const els = this.marks.children; // in the order drawn: the line, the highlights, the scenes, the notes, the timecodes
     const nh = tl.highlights.length, ns = tl.scenes.length, nn = tl.notes.length;
     this.targets = [
-      ...tl.highlights.map((hl, i) => ({ x: hl.x0, at: hl.at, color: hl.color, kind: 'hl', el: els[1 + i] })),
+      ...tl.highlights.map((hl, i) => ({ x: hl.x0, x1: hl.x1, at: hl.at, color: hl.color, kind: 'hl', el: els[1 + i] })),
       ...tl.scenes.map((sc, i) => ({ ...sc, kind: 'scene', el: els[1 + nh + i] })),
       ...tl.notes.map((n, i) => ({ ...n, kind: 'note', el: els[1 + nh + ns + i] })),
       ...anchors.map((a, i) => ({ ...a, kind: 'tc', el: els[1 + nh + ns + nn + i] })), // last: on a scene, its timecode wins
@@ -650,23 +764,28 @@ export class Timeline {
     // The end of the script (its estimated length) and the pinned timecodes are labelled in their
     // own places: the scenes' timecodes first, then the others, the newest first; one that would
     // run into a label already placed keeps just its line. The regular labels give way around them.
+    // Every label and grid line is kept from one drawing to the next (sync()): zooming moves them, and
+    // the ones that come or go as the steps change fade rather than blink.
     const order = this.tcs().map((tc) => tc.id + ':' + tc.line);
-    this.ruler.innerHTML = `<span class="tl-lb tl-end" style="left:${len * s}px">${rulerLabel(total)}</span>`
-      + anchors.map((p) => `<span class="tl-lb tl-tc ${p.scene ? 'sc' : 'loose'}${p.color ? ' c-' + p.color : ''}" style="left:${p.x * s}px">${rulerLabel(p.t)}${p.tag ? `<b>${esc(p.tag)}</b>` : ''}</span>`).join('');
-    const [end, ...labels] = this.ruler.children;
-    const placed = [[len * s - end.offsetWidth, len * s]];
-    const shown = placeLabels(anchors.map((p, i) => ({ x0: p.x * s, x1: p.x * s + labels[i].offsetWidth, rank: (p.scene ? order.length : 0) + order.indexOf(p.id + ':' + p.line) })), placed);
-    labels.forEach((el, i) => { if (!shown[i]) el.classList.add('mute'); });
-    let ruler = '', grid = '';
+    const fixed = [{ k: 'end', x: len, cls: 'tl-lb tl-end', html: rulerLabel(total) }, ...anchors.map((p) => ({ k: 'tc' + p.id + ':' + p.line, x: p.x, cls: `tl-lb tl-tc ${p.scene ? 'sc' : 'loose'}${p.color ? ' c-' + p.color : ''}`, html: rulerLabel(p.t) + (p.tag ? `<b>${esc(p.tag)}</b>` : '') }))];
+    const items = [], grid = [];
+    const lw = (t) => 10 + rulerLabel(t).length * 5.5; // (a regular label's width, near enough)
+    const ticks = [];
     for (let t = Math.floor(time.at(a / s) / inc) * inc; t <= total + 0.5; t += inc) {
-      const x = time.pos(t) * s;
-      if (x > b + 0.5) break;
+      const x = time.pos(t);
+      if (x * s > b + 0.5) break;
       const major = Math.round(t) % step === 0;
-      if (t) grid += `<i${major ? ' class="mj"' : ''} style="left:${x}px"></i>`;
-      if (major && clearOf(placed, x, x + 10 + rulerLabel(t).length * 5.5)) ruler += `<span class="tl-lb" style="left:${x}px">${rulerLabel(t)}</span>`;
+      if (t) grid.push({ k: t, x, cls: major ? 'mj' : '', tag: 'i' });
+      if (major) ticks.push({ t, x });
     }
-    this.ruler.insertAdjacentHTML('afterbegin', ruler);
-    this.grid.innerHTML = grid;
+    sync(this.ruler, fixed, s, false); // (first, to be measured)
+    const els = fixed.map((f) => this.ruler.keyed.get(f.k)), [end, ...labels] = els;
+    const placed = [[len * s - widthOf(end), len * s]];
+    const shown = placeLabels(anchors.map((p, i) => ({ x0: p.x * s, x1: p.x * s + widthOf(labels[i]), rank: (p.scene ? order.length : 0) + order.indexOf(p.id + ':' + p.line) })), placed);
+    labels.forEach((el, i) => el.classList.toggle('mute', !shown[i]));
+    for (const { t, x } of ticks) if (clearOf(placed, x * s, x * s + lw(t))) items.push({ k: 'r' + t, x, cls: 'tl-lb', html: rulerLabel(t) });
+    sync(this.ruler, [...fixed, ...items], s);
+    sync(this.grid, grid, s);
   }
 
   /** The time and scene under the pointer, drawn to a mark close by. */

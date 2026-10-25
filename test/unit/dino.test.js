@@ -279,6 +279,25 @@ test('rapid clicks escalate, stay queued at most two deep, and never break the a
   assert.equal(c.queue.length, 0);
 });
 
+test('the nearer today’s goal, the livelier: writing at the same pace, and idle too (a little)', () => {
+  const settled = (today, wpm) => {
+    const c = make(6);
+    c.progress.today = today;
+    for (let i = 0; i < 200; i++) { c.heat = wpm * 2; c.updateEnergy(10000); }
+    return c.energy;
+  };
+  for (const wpm of [0, 10, 30]) {
+    const far = settled(0, wpm), half = settled(500, wpm), near = settled(950, wpm);
+    assert.ok(far < half && half < near, `at ${wpm} words a minute: ${far.toFixed(3)} < ${half.toFixed(3)} < ${near.toFixed(3)}`);
+  }
+  assert.ok(settled(950, 10) - settled(0, 10) > 0.08, 'writing, it shows');
+  const c = make(6);
+  const lively = (k) => ['dance', 'zoomies', 'hop', 'juggle', 'fetch'].reduce((s, a) => s + (k[a] || 0), 0);
+  const pick = (today) => { const k = {}, e = settled(today, 10); c.progress.today = today; for (let i = 0; i < 6000; i++) { c.recent = []; c.energy = e; const a = c.pickActivity(1e9 + i); k[a] = (k[a] || 0) + 1; } return lively(k); };
+  const far = pick(0), near = pick(990);
+  assert.ok(near > far, `and plays more for it (${far} → ${near} lively choices)`);
+});
+
 test('livelier while writing, calmer when idle — gradually', () => {
   const c = make(5);
   for (let i = 0; i < 40; i++) c.wrote(1, 1000 + i * 1500);

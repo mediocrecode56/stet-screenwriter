@@ -345,7 +345,8 @@ test('a note pinned glides to the top and keeps its writing; its colour shows on
   await app.until(`document.querySelectorAll('#timeline .tl-note.c-pink').length === 1`, { what: 'its mark on the timeline in pink' });
   await app.until(`document.querySelectorAll('.page .mk.hl-pink').length === 1 && document.querySelectorAll('.page .cmtick.c-pink').length === 1`, { what: 'its passage highlighted in pink, and its marker on the page' });
   assert.ok(await app.eval(`(() => { const r = document.querySelector('.page .cmtick').getBoundingClientRect(); return Math.abs(r.width - r.height) < 0.5 && r.width > 2; })()`), 'the marker is a square');
-  assert.deepEqual(await app.eval('Object.values(__stet.session.doc.comments).map((c) => c.color || null).sort()'), [null, 'pink'].sort());
+  assert.deepEqual(await app.eval('[...__stet.editor.noteColors().values()]'), ['pink'], 'the colour is the highlight on its passage');
+  assert.equal(await app.eval(`__stet.editor.blocks[1].marks.filter((m) => m.k === 'hl').length`), 1);
   await app.clickOn('#notes .note:first-child [data-x="pin"]');
   await app.until(`${order} === 'One,Two!'`, { what: 'unpinned: back to its place in the script' });
   await app.eval(`__stet.cmd.run('panel-notes')`);

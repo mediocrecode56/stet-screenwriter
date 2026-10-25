@@ -30,18 +30,21 @@ test('round trip preserves types, text, marks, title page, comments and settings
   assert.equal(back.meta.id, doc.meta.id);
 });
 
-test('a note keeps its colour and pin; neither is written unless set, and a colour of no highlight is dropped', () => {
+test('a note keeps its pin, written only when set; a colour from 0.40-0.43 becomes the highlight on its passage', () => {
   const doc = newDocument();
-  doc.blocks = [makeBlock('action', 'One two three.', [{ s: 0, e: 3, k: 'cm', v: 'a' }, { s: 4, e: 7, k: 'cm', v: 'b' }])];
-  doc.comments.a = { text: 'x', created: '', modified: '', color: 'pink', pinned: true };
+  doc.blocks = [makeBlock('action', 'One two three.', [{ s: 0, e: 3, k: 'cm', v: 'a' }, { s: 4, e: 7, k: 'cm', v: 'b' }, { s: 8, e: 13, k: 'cm', v: 'c' }, { s: 8, e: 13, k: 'hl', v: 'blue' }])];
+  doc.comments.a = { text: 'x', created: '', modified: '', pinned: true };
   doc.comments.b = { text: 'y', created: '', modified: '' };
+  doc.comments.c = { text: 'z', created: '', modified: '' };
   const text = serialize(doc);
   assert.deepEqual(JSON.parse(text).comments.b, { text: 'y', created: '', modified: '' });
-  const { doc: back } = deserialize(text);
-  assert.deepEqual([back.comments.a.color, back.comments.a.pinned], ['pink', true]);
+  assert.equal(deserialize(text).doc.comments.a.pinned, true);
   const p = JSON.parse(text);
-  p.comments.a.color = 'red'; p.comments.a.pinned = 'yes';
-  assert.deepEqual(deserialize(JSON.stringify(p)).doc.comments.a, { text: 'x', created: '', modified: '' });
+  p.comments.a.color = 'pink'; p.comments.b.color = 'red'; p.comments.c.color = 'yellow'; p.comments.b.pinned = 'yes';
+  const back = deserialize(JSON.stringify(p)).doc;
+  assert.deepEqual(back.blocks[0].marks.filter((m) => m.k === 'hl').map((m) => [m.s, m.e, m.v]), [[0, 3, 'pink'], [8, 13, 'blue']], 'its passage in pink; one highlighted already keeps its own; no colour of no highlight');
+  assert.deepEqual(back.comments.b, { text: 'y', created: '', modified: '' });
+  assert.ok(Object.values(back.comments).every((c) => !('color' in c)), 'the colour is the highlight alone');
 });
 
 test('unreferenced comments are not written', () => {

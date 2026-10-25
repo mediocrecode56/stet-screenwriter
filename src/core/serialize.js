@@ -3,7 +3,7 @@
 // Serialization is deterministic (fixed key order, sorted comment ids, no
 // runtime ids), so save(load(save(doc))) is byte-identical to save(doc).
 
-import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, withAlign, writtenText, defaultDocSettings, emptyTitlePage, uuid, cueName } from './model.js';
+import { TYPES, HIGHLIGHT_COLORS, STYLES, makeBlock, withAlign, withText, setHighlight, writtenText, defaultDocSettings, emptyTitlePage, uuid, cueName } from './model.js';
 import { ALIGNS } from './format.js';
 import { reviewToJSON, reviewFromJSON } from './revision.js';
 import { readCast } from './cast.js';
@@ -29,8 +29,7 @@ export function toPayload(doc, appVersion) {
     if (!used.has(id)) continue;
     const c = doc.comments[id];
     comments[id] = { text: c.text, created: c.created, modified: c.modified };
-    if (HIGHLIGHT_COLORS.includes(c.color)) comments[id].color = c.color; // (both only when set: older files stay as they were)
-    if (c.pinned) comments[id].pinned = true;
+    if (c.pinned) comments[id].pinned = true; // (only when set: older files stay as they were)
   }
   const tp = {};
   for (const k of TITLE_KEYS) tp[k] = doc.titlePage[k] || '';
@@ -164,6 +163,17 @@ export function deserialize(json) {
   for (const b of blocks) for (const m of b.marks) {
     if (m.k === 'cm' && !comments[m.v]) { comments[m.v] = { text: '', created: '', modified: '' }; warnings.push('A comment had lost its text.'); }
   }
+  // A note's colour is the highlight on its passage now (editor.noteColors()): a colour written by
+  // 0.40 to 0.43 becomes that highlight, where the passage has none of its own.
+  blocks.forEach((b, i) => {
+    let marks = b.marks;
+    for (const m of b.marks) {
+      const c = m.k === 'cm' && comments[m.v].color;
+      if (c && !marks.some((h) => h.k === 'hl' && h.s < m.e && h.e > m.s)) marks = setHighlight(marks, m.s, m.e, c);
+    }
+    if (marks !== b.marks) blocks[i] = withText(b, b.text, marks);
+  });
+  for (const c of Object.values(comments)) delete c.color;
 
   const ds = defaultDocSettings();
   const s = p.settings || {};

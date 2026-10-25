@@ -2,6 +2,21 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.44.0 · 25 Oct 2026
+
+- Timeline, zooming: what you zoom around stays perfectly still. Before, the whole strip shivered by half a pixel on every frame, the mark under the pointer blinked, and ruler labels and grid lines popped in and out as the steps changed; now they fade. With the pointer drawn to a scene, note or highlight, the zoom holds that mark under the line.
+- Timeline, the glass box: it moves smoothly with the script. Before, it waited at blank lines and page breaks and then jumped, and it snapped hard onto any mark near its edge; now the pull towards a mark is as soft as the pointer's.
+- Timeline: clicking a note, highlight or timecode outside the glass box now glides the script so that it sits at the top and the box begins exactly on it, just as scenes already did. A note or highlight in the middle of a paragraph now goes right to the top of the window instead of two lines below it.
+- Timeline: dragging the glass box follows the pointer exactly, with no lag and no stretching where page breaks pass its edges; when you let go it eases into place.
+- Timeline: the glass box's edges are a lens: what passes under them blurs a little more towards the edge and bends very slightly. Its middle stays clear.
+- Timeline: the fade at the right end starts to come up a little further from the end.
+- Notes and highlights are now one colour. A note made on highlighted text takes that highlight's colour; giving a note a colour highlights its passage (one step you can undo); removing the highlight removes the note's colour. The colour shows the same on the page, the margin marker, the note card and the timeline. Notes coloured in 0.40 to 0.43 open with their passage highlighted in that colour.
+- Tab: going round the element types with text selected, and round again, now changes only the element. Before, passing from PAREN into the capital elements left the text in capitals for good.
+- Tab cycle: the outline around the elements Tab steps through now stands the same pixel clear of the white fill on every side; before, it overlapped the fill at the sides and its right edge fell on half a pixel.
+- The dinosaur never walks on the spot any more: dance steps and turns on the spot now shuffle a little, one way then the other, and a stride with nowhere to go becomes a stand. A new check runs on every frame of the hours-long simulation.
+- Checked again: the dinosaur is livelier the nearer you are to today's goal (now with its own test), and the streak's special routines unlock as before.
+- Tests: the AUTO theme tests no longer fail on the night the clocks go back.
+
 ## 0.43.0 · 25 Oct 2026
 
 - A screenplay now opens where you left it, whether STET reopens it at launch or you open it again: the caret where it was, and the page scrolled just as it was.

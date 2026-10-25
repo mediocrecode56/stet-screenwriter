@@ -196,7 +196,6 @@ export class View {
       sig += `${ver(blocks[it.bi])}.${it.l0}.${it.l1}.${it.y}.${it.bi},`;
       const tc = times.get(blocks[it.bi].id);
       if (tc) sig += `${tc.t}.${tc.tag},`;
-      for (const m of blocks[it.bi].marks) if (m.k === 'cm') sig += `${this.noteColor(m.v)},`; // (a note's colour shows on its passage)
     }
     if (this.activeComment) sig += '|' + this.activeComment;
     let node = this.els.get(vi);
@@ -217,8 +216,8 @@ export class View {
     node.innerHTML = this.pageHTML(page, pi, blocks, times);
   }
 
-  /** The highlight colour a note was given in the notes panel ('' for none). */
-  noteColor(id) { return (this.doc && this.doc.comments && this.doc.comments[id] || {}).color || ''; }
+  /** A note's colour: the highlight on its passage ('' for none). */
+  noteColor(id) { return this.editor.noteColors().get(id) || ''; }
 
   /** The scenes' own timecodes (core/timeline.js), shown beside their headings: by block id. */
   sceneTimes() {
@@ -259,9 +258,8 @@ export class View {
           const x = this.xAt(x0, colIn(gaps, a - ls)), w = (colIn(gaps, z - ls) - colIn(gaps, a - ls)) * this.cw;
           if (m.k === 'hl') h += `<div class="mk hl-${m.v}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
           else if (m.k === 'cm') {
-            // A note given a colour highlights its passage in it, and its marker takes it too.
+            // A note's marker takes the colour of the highlight on its passage.
             const c = this.noteColor(m.v);
-            if (c) h += `<div class="mk hl-${c}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
             h += `<div class="mk cm" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
             if (!ticks.has(m.v)) {
               ticks.add(m.v);
@@ -546,12 +544,11 @@ export class View {
     this.stopGlide();
     const goal = () => {
       if (y) return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(y())));
+      if (top) return this.topOf(a) ?? sc.scrollTop;
       const r0 = this.caretRect(a), r1 = this.caretRect(b);
       if (!r0) return sc.scrollTop;
       const mid = r1 && r1.y >= r0.y ? (r0.y + r1.y + r1.h) / 2 : r0.y + r0.h / 2;
-      // At the top: the target with the blank rows above it, and never a line of the text before it.
-      const want = top ? r0.y - this.blankAbove(a) * this.row : mid - sc.clientHeight / 2;
-      return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, top ? Math.ceil(want) : Math.round(want)));
+      return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(mid - sc.clientHeight / 2)));
     };
     const r = this.caretRect(a);
     if (r) { const lx = r.x - sc.scrollLeft; if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2; }
@@ -574,9 +571,20 @@ export class View {
     g.raf = requestAnimationFrame(step);
   }
 
+  /** The scroll position that puts position p at the top of the view (glideTo's `top`): with the blank
+   *  rows above it and never a line of the text before it, as far as the ends allow (null: nowhere).
+   *  `free`: where that would be without the ends. */
+  topOf(p, free = false) {
+    const r = this.caretRect(p), sc = this.scroller;
+    if (!r) return null;
+    const want = Math.ceil(r.y - this.blankAbove(p) * this.row);
+    return free ? want : Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, want));
+  }
+
   /**
    * Empty rows just above position p on its page (at most 2): the space before a scene heading.
-   * At the top of a page, one row of the top margin.
+   * At the top of a page, one row of the top margin. None on a block's second line or later: the
+   * line above it is text.
    */
   blankAbove(p) {
     const b = this.editor.blocks[p.b];
@@ -589,6 +597,7 @@ export class View {
     let above = page.cont ? 1 : 0;
     for (const it of page.items) {
       const end = it.y + it.l1 - it.l0;
+      if (it.y < r && r < end) return 0;
       if (end <= r && end > above) above = end;
     }
     return r === 0 ? 1 : Math.min(2, r - above);

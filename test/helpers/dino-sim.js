@@ -82,6 +82,7 @@ export const STEPPING = /^(walk|run|creep)/;
 /** Every move along the ground is a step of the legs, taken with the frame and held (never glided), no longer than they reach. */
 export function walksNotSlides(c) {
   const s = c.step;
+  if (s && STEPPING.test(s.f) && !s.still && !s.jump && !s.lift && !s.flip) assert.ok(s.x1 !== s.x0, `${s.f}: its legs walk on the spot [${c.activity}/${c.inReaction}]`);
   if (!s || !s.ground) return;
   const wiggle = Math.abs(s.dx) <= 1 && (s.f === 'crouch' || s.f === 'cower'); // a wiggle on the spot before a pounce, a shiver
   const roll = s.f === 'fallen' || s.f === 'lie';                               // rolling over and over

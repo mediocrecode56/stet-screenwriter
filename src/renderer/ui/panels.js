@@ -155,7 +155,7 @@ export class NotesPanel {
 
   render() {
     const anchors = this.listed();
-    const key = anchors.map((a) => a.id + ':' + a.b + (this.comment(a.id).pinned ? '*' : '') + (this.comment(a.id).color || '')).join('|') + '#' + this.view.pages.length;
+    const key = anchors.map((a) => a.id + ':' + a.b + (this.comment(a.id).pinned ? '*' : '') + (this.ed.noteColors().get(a.id) || '')).join('|') + '#' + this.view.pages.length;
     if (key === this.lastKey) return;
     // Don't rebuild while the user types in a note (the textarea would lose focus, and the next keys
     // with it) or a delete waits for its second press: not even for a forced refresh, such as the one
@@ -173,7 +173,7 @@ export class NotesPanel {
     const blocks = this.ed.blocks;
     let h = '';
     for (const a of anchors) {
-      const c = this.session.doc.comments[a.id] || { text: '' };
+      const c = this.session.doc.comments[a.id] || { text: '' }, color = this.ed.noteColors().get(a.id);
       const b = blocks[a.b];
       const quote = b.text.slice(a.s, a.e).replace(/\s+/g, ' ');
       const pg = pageOf(this.view.pages, a.b, lineIndexOf(linesOf(b), a.s)) + 1;
@@ -181,7 +181,7 @@ export class NotesPanel {
       // A card: where it is and when it was written (and, on the pointer, its colour, pin and bin),
       // the passage it is about, then the note itself.
       const sws = NOTE_COLORS.map((k) => `<button class="nsw" data-sw="${k || ''}" title="${k ? 'Mark ' + k : 'No colour'}" aria-label="${k || 'no colour'}"><span class="sw ${k || 'none'}"></span></button>`).join('');
-      h += `<div class="note${a.id === this.view.activeComment ? ' cur' : ''}${c.color ? ' c-' + c.color : ''}${c.pinned ? ' pinned' : ''}" data-id="${esc(a.id)}">
+      h += `<div class="note${a.id === this.view.activeComment ? ' cur' : ''}${color ? ' c-' + color : ''}${c.pinned ? ' pinned' : ''}" data-id="${esc(a.id)}">
         <div class="nh"><span class="pg">P.${pg}</span><span class="when">${esc(when)}</span><span class="nacts"><span class="nsws">${sws}</span><button class="nb ncol" data-x="col" title="Colour" aria-label="Colour"><i></i></button><button class="nb npin" data-x="pin" title="${c.pinned ? 'Unpin' : 'Pin to the top'}" aria-label="${c.pinned ? 'Unpin' : 'Pin'}">${PIN_ICON}</button><button class="nb ndel" data-x="del" title="Delete this note (press twice)" aria-label="Delete">${TRASH_ICON}</button></span></div>
         <div class="q" dir="auto" title="Go to the passage">${esc(quote.slice(0, 160))}</div>
         <textarea spellcheck="true" dir="auto" placeholder="Write a note…">${esc(c.text)}</textarea>
@@ -205,12 +205,12 @@ export class NotesPanel {
     if (id) this.card(id)?.classList.add('picking');
   }
 
-  /** Give note `id` a highlight colour (null: none), shown on its card, on its passage and marker in
-   *  the script, and on the timeline. */
+  /** Give note `id` a colour (null: none): its passage is highlighted in it (editor.noteColors()), which
+   *  shows on its card, its marker in the script and the timeline. */
   setColor(id, color) {
-    const c = this.body(id);
-    if ((c.color || null) === color) return;
-    if (color) c.color = color; else delete c.color;
+    const range = this.ed.noteRange(id);
+    if (!range || (this.ed.noteColors().get(id) || null) === color) return;
+    this.ed.highlight(color, range);
     const n = this.card(id);
     if (n) { for (const k of HIGHLIGHT_COLORS) n.classList.toggle('c-' + k, k === color); }
     this.onChange();

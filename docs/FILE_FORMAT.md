@@ -163,9 +163,11 @@ dropped. Written only when there are any; older builds ignore it.
 
 Only comments referenced by at least one anchor are written. Comment text is
 not part of the screenplay and never prints unless explicitly requested.
-A comment may also carry `"color"` (one of the highlight colours) and
-`"pinned": true` (listed first in the notes panel); each is written only
-when set, and older builds ignore them.
+A comment may also carry
+`"pinned": true` (listed first in the notes panel), written only when set;
+older builds ignore it. A note's colour is the highlight on its passage. STET 0.40 to
+0.43 wrote it as the comment's `"color"` instead: opening such a file turns it into
+that highlight (where the passage has none of its own), and it is not written again.
 
 ## Validation and repair on open
 

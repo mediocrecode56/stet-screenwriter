@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, flowAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
 import { paginate } from '../../src/core/layout.js';
 import { newDocument, makeBlock } from '../../src/core/model.js';
 import { serialize, deserialize } from '../../src/core/serialize.js';
@@ -204,4 +204,20 @@ test('the window on the script, as the glass band shows it: from the first line 
   assert.equal(lineFrom(pages, -1, 0), 0, 'the title page: the start');
   assert.equal(lineFrom(pages, pages.length, 0), pages.length, 'past the end: the end');
   assert.equal(lineTo(pages, 0, -5), 0);
+});
+
+test('the glass band flows with the scroll: on a line as lineFrom reads it, across blank rows and page breaks without a stop or a jump', () => {
+  const { pages } = script(12, 14);
+  const span = 66, it = pages[1].items[0];
+  assert.ok(Math.abs(flowAt(pages, 1, it.y + 0.5, span) - lineFrom(pages, 1, it.y + 0.5)) < 1e-12, 'on a printed line');
+  // Down the whole script a tenth of a row at a time: always onward, and never faster than the scroll.
+  let prev = 0, most = 0;
+  for (let pi = 0; pi < pages.length; pi++) for (let r = -6; r < span - 6; r += 0.1) {
+    const x = flowAt(pages, pi, r, span);
+    assert.ok(x >= prev - 1e-9, `onward at page ${pi} row ${r.toFixed(1)}`);
+    most = Math.max(most, x - prev); prev = x;
+  }
+  assert.ok(most < 0.101 / 54, `no jump (the most at once: ${(most * 54).toFixed(3)} rows)`);
+  assert.equal(flowAt(pages, -1, 0, span), 0, 'the title page: the start');
+  assert.equal(flowAt(pages, pages.length, 0, span), pages.length, 'past the end: the end');
 });

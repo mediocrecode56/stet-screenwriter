@@ -1518,6 +1518,9 @@ export class Critter {
       const v = this.bridged(this.held.length ? this.held.shift() : this.nextStep(now));
       if (v.do) v.do(this);
       if (v.face) this.face = v.face;
+      // Legs never walk on the spot: a stride given nowhere to go (a dance step, a turn on the spot)
+      // shuffles a little, one way then the other, unless a stride is held on purpose (`still`).
+      if (STEPPING.test(v.f) && !v.dx && !v.jump && !v.lift && !v.flip && !v.still) v.dx = (this.shuffle = -(this.shuffle || 1)) * 0.75 * this.du;
       // Steps stay on the strip; off it (after a resize), they may only head back.
       const x1 = Math.max(Math.min(0, this.x), Math.min(Math.max(this.maxX, this.x), this.x + (v.dx || 0)));
       // On the ground it moves by stepping: the stride is taken with the frame and held,

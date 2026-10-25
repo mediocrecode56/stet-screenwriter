@@ -82,9 +82,6 @@ export function buildPrintPages(doc, options = {}) {
           const a = Math.max(m.s, ls), z = Math.min(m.e, le);
           if (z <= a) continue;
           if (m.k === 'hl' && opt.highlights) rects.push({ col: at(a - ls), row, w: at(z - ls) - at(a - ls), color: m.v });
-          // A note given a colour highlights its passage, on paper as on the screen.
-          const nc = m.k === 'cm' && opt.highlights && ((doc.comments || {})[m.v] || {}).color;
-          if (nc) rects.push({ col: at(a - ls), row, w: at(z - ls) - at(a - ls), color: nc });
           if (m.k === 'cm' && opt.comments) {
             notes.push({ col: at(a - ls), row, w: at(z - ls) - at(a - ls) });
             if (!noteIndex.has(m.v)) {

@@ -64,6 +64,30 @@ export function lineTo(pages, pi, row) {
   return 0;
 }
 
+/**
+ * Where content row `row` (fractional, from the top of page pi's body; `span` rows from one page's
+ * body to the next's) is in the script, with no break anywhere: on a printed line as lineFrom reads
+ * it, and across rows with no line on them (blank rows, the margins, the gap between pages) evenly
+ * from the end of the line before to the start of the next. The glass band is drawn with it, so
+ * scrolling the script moves it smoothly, never waiting at a blank row and then jumping.
+ */
+export function flowAt(pages, pi, row, span) {
+  if (!pages.length || pi < 0) return 0;
+  if (pi >= pages.length) return pages.length;
+  let end = null, start = null; // the printed line ending before the row, and the one starting after it: [row, pos]
+  for (const it of pages[pi].items) {
+    const n = it.l1 - it.l0;
+    if (row >= it.y && row < it.y + n) return pi + row / BODY;
+    if (it.y + n <= row) end = [it.y + n, pi + (it.y + n) / BODY];
+    else if (it.y > row) { start = [it.y, pi + it.y / BODY]; break; }
+  }
+  if (!end && pi > 0) { const last = pages[pi - 1].items.at(-1); if (last) { const e = last.y + last.l1 - last.l0; end = [e - span, pi - 1 + e / BODY]; } }
+  if (!start && pi + 1 < pages.length) { const first = pages[pi + 1].items[0]; if (first) start = [first.y + span, pi + 1 + first.y / BODY]; }
+  if (!end) return start ? start[1] : pi + Math.max(0, Math.min(BODY, row)) / BODY;
+  if (!start) return end[1];
+  return end[1] + (start[1] - end[1]) * Math.max(0, Math.min(1, (row - end[0]) / (start[0] - end[0])));
+}
+
 /** Line of block b that offset o is on. */
 function lineOf(b, o) {
   const starts = linesOf(b);

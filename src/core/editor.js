@@ -650,6 +650,8 @@ export class Editor {
         } else if (b.type === 'paren' && type !== 'paren' && /^\(.*\)$/s.test(nb.text)) {
           const inner = nb.text.slice(1, -1);
           nb = { ...nb, text: inner, marks: marksAfterDelete(marksAfterDelete(nb.marks, nb.text.length - 1, nb.text.length), 0, 1) };
+          // (and from the text as written, or into capitals it would be lost: a lap of Tab would leave it in them)
+          if (nb.cased) { const c = nb.cased.slice(1, -1); if (c !== inner && c.toUpperCase() === inner) nb.cased = c; else delete nb.cased; }
         }
         this._replace(i, nb);
       }
@@ -675,10 +677,11 @@ export class Editor {
 
   // ---- marks -------------------------------------------------------------------
 
-  /** Apply (or with null, clear) a highlight across the selection. */
-  highlight(color) {
-    if (!this.hasSelection()) return false;
-    const [s, e] = this.ordered();
+  /** Apply (or with null, clear) a highlight across the selection (or the range [s, e]). */
+  highlight(color, range = null) {
+    if (!range && !this.hasSelection()) return false;
+    const [s, e] = range || this.ordered();
+    if (cmp(s, e) >= 0) return false;
     this.edit('mark', () => {
       for (let i = s.b; i <= e.b; i++) {
         const b = this.blocks[i];
@@ -768,6 +771,37 @@ export class Editor {
         if (m !== b.marks) this._replace(i, withText(b, b.text, m));
       }
     }, { close: true });
+  }
+
+  /** The passage note `id` is on, from its first anchor to its last: [start, end] (null: none). */
+  noteRange(id) {
+    let s = null, e = null;
+    this.blocks.forEach((b, i) => { for (const m of b.marks) if (m.k === 'cm' && m.v === id) { if (!s) s = pos(i, m.s); e = pos(i, m.e); } });
+    return s && [s, e];
+  }
+
+  /**
+   * A note's colour is its passage's highlight: the one over most of it. So a note made on highlighted
+   * text takes its colour, clearing the highlight clears the note's colour, and giving the note a colour
+   * highlights its passage (one undoable change, like any other highlight). By note id, kept until the
+   * script changes.
+   */
+  noteColors() {
+    if (this._noteColors && this._noteColors.rev === this.rev) return this._noteColors.map;
+    const cover = new Map(); // id -> { colour: characters }
+    for (const b of this.blocks) {
+      const hls = b.marks.filter((m) => m.k === 'hl');
+      if (hls.length) for (const m of b.marks) {
+        if (m.k !== 'cm') continue;
+        for (const h of hls) {
+          const n = Math.min(m.e, h.e) - Math.max(m.s, h.s);
+          if (n > 0) { const c = cover.get(m.v) || {}; c[h.v] = (c[h.v] || 0) + n; cover.set(m.v, c); }
+        }
+      }
+    }
+    const map = new Map([...cover].map(([id, c]) => [id, Object.keys(c).reduce((a, k) => (c[k] > c[a] ? k : a))]));
+    this._noteColors = { rev: this.rev, map };
+    return map;
   }
 
   /** Positions of every comment anchor in document order: [{id, b, s, e}]. */
