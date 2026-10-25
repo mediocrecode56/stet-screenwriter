@@ -195,7 +195,8 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   await app.until(`__stet.timeline.bandA > ${await tl('t.tl.notes[0].x')} + 0.2`, { what: 'the band past the note' });
   // (the notes panel open first: on a narrow window, opening it may bring a horizontal scrollbar, a shorter view)
   const right = `document.getElementById('right')`;
-  if (!(await app.eval(`${right}.dataset.open === '1'`))) await app.clickOn('#btn-notes');
+  // (its shortcut, not the NOTES button: on a 1024-pixel window, such as the Mac runner's, the button is past the right edge)
+  if (!(await app.eval(`${right}.dataset.open === '1'`))) await app.key('Mod+Shift+\\');
   await app.until(`${right}.dataset.open === '1' && !${right}.hidden && !${right}._anim`, { what: 'the notes panel open' });
   const sq = await app.rect('#timeline .tl-note');
   await app.click(sq.left + 3, sq.top + 6);
