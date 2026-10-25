@@ -232,7 +232,16 @@ export function mergeDirty(d, s, r, a) {
   return { from: Math.min(d.from, s), to: Math.max(t, s + a), delta: d.delta + a - r };
 }
 
-/** Index of the page containing (bi, line). Binary search over page starts. */
+/** Where a key point (a note, a highlight, a timecode, a line chosen on the timeline) sits in the view
+ *  it is taken to: 10% of the view's height above its middle. */
+export const KEY_AT = 0.4;
+
+/** The scroll position that puts a line at content y, `h` tall, at KEY_AT of a `viewH`-tall view, as
+ *  far as the ends allow (`max`: the furthest it scrolls). */
+export function keyTop(y, h, viewH, max) {
+  return Math.max(0, Math.min(max, Math.round(y + h / 2 - KEY_AT * viewH)));
+}
+
 /** Rows of room kept above a line when it goes to the top of the view (view.topOf()): the `blank`
  *  rows before it, so no line of the text before it shows; with none, on a paragraph's second `line`
  *  or later two, its own lines before it, and right under a line of text (dialogue under its character) one. */
@@ -240,6 +249,7 @@ export function roomRows(blank, line) {
   return blank || (line > 0 ? 2 : 1);
 }
 
+/** Index of the page containing (bi, line). Binary search over page starts. */
 export function pageOf(pages, bi, line = 0) {
   let lo = 0, hi = pages.length - 1;
   while (lo < hi) {

@@ -8,7 +8,7 @@
 
 import { PAGE, ELEMENT, lineText, lineX, lineGaps, colIn, offsetAtCol, setText } from '../core/format.js';
 import { ZOOM_MIN, ZOOM_MAX } from '../core/wheelzoom.js';
-import { linesOf, paginate, pageOf, rowOf, roomRows } from '../core/layout.js';
+import { linesOf, paginate, pageOf, rowOf, roomRows, keyTop } from '../core/layout.js';
 import { lineIndexOf, lineEndOffset } from '../core/nav.js';
 import { cmp, pos } from '../core/editor.js';
 import { TITLE_FIELDS_SPEC } from '../core/titlepage.js';
@@ -536,15 +536,17 @@ export class View {
    * there: with no frames at all (a hidden window) it is put there when the time is up.
    * A wheel or a press on the script takes over at once; reduced motion goes straight there.
    * With `top`, the passage goes to the top of the view instead (a scene: its heading, with the
-   * blank line before it and one more above), as far as the end of the script allows. With `y`, to
-   * the scroll position it gives instead (read again every frame).
+   * blank line before it and one more above), as far as the end of the script allows. With `key`,
+   * `a`'s line goes 10% of the view above its middle instead (a note, a highlight, a timecode:
+   * core/layout.js keyTop()). With `y`, to the scroll position it gives instead (read again every frame).
    */
-  glideTo(a, b = a, { top = false, y = null } = {}) {
+  glideTo(a, b = a, { top = false, key = false, y = null } = {}) {
     const sc = this.scroller;
     this.stopGlide();
     const goal = () => {
       if (y) return Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, Math.round(y())));
       if (top) return this.topOf(a) ?? sc.scrollTop;
+      if (key) { const r = this.caretRect(a); return r ? keyTop(r.y, r.h, sc.clientHeight, sc.scrollHeight - sc.clientHeight) : sc.scrollTop; }
       const r0 = this.caretRect(a), r1 = this.caretRect(b);
       if (!r0) return sc.scrollTop;
       const mid = r1 && r1.y >= r0.y ? (r0.y + r1.y + r1.h) / 2 : r0.y + r0.h / 2;
@@ -572,8 +574,7 @@ export class View {
   }
 
   /** The scroll position that puts position p at the top of the view (glideTo's `top`), as far as the
-   *  ends allow (null: nowhere). Whatever it is (a scene heading; a note, a highlight or a timecode
-   *  chosen on the timeline), it never lands against the top: its room above (roomAbove()) is the
+   *  ends allow (null: nowhere). Whatever it is (a scene heading), it never lands against the top: its room above (roomAbove()) is the
    *  blank rows before it, or in the middle of a paragraph the lines of it before, the view's top edge
    *  on a row's edge so no part of a line shows there, and no more than one row of its page's top margin.
    *  `free`: where that would be without the ends. */

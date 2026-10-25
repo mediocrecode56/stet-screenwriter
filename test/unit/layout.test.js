@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { wrap, lineText, PAGE, ELEMENT } from '../../src/core/format.js';
-import { paginate, linesOf, mergeDirty, pageOf, roomRows } from '../../src/core/layout.js';
+import { paginate, linesOf, mergeDirty, pageOf, roomRows, keyTop, KEY_AT } from '../../src/core/layout.js';
 import { makeBlock, withText, defaultDocSettings } from '../../src/core/model.js';
 import { generateScript } from '../../src/dev/sample.js';
 
@@ -157,4 +157,11 @@ test('a line sent to the top of the view keeps room above it: the blank rows bef
   assert.equal(roomRows(0, 1), 2, 'in the middle of a paragraph: two rows, its own line before it');
   assert.equal(roomRows(0, 4), 2);
   assert.equal(roomRows(0, 0), 1, 'right under a line of text: one row, never against the top');
+});
+
+test('a key point (a note, a highlight, a timecode) goes 10% of the view above its middle, as far as the ends allow', () => {
+  assert.equal(KEY_AT, 0.4);
+  assert.equal(keyTop(1000, 20, 800, 5000), 1000 + 10 - 320, 'its line\'s middle at 40% of the view');
+  assert.equal(keyTop(100, 20, 800, 5000), 0, 'near the start: the script at its top');
+  assert.equal(keyTop(4900, 20, 800, 4500), 4500, 'near the end: as far as it scrolls');
 });

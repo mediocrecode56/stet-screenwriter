@@ -145,6 +145,10 @@ const locked = async (x, y) => {
   return on;
 };
 const tl = (expr) => app.eval(`(() => { const t = __stet.timeline; return ${expr}; })()`);
+// Where the caret's line sits once a jump is over: its middle, as a share of the window's height from the top
+// (0.4 for a key point), and whether the script was already as far as it scrolls that way.
+const keyed = () => app.eval(`(() => { const v = __stet.view, sc = v.scroller, r = v.caretRect();
+  return { at: (r.y + r.h / 2 - sc.scrollTop) / sc.clientHeight, px: r.y + r.h / 2 - sc.scrollTop - 0.4 * sc.clientHeight, end: sc.scrollTop <= 0 || sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 1 }; })()`);
 
 test('the timeline: a tick for each scene, note and highlight; a click goes there, drawn to what is near', async () => {
   await app.load(SCRIPT);
@@ -163,12 +167,12 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   const s10 = await app.rect('#timeline .tl-scene', 9);
   await app.until(async () => { const c = await app.rect('#timeline .tl-cur'); return Math.abs(c.left - s9.left) < 1 && Math.abs(c.right - s10.left) < 1; }, { what: 'the stretch of scene 9' });
   assert.equal(await app.eval(`(() => { const h = document.querySelector('#timeline .tl-head').getBoundingClientRect(), c = getComputedStyle(document.querySelector('#timeline .tl-head'), '::before'); return h.left + h.width / 2 - (h.left + parseFloat(c.left) + (parseFloat(c.width) + parseFloat(c.borderLeftWidth) + parseFloat(c.borderRightWidth)) / 2); })()`), 0, 'the cap centred on the line');
-  // A click inside the band (whatever the window's height): that line glides to the middle of the band.
+  // A click inside the band (whatever the window's height): that line glides to 10% of the window above its middle.
   const view = await app.rect('#timeline .tl-view');
   await app.click(view.left + view.width * 0.6, view.top + 8);
   await app.until('!__stet.view.glide', { what: 'the glide' });
-  const band = await tl('[t.bandA, t.bandB, t.head.offsetLeft / t.drawn]');
-  assert.ok(Math.abs((band[0] + band[1]) / 2 - band[2] - 0.5 / 54) < 0.005 + 0.5 / 60 || band[0] === 0, `in the middle of the band (${band.map((x) => x.toFixed(3))})`); // (the playhead on that line's whole second: up to half a second off)
+  const k1 = await keyed();
+  assert.ok(Math.abs(k1.px) <= 1 || k1.end, `the line clicked at 40% of the window (${k1.at.toFixed(3)})`);
   assert.equal(await tl('((s) => Math.abs(s - Math.round(s)) < 1e-6)(t.time.at(parseFloat(t.head.style.left) / t.drawn))'), true, 'the playhead on a whole second');
   // The cursor says what a press does: drawn to a mark, on the ruler too, it is a click on it, not a zoom.
   const note = await app.rect('#timeline .tl-note');
@@ -186,25 +190,23 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   const pink = await app.rect('#timeline .tl-hl.hl-pink');
   await app.move(pink.left + 1, pink.top + 3);
   assert.match(await tl('t.hover.textContent'), /pink highlight/, 'a highlight says which');
-  // A note outside the band: it glides to the top with the blank rows before it as its room, never a line of the text before it; the playhead on its square.
+  // A note outside the band: it glides to 10% of the window above its middle; the playhead on its square.
   await app.eval('__stet.view.scroller.scrollTop = __stet.view.scroller.scrollHeight');
   await app.until(`__stet.timeline.bandA > ${await tl('t.tl.notes[0].x')} + 0.2`, { what: 'the band past the note' });
   const sq = await app.rect('#timeline .tl-note');
   await app.click(sq.left + 3, sq.top + 6);
   await app.until(`__stet.editor.caret.b === 8 && !__stet.view.glide`, { what: 'the glide to the note' });
-  const top = await app.eval(`(() => { const v = __stet.view, e = __stet.editor, s = v.scroller.scrollTop, b = e.caret.b;
-    const end = v.caretRect({ b: b - 1, o: e.blocks[b - 1].text.length });
-    return { off: v.caretRect().y - s, row: v.row, blank: v.blankAbove({ b, o: 0 }), prevBottom: end.y + v.row - s }; })()`);
-  assert.ok(top.blank >= 1 && Math.abs(top.off - top.blank * top.row) <= 1, `the blank rows above it as its room (${top.off}px for ${top.row}px rows)`);
-  assert.ok(top.prevBottom <= 0, `the line before it out of view (${top.prevBottom}px)`);
-  assert.ok(Math.abs(top.off % top.row) <= 1 || Math.abs(top.off % top.row - top.row) <= 1, 'no part of a line at the top');
+  const k2 = await keyed();
+  assert.ok(Math.abs(k2.px) <= 1 && !k2.end, `the note at 40% of the window (${k2.at.toFixed(3)})`);
   await app.until(async () => { const h = await app.rect('#timeline .tl-head'), n = await app.rect('#timeline .tl-note'); return Math.abs(h.left + 0.5 - (n.left + n.width / 2)) < 0.5; }, { what: 'the playhead on the note' });
-  // A mark in the middle of a paragraph lands with two rows of room: the paragraph's own line before it.
-  const mid = await app.eval(`(() => { const v = __stet.view, b = 20, t = __stet.editor.blocks[b].text, y0 = v.caretRect({ b, o: 0 }).y;
-    let o = 1; while (o < t.length && v.caretRect({ b, o }).y === y0) o++;
-    return { wraps: o < t.length, off: v.caretRect({ b, o }).y - v.topOf({ b, o }, true), row: v.row }; })()`);
-  assert.ok(mid.wraps, 'the paragraph runs to a second line');
-  assert.ok(Math.abs(mid.off - 2 * mid.row) <= 1, `two rows above a paragraph's second line (${mid.off}px for ${mid.row}px rows)`);
+  // The notes panel goes there the same way: F8 to the note, at 40% of the window.
+  await app.caret(0, 0);
+  await app.eval('__stet.view.stopGlide(); __stet.view.scroller.scrollTop = 0');
+  await app.until('__stet.view.scroller.scrollTop === 0', { what: 'the script back at the top' });
+  await app.key('F8');
+  await app.until(`__stet.editor.caret.b === 8 && !__stet.view.glide`, { what: 'F8 to the note' });
+  const k3 = await keyed();
+  assert.ok(Math.abs(k3.px) <= 1 || k3.end, `F8: the note at 40% of the window (${k3.at.toFixed(3)})`);
 });
 
 test('the timeline: zoom by dragging the ruler, the whole script again by double-clicking it, scroll by dragging the band', async () => {

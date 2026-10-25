@@ -73,12 +73,13 @@ input.names = () => castOrder(session.doc.cast, editor.characterNames());
 input.onCue = (name) => { session.doc.cast = touchCast(session.doc.cast, name); };
 
 // glide: true glides until the passage is in the middle, 'top' until it is at the top of the view,
+// 'key' until its start is 10% of the view above the middle (a note, a highlight, a timecode),
 // { y } to the scroll position y() gives (the timeline: the middle of its band).
 const jump = (p, center = false, end = null, glide = false) => {
   editor.setSel(p, end || p);
   view.relayout();
   view.frame();
-  if (glide) view.glideTo(p, end || p, typeof glide === 'object' ? glide : { top: glide === 'top' });
+  if (glide) view.glideTo(p, end || p, typeof glide === 'object' ? glide : { top: glide === 'top', key: glide === 'key' });
   else view.revealCaret(center);
   input.focus();
   input.placeTextarea();
@@ -113,7 +114,7 @@ view.scroller.addEventListener('contextmenu', (e) => spelling.contextMenu(e));
 
 const timeline = new Timeline($('timeline'), {
   editor, view, session, jump,
-  openNote: (id, b, s, e, glide = true) => { jump(pos(b, s), true, pos(b, e), glide); view.activeComment = id; openNote(id); view.invalidate(); },
+  openNote: (id, b, s, e) => { jump(pos(b, s), true, pos(b, e), 'key'); view.activeComment = id; openNote(id); view.invalidate(); },
   onToggle: (on) => api.invoke('settings:set', { timeline: on }),
   lockPointer: () => api.invoke('pointer:lock'),
   onTimecodes: () => scenes.refresh(),
@@ -979,7 +980,7 @@ function addNote() {
 function stepNote(dir) {
   const a = notes.step(dir);
   if (!a) return;
-  jump(pos(a.b, a.s), true, pos(a.b, a.e), true);
+  jump(pos(a.b, a.s), true, pos(a.b, a.e), 'key');
   view.activeComment = a.id;
   if (notes.visible) notes.select(a.id);
   view.invalidate();

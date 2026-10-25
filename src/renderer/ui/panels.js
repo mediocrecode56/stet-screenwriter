@@ -251,7 +251,7 @@ export class NotesPanel {
     this.render();
     this.markCurrent();
     const a = this.anchors().find((x) => x.id === id);
-    if (a && jumpTo) this.jump(pos(a.b, a.s), true, pos(a.b, a.e), true); // a glide to its passage, as for F8
+    if (a && jumpTo) this.jump(pos(a.b, a.s), true, pos(a.b, a.e), 'key'); // a glide to its passage, as for F8
     const n = this.list.querySelector(`.note[data-id="${CSS.escape(id)}"]`);
     if (n) {
       reveal(this.list, n);

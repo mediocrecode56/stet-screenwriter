@@ -178,19 +178,19 @@ export class Timeline {
     return b ? pos(bi, linesOf(b)[line] || 0) : null;
   }
 
-  /** Go to the line at position x: one in the window glides to its middle (and the band's), one
-   *  outside it to the top, where the band then begins (on `mark`, drawn there, if it is one). */
-  go(x, mark = null) {
-    const { bi, line } = placeAt(this.view.pages, x), p = this.lineStart(x), at = scriptPos(this.view.pages, bi, line);
-    if (p) this.jump(p, false, null, this.glideFor(x, at + 0.5 / 54, { p, x: mark ?? at })); // (the middle of that line)
+  /** Go to the line at position x: it glides to 10% of the window above its middle, wherever it is. */
+  go(x) {
+    const p = this.lineStart(x);
+    this.pinned = null;
+    if (p) this.jump(p, false, null, 'key');
   }
 
-  /** How the script glides to position x (view.glideTo): to the middle of the band when x is in the
-   *  window already (the middle of the window too, but where a page break is in view), else to the top,
-   *  where the band then begins exactly on `pin` ({ p: where the script goes, x: the mark drawn there }). */
-  glideFor(x, centre = x, pin = null) {
+  /** How the script glides to a scene at position x (view.glideTo): to the middle of the band when x is
+   *  in the window already (the middle of the window too, but where a page break is in view), else to the
+   *  top, where the band then begins exactly on `pin` ({ p: where the script goes, x: the mark drawn there }). */
+  glideFor(x, pin = null) {
     this.pinned = null;
-    if (x >= this.bandA - 1e-6 && x <= this.bandB + 1e-6) return { y: () => this.centreTop(centre) };
+    if (x >= this.bandA - 1e-6 && x <= this.bandB + 1e-6) return { y: () => this.centreTop(x) };
     this.pinned = pin && { ...pin, rev: this.ed.rev };
     return 'top';
   }
@@ -418,12 +418,12 @@ export class Timeline {
       }
       if (ev && ev.clientX != null) this.settle(ev); // the cursor and readout for where the pointer is now
       if (mode || !this.visible) return;
-      // Inside the band, to the middle of the window (and of the band); outside it, to the top, where
-      // the band then begins, exactly on what was clicked.
-      if (note) return this.openNote(note.id, note.b, note.s, note.e, this.glideFor(note.at ?? note.x, undefined, { p: pos(note.b, note.s), x: note.x }));
-      if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, this.glideFor(near.at ?? near.x, undefined, { p: pos(near.b, 0), x: near.x })); // to its heading
-      if (near && near.kind === 'tc') { this.go(near.x, near.x); return this.editTimecode(near.x, near); }
-      this.go(near ? near.at ?? near.x : at0, near ? near.x : null); // (a highlight: its first line, though drawn on its second)
+      // A scene: inside the band, to the middle of the window (and of the band); outside it, to the top,
+      // where the band then begins, exactly on its tick. Anything else: 10% of the window above its middle.
+      if (note) { this.pinned = null; return this.openNote(note.id, note.b, note.s, note.e); }
+      if (near && near.kind === 'scene') return this.jump(pos(near.b, 0), false, null, this.glideFor(near.at ?? near.x, { p: pos(near.b, 0), x: near.x })); // to its heading
+      if (near && near.kind === 'tc') { this.go(near.x); return this.editTimecode(near.x, near); }
+      this.go(near ? near.at ?? near.x : at0); // (a highlight: its first line, though drawn on its second)
     };
     addEventListener('mousemove', move, true);
     addEventListener('mouseup', up, true);

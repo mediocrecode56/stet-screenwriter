@@ -2,6 +2,11 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.48.0 · 25 Oct 2026
+
+- Jumping to a key point is simpler. A note, highlight or timecode chosen on the timeline, a note clicked in the notes panel, or F8 to the next note now always brings it to the same place: a little above the middle of the window (10% of its height higher), whether it was already in view or not. Near the start or end of the script it goes as far as the script scrolls.
+- Scenes are unchanged: a scene chosen on the timeline or in the scene list still comes to the top of the window with its heading.
+
 ## 0.47.0 · 25 Oct 2026
 
 - Highlights in the script are now the same colours as their marks on the timeline and the note colours, instead of a lighter, different shade. In the dark theme they are a deeper version of the same colours, so the text stays readable.
