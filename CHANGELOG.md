@@ -2,6 +2,10 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.51.1 · 25 Oct 2026
+
+- Opening the scene list now shows the scenes of the screenplay you have open straight away. Before, it could show the previous screenplay's scenes for a moment.
+
 ## 0.51.0 · 25 Oct 2026
 
 - The right-click menu on selected text: resting on the element, text style or alignment button opens its dropdown after 0.3 seconds, with no filling line under it. The dropdown slides out from under the bar in one smooth move, the same way the side panels slide in, and the menu itself opens like every other menu in STET.
