@@ -237,3 +237,23 @@ test('View > Hide Toolbar slides it away and is kept; Focus Mode: full screen, t
   await app.until(`!document.getElementById('elbar').hidden`, { what: 'the toolbar back' });
   await app.eval(`__stet.cmd.run('panel-scenes')`);
 });
+
+test('a narrow window: the toolbar tightens only as far as it must, NOTES and every button still in the window', async () => {
+  const inView = `(() => { const bar = document.getElementById('elbar'), r = bar.getBoundingClientRect(), last = document.getElementById('btn-notes').getBoundingClientRect();
+    const btns = [...bar.querySelectorAll('.tb')].map((b) => b.getBoundingClientRect()).filter((q) => q.width);
+    return { cls: bar.className, notes: last.right <= innerWidth - 1 && last.width > 0, all: btns.every((q) => q.left >= r.left && q.right <= r.right), apart: btns.every((q, i) => !i || q.left >= btns[i - 1].right - 0.5) }; })()`;
+  const at = async (w) => {
+    await app.send('Emulation.setDeviceMetricsOverride', { width: w, height: 700, deviceScaleFactor: 1, mobile: false });
+    return app.until(async () => { const s = await app.eval(inView); return s.notes && s.all && s.apart && s; }, { what: `the toolbar fitted at ${w}px` });
+  };
+  try {
+    const wide = await at(1600);
+    assert.equal(wide.cls, '', 'a wide window: as it always was');
+    const mid = await at(1024);
+    assert.ok(/tight-/.test(mid.cls) && !/tight-5/.test(mid.cls), `1024px: tightened, the full labels kept (${mid.cls})`);
+    const min = await at(720); // (the smallest the window goes: main.js minWidth)
+    assert.match(min.cls, /tight-/);
+  } finally {
+    await app.send('Emulation.clearDeviceMetricsOverride');
+  }
+});

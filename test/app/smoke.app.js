@@ -303,10 +303,11 @@ test('a right-click on selected text: style, alignment and a note, as three squa
 // What shows where the caret is: the element and alignment in the toolbar, the status bar, the current scene.
 const shown = () => app.eval(`[...document.querySelectorAll('#eltypes .tb.on, #stbar .on')].map((b) => b.dataset.t || b.dataset.s).join() + '|' + document.getElementById('btn-align').dataset.a + '|' + ['st-el', 'st-page', 'st-scene'].map((id) => document.getElementById(id).textContent).join('|') + '|' + document.querySelector('#scenes .cur')?.dataset.b`);
 // Every change anywhere in the window but the script, the timeline and what lives on its own (the dinosaur, the clock).
+// (#st-goal: the day's word count catches up on its own schedule after the script before changed, as the clock ticks)
 const watch = () => app.eval(`(() => { const log = window.__changed = [];
   window.__watch?.disconnect();
   window.__watch = new MutationObserver((ms) => { for (const m of ms) { const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
-    if (t === document.body || t.closest('#content, #timeline, #dino, #st-clock, .tl-cover') || [...m.addedNodes, ...m.removedNodes].some((n) => n.classList?.contains('tl-cover'))) continue;
+    if (t === document.body || t.closest('#content, #timeline, #dino, #st-clock, #st-goal, .tl-cover') || [...m.addedNodes, ...m.removedNodes].some((n) => n.classList?.contains('tl-cover'))) continue;
     log.push((t.id || t.className || t.nodeName) + ' ' + (m.attributeName || m.type)); } });
   window.__watch.observe(document.body, { attributes: true, childList: true, characterData: true, subtree: true }); })()`);
 const changed = async () => { await app.frame(); return app.eval('[...new Set(window.__changed)].join(", ")'); };

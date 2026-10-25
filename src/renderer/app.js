@@ -324,10 +324,13 @@ function renderGoal() {
     : `Streak: none yet — ${aim} to start one; up to two days a week that miss it don’t break it (the dinosaur grows at 1, 2, 4, 8, 16 and 32 days).`;
   // Beside the flame, a shield with this week's rest days left: two days a week may miss the goal.
   const restTip = `Rest days left this week: ${k.rest.left} of 2. Each day that ${missed} uses one, and the streak carries on; a third in the same week ends it. Today counts once it is over. Two new ones every Monday.`;
-  el.innerHTML = `TODAY ${today.toLocaleString()}${goal ? ' / ' + goal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`
+  // (written only when it changed: the readout is redrawn after every pause in writing, and once a minute)
+  const html = `TODAY ${today.toLocaleString()}${goal ? ' / ' + goal.toLocaleString() : ''} <span class="meter"><i style="width:${pct}%"></i></span>`
     + `<span id="st-streak" class="streak${k.days ? '' : ' none'}${k.today ? ' lit' : ''}" title="${streakTip}">${FLAME}${k.days}</span>`
     + `<span id="st-rest" class="rest${k.rest.left ? '' : ' none'}" title="${restTip}">${SHIELD}${k.rest.left}</span>`;
-  el.title = `Today: ${today.toLocaleString()} words written${goal ? (today >= goal ? ' — goal met' : ` — ${(goal - today).toLocaleString()} to go`) : ''}. This week: ${s.week.total.toLocaleString()}${s.goals.weekly ? ' of ' + s.goals.weekly.toLocaleString() : ''}. Click for your week.`;
+  if (el._html !== html) { el.innerHTML = html; el._html = html; }
+  const title = `Today: ${today.toLocaleString()} words written${goal ? (today >= goal ? ' — goal met' : ` — ${(goal - today).toLocaleString()} to go`) : ''}. This week: ${s.week.total.toLocaleString()}${s.goals.weekly ? ' of ' + s.goals.weekly.toLocaleString() : ''}. Click for your week.`;
+  if (el.title !== title) el.title = title;
   // The dinosaur's size and special routines follow the streak: restored as they were at
   // start-up, a milestone reached while writing shown with a little ceremony.
   const key = `${k.growth}/${k.unlocked}`;
@@ -471,8 +474,9 @@ function renderTips() {
 }
 
 for (const [i, t] of TYPES.entries()) {
-  const short = { scene: 'SCENE', action: 'ACTION', character: 'CHARACTER', paren: 'PAREN', dialogue: 'DIALOGUE', transition: 'TRANS', shot: 'SHOT' }[t];
-  const b = dlg.h('button', { class: 'tb', 'data-t': t }, short, dlg.h('sup', {}, String(i + 1)));
+  // (the part after the bar is left out on the narrowest windows: fitToolbar())
+  const [short, more = ''] = { scene: 'SCENE', action: 'ACTION', character: 'CHAR|ACTER', paren: 'PAREN', dialogue: 'DIAL|OGUE', transition: 'TRANS', shot: 'SHOT' }[t].split('|');
+  const b = dlg.h('button', { class: 'tb', 'data-t': t }, short, ...(more ? [dlg.h('span', { class: 'more' }, more)] : []), dlg.h('sup', {}, String(i + 1)));
   tip(b, TYPE_LABEL[t], 'type-' + t, MAC ? ' · ⌘-click: in or out of the Tab cycle' : ' · Ctrl+click: in or out of the Tab cycle');
   b.addEventListener('mousedown', (e) => {
     e.preventDefault();
@@ -563,7 +567,6 @@ tabTypesEl.addEventListener('mousedown', (e) => {
   addEventListener('mouseup', up, true);
   addEventListener('blur', up); // (Alt+Tab mid-drag: no mouseup comes)
 });
-addEventListener('resize', () => renderTabTypes());
 for (const c of HIGHLIGHT_COLORS) {
   const b = dlg.h('button', { class: 'tb' }, dlg.h('span', { class: 'sw ' + c }));
   tip(b, `Highlight ${c}`, 'hl-' + c);
@@ -586,9 +589,23 @@ const alignBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-align', title: 'Al
 alignBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(alignBtn, ALIGN_CMDS.map((x) => 'align-' + x.a)); });
 $('albar').appendChild(alignBtn);
 // Spelling: its switch, Suggestions, Auto and the dictionaries installed, in a small menu.
-const spellBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-spell', title: 'Spelling', 'aria-haspopup': 'menu', html: 'SPELLING<span class="dn">▾</span>' });
+const spellBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-spell', title: 'Spelling', 'aria-haspopup': 'menu', html: 'SPELL<span class="more">ING</span><span class="dn">▾</span>' });
 spellBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(spellBtn, () => spelling.menuItems()); });
 $('btn-comment').after(dlg.h('div', { class: 'sep' }), spellBtn);
+// On a narrow window the toolbar tightens a step at a time, only as far as it must for every button,
+// NOTES at the right end too, to stay in the window: closer buttons, then without the element
+// shortcuts' small numbers, then closer still, twice, and at the narrowest CHAR, DIAL and SPELL. (Hidden, it is fitted again when shown.)
+const TIGHT = ['tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5'];
+function fitToolbar() {
+  const bar = $('elbar'), end = $('elright');
+  const fits = () => end.getBoundingClientRect().right <= bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight) + 0.5;
+  bar.classList.remove(...TIGHT);
+  for (const t of TIGHT) { if (fits()) break; bar.classList.add(t); }
+  renderTabTypes(); // (the Tab-cycle boxes on the buttons' new edges)
+}
+addEventListener('resize', fitToolbar);
+document.fonts.ready.then(fitToolbar);
+fitToolbar();
 function renderSpelling() {
   const o = spelling.opts, lang = spelling.lang;
   spellBtn.classList.toggle('off', !o.on || !spelling.ready);
@@ -1012,6 +1029,7 @@ const jumpScene = (b) => jump(pos(b, 0), false, null, 'top');
 // The toolbar (View > Hide Toolbar) slides up out of the way, and back; the choice is kept.
 function showToolbar(on) {
   setPanel($('elbar'), on);
+  if (on) fitToolbar();
   view.layoutDirty = true;
   view.schedule();
   api.invoke('settings:set', { toolbar: on });

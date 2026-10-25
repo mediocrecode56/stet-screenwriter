@@ -227,6 +227,12 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
    touches the separator lines above and below it. */
 #elbar { padding-top: 3px; padding-bottom: 3px; }
 #elbar .sep { margin: 2px 6px; }
+/* A narrow window: the toolbar tightens a step at a time until it fits (app.js fitToolbar()). */
+#elbar.tight-1 .tb { padding: 0 5px; } #elbar.tight-1 .sep { margin: 2px 3px; }
+#elbar.tight-2 #eltypes sup { display: none; }
+#elbar.tight-3 .tb { padding: 0 4px; letter-spacing: .07em; }
+#elbar.tight-4 .tb { padding: 0 3px; letter-spacing: .05em; } #elbar.tight-4 .sep { margin: 2px 2px; }
+#elbar.tight-5 .more { display: none; }
 /* The rule between the menu bar and the toolbar stops a clear margin before
    REVISE instead of running over the right-hand panel buttons. */
 #elright { display: flex; position: relative; }
