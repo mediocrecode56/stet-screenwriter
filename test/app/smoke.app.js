@@ -194,8 +194,9 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   await app.eval('__stet.view.scroller.scrollTop = __stet.view.scroller.scrollHeight');
   await app.until(`__stet.timeline.bandA > ${await tl('t.tl.notes[0].x')} + 0.2`, { what: 'the band past the note' });
   // (the notes panel open first: on a narrow window, opening it may bring a horizontal scrollbar, a shorter view)
-  if (!(await app.eval(`document.getElementById('btn-notes').classList.contains('on')`))) await app.clickOn('#btn-notes');
-  await app.until(`document.getElementById('btn-notes').classList.contains('on') && !document.getElementById('right').getAnimations().length`, { what: 'the notes panel open' });
+  const right = `document.getElementById('right')`;
+  if (!(await app.eval(`${right}.dataset.open === '1'`))) await app.clickOn('#btn-notes');
+  await app.until(`${right}.dataset.open === '1' && !${right}.hidden && !${right}._anim`, { what: 'the notes panel open' });
   const sq = await app.rect('#timeline .tl-note');
   await app.click(sq.left + 3, sq.top + 6);
   await app.until(`__stet.editor.caret.b === 8 && !__stet.view.glide`, { what: 'the glide to the note' });
