@@ -498,7 +498,7 @@ test('the timeline: a click on a timecode edits it; a right-click on a scene giv
 test('the scene list: each scene at its time; a right-click gives it its own timecode, as on the timeline', async () => {
   await app.load(SCRIPT);
   await app.eval(`__stet.cmd.run('panel-scenes')`);
-  await app.until(`document.querySelectorAll('#scenes .row').length === 12 && !document.getElementById('left').getAnimations().length`, { what: 'the scene list, open' });
+  await app.until(`[...document.querySelectorAll('#scenes .row')].map((r) => r.dataset.b).join() === __stet.editor.scenes().map((s) => s.b).join() && !document.getElementById('left').getAnimations().length`, { what: 'the scene list, open' });
   const times = await app.eval(`[...document.querySelectorAll('#scenes .row .n')].map((n) => n.textContent)`);
   assert.equal(times[0], '0:00');
   assert.ok(times.every((t) => /^\d+:\d\d$/.test(t)), times.join());

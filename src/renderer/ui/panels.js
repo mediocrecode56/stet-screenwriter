@@ -54,8 +54,12 @@ export class ScenePanel {
 
   get visible() { return isOpen(this.host); }
 
-  refresh() {
-    if (!this.visible || this.pending) return;
+  /** Redraw on idle; `now` (the panel opening) at once, so it never shows the scenes of a screenplay
+   *  closed since, even for a moment. */
+  refresh(now = false) {
+    if (!this.visible) return;
+    if (now) return this.render();
+    if (this.pending) return;
     this.pending = true;
     idle(() => { this.pending = false; this.render(); });
   }
