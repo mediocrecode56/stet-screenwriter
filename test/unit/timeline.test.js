@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, flowAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, maxScale, ZOOM_MAX_SEC, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes, keyBand } from '../../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, flowAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, maxScale, ZOOM_MAX_SEC, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes, keyBand, bandTravel } from '../../src/core/timeline.js';
 import { paginate } from '../../src/core/layout.js';
 import { newDocument, makeBlock } from '../../src/core/model.js';
 import { serialize, deserialize } from '../../src/core/serialize.js';
@@ -252,4 +252,24 @@ test('a key point chosen on the timeline: the band as wide as the window, the ma
   assert.deepEqual(keyBand(2, 3, 2.7, 0, 2.05), [2.05, 3]);
   const [e, f] = keyBand(2, 3, 2.7, 0.5);
   assert.ok(e > 2 && e < 2.3 && f > 3 && f < 3.3, 'halfway between');
+});
+
+test('the band through a glide: one move from where it was to where it will be, as far as the glide has come', () => {
+  const from = [1, 1.5], to = [4, 4.8];
+  assert.deepEqual(bandTravel(from, to, 100, 900, 100), from, 'not yet moved');
+  assert.deepEqual(bandTravel(from, to, 100, 900, 900), to, 'there');
+  assert.deepEqual(bandTravel(from, to, 100, 900, 500), [2.5, 3.15], 'halfway');
+  // Every step of the way it only goes one way, back up the script as well as down it.
+  for (const [s, g] of [[100, 900], [900, 100]]) {
+    let last = null;
+    for (let t = 0; t <= 1; t += 0.05) {
+      const k = bandTravel(from, to, s, g, s + (g - s) * t * t * (3 - 2 * t));
+      if (last) assert.ok(k[0] >= last[0] - 1e-12 && k[1] >= last[1] - 1e-12);
+      last = k;
+    }
+  }
+  // Past either end (a glide whose goal moved), it stays at that end; already there, at once.
+  assert.deepEqual(bandTravel(from, to, 100, 900, 950), to);
+  assert.deepEqual(bandTravel(from, to, 100, 900, 50), from);
+  assert.deepEqual(bandTravel(from, to, 300, 300.4, 300.2), to);
 });

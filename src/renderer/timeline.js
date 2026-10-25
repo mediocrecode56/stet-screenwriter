@@ -7,7 +7,7 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond, maxScale, keyBand } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond, maxScale, keyBand, bandTravel } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
@@ -78,6 +78,7 @@ export class Timeline {
     this.unlocked = false; // stepping just ended with the pointer locked, and it hasn't moved since
     this.shift = 0; // px the strip is slid past where it scrolls to, to keep a stepped line under the pointer
     this.pinned = null; // a mark clicked: { p, x }, a scene outside the band begins it once the script is there; { key: true, p, x }, a key point sits at KEY_AT of it
+    this.travel = this.bandK = null; // the band gliding with the script, and where it was last: see showBand()
     this.bandDrag = null; // the band being dragged: { x, top, k }, see showBand()
     // (the grid under the band, whose glass softens it: the marks over the band read clearly)
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-grid"></div><div class="tl-view"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-lens l"></div><div class="tl-lens r"></div><div class="tl-ruler"></div>'
@@ -153,7 +154,7 @@ export class Timeline {
   get visible() { return !this.host.hidden; }
 
   show(on = !this.visible) {
-    if (!on) { this.stopZoom(); this.endStep(); this.closeEditor(); this.leave(); this.slide(0); this.pinned = null; }
+    if (!on) { this.stopZoom(); this.endStep(); this.closeEditor(); this.leave(); this.slide(0); this.pinned = null; this.travel = this.bandK = null; }
     this.host.hidden = !on;
     if (on) this.update(true);
     this.onToggle(on);
@@ -627,7 +628,7 @@ export class Timeline {
     const tcs = this.tcs();
     const key = `${this.ed.rev}|${pages.length}|${this.scale}|${tcs.map((t) => t.id + ':' + t.line + ':' + t.t).join(',')}`;
     // Another script: nothing carries over. One laid out to more or fewer pages: at once.
-    if (this.session.doc !== this.docSeen) { this.endStep(); this.closeEditor(); this.pinned = null; }
+    if (this.session.doc !== this.docSeen) { this.endStep(); this.closeEditor(); this.pinned = null; this.travel = this.bandK = null; }
     const redraw = force || this.drawn !== this.scale || this.session.doc !== this.docSeen || pages.length !== this.drawnPages;
     if (redraw) this.repaint(key);
     else if (key !== this.key || pages !== this.pagesSeen) {
@@ -672,36 +673,50 @@ export class Timeline {
    *  with the script without stopping or jumping. Its start is drawn softly to a mark whose line it is
    *  near (a mark sits on its whole second, a little off its line), the way the pointer is; and once
    *  the script is where a click on a mark outside the band sent it, it begins exactly on that mark,
-   *  letting go of it again over a few rows of scrolling. Dragged, it simply goes with the pointer. */
+   *  letting go of it again over a few rows of scrolling. Dragged, it simply goes with the pointer.
+   *  While the script glides somewhere (a click on a mark, the scene list, a note), the band travels
+   *  in one move from where it was to where it will be, as far along as the glide is: it never
+   *  passes its place and comes back, nor catches on the marks it crosses on the way. */
   showBand() {
     const v = this.view, sc = v.scroller, top = sc.scrollTop, s = this.drawn;
     const a = this.flow(top), b = Math.max(a, this.flow(top + sc.clientHeight));
     this.bandA = a; this.bandB = b;
     const d = this.bandDrag;
     if (d) {
+      this.travel = this.bandK = null;
       const x = d.x + (top - d.top) * d.k;
       return this.place(x * s, Math.max(2, d.w * s));
     }
+    const pin = this.pinned;
+    if (pin && pin.rev !== this.ed.rev) this.pinned = null; // (the script changed since: where it went is no longer where it is)
+    const g = v.glide;
+    if (!g || !this.bandK) this.travel = null;
+    else if (!this.travel || this.travel.g !== g) this.travel = { g, from: this.bandK };
+    const t = this.travel, goal = t && g.goal(), ga = t && this.flow(goal);
+    const k = this.bandK = t ? bandTravel(t.from, this.bandAt(goal, ga, Math.max(ga, this.flow(goal + sc.clientHeight))), g.from, goal, top) : this.bandAt(top, a, b);
+    this.place(k[0] * s, Math.max(2, (k[1] - k[0]) * s));
+  }
+
+  /** The band's start and end (in the bar's units) with the window's top at `top`, where it reads
+   *  from a to b: drawn to a mark near its start, or held on a mark clicked (showBand()). */
+  bandAt(top, a, b) {
+    const v = this.view, sc = v.scroller, s = this.drawn;
     let x0 = a, near = null, dist = Infinity;
     for (const m of this.targets) if (m.kind !== 'tc' && m.at != null && Math.abs(m.at - a) < dist) { dist = Math.abs(m.at - a); near = m; }
     if (near) x0 += (near.x - near.at) * (1 - smooth(dist * s / Math.max(PULL_PX, 1.6 * Math.abs(near.x - near.at) * s)));
     const pin = this.pinned;
-    if (pin && pin.rev !== this.ed.rev) this.pinned = null; // (the script changed since: where it went is no longer where it is)
-    else if (pin && pin.key) {
+    if (pin && pin.key) {
       // A key point: as far along the band as its line is down the window (KEY_AT, or nearer an edge at
       // the ends of the script), the band as wide as the window.
       const goal = v.keyOf(pin.p), r = v.caretRect(pin.p);
       const w = goal != null && r ? 1 - smooth(Math.abs(top - goal) / (PIN_ROWS * v.row)) : 0;
-      if (w > 0) {
-        const [k0, k1] = keyBand(a, b, pin.x, w, x0, Math.max(0, Math.min(1, (r.y + r.h / 2 - top) / sc.clientHeight)));
-        return this.place(k0 * s, Math.max(2, (k1 - k0) * s));
-      }
+      if (w > 0) return keyBand(a, b, pin.x, w, x0, Math.max(0, Math.min(1, (r.y + r.h / 2 - top) / sc.clientHeight)));
     } else if (pin) {
       const goal = v.topOf(pin.p, true), max = sc.scrollHeight - sc.clientHeight;
       const w = goal != null && goal >= 0 && goal <= max ? 1 - smooth(Math.abs(top - goal) / (PIN_ROWS * v.row)) : 0;
       if (w > 0) x0 += (a + pin.x - this.flow(goal) - x0) * w; // (none on the way there, nor once scrolled on from it, nor if it can't reach the top: the end of the script)
     }
-    this.place(x0 * s, Math.max(2, (b - x0) * s));
+    return [x0, b];
   }
 
   /** The band at `left` for `width` pixels, with the lens over each of its edges. */

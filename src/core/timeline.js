@@ -20,6 +20,13 @@ export function keyBand(a, b, mark, w, x0 = a, at = KEY_AT) {
   const k0 = mark - at * (b - a);
   return [x0 + (k0 - x0) * w, b + (k0 + (b - a) - b) * w];
 }
+/** The band [x0, x1] partway through a glide of the script from scroll position `start` to `goal`, now
+ *  at `top`: as far from `from` (the band as it was) to `to` (as it will be there) as the glide has
+ *  come, so it travels in one move with the script and never passes its place and comes back. */
+export function bandTravel(from, to, start, goal, top) {
+  const span = goal - start, f = Math.abs(span) < 1 ? 1 : Math.max(0, Math.min(1, (top - start) / span));
+  return [from[0] + (to[0] - from[0]) * f, from[1] + (to[1] - from[1]) * f];
+}
 const BODY = PAGE.bodyRows;
 
 /** Position of line `line` of block bi. */

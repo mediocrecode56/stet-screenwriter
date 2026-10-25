@@ -178,15 +178,27 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .sp-acts { display: flex; gap: 2px; margin-top: 3px; padding: 3px 4px 0; border-top: 1px solid var(--rule); }
 .sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .sp-act:hover { background: var(--hover-on); color: var(--ink); }
-/* The right-click menu on selected text (ui/selmenu.js): three square icons, two with a dropdown under the bar. */
+/* The right-click menu on selected text (ui/selmenu.js): four square buttons, three with a dropdown
+   under the bar. Resting on one, a line under it fills (selmenu.js HOVER_MS) and its dropdown opens;
+   open, the line stays and the arrow turns up. */
 .menu.selbar { min-width: 0; display: flex; padding: 0; transform-origin: top left; }
-.selb { display: flex; align-items: center; justify-content: center; gap: 3px; height: 26px; min-width: 30px; padding: 0 7px; border: 0; background: none; color: var(--ink-2); cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.selb { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; height: 28px; min-width: 32px; padding: 0 8px; border: 0; background: none; color: var(--ink-2); cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .selb + .selb { box-shadow: inset 1px 0 0 var(--rule); }
 .selb:hover, .selb.open { background: var(--hover-on); color: var(--ink); }
+.selb:active { background: var(--hover); }
+.selb::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform var(--dur-out) var(--ease-out); }
+.selb.wait::after { transform: scaleX(1); transition: transform 500ms linear; }
+.selb.open::after { transform: scaleX(1); transition: transform var(--dur-fast) var(--ease-out); }
 .selb svg { display: block; }
-.selb .dn { font-size: 8px; color: var(--ink-3); }
+.selb .gb { font: 700 14px/1 var(--script); }
+.selb .tl { min-width: 74px; text-align: left; font-size: 10px; letter-spacing: .12em; }
+.selb .dn { display: inline-block; font-size: 8px; color: var(--ink-3); transition: transform var(--dur-panel) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.selb:hover .dn, .selb.open .dn { color: var(--ink-2); }
+.selb.open .dn { transform: rotate(180deg); }
 .seldrop { min-width: 190px; }
-.seldrop > .mi.cur { box-shadow: inset 2px 0 0 var(--ink); }
+.seldrop > .mi { transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.seldrop > .mi:hover { box-shadow: inset 2px 0 0 var(--ink-3); }
+.menu.seldrop > .mi.cur, .menu.seldrop > .mi.cur:hover { color: var(--ink); box-shadow: inset 2px 0 0 var(--ink); }
 .msep { height: 1px; background: var(--rule); margin: 3px 0; }
 /* A menu row with a quick flyout (Open Recent), and the flyout: short, long titles end in "…". */
 .mi.has-sub .k::after { content: '›'; margin-left: 10px; }

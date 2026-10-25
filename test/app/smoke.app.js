@@ -144,6 +144,17 @@ const locked = async (x, y) => {
   if (on) await app.move(x, y);
   return on;
 };
+// The band's edges every frame while `go` runs: it goes where it goes in one move, never past and back.
+const oneWay = async (go) => {
+  await app.eval(`(() => { const v = document.querySelector('#timeline .tl-view'), seen = window.__band = []; const f = () => { if (seen.done) return; const r = v.getBoundingClientRect(); seen.push([r.left, r.right]); requestAnimationFrame(f); }; f(); })()`);
+  await go();
+  await app.frame();
+  const xs = await app.eval('(window.__band.done = true, window.__band)');
+  for (const e of [0, 1]) {
+    const s = xs.map((r) => r[e]), d = Math.sign(s[s.length - 1] - s[0]);
+    assert.ok(s.every((x, i) => !i || (x - s[i - 1]) * d >= -0.5), `the band's ${e ? 'end' : 'start'} goes one way only (${s.map((x) => x.toFixed(1)).join(' ')})`);
+  }
+};
 const tl = (expr) => app.eval(`(() => { const t = __stet.timeline; return ${expr}; })()`);
 // Where the caret's line sits once a jump is over: its middle, as a share of the window's height from the top
 // (0.4 for a key point), and whether the script was already as far as it scrolls that way.
@@ -169,8 +180,10 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   assert.equal(await app.eval(`(() => { const h = document.querySelector('#timeline .tl-head').getBoundingClientRect(), c = getComputedStyle(document.querySelector('#timeline .tl-head'), '::before'); return h.left + h.width / 2 - (h.left + parseFloat(c.left) + (parseFloat(c.width) + parseFloat(c.borderLeftWidth) + parseFloat(c.borderRightWidth)) / 2); })()`), 0, 'the cap centred on the line');
   // A click inside the band (whatever the window's height): that line glides to 10% of the window above its middle.
   const view = await app.rect('#timeline .tl-view');
-  await app.click(view.left + view.width * 0.6, view.top + 8);
-  await app.until('!__stet.view.glide', { what: 'the glide' });
+  await oneWay(async () => {
+    await app.click(view.left + view.width * 0.5, view.top + 8);
+    await app.until('!__stet.view.glide', { what: 'the glide' });
+  });
   const k1 = await keyed();
   assert.ok(Math.abs(k1.px) <= 1 || k1.end, `the line clicked at 40% of the window (${k1.at.toFixed(3)})`);
   assert.equal(await tl('((s) => Math.abs(s - Math.round(s)) < 1e-6)(t.time.at(parseFloat(t.head.style.left) / t.drawn))'), true, 'the playhead on a whole second');
@@ -199,8 +212,10 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   if (!(await app.eval(`${right}.dataset.open === '1'`))) await app.key('Mod+Shift+\\');
   await app.until(`${right}.dataset.open === '1' && !${right}.hidden && !${right}._anim`, { what: 'the notes panel open' });
   const sq = await app.rect('#timeline .tl-note');
-  await app.click(sq.left + 3, sq.top + 6);
-  await app.until(`__stet.editor.caret.b === 8 && !__stet.view.glide`, { what: 'the glide to the note' });
+  await oneWay(async () => {
+    await app.click(sq.left + 3, sq.top + 6);
+    await app.until(`__stet.editor.caret.b === 8 && !__stet.view.glide`, { what: 'the glide to the note' });
+  });
   const k2 = await keyed();
   assert.ok(Math.abs(k2.px) <= 1 && !k2.end, `the note at 40% of the window (${k2.at.toFixed(3)})`);
   await app.until(async () => { const h = await app.rect('#timeline .tl-head'), n = await app.rect('#timeline .tl-note'); return Math.abs(h.left + 0.5 - (n.left + n.width / 2)) < 0.5; }, { what: 'the playhead on the note' });
@@ -257,12 +272,12 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   assert.ok(await app.eval('__stet.view.scroller.scrollTop') > 300, 'dragging the band moves the window');
 });
 
-test('a right-click on selected text: style, alignment and a note, as three square icons; note underlines can be hidden', async () => {
+test('a right-click on selected text: element, style, alignment and a note, as four square buttons; note underlines can be hidden', async () => {
   await app.load(SCRIPT);
   await app.caret(1, 0, 20);
   await app.frame();
   const bar = '.menu.selbar';
-  const rightClick = async () => { const r = await app.rect('.selr'); await app.click(r.left + r.width / 2, r.top + r.height / 2, { button: 'right' }); await app.until(`document.querySelectorAll('${bar} .selb').length === 3`, { what: 'the selection menu' }); };
+  const rightClick = async () => { const r = await app.rect('.selr'); await app.click(r.left + r.width / 2, r.top + r.height / 2, { button: 'right' }); await app.until(`document.querySelectorAll('${bar} .selb').length === 4`, { what: 'the selection menu' }); };
   const choose = async (k, label) => {
     await app.clickOn(`${bar} .selb[data-k="${k}"]`);
     await app.until(`!!document.querySelector('${bar} .seldrop')`, { what: `the ${k} dropdown` });
@@ -274,6 +289,32 @@ test('a right-click on selected text: style, alignment and a note, as three squa
   };
   await rightClick();
   assert.equal(await app.eval(`getComputedStyle(document.querySelector('${bar}')).borderRadius`), '0px', 'square');
+  // Resting on a button opens its dropdown after a moment, without a click; the element one lists
+  // the types in the Tab cycle, the paragraph's own marked.
+  const tb = await app.rect(`${bar} .selb[data-k="type"]`);
+  await app.move(tb.left + tb.width / 2, tb.top + tb.height / 2);
+  await app.until(`document.querySelector('${bar} .seldrop')?.dataset.k === 'type'`, { what: 'the element dropdown on hover' });
+  assert.deepEqual(await app.eval(`[...document.querySelectorAll('${bar} .seldrop .mi')].map((r) => r.dataset.id + (r.classList.contains('cur') ? '*' : ''))`),
+    ['type-scene', 'type-action*', 'type-character', 'type-dialogue', 'type-paren', 'type-transition', 'type-shot'], 'every type, action marked');
+  await app.key('Escape');
+  await app.until(`!document.querySelector('${bar} .seldrop') || document.querySelector('${bar} .seldrop').style.pointerEvents === 'none'`, { what: 'the dropdown closed' });
+  await app.key('Escape');
+  await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
+  await app.eval(`__stet.editor.tabTypes = ['scene', 'action', 'character', 'dialogue']`);
+  await rightClick();
+  await choose('type', 'Character');
+  await app.until(`__stet.editor.blocks[1].type === 'character'`, { what: 'the selection a character' });
+  await app.eval(`__stet.editor.tabTypes = null`);
+  assert.equal(await app.eval(`(() => { const s = __stet.editor.sel; return s.a.o !== s.f.o; })()`), true, 'the selection kept');
+  await app.eval(`__stet.cmd.run('undo')`);
+  await app.until(`__stet.editor.blocks[1].type === 'action'`, { what: 'undone' });
+  await app.caret(1, 0, 20);
+  await app.frame();
+  await rightClick();
+  assert.equal(await app.eval(`document.querySelector('${bar} .selb[data-k="type"] .tl').textContent`), 'ACTION', 'the element named on its button');
+  await app.key('Escape');
+  await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
+  await rightClick();
   await choose('style', 'Bold');
   await app.until(`__stet.editor.styleActive('b')`, { what: 'the selection bold' });
   assert.deepEqual(await app.eval('[__stet.editor.sel.a, __stet.editor.sel.f].map((p) => p.o)'), [0, 20], 'the selection kept');

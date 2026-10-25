@@ -558,7 +558,7 @@ export class View {
     const from = sc.scrollTop, t0 = performance.now();
     const dur = 0.9 * Math.min(700, 280 + Math.abs(goal() - from) / 10);
     const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
-    const g = this.glide = {};
+    const g = this.glide = { from, goal }; // (the timeline's band travels along with it)
     const step = () => {
       if (this.glide !== g) return;
       const k = Math.min(1, (performance.now() - t0) / dur);

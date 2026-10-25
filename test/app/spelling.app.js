@@ -66,6 +66,7 @@ test('the installed dictionary is there on the next start, nothing downloaded ag
 test('Add a Language: another one downloaded and chosen; the menu switches between them', async () => {
   const first = await app.eval('__stet.spelling.lang.id');
   await app.clickOn('#btn-spell');
+  await app.until(`[...document.querySelectorAll('.menu .mi')].some((x) => x.textContent.startsWith('Add a Language'))`, { what: 'the spelling menu' });
   const row = await app.eval(`(() => { const m = [...document.querySelectorAll('.menu .mi')].find((x) => x.textContent.startsWith('Add a Language')); const b = m.getBoundingClientRect(); return { x: b.left + 20, y: b.top + b.height / 2 }; })()`);
   await app.move(row.x - 10, row.y); await app.move(row.x, row.y); // in from the side, as a hand would
   await app.until(`!!document.querySelector('.msub')`, { what: 'the languages' });

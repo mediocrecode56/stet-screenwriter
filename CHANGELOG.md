@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.50.0 · 25 Oct 2026
+
+- Timeline: when you jump somewhere (a mark on the timeline, the scene list, a note), the glass box now goes there in one smooth move along with the script. It no longer goes slightly too far and springs back, or catches on the marks it passes on the way.
+- The right-click menu on selected text has a fourth button on the left for the element type (SCENE, ACTION and so on). Its dropdown lists the types in your Tab cycle, with the current one marked. Choosing one changes the selected text to that type.
+- The text style button is now a bold B, and the note button is a square with a small filled square inside.
+- Resting the pointer on the element, text style or alignment button for half a second opens its dropdown, without a click. A line fills under the button while it waits. If one dropdown is already open, moving to another button opens that one straight away.
+- The menu is smoother: its buttons come in one after another, dropdowns unfold from the bar with their rows following, the arrow turns up while a dropdown is open, and Esc closes the dropdown first and then the menu. Nothing bounces.
+
 ## 0.49.0 · 25 Oct 2026
 
 - Right-click on selected text for a small menu of three icons: text style (bold, italic, underline, strikethrough) and alignment each open their own dropdown, and the third adds a note on the selection and opens the notes panel so you can write it straight away. Right-clicking a misspelt word still shows its spelling fixes.

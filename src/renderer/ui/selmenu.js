@@ -1,19 +1,23 @@
-// The right-click menu on selected text: three square icons in a row, text style, alignment and
-// a note. The first two open their own dropdown under the bar (on hover, or a click); the note
-// adds one on the selection at once and opens the notes panel to write it.
+// The right-click menu on selected text: four square buttons in a row, the element type, text style,
+// alignment and a note. The first three open their own dropdown under the bar: on a click, or after
+// resting on one for half a second (a line under it fills while it waits), or at once when another
+// one is already open. The note adds one on the selection at once and opens the notes panel to write it.
 
 import { h } from './dialog.js';
 import * as cmd from './commands.js';
-import { arrive, leave, DUR_FAST } from './motion.js';
+import { arrive, leave, reducedMotion, EASE_OUT, DUR_FAST, DUR_PANEL } from './motion.js';
 
-const STYLE = '<svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor"><path d="M1 1h4.2c1.6 0 2.5.8 2.5 2.1 0 .9-.5 1.5-1.2 1.8.9.2 1.6.9 1.6 2 0 1.5-1 2.4-2.8 2.4H1zm1.8 1.5v2.3h2.2c.8 0 1.1-.4 1.1-1.1s-.4-1.2-1.1-1.2zm0 3.7v2.5h2.4c.8 0 1.3-.4 1.3-1.3 0-.8-.5-1.2-1.3-1.2z"/><path d="M10.2 1h3l-.3 1.2h-.8L10.6 8.1h.8l-.3 1.2h-3l.3-1.2h.8l1.5-5.9h-.8z"/><rect x="0" y="11" width="14" height="1"/></svg>';
-const NOTE = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><path d="M1.5 1.5h9v7h-5l-2.5 2.2V8.5H1.5z" fill="none" stroke="currentColor" stroke-width="1"/><rect x="5.5" y="3" width="1" height="4" fill="currentColor"/><rect x="4" y="4.5" width="4" height="1" fill="currentColor"/></svg>';
+export const HOVER_MS = 500; // resting on a button this long opens its dropdown
+const STYLE = '<span class="gb" aria-hidden="true">B</span>';
+const NOTE = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><rect x=".5" y=".5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="4" width="4" height="4" fill="currentColor"/></svg>';
+const DN = '<span class="dn" aria-hidden="true">▾</span>';
 
-let open = null; // { el, off, drop }
+let open = null; // { el, off, drop, wait }
 
-/** The menu at (x, y): `styles` and `aligns` are the command ids of each dropdown, `alignIcon()`
- *  the icon for the paragraph's alignment as it is now. */
-export function selectionMenu(x, y, { styles, aligns, alignIcon }) {
+/** The menu at (x, y): `types`, `styles` and `aligns` are the command ids of each dropdown (`types()`
+ *  read as it opens: the element types in the Tab cycle), `typeLabel()` the selection's element
+ *  as it is now, `alignIcon()` the icon for the paragraph's alignment. */
+export function selectionMenu(x, y, { types, typeLabel, styles, aligns, alignIcon }) {
   closeSelectionMenu(false);
   cmd.closeMenu(false);
   const el = h('div', { class: 'menu selbar', role: 'toolbar', 'aria-label': 'Selection' });
@@ -24,60 +28,91 @@ export function selectionMenu(x, y, { styles, aligns, alignIcon }) {
     return b;
   };
   const drops = [
-    [btn('style', 'Text style', STYLE + '<span class="dn">▾</span>'), styles],
-    [btn('align', 'Alignment', alignIcon() + '<span class="dn">▾</span>'), aligns],
+    [btn('type', 'Element', `<span class="tl">${typeLabel()}</span>` + DN), types],
+    [btn('style', 'Text style', STYLE + DN), () => styles],
+    [btn('align', 'Alignment', alignIcon() + DN), () => aligns],
   ];
   const note = btn('note', 'Add a note', NOTE);
   for (const [b, ids] of drops) {
-    b.addEventListener('mouseenter', () => { if (open && open.drop && open.drop.btn !== b) showDrop(b, ids); });
-    b.addEventListener('mouseup', (e) => { if (e.button !== 0 || !open) return; if (open.drop && open.drop.btn === b) hideDrop(); else showDrop(b, ids); });
+    b.setAttribute('aria-haspopup', 'menu');
+    b.addEventListener('mouseenter', () => {
+      if (!open || (open.drop && open.drop.btn === b)) return;
+      if (open.drop) return showDrop(b, ids()); // (one already open: the next at once)
+      wait(b, () => showDrop(b, ids()));
+    });
+    b.addEventListener('mouseleave', () => wait(null));
+    b.addEventListener('mouseup', (e) => {
+      if (e.button !== 0 || !open) return;
+      wait(null);
+      if (open.drop && open.drop.btn === b) hideDrop(); else showDrop(b, ids());
+    });
   }
-  note.addEventListener('mouseenter', hideDrop);
+  note.addEventListener('mouseenter', () => { wait(null); hideDrop(); });
   note.addEventListener('mouseup', (e) => { if (e.button !== 0) return; closeSelectionMenu(); setTimeout(() => cmd.run('note-add'), 0); });
   document.body.appendChild(el);
-  el.style.left = Math.max(0, Math.min(x, innerWidth - el.offsetWidth)) + 'px';
-  el.style.top = Math.max(0, Math.min(y, innerHeight - el.offsetHeight)) + 'px';
-  arrive(el, { dist: 2, dur: DUR_FAST, scale: 0.98 });
+  // (a step off the pointer, so the button under it doesn't take it for resting there)
+  el.style.left = Math.max(0, Math.min(x + 2, innerWidth - el.offsetWidth)) + 'px';
+  el.style.top = Math.max(0, Math.min(y + 2, innerHeight - el.offsetHeight)) + 'px';
+  arrive(el, { dist: 4, dur: DUR_PANEL, scale: 0.97 });
+  // (each button after the one before, a step from the left)
+  if (!reducedMotion()) [...el.children].forEach((b, i) => b.animate([{ opacity: 0, translate: '-3px 0' }, { opacity: 1, translate: '0 0' }], { duration: DUR_PANEL, delay: 20 + i * 22, easing: EASE_OUT, fill: 'backwards' }));
   const off = new AbortController();
-  open = { el, off, drop: null };
+  open = { el, off, drop: null, wait: null };
   addEventListener('mousedown', (e) => { if (!el.contains(e.target)) closeSelectionMenu(); }, { capture: true, signal: off.signal });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSelectionMenu(); } }, { capture: true, signal: off.signal });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (open.drop) hideDrop(); else closeSelectionMenu(); } }, { capture: true, signal: off.signal });
   addEventListener('blur', () => closeSelectionMenu(), { signal: off.signal });
   return el;
 }
 
+/** Wait on button b (its line filling, style.css .selb.wait) and then run `then`; none: stop waiting. */
+function wait(b, then) {
+  if (!open) return;
+  if (open.wait) { clearTimeout(open.wait.t); open.wait.b.classList.remove('wait'); open.wait = null; }
+  if (!b) return;
+  b.classList.add('wait');
+  open.wait = { b, t: setTimeout(() => { if (!open || !open.wait || open.wait.b !== b) return; b.classList.remove('wait'); open.wait = null; then(); }, HOVER_MS) };
+}
+
 /** A button's dropdown, under the bar from the button's left edge (inside the bar, so a click in it
- *  is a click in the menu): each command with its shortcut, the current ones marked. */
+ *  is a click in the menu): each command with its shortcut, the current ones marked. It unrolls
+ *  from the bar, its rows coming in one after another. */
 function showDrop(b, ids) {
   hideDrop();
-  const el = open.el, d = h('div', { class: 'menu msub seldrop', role: 'menu' });
+  const el = open.el, d = h('div', { class: 'menu msub seldrop', role: 'menu', 'data-k': b.dataset.k });
   for (const id of ids) {
     const c = cmd.get(id);
     if (!c) continue;
-    const row = h('div', { class: 'mi' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id }, h('span', {}, c.label), h('span', { class: 'k' }, cmd.keyLabel(c)));
+    const label = typeof c.label === 'function' ? c.label() : c.label;
+    const row = h('div', { class: 'mi' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id }, h('span', {}, label), h('span', { class: 'k' }, cmd.keyLabel(c)));
     row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; e.stopPropagation(); closeSelectionMenu(); setTimeout(() => cmd.run(id), 0); });
     d.appendChild(row);
   }
   el.appendChild(d);
-  const r = el.getBoundingClientRect();
+  const r = el.getBoundingClientRect(), up = r.bottom + d.offsetHeight > innerHeight;
   d.style.left = Math.min(b.offsetLeft - el.clientLeft, innerWidth - r.left - d.offsetWidth) + 'px';
-  d.style.top = (r.bottom + d.offsetHeight > innerHeight ? -d.offsetHeight : r.height - el.clientTop - 1) + 'px';
+  d.style.top = (up ? -d.offsetHeight : r.height - el.clientTop - 1) + 'px';
   b.classList.add('open');
   open.drop = { btn: b, el: d };
-  arrive(d, { dist: 0, dur: DUR_FAST });
+  if (reducedMotion()) return;
+  // (never a clip: a click on it at once must still land in it)
+  d.style.transformOrigin = up ? 'bottom left' : 'top left';
+  d.animate([{ opacity: 0, scale: '1 .88' }, { opacity: 1, scale: '1 1' }], { duration: DUR_PANEL, easing: EASE_OUT });
+  [...d.children].forEach((row, i) => row.animate([{ opacity: 0, translate: `0 ${up ? 3 : -3}px` }, { opacity: 1, translate: '0 0' }], { duration: DUR_PANEL, delay: 15 + i * 16, easing: EASE_OUT, fill: 'backwards' }));
 }
 
 function hideDrop() {
   if (!open || !open.drop) return;
-  open.drop.el.remove();
-  open.drop.btn.classList.remove('open');
+  const { btn, el } = open.drop;
   open.drop = null;
+  btn.classList.remove('open');
+  leave(el, () => el.remove(), { dist: 0, dur: DUR_FAST });
 }
 
 export function closeSelectionMenu(animated = true) {
   if (!open) return;
   const { el, off } = open;
+  if (open.wait) clearTimeout(open.wait.t);
   open = null;
   off.abort();
-  if (animated) leave(el, () => el.remove(), { dist: 2 }); else el.remove();
+  if (animated) leave(el, () => el.remove(), { dist: 3 }); else el.remove();
 }

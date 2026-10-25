@@ -79,9 +79,11 @@ input.onCue = (name) => { session.doc.cast = touchCast(session.doc.cast, name); 
 const jump = (p, center = false, end = null, glide = false) => {
   editor.setSel(p, end || p);
   view.relayout();
-  view.frame();
+  // (the glide under way before the frame: the timeline's band then travels from where it was,
+  // rather than first leaping to where the caret is)
   if (glide) view.glideTo(p, end || p, typeof glide === 'object' ? glide : { top: glide === 'top', key: glide === 'key' });
-  else view.revealCaret(center);
+  view.frame();
+  if (!glide) view.revealCaret(center);
   input.focus();
   input.placeTextarea();
 };
@@ -111,13 +113,18 @@ const spelling = new Spelling({
   notify: (text) => toast(text, 5000),
 });
 input.onSpace = () => spelling.spaced();
-// A right-click on a misspelt word: its fixes; on selected text: style, alignment and a note.
+// A right-click on a misspelt word: its fixes; on selected text: its element type (those in the Tab
+// cycle), style, alignment and a note.
 view.scroller.addEventListener('contextmenu', (e) => {
   if (spelling.contextMenu(e) || !e.target.closest || !e.target.closest('.page') || !editor.hasSelection()) return;
   const p = view.posAt(e.clientX, e.clientY), [s, z] = editor.ordered();
   if (!p || cmp(p, s) < 0 || cmp(p, z) > 0) return;
   e.preventDefault();
-  selectionMenu(e.clientX, e.clientY, { styles: styleCmds.map((c) => c.id), aligns: alignCmds.map((c) => c.id), alignIcon: () => alignIcon(alignOf(editor.block)) });
+  selectionMenu(e.clientX, e.clientY, {
+    types: () => (editor.tabTypes || TYPES).map((t) => 'type-' + t),
+    typeLabel: () => { const ts = new Set(selectedBlocks().map((b) => b.type)); return ts.size === 1 ? TYPE_SHORT[[...ts][0]] : 'MIXED'; },
+    styles: styleCmds.map((c) => c.id), aligns: alignCmds.map((c) => c.id), alignIcon: () => alignIcon(alignOf(editor.block)),
+  });
 });
 
 const timeline = new Timeline($('timeline'), {
@@ -473,9 +480,12 @@ function renderTips() {
   for (const t of tips) { const k = cmd.keyText(t.id); t.el.title = k ? `${t.text} (${k}${t.after})` : t.text; }
 }
 
+// Each element type's name on the toolbar (the part after the bar is left out on the narrowest
+// windows: fitToolbar()), and whole (the selection menu).
+const TYPE_NAME = { scene: 'SCENE', action: 'ACTION', character: 'CHAR|ACTER', paren: 'PAREN', dialogue: 'DIAL|OGUE', transition: 'TRANS', shot: 'SHOT' };
+const TYPE_SHORT = Object.fromEntries(TYPES.map((t) => [t, TYPE_NAME[t].replace('|', '')]));
 for (const [i, t] of TYPES.entries()) {
-  // (the part after the bar is left out on the narrowest windows: fitToolbar())
-  const [short, more = ''] = { scene: 'SCENE', action: 'ACTION', character: 'CHAR|ACTER', paren: 'PAREN', dialogue: 'DIAL|OGUE', transition: 'TRANS', shot: 'SHOT' }[t].split('|');
+  const [short, more = ''] = TYPE_NAME[t].split('|');
   const b = dlg.h('button', { class: 'tb', 'data-t': t }, short, ...(more ? [dlg.h('span', { class: 'more' }, more)] : []), dlg.h('sup', {}, String(i + 1)));
   tip(b, TYPE_LABEL[t], 'type-' + t, MAC ? ' · ⌘-click: in or out of the Tab cycle' : ' · Ctrl+click: in or out of the Tab cycle');
   b.addEventListener('mousedown', (e) => {
@@ -1075,7 +1085,9 @@ async function exportPdf(options = lastPrintOpts) {
 
 // ---- commands -----------------------------------------------------------------------------------
 
-const typeCmds = TYPES.map((t, i) => ({ id: 'type-' + t, cat: 'Element', label: TYPE_LABEL[t], keys: `Ctrl+${i + 1}`, run: () => { editor.applyType(t); input.after(); input.focus(); } }));
+// The paragraphs a selection touches (or the caret's).
+const selectedBlocks = () => (editor.hasSelection() ? editor._touched() : [editor.block]);
+const typeCmds = TYPES.map((t, i) => ({ id: 'type-' + t, cat: 'Element', label: TYPE_LABEL[t], keys: `Ctrl+${i + 1}`, checked: () => selectedBlocks().every((b) => b.type === t), run: () => { editor.applyType(t); input.after(); input.focus(); } }));
 // A highlight with no selection covers the whole paragraph.
 function highlight(color) {
   if (!editor.hasSelection()) editor.setSel(pos(editor.caret.b, 0), pos(editor.caret.b, editor.block.text.length));
