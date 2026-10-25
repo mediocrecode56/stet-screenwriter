@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, flowAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, lineFrom, lineTo, flowAt, formatTime, parseTime, rulerLabel, rulerStep, minorStep, maxScale, ZOOM_MAX_SEC, snapTo, fineTime, onSeconds, makeTimecode, cleanTag, placeLabels, clearOf, SEC_PER_PAGE, isSceneTimecode, sceneTimecodes } from '../../src/core/timeline.js';
 import { paginate } from '../../src/core/layout.js';
 import { newDocument, makeBlock } from '../../src/core/model.js';
 import { serialize, deserialize } from '../../src/core/serialize.js';
@@ -107,6 +107,14 @@ test('the ruler steps out as the bar zooms out', () => {
   assert.equal(minorStep(300, 0.24), 60);  // 5:00 labels, a tick a minute
   assert.equal(minorStep(60, 1), 10);
   assert.equal(minorStep(1, 100), 0);      // nothing finer than a second
+});
+
+test('the bar zooms in no closer than two minutes across it, and a script shorter than that not at all', () => {
+  assert.equal(ZOOM_MAX_SEC, 120);
+  // 1000 pixels for 100 pages of 6000 seconds: 10 px a page whole, 500 px a page (two pages, two minutes) at most.
+  assert.equal(maxScale(1000, 100, 6000), 500);
+  assert.equal(1000 / maxScale(1000, 100, 6000) * 6000 / 100, 120, 'two minutes in view');
+  assert.equal(maxScale(1000, 2, 90), 500, 'a minute and a half: the whole script is as close as it gets');
 });
 
 test('timecodes are saved with the script and come back on their lines', () => {

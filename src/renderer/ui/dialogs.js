@@ -169,9 +169,9 @@ export async function preferencesDialog(settings, doc) {
 /**
  * File > Restore Backup: this screenplay's backups, newest first, grouped by day. Each row says
  * when (and how long ago), how many words it holds against the script now, and its size; RESTORE
- * and DELETE are on the row, each taking a second press (ui/arm.js), so nothing is lost to one
- * click. Arrow keys move through the rows, Enter arms RESTORE on the chosen one, Delete arms
- * DELETE. BACKUP NOW adds one at the top; OPEN FOLDER shows them where they are.
+ * and DELETE are on the row. RESTORE goes straight on to naming the new screenplay (that step is
+ * its confirmation, and it loses nothing); DELETE takes a second press (ui/arm.js). Arrow keys move
+ * through the rows, Enter restores the chosen one, Delete arms DELETE. BACKUP NOW adds one at the top; OPEN FOLDER shows them where they are.
  * Resolves with { file, time } to restore, or null. `io` = { words, readWords(file), backupNow(), remove(file), reveal() }.
  */
 export async function backupsDialog(ref, currentName, io) {
@@ -199,7 +199,7 @@ export async function backupsDialog(ref, currentName, io) {
         + `<span class="bk-ago">${esc(ago(b.time))}</span>`
         + `<span class="bk-words">${wordsHTML(b.file)}</span>`
         + `<span class="bk-size">${esc(fmtSize(b.size))}</span>`
-        + `<span class="bk-acts"><button class="tb bk-restore" data-x="restore"${bad ? ' disabled title="This backup cannot be read"' : ' title="Restore this backup as a new screenplay (press twice). The one open now stays as it is."'}>RESTORE</button>`
+        + `<span class="bk-acts"><button class="tb bk-restore" data-x="restore"${bad ? ' disabled title="This backup cannot be read"' : ' title="Restore this backup as a new screenplay. The one open now stays as it is."'}>RESTORE</button>`
         + '<button class="tb bk-del" data-x="delete" title="Delete this backup (press twice)">DELETE</button></span></div>';
     }
     listEl.innerHTML = html;
@@ -248,8 +248,12 @@ export async function backupsDialog(ref, currentName, io) {
     e.preventDefault();
     if (btn.disabled) return;
     choose(row.dataset.file, false);
-    if (btn.dataset.x === 'restore') arm(btn, () => pick(row.dataset.file));
-    else arm(btn, () => remove(row.dataset.file));
+    if (btn.dataset.x !== 'restore') arm(btn, () => remove(row.dataset.file));
+  });
+  // (on the click, not the press: the dialog that follows never takes the rest of this click)
+  listEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.bk-restore');
+    if (btn && !btn.disabled) pick(btn.closest('.bk-row').dataset.file);
   });
   listEl.addEventListener('keydown', (e) => {
     const i = list.findIndex((b) => b.file === chosen);
@@ -260,7 +264,7 @@ export async function backupsDialog(ref, currentName, io) {
     } else if (e.key === 'Enter' && chosen) {
       e.preventDefault(); e.stopPropagation(); // (not the window's Close)
       const f = chosen, btn = rowOf(f)?.querySelector('.bk-restore');
-      if (btn && !btn.disabled) arm(btn, () => pick(f));
+      if (btn && !btn.disabled) pick(f);
     } else if (e.key === 'Delete' && chosen) {
       e.preventDefault();
       const f = chosen, btn = rowOf(f)?.querySelector('.bk-del');

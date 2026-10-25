@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.46.0 · 25 Oct 2026
+
+- Tab cycle: the outline now lies exactly on the edges of the buttons it takes in, drawn inwards, so it never stands out past them or over the toolbar's lines.
+- Colours: the highlights and the mark colours (timeline, note squares, note cards, timecodes) are all softer and more pastel, the yellow no brighter than the blue or the pink, in the dark theme and in print too.
+- Timeline: a note, highlight or timecode chosen outside the glass box comes to the top of the window with only the blank space before it as its margin. The line of text before it no longer shows.
+- Restore Backup: RESTORE no longer asks for a second press. The window that names the new screenplay is the confirmation, and it can be cancelled.
+- Timeline: zooming in stops at two minutes across the bar. The strip stays a sensible size at the closest zoom, so zooming and scrolling there are lighter. A screenplay shorter than two minutes doesn't zoom at all.
+
 ## 0.45.0 · 25 Oct 2026
 
 - Confirm buttons never time out. Deleting a note or a backup, restoring a backup, or resetting the guidelines waits for the second press for as long as you like; a press anywhere else (or Esc) cancels it. The bar that ran out under the button is gone.

@@ -572,17 +572,16 @@ export class View {
   }
 
   /** The scroll position that puts position p at the top of the view (glideTo's `top`), as far as the
-   *  ends allow (null: nowhere). A scene heading has the blank rows above it and never a line of the
-   *  text before it; a line inside the text (a note, a highlight, a timecode chosen on the timeline)
-   *  has the same room as a heading's, made of the whole lines before it, the view's top edge on a row's
-   *  edge so no part of a line shows there, and no more than one row of its page's top margin.
+   *  ends allow (null: nowhere). Whatever it is (a scene heading; a note, a highlight or a timecode
+   *  chosen on the timeline), its room above is the blank rows before it and never a line of the text
+   *  before it, the view's top edge on a row's edge so no part of a line shows there, and no more
+   *  than one row of its page's top margin.
    *  `free`: where that would be without the ends. */
   topOf(p, free = false) {
     const r = this.caretRect(p), sc = this.scroller;
     if (!r) return null;
     const first = this.pageTop(r.page + this.offset) + (PAGE.topRows - 1) * this.row; // (one row above the page's first line)
-    const heading = this.editor.blocks[p.b]?.type === 'scene' && p.o === 0;
-    const want = Math.ceil(Math.max(first, r.y - (heading ? this.blankAbove(p) : 2) * this.row));
+    const want = Math.ceil(Math.max(first, r.y - this.blankAbove(p) * this.row));
     return free ? want : Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, want));
   }
 

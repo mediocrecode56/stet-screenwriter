@@ -494,7 +494,6 @@ function toggleTabType(t) {
   const cur = editor.tabTypes || TYPES;
   setTabTypes(cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]);
 }
-const CYC_GAP = 4; // (the rule, then three pixels clear of the fill: as above and below it)
 function renderTabTypes() {
   const keep = editor.tabTypes || TYPES;
   const btns = typeButtons();
@@ -506,14 +505,14 @@ function renderTabTypes() {
     if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]);
   });
   // Each button is a whole number of pixels wide, so every edge (a fill's, a box's) falls on a pixel
-  // and none is drawn soft or a part of a pixel off. Each box's top and bottom are the toolbar's own rules,
-  // and its sides stand as far from the buttons' fill as those rules do (style.css .cyc-box: CYC_GAP).
+  // and none is drawn soft or a part of a pixel off. Each box is exactly its buttons' edges, its line
+  // drawn inwards (style.css .cyc-box), so it never stands outside them.
   for (const b of btns) b.style.width = '';
   const ws = btns.map((b) => Math.ceil(b.getBoundingClientRect().width - 0.01));
   btns.forEach((b, i) => { b.style.width = ws[i] + 'px'; });
   const x0 = $('eltypes').getBoundingClientRect().left;
   tabTypesEl.replaceChildren(...runs.map(([a, z]) => {
-    const l = Math.round(btns[a].getBoundingClientRect().left - x0) - CYC_GAP, r = Math.round(btns[z].getBoundingClientRect().right - x0) + CYC_GAP;
+    const l = Math.round(btns[a].getBoundingClientRect().left - x0), r = Math.round(btns[z].getBoundingClientRect().right - x0);
     const box = dlg.h('div', { class: 'cyc-box' + (tabDrag ? ' drag' : ''), style: `left:${l}px;width:${r - l}px` },
       dlg.h('i', { class: 'cyc-h l', 'data-a': a, 'data-z': z }), dlg.h('i', { class: 'cyc-h r', 'data-a': a, 'data-z': z }));
     box.title = 'Tab steps through the outlined elements. Drag an end to take more in or leave some out.';

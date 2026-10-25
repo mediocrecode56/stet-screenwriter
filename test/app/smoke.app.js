@@ -186,14 +186,17 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   const pink = await app.rect('#timeline .tl-hl.hl-pink');
   await app.move(pink.left + 1, pink.top + 3);
   assert.match(await tl('t.hover.textContent'), /pink highlight/, 'a highlight says which');
-  // A note outside the band: it glides to the top with a scene heading's room above it, made of whole lines; the playhead on its square.
+  // A note outside the band: it glides to the top with the blank rows before it as its room, never a line of the text before it; the playhead on its square.
   await app.eval('__stet.view.scroller.scrollTop = __stet.view.scroller.scrollHeight');
   await app.until(`__stet.timeline.bandA > ${await tl('t.tl.notes[0].x')} + 0.2`, { what: 'the band past the note' });
   const sq = await app.rect('#timeline .tl-note');
   await app.click(sq.left + 3, sq.top + 6);
   await app.until(`__stet.editor.caret.b === 8 && !__stet.view.glide`, { what: 'the glide to the note' });
-  const top = await app.eval(`(() => { const v = __stet.view; return { off: v.caretRect().y - v.scroller.scrollTop, row: v.row }; })()`);
-  assert.ok(Math.abs(top.off - 2 * top.row) <= 1, `two rows of room above it (${top.off}px for ${top.row}px rows)`);
+  const top = await app.eval(`(() => { const v = __stet.view, e = __stet.editor, s = v.scroller.scrollTop, b = e.caret.b;
+    const end = v.caretRect({ b: b - 1, o: e.blocks[b - 1].text.length });
+    return { off: v.caretRect().y - s, row: v.row, blank: v.blankAbove({ b, o: 0 }), prevBottom: end.y + v.row - s }; })()`);
+  assert.ok(top.blank >= 1 && Math.abs(top.off - top.blank * top.row) <= 1, `the blank rows above it as its room (${top.off}px for ${top.row}px rows)`);
+  assert.ok(top.prevBottom <= 0, `the line before it out of view (${top.prevBottom}px)`);
   assert.ok(Math.abs(top.off % top.row) <= 1 || Math.abs(top.off % top.row - top.row) <= 1, 'no part of a line at the top');
   await app.until(async () => { const h = await app.rect('#timeline .tl-head'), n = await app.rect('#timeline .tl-note'); return Math.abs(h.left + 0.5 - (n.left + n.width / 2)) < 0.5; }, { what: 'the playhead on the note' });
 });
@@ -220,6 +223,11 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   await app.click(sr.right - 40, bar.top + 20);
   await app.frame();
   assert.deepEqual(await app.eval('[JSON.stringify(__stet.editor.caret), __stet.timeline.drawn]'), before, 'a click under the fade goes nowhere');
+  // Dragging on and on zooms in no closer than two minutes across the bar.
+  for (let i = 0; i < 3; i++) await app.drag(bar.left + bar.width * 0.3, bar.bottom - 5, bar.left + bar.width * 0.3 + 300, bar.bottom - 5);
+  await app.until('!__stet.timeline.zoomRaf', { what: 'the zoom settled, all the way in' });
+  const across = await tl('(t.scroll.clientWidth - 28) / t.drawn * t.time.at(t.length) / t.length');
+  assert.ok(Math.abs(across - 120) < 0.5, `two minutes across the bar at the closest (${across}s)`);
   await app.clickOn('#timeline .tl-reset');
   await app.until(`__stet.timeline.drawn === ${fit} && !__stet.timeline.zoomRaf`, { what: 'the corner button: the whole script, in one smooth zoom' });
   await app.drag(bar.left + bar.width * 0.3, bar.bottom - 5, bar.left + bar.width * 0.3 + 60, bar.bottom - 5);

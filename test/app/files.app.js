@@ -256,7 +256,7 @@ test('Open Recent: × removes an entry and keeps the file; the bin asks, then mo
   await app.noDialog();
 });
 
-test('File > Restore Backup: this screenplay\'s backups by day, with their words; delete and restore each take a second press', async () => {
+test('File > Restore Backup: this screenplay\'s backups by day, with their words; delete takes a second press, restore goes straight to naming the new screenplay', async () => {
   const file = path.join(tmp, 'Backed Up.stet');
   const json = async (text) => { await app.load([['action', text]]); return app.eval('__stet.session.serialize()'); };
   const alpha = await json('Alpha one two.'), beta = await json('Beta words here now.');
@@ -282,9 +282,7 @@ test('File > Restore Backup: this screenplay\'s backups by day, with their words
   await press('3 words', '.bk-del');
   await app.until(`document.querySelectorAll('.bk-row').length === 1`, { what: 'the row gone' });
   assert.equal(await onDisk(), 1);
-  // RESTORE: the second press asks for a new screenplay, named after this one and the backup's time, in the same folder.
-  await press('4 words', '.bk-restore');
-  assert.equal(await app.eval(`!!document.querySelector('.bk-dlg')`), true, 'one press restores nothing');
+  // RESTORE: one press asks for a new screenplay, named after this one and the backup's time, in the same folder.
   await press('4 words', '.bk-restore');
   await app.until(`document.querySelector('#overlay .dlg')?.textContent.includes('RESTORE AS NEW SCREENPLAY')`, { what: 'the new screenplay asked for' });
   const [name, where] = await app.eval(`[...document.querySelectorAll('#overlay .dlg input[type=text]')].slice(0, 2).map((i) => i.value)`);

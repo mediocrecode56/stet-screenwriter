@@ -262,6 +262,16 @@ export function parseTime(str) {
 
 const STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
 
+/** The closest the timeline zooms in: two minutes of the script across the bar. */
+export const ZOOM_MAX_SEC = 120;
+
+/** The most pixels a page the bar (`width` pixels for the script's `len` pages, `total` seconds long)
+ *  is drawn at: two minutes of it across the bar at the script's own pace, never closer than the whole
+ *  script (one shorter than two minutes doesn't zoom at all). */
+export function maxScale(width, len, total) {
+  return (width / len) * Math.max(1, total / ZOOM_MAX_SEC);
+}
+
 /** The ruler's step in seconds: the smallest that leaves at least `minPx` between ticks. */
 export function rulerStep(pxPerSec, minPx = 56) {
   for (const s of STEPS) if (s * pxPerSec >= minPx) return s;

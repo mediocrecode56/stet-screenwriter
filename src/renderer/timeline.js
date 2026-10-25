@@ -7,13 +7,12 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond, maxScale } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
 import { MAC } from '../core/keys.js';
 
-const PPP_MAX = 6000; // most pixels a page: about 100 a second at a minute a page
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const COVER = 0.62; // the part of the fade at the right end (zoomed in) dense enough that nothing under it is in play
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
@@ -140,10 +139,11 @@ export class Timeline {
       if ((l < this.rulerA && this.rulerA > 0) || (l + w > this.rulerB && this.rulerB < this.length * this.drawn)) this.paintRuler();
       this.refreshHover(); // the strip moved under a pointer that didn't
     });
-    // A wider window may hold the whole script at the zoom it had: then it is simply the whole script.
+    // A wider window may hold the whole script at the zoom it had: then it is simply the whole script;
+    // a narrower one, less than two minutes: then it is two minutes.
     new ResizeObserver(() => {
       if (!this.visible) return;
-      if (!this.zoomed) this.ppp = 0;
+      this.ppp = this.zoomed ? Math.min(this.ppp, this.maxPpp) : 0;
       this.slide(0);
       this.update(true);
       this.editing?.place();
@@ -162,6 +162,8 @@ export class Timeline {
   get length() { return Math.max(1, this.view.pages.length); }
   get fit() { return Math.max(1, this.scroll.clientWidth - PADX * 2) / this.length; }
   get scale() { return this.zoomed ? this.ppp : this.fit; }
+  /** The closest it zooms in: two minutes across the bar (core/timeline.js maxScale()). */
+  get maxPpp() { return this.time ? maxScale(Math.max(1, this.scroll.clientWidth - PADX * 2), this.length, this.time.at(this.length)) : this.fit; }
   /** Zoomed in past fitting the whole script in the bar. */
   get zoomed() { return this.ppp > this.fit; }
 
@@ -248,7 +250,7 @@ export class Timeline {
    * stretch. A new goal mid-way carries on from where it is, without a restart.
    */
   zoomTo(ppp, at, px, { tau = 70, ptr = null } = {}) {
-    ppp = Math.max(this.fit, Math.min(PPP_MAX, ppp));
+    ppp = Math.max(this.fit, Math.min(this.maxPpp, ppp));
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { this.stopZoom(); return this.setScale(ppp, at, px); }
     const from = { s: this.drawn, px: this.inner.getBoundingClientRect().left + at * this.drawn - this.scroll.getBoundingClientRect().left }; // where `at` is now, to the part of a pixel
     this.zoomGoal = { ppp, at, px, tau, from, ptr };
@@ -272,7 +274,7 @@ export class Timeline {
 
   /** Draw at `ppp` pixels a page (down to fitting the script), with position `at` at `px` in the bar. */
   setScale(ppp, at, px) {
-    ppp = Math.min(PPP_MAX, ppp);
+    ppp = Math.min(this.maxPpp, ppp);
     this.ppp = ppp <= this.fit ? 0 : ppp;
     this.slide(0);
     this.update(true);

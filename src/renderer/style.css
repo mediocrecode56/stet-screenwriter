@@ -21,15 +21,15 @@
   --inv-fg: #fff;
   --sel: rgba(0, 0, 0, .16);
   --caret: #000;
-  /* The three highlights are one set, like highlighter on paper: the same lightness and about the same
-     softness (OKLCH ~0.9 / 0.03-0.05), the yellow a warm cream rather than a bright lemon. */
-  --hl-blue: #cfdcf0;
-  --hl-yellow: #ede2b8;
-  --hl-pink: #f1d4e1;
+  /* The three highlights are one set, pastel, like soft pencil on paper: the same lightness and softness
+     (OKLCH ~0.89 / 0.03), the yellow a pale cream, never brighter than the blue or the pink. */
+  --hl-blue: #cfdcee;
+  --hl-yellow: #e4dcc4;
+  --hl-pink: #ebd3dd;
   --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
-  --tl-blue: #4a8ee8;
-  --tl-yellow: #e5be14;
-  --tl-pink: #e2609f;
+  --tl-blue: #75a1dc; /* the marks' colours (timeline, squares, notes): pastel too (~0.70-0.80 / 0.10) */
+  --tl-yellow: #d6bc6b;
+  --tl-pink: #d987ac;
   --spell: rgba(206, 38, 38, .74); /* a misspelling's underline: a clear red line under the word */
   --find: rgba(0, 0, 0, .10);
   --find-cur: rgba(0, 0, 0, .32);
@@ -75,13 +75,13 @@
   --inv-fg: #0f0f0f;
   --sel: rgba(255, 255, 255, .20);
   --caret: #fff;
-  --hl-blue: #2a4260;
-  --hl-yellow: #4d3f20; /* (warm, not olive: with the blue and pink, ~0.37 / 0.05-0.06) */
-  --hl-pink: #5a2f46;
+  --hl-blue: #304157;
+  --hl-yellow: #4b3f27; /* (warm, not olive: with the blue and pink, ~0.37 / 0.04-0.05) */
+  --hl-pink: #543544;
   --tl-line: #f0f0ed;
-  --tl-blue: #5b9cf0;
-  --tl-yellow: #f2d33a;
-  --tl-pink: #ef6fae;
+  --tl-blue: #80aae3;
+  --tl-yellow: #dfca7d;
+  --tl-pink: #e192b5;
   --spell: rgba(255, 102, 102, .78);
   --find: rgba(255, 255, 255, .12);
   --find-cur: rgba(255, 255, 255, .34);
@@ -197,10 +197,9 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 /* The Tab cycle: a box around each run of element types Tab steps through, with a grip at each end. */
 #eltypes { position: relative; }
 #tabcycle { position: absolute; inset: 0; pointer-events: none; }
-/* Its top and bottom lie on the toolbar's own rules (the menu bar's above, the toolbar's below: 4px out from the
-   buttons, #elbar's padding and rule), drawn firmer along the box, so the box is cut from the bar's outline
-   rather than drawn inside it; its sides stand the same three pixels clear of a filled button (app.js CYC_GAP). */
-.cyc-box { position: absolute; top: -4px; bottom: -4px; box-shadow: inset 0 0 0 1px var(--ink-3); }
+/* Exactly the buttons' own edges (app.js renderTabTypes), its line drawn inwards on their outermost pixel:
+   nothing of it ever stands outside the buttons or over the toolbar's rules. */
+.cyc-box { position: absolute; top: 0; bottom: 0; box-shadow: inset 0 0 0 1px var(--ink-3); }
 .cyc-box.drag, #elbar:hover .cyc-box { box-shadow: inset 0 0 0 1px var(--ink-2); }
 .cyc-h { position: absolute; top: 0; bottom: 0; width: 7px; pointer-events: auto; cursor: ew-resize; }
 .cyc-h.l { left: -3px; } .cyc-h.r { right: -3px; }
@@ -787,7 +786,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .sheet { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2); position: relative; overflow: hidden; flex: none; color: #000; font-family: var(--script); }
 .sheet .l { position: absolute; white-space: pre; line-height: 1; }
 .sheet .mk { position: absolute; }
-.sheet .mk.hl-blue { background: #c8defb; } .sheet .mk.hl-yellow { background: #fbefa0; } .sheet .mk.hl-pink { background: #fbcde2; }
+.sheet .mk.hl-blue { background: #cee0f8; } .sheet .mk.hl-yellow { background: #f2e9bb; } .sheet .mk.hl-pink { background: #f6d3e3; }
 .sheet .cap { position: absolute; bottom: -1px; right: 0; font: 9px var(--ui); background: #000; color: #fff; padding: 1px 4px; }
 
 /* changelog */
