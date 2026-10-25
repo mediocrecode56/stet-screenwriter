@@ -334,6 +334,7 @@ export const PROPS = {
   reed: [['.....', '.....', '.....', '.#.#.', '.#.#.'], ['.....', '.....', '#.#..', '.#.#.', '.#.#.'], ['.....', '#.#.#', '#.#.#', '.#.#.', '.#.#.'], ['#...#', '#.#.#', '#.#.#', '.#.#.', '.#.#.']],
   stick: [['#......', '.######', '...#...']], // a twig with a stub of a branch
   mug: [['###.', '#.##', '#.#.', '###.']],
+  table: [['######', '.#..#.', '.#..#.']], // a little one for the mug, so it never stands in the sand
   // A squiggle scratched into the sand, a stroke at a time.
   doodle: [['.......', '#......'], ['.#.....', '#.#....'], ['.#...#.', '#.#.#..'], ['.#...#.', '#.#.#.#']],
   mound: [['......', '......', '..##..'], ['......', '.####.', '######'], ['..##..', '.####.', '######']],
@@ -382,21 +383,21 @@ export const PROPS = {
   dragonfly: [['..#.#..', '#######', '.......'], ['.......', '#######', '..#.#..']],
   bee: [['..##.', '#.#.#', '.###.'], ['.....', '#.#.#', '.###.']],
   kite: [['..#..', '.#.#.', '#.#.#', '.#.#.', '..#..', '..#..', '.#...'], ['..#..', '.#.#.', '#.#.#', '.#.#.', '..#..', '..#..', '...#.']],
-  rock: [['..####..', '.######.', '########']],
+  rock: [['.####.', '######']],
   beetle: [['.###', '#.#.'], ['.###', '.#.#']],
   dung: [['.#.', '###', '.#.'], ['.##', '###', '##.']],
   pile: [['..#.#...', '.######.', '########']], // leaves swept together
 };
 // Drawn lighter: water, light and things far off.
-export const ALPHA = { doodle: 0.55, puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8, kite: 0.9 };
+export const ALPHA = { rock: 0.7, doodle: 0.55, puddle: 0.5, rainbow: 0.4, cloud: 0.85, sun: 0.75, moon: 0.8, kite: 0.9 };
 
 /**
- * A rock as it comes out of the sand, never the same twice: 7 to 12 columns wide and 3 to 5 rows high,
- * its top a rounded random profile (highest somewhere near the middle), a few dents in its face, and
- * always a solid bottom row to stand on. `rnd` gives numbers in [0, 1).
+ * A rock as it comes out of the sand, never the same twice: small and plain, 5 to 8 columns wide and
+ * 2 or 3 rows high, its top a rounded random profile (highest somewhere near the middle) and always a
+ * solid bottom row to stand on. `rnd` gives numbers in [0, 1).
  */
 export function rockArt(rnd) {
-  const w = 7 + Math.floor(rnd() * 6), h = 3 + Math.floor(rnd() * 3), peak = (0.3 + rnd() * 0.4) * (w - 1);
+  const w = 5 + Math.floor(rnd() * 4), h = 2 + Math.floor(rnd() * 2), peak = (0.3 + rnd() * 0.4) * (w - 1);
   const tops = [];
   for (let i = 0; i < w; i++) {
     const d = Math.abs(i - peak) / Math.max(peak, w - 1 - peak); // 0 at the peak, 1 at the far end
@@ -406,11 +407,7 @@ export function rockArt(rnd) {
   const rows = [];
   for (let r = 0; r < h; r++) {
     let row = '';
-    for (let i = 0; i < w; i++) {
-      const fill = h - r <= tops[i];
-      const dent = fill && r > 0 && r < h - 1 && i > 0 && i < w - 1 && h - r < tops[i] && rnd() < 0.12;
-      row += fill && !dent ? '#' : '.';
-    }
+    for (let i = 0; i < w; i++) row += h - r <= tops[i] ? '#' : '.';
     rows.push(row);
   }
   return rows;

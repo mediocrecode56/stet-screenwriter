@@ -11,6 +11,7 @@ import { Input } from './input.js';
 import { Session } from './session.js';
 import { ScenePanel, NotesPanel } from './ui/panels.js';
 import { setPanel, isOpen } from './ui/motion.js';
+import { started } from './ui/startup.js';
 import { FocusMode } from './ui/focus.js';
 import { Dino } from './dino.js';
 import { WritingStats } from './writing.js';
@@ -92,6 +93,7 @@ const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), {
   editor, view, jump: (p) => jumpScene(p.b),
   times: () => timeline.sceneTimes(), // each scene's time, as the timeline has it
   editTime: (b, box) => timeline.editScene(b, box),
+  focusEditor: () => input.focus(),
 });
 const notes = new NotesPanel($('right'), $('notes'), $('note-count'), { editor, view, session, jump, onChange: () => session.touch(), onMark: () => { timeline.update(true); view.schedule(); } });
 const find = new FindBar({ editor, view, jump, focusEditor: () => input.focus() });
@@ -1357,6 +1359,10 @@ if (info.sample) {
     else for (const p of launchOrder(settings.recent, settings.lastEdited)) if (session.doc !== blank || await openPath(p, { quiet: true, onlyOver: blank })) break;
   }
 }
+// Shown once it is all in place and painted, the fonts in (main.js keeps the window hidden till then).
+await Promise.race([document.fonts?.ready, new Promise((r) => setTimeout(r, 400))]);
+await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+started();
 if (info.e2e) window.__stet.started = true; // the tests begin once STET has finished starting
 if (info.run) setTimeout(() => cmd.run(info.run), 300);
 if (info.updateCheck && settings.updateCheck !== false) setTimeout(() => updates.check(false), info.updateDelay);

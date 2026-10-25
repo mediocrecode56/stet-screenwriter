@@ -170,9 +170,9 @@ test('five newer neighbours: a dragonfly, a bee, a kite, a rock, a dung beetle â
     const art = rockArt(seeded(i));
     shapes.add(art.join('/'));
     assert.ok(art.every((r) => r.length === art[0].length && /^[#.]+$/.test(r)) && /^#+$/.test(art.at(-1)), art.join('/'));
-    assert.ok(art[0].length >= 7 && art[0].length <= 12 && art.length >= 3 && art.length <= 5, 'its size');
+    assert.ok(art[0].length >= 5 && art[0].length <= 8 && art.length >= 2 && art.length <= 3, 'its size: small');
   }
-  assert.ok(shapes.size >= 35, `${shapes.size} shapes in 40`);
+  assert.ok(shapes.size >= 25, `${shapes.size} shapes in 40`); // (small, so fewer shapes to have)
   // The kite and the rock are seldom; a bee mostly where the flowers are; a dragonfly mostly by the water.
   const plain = make1('plain').weights(NOW), wet = make1('rainy').weights(NOW), fl = make1('flowers').weights(NOW);
   for (const a of ['kite', 'boulder']) assert.ok(share(plain, a) > 0 && share(plain, a) < 0.006, `${a} seldom (${(100 * share(plain, a)).toFixed(2)} %)`);

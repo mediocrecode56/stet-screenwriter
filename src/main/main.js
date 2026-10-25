@@ -43,6 +43,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'stet', privileges: { standard: 
 if (!PERF && !SHOT && !E2E && !app.requestSingleInstanceLock()) app.quit();
 
 let win = null;
+let revealWin = () => {}; // shows the window (createWindow); the renderer asks once it has started
 let allowClose = false;
 let closeAsked = 0;
 let settings, stats, recovery, claude, updater;
@@ -89,13 +90,17 @@ function createWindow() {
   win.loadURL('stet://app/renderer/index.html');
   // Started as a patch (src/main/boot.js): it works, so it is kept.
   if (process.env.STET_PATCH) win.webContents.once('did-finish-load', () => confirmLaunch(process.env.STET_PATCH).catch(() => {}));
-  // Shown only once the interface has painted, in one go. A maximized window is maximized here,
-  // not at creation: on Windows maximize() shows a hidden window at once, so it used to appear
-  // empty and then fill in (a jump on every start).
-  win.once('ready-to-show', () => {
-    if (SHOT || flag('--hidden')) return;
+  // Shown only once STET has started (app:ready): its theme, panels, toolbar and screenplay all in
+  // place and painted, so it appears in one go, with nothing sliding in, swapping or jumping after.
+  // (Should that never come, it is shown a little after the first paint anyway.) A maximized window
+  // is maximized here, not at creation: on Windows maximize() shows a hidden window at once.
+  let shown = false;
+  revealWin = () => {
+    if (shown || !win || win.isDestroyed() || SHOT || flag('--hidden')) return;
+    shown = true;
     if (b.maximized) win.maximize(); else win.show();
-  });
+  };
+  win.once('ready-to-show', () => setTimeout(revealWin, 2500));
   for (const [ev, on] of [['enter-full-screen', true], ['leave-full-screen', false]]) win.on(ev, () => win.webContents.send('app:fullscreen', on));
   win.on('close', (e) => {
     saveBounds();
@@ -527,6 +532,7 @@ app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
   }
   registerIpc();
+  handle('app:ready', () => { revealWin(); return true; });
   handle('app:pending-open', () => { const f = pendingOpen; pendingOpen = null; return f; });
   createWindow();
   if (PERF) win.webContents.once('did-finish-load', () => setTimeout(() => win.webContents.send('perf:start'), 800));

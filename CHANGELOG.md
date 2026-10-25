@@ -2,6 +2,15 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.51.0 · 25 Oct 2026
+
+- The right-click menu on selected text: resting on the element, text style or alignment button opens its dropdown after 0.3 seconds, with no filling line under it. The dropdown slides out from under the bar in one smooth move, the same way the side panels slide in, and the menu itself opens like every other menu in STET.
+- Double-click a scene in the scene list to rename it. Type the new heading and press Enter (or click away); Esc leaves it as it was. The heading changes in the script too, in capitals, and one undo puts it back.
+- The rock the dinosaur digs up is smaller, plainer and a little lighter, with no more dots in its face.
+- On a coffee break the dinosaur now sets out a little table for its mug, instead of putting the mug down in the sand.
+- The scrollbars at the side and bottom are quieter: a thin, faint bar that gets stronger only when the pointer is on it.
+- STET starts more smoothly. The window now appears only once everything is in place (theme, toolbar, side panels, timeline and your screenplay), so nothing slides in, flickers or jumps just after it opens.
+
 ## 0.50.0 · 25 Oct 2026
 
 - Timeline: when you jump somewhere (a mark on the timeline, the scene list, a note), the glass box now goes there in one smooth move along with the script. It no longer goes slightly too far and springs back, or catches on the marks it passes on the way.

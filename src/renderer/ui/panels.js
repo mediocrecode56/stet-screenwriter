@@ -25,18 +25,23 @@ function idle(fn) {
 }
 
 export class ScenePanel {
-  constructor(host, list, count, { editor, view, jump, times, editTime }) {
+  constructor(host, list, count, { editor, view, jump, times, editTime, focusEditor }) {
     this.host = host; this.list = list; this.count = count;
-    this.ed = editor; this.view = view; this.jump = jump;
+    this.ed = editor; this.view = view; this.jump = jump; this.focusEditor = focusEditor;
     this.times = times; // each scene's time on the timeline: () => (b) => { t, pinned }
     this.editTime = editTime;
     this.pending = false;
     this.lastKey = '';
     list.addEventListener('mousedown', (e) => {
       const r = e.target.closest('.row');
-      if (!r) return;
+      if (!r || e.target.closest('.t.editing')) return;
       e.preventDefault();
       if (e.button === 0) this.jump(pos(+r.dataset.b, 0), true); // (a right-click is for its timecode)
+    });
+    // A double-click on a scene renames it: its heading becomes a field (as the title does).
+    list.addEventListener('dblclick', (e) => {
+      const r = e.target.closest('.row');
+      if (r && !e.target.closest('.t.editing')) this.rename(+r.dataset.b, r.querySelector('.t'));
     });
     // A right-click on a scene: its own timecode, as on the timeline.
     list.addEventListener('contextmenu', (e) => {
@@ -55,7 +60,49 @@ export class ScenePanel {
     idle(() => { this.pending = false; this.render(); });
   }
 
+  /** Rename scene heading b in place: Enter (or clicking away) writes the new heading into the
+   *  script as one undoable step; Escape leaves it as it was. */
+  rename(b, t) {
+    if (!t || this.renaming) return;
+    const was = this.ed.blocks[b]?.text ?? '';
+    this.renaming = true;
+    t.textContent = was;
+    t.contentEditable = 'plaintext-only';
+    t.classList.add('editing');
+    t.focus();
+    getSelection().selectAllChildren(t);
+    let done = false;
+    const finish = (keep) => {
+      if (done) return;
+      done = true;
+      t.removeEventListener('keydown', onKey);
+      t.removeEventListener('blur', onBlur);
+      removeEventListener('mousedown', onDown, true);
+      t.contentEditable = 'false';
+      t.classList.remove('editing');
+      getSelection().removeAllRanges();
+      this.renaming = false;
+      const name = t.textContent.replace(/\s+/g, ' ').trim();
+      const blk = this.ed.blocks[b];
+      if (keep && name && name !== was && blk && blk.type === 'scene' && blk.text === was) this.ed.replaceRanges([{ b, s: 0, e: was.length }], [name]);
+      this.lastKey = '';
+      this.render();
+      this.focusEditor?.();
+    };
+    const onKey = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    };
+    const onBlur = () => finish(true);
+    const onDown = (e) => { if (!t.contains(e.target)) finish(true); };
+    t.addEventListener('keydown', onKey);
+    t.addEventListener('blur', onBlur);
+    addEventListener('mousedown', onDown, true);
+  }
+
   render() {
+    if (this.renaming) return; // (the field stays as it is until the rename ends)
     const scenes = this.ed.scenes();
     const pages = this.view.pages;
     const cur = this.ed.caret.b;
@@ -70,7 +117,7 @@ export class ScenePanel {
     let h = '';
     scenes.forEach((s, i) => {
       const pg = pageOf(pages, s.b, 0) + 1, tm = tms[i];
-      h += `<div class="row${i === curIdx ? ' cur' : ''}" data-b="${s.b}" title="Scene ${i + 1}${tm.pinned ? ' · timecode pinned' : ''} (right-click for its timecode)"><span class="n${tm.pinned ? ' pin' : ''}">${rulerLabel(tm.t)}</span><span class="t">${esc(s.text || '—')}</span><span class="p">${pg}</span></div>`;
+      h += `<div class="row${i === curIdx ? ' cur' : ''}" data-b="${s.b}" title="Scene ${i + 1}${tm.pinned ? ' · timecode pinned' : ''} (double-click to rename, right-click for its timecode)"><span class="n${tm.pinned ? ' pin' : ''}">${rulerLabel(tm.t)}</span><span class="t">${esc(s.text || '—')}</span><span class="p">${pg}</span></div>`;
     });
     this.list.innerHTML = h;
     const c = this.list.querySelector('.cur');

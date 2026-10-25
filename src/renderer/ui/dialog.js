@@ -6,6 +6,7 @@
 
 import { arrive, leave, reducedMotion, DUR_FAST, EASE_IN_OUT } from './motion.js';
 import { macKeys } from '../../core/keys.js';
+import { started } from './startup.js';
 
 const overlay = () => document.getElementById('overlay');
 let active = null;
@@ -45,6 +46,7 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
       body,
       h('div', { class: 'foot' }, h('span', { class: 'grow' }, foot || ''), ...btns));
     ov.replaceChildren(dlg);
+    started(); // (a question while starting, such as unsaved changes found, needs the window)
     ov.hidden = false;
     if (!swap) arrive(dlg, { dist: 4, scale: 0.97 });
     const onKey = (e) => {

@@ -8,7 +8,7 @@ const INVOKE = new Set([
   'recovery:write', 'recovery:clear', 'recovery:list', 'recovery:read',
   'backup:create', 'backup:list', 'backup:delete', 'backup:prune', 'backup:read', 'backup:dir', 'backup:reveal',
   'stats:get', 'stats:add', 'stats:flush', 'stats:reset', 'e2e:close-window',
-  'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'perf:scratch', 'perf:cleanup','shell:reveal', 'app:pending-open',
+  'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'perf:scratch', 'perf:cleanup','shell:reveal', 'app:pending-open', 'app:ready',
   'recent:list', 'recent:dismiss', 'recent:trash',
   'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel',
   'app:open-url', 'app:link-files', 'update:check', 'update:download', 'update:cancel', 'update:install', 'pointer:lock', 'win:fullscreen',

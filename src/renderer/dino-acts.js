@@ -213,15 +213,17 @@ export const ACTIVITIES = {
   },
   *coffeeBreak(d) {
     yield* d.getTo('sit');
-    const mug = d.spawn('mug', { x: d.front(4, 0) });
-    yield { f: 'sitBlink', t: 300, fx: 'puff', do: (c) => c.puffAt(mug.x) };
+    // (on a little table of its own, never down in the sand)
+    const table = d.spawn('table', { x: d.front(6, 0) });
+    const mug = d.spawn('mug', { x: table.x + d.u, y: PROPS.table[0].length });
+    yield { f: 'sitBlink', t: 300, fx: 'puff', do: (c) => c.puffAt(table.x + c.u) };
     const n = d.rint(3, 5);
     for (let i = 0; i < n; i++) {
       yield { f: 'sit', t: d.rnd(900, 1300), do: (c) => c.steam(mug) };
       yield { f: 'sitUp', t: 500, do: () => { mug.carried = true; } }; // a sip
       yield { f: 'sitBlink', t: 500, fx: i === 1 ? 'heart' : null, do: () => { mug.carried = false; } };
     }
-    yield { f: 'sit', t: 300, do: (c) => { c.remove(mug); c.puffAt(mug.x); } };
+    yield { f: 'sit', t: 300, do: (c) => { c.remove(mug); c.remove(table); c.puffAt(table.x + c.u); } };
     yield { f: 'sitBreath', t: 400 };
   },
   *writeAlong(d) {

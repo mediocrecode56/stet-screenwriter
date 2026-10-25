@@ -815,7 +815,7 @@ export class Critter {
   }
   puffAt(x, y = 1) { for (let i = 0; i < 4; i++) this.particles.push({ x: x + this.rnd(0, 6), y: y + this.rnd(0, 3), vx: this.rnd(-20, 20), vy: this.rnd(10, 25), t0: this.now }); }
   splashAt(x, n, dir = 0) { for (let i = 0; i < n; i++) this.particles.push({ x: x + this.rnd(-6, 6), y: 1, vx: (dir || (this.chance(0.5) ? 1 : -1)) * this.rnd(15, 45), vy: this.rnd(20, 40), t0: this.now }); }
-  steam(p) { if (p) for (let i = 0; i < 2; i++) this.particles.push({ x: p.x + this.rnd(0, 3 * this.u), y: 5 + i, vx: this.rnd(-3, 3), vy: this.rnd(4, 7), g: 0, t0: this.now }); }
+  steam(p) { if (p) for (let i = 0; i < 2; i++) this.particles.push({ x: p.x + this.rnd(0, 3 * this.u), y: (p.y || 0) + 5 + i, vx: this.rnd(-3, 3), vy: this.rnd(4, 7), g: 0, t0: this.now }); }
   spark(x, y, n) { for (let i = 0; i < n; i++) this.sparks.push({ x, y, vx: this.rnd(-15, 15), vy: this.rnd(5, 18), g: 30, t0: this.now, life: 500 }); }
   /** The sun or the moon: the one already in the sky (turned round to rise or set), or a new one. */
   sky(kind, o) {

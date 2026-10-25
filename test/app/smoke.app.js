@@ -122,6 +122,15 @@ test('scene navigation glides to the heading, nothing of the scene before it in 
   const p = await app.eval(`(() => { const { view, editor } = __stet; return { text: editor.block.text, off: view.caretRect().y - view.scroller.scrollTop, blank: view.blankAbove(editor.caret), row: view.row }; })()`);
   assert.equal(p.text, 'INT. ROOM 10 - DAY');
   assert.ok(Math.abs(p.off - p.blank * p.row) <= 1, `from the scene list too (${p.off}px down)`);
+  // A double-click on a scene renames it, in the script (in capitals, as a heading is), one undo away.
+  await app.click(row.x, row.y);
+  await app.click(row.x, row.y, { count: 2 });
+  await app.until(`!!document.querySelector('#scenes .row .t.editing')`, { what: 'the scene name a field' });
+  await app.type('ext. roof - night');
+  await app.key('Enter');
+  await app.until(`__stet.editor.blocks[${9 * 6}].text === 'EXT. ROOF - NIGHT' && document.querySelector('#scenes .row[data-b="${9 * 6}"] .t').textContent === 'EXT. ROOF - NIGHT'`, { what: 'the scene renamed' });
+  await app.eval(`__stet.editor.undo()`);
+  assert.equal(await app.eval(`__stet.editor.blocks[${9 * 6}].text`), 'INT. ROOM 10 - DAY', 'undone in one step');
   await app.eval(`__stet.cmd.run('panel-scenes')`);
   await app.until('document.getElementById("left").hidden');
 });

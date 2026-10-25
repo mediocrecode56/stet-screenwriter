@@ -121,11 +121,16 @@ button { font: inherit; color: inherit; letter-spacing: inherit; }
 input, textarea, select { font: inherit; color: var(--ink); background: transparent; }
 input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { cursor: text; }
 [hidden] { display: none !important; }
+/* Starting (the window not shown yet: ui/startup.js): everything takes its place at once. */
+.starting *, .starting *::before, .starting *::after { transition: none !important; }
 ::selection { background: var(--sel); }
+/* Scrollbars, side and bottom: a quiet hairline-thin square bar, inset from the edge, that firms up
+   only under the pointer (the clear border keeps the space to grab it by). */
 ::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-thumb { background: var(--rule); }
-::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--rule) 55%, transparent); background-clip: padding-box; border: 3px solid transparent; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--rule); border-width: 2px; }
+::-webkit-scrollbar-thumb:active { background-color: var(--ink-3); border-width: 2px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
 
 /* ---- top bar --------------------------------------------------------- */
 #top {
@@ -179,15 +184,14 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .sp-act:hover { background: var(--hover-on); color: var(--ink); }
 /* The right-click menu on selected text (ui/selmenu.js): four square buttons, three with a dropdown
-   under the bar. Resting on one, a line under it fills (selmenu.js HOVER_MS) and its dropdown opens;
-   open, the line stays and the arrow turns up. */
+   under the bar. Resting on one (selmenu.js HOVER_MS) opens its dropdown;
+   open, a line marks the button and its arrow turns up. */
 .menu.selbar { min-width: 0; display: flex; padding: 0; transform-origin: top left; }
 .selb { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; height: 28px; min-width: 32px; padding: 0 8px; border: 0; background: none; color: var(--ink-2); cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .selb + .selb { box-shadow: inset 1px 0 0 var(--rule); }
 .selb:hover, .selb.open { background: var(--hover-on); color: var(--ink); }
 .selb:active { background: var(--hover); }
 .selb::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform var(--dur-out) var(--ease-out); }
-.selb.wait::after { transform: scaleX(1); transition: transform 500ms linear; }
 .selb.open::after { transform: scaleX(1); transition: transform var(--dur-fast) var(--ease-out); }
 .selb svg { display: block; }
 .selb .gb { font: 700 14px/1 var(--script); }
@@ -448,6 +452,7 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .row .n { color: var(--ink-3); min-width: 4.5ch; flex: none; text-align: right; font-size: 10px; line-height: 16px; letter-spacing: .04em; font-variant-numeric: tabular-nums; } /* the scene's time on the timeline */
 .row .n.pin { color: var(--ink-2); } /* pinned to a timecode */
 .row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.row .t.editing { background: var(--hover-on); color: var(--ink); cursor: text; text-overflow: clip; user-select: text; outline: 0; } /* renaming in place (double-click) */
 .row .p { color: var(--ink-3); flex: none; }
 /* Cards, shared by the notes and Revise: a small header line (where, when, what kind), the passage
    in the script's own type behind a rule, then the text. The card you are on is lifted to the page

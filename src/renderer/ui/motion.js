@@ -17,7 +17,9 @@ export const DUR_FAST = 90;
 export const DUR_PANEL = 140;
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-export const reducedMotion = () => reduced.matches;
+// While STET starts (the window still hidden: ui/startup.js) what it restores is simply there.
+const starting = () => document.documentElement.classList.contains('starting');
+export const reducedMotion = () => reduced.matches || starting();
 
 /** Is a panel open (or opening)? Closing panels already count as closed. */
 export const isOpen = (el) => el.dataset.open === '1';
@@ -39,7 +41,7 @@ export function setPanel(el, want) {
   if (el._anim) { el._anim.cancel(); el._anim = null; }
   if (want) el.hidden = false;
   const w = el[size];
-  if (reduced.matches || !w) { el.hidden = !want; return; }
+  if (reducedMotion() || !w) { el.hidden = !want; return; }
   const start = from ?? (want ? -w : 0);
   const end = want ? 0 : -w;
   const dur = DUR_PANEL * Math.min(1, Math.abs(end - start) / w);
@@ -60,7 +62,7 @@ export function setPanel(el, want) {
 
 /** A floating surface (dialog, menu) arrives: a short drop into place (a negative dist rises), a touch of scale, while it fades in. */
 export function arrive(el, { dist = 6, dur = DUR_PANEL, scale = 1 } = {}) {
-  if (reduced.matches) return;
+  if (reducedMotion()) return;
   el.animate([{ opacity: 0, translate: `0 ${-dist}px`, scale: String(scale) }, { opacity: 1, translate: '0 0', scale: '1' }], { duration: dur, easing: EASE_OUT });
 }
 
