@@ -282,13 +282,19 @@ test('File > Restore Backup: this screenplay\'s backups by day, with their words
   await press('3 words', '.bk-del');
   await app.until(`document.querySelectorAll('.bk-row').length === 1`, { what: 'the row gone' });
   assert.equal(await onDisk(), 1);
-  // RESTORE: the second press brings it back; what was open is kept as a backup first.
+  // RESTORE: the second press asks for a new screenplay, named after this one and the backup's time, in the same folder.
   await press('4 words', '.bk-restore');
   assert.equal(await app.eval(`!!document.querySelector('.bk-dlg')`), true, 'one press restores nothing');
   await press('4 words', '.bk-restore');
-  await app.until(`__stet.editor.blocks[0].text === 'Beta words here now.' && !document.querySelector('.bk-dlg')`, { what: 'the backup restored' });
-  assert.equal(await app.eval('__stet.session.path'), file, 'the same screenplay, restored in place');
-  await app.until(async () => (await onDisk()) === 2, { what: 'what was open kept as a backup first' });
+  await app.until(`document.querySelector('#overlay .dlg')?.textContent.includes('RESTORE AS NEW SCREENPLAY')`, { what: 'the new screenplay asked for' });
+  const [name, where] = await app.eval(`[...document.querySelectorAll('#overlay .dlg input[type=text]')].slice(0, 2).map((i) => i.value)`);
+  assert.match(name, /^Backed Up \d{4}-\d{2}-\d{2} \d{4}$/, 'the screenplay and the time of its backup');
+  assert.equal(where, tmp, 'in the folder of the one it came from');
+  await app.press('Restore');
+  await app.until(`__stet.editor.blocks[0].text === 'Beta words here now.' && __stet.session.path && !__stet.session.dirty`, { what: 'the backup restored and saved' });
+  assert.equal(await app.eval('__stet.session.path'), path.join(tmp, name + '.stet'), 'a screenplay of its own');
+  assert.match((await app.eval(`__stet.api.invoke('doc:read', ${JSON.stringify(file)})`)).json, /Gamma\./, 'the one that was open left as it was');
+  assert.equal(await onDisk(), 1, 'nothing taken from its backups');
 });
 
 test('Tools > Run Performance Probe gives a score and leaves no trace', async () => {

@@ -7,7 +7,7 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
-import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds } from '../core/timeline.js';
+import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
 import { menuAt } from './ui/commands.js';
@@ -635,7 +635,8 @@ export class Timeline {
     const lines = linesOf(this.ed.blocks[c.b] || { text: '', type: 'action' });
     let l = 0;
     while (l + 1 < lines.length && lines[l + 1] <= c.o) l++;
-    const x = scriptPos(pages, c.b, l) * this.drawn;
+    // On the caret's line's own second, as the marks are: on a mark clicked, exactly over it.
+    const line = scriptPos(pages, c.b, l), x = (this.time ? onSecond(this.time, line, this.length) : line) * this.drawn;
     this.head.classList.toggle('glide', !redraw && !this.dragging); // a jump glides; a zoom or a new script doesn't
     this.head.style.left = x + 'px';
     this.showScene(c.b, !redraw && !this.dragging);
@@ -714,7 +715,8 @@ export class Timeline {
     const again = this.zoomRaf && this.tl && this.docSeen === this.session.doc; // mid-zoom: the same marks, drawn at the new scale
     const anchors = again ? this.anchorsDrawn : (this.anchorsDrawn = this.anchors());
     if (!again) this.time = timeScale(anchors);
-    const tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages), this.time, len)); // each on its second, never between two
+    const colors = this.ed.noteColors();
+    const tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages, colors), this.time, len)); // each on its second, never between two
     this.paintRuler();
     this.reset.hidden = this.fade.hidden = !this.zoomed;
     this.nearEnd(this.endX); // (zoomed in or out under a pointer at the end)
@@ -735,7 +737,6 @@ export class Timeline {
     let m = `<div class="tl-line" style="width:${len * s}px"></div>`;
     for (const hl of tl.highlights) m += `<div class="tl-hl hl-${hl.color}" style="left:${hl.x0 * s}px;width:${Math.max(3, (hl.x1 - hl.x0) * s)}px"></div>`;
     for (const sc of tl.scenes) m += `<div class="tl-scene" data-b="${sc.b}" style="left:${sc.x * s}px"></div>`;
-    const colors = this.ed.noteColors();
     tl.notes.forEach((n, i) => { const c = colors.get(n.id); m += `<div class="tl-note${c ? ' c-' + c : ''}" data-i="${i}" style="left:${n.x * s}px"></div>`; }); // a square hung from the line, as on the page; in the note's colour, if it has one
     for (const a of anchors) m += `<div class="tl-tcm ${a.scene ? 'sc' : 'loose'}${a.color ? ' c-' + a.color : ''}" style="left:${a.x * s}px"></div>`;
     this.marks.innerHTML = m;
@@ -804,7 +805,7 @@ export class Timeline {
     // it goes there (whatever row it is on); else a drag zooms (on the ruler) or moves the band (on it).
     this.inner.dataset.zone = near ? (near.kind === 'tc' ? 'tc' : 'mark') : this.onRuler(e) ? 'ruler' : where;
     this.mark(near);
-    this.readout(near ? near.x : this.posAt(e.clientX), null, near);
+    this.readout(near ? near.x : onSecond(this.time, this.posAt(e.clientX), this.length), null, near); // (on a whole second, like everything on the bar)
   }
 
   /** The readout again where the pointer rests, after the strip moved or was redrawn under it. */
@@ -915,7 +916,8 @@ export class Timeline {
     let color = old ? old.color || null : null;
     const time = h('input', { class: 'tc-time', value: formatTime(t0 ?? (old ? old.t : Math.round(this.timeAt(at.here)))), spellcheck: false, 'aria-label': 'Time (HH:MM:SS)' });
     const tag = h('input', { class: 'tc-tag', value: old && old.tag || '', placeholder: 'Tag', maxlength: 40, spellcheck: false, 'aria-label': 'Tag (optional)' });
-    const sws = [null, ...HIGHLIGHT_COLORS].map((c) => h('button', { class: 'tc-sw' + (c === color ? ' on' : ''), title: c ? `Mark ${c}` : 'No colour', 'aria-label': c || 'none', onmousedown: (e) => e.preventDefault(), onclick: () => { color = c; sws.forEach((b, i) => b.classList.toggle('on', i === [null, ...HIGHLIGHT_COLORS].indexOf(c))); } }, h('span', { class: 'sw ' + (c || 'none') })));
+    const SWS = [...HIGHLIGHT_COLORS, null]; // (in the toolbar's order: the colours, then none)
+    const sws = SWS.map((c) => h('button', { class: 'tc-sw' + (c === color ? ' on' : ''), title: c ? `Mark ${c}` : 'No colour', 'aria-label': c || 'none', onmousedown: (e) => e.preventDefault(), onclick: () => { color = c; sws.forEach((b, i) => b.classList.toggle('on', i === SWS.indexOf(c))); } }, h('span', { class: 'sw ' + (c || 'none') })));
     const msg = h('div', { class: 'tc-err' });
     const doc = this.session.doc; // another script opened meanwhile: nothing is kept
     const button = (cls, label, html, run) => h('button', { class: cls, title: label, 'aria-label': label, html, onmousedown: (e) => e.preventDefault(), onclick: run });

@@ -98,9 +98,11 @@ function lineOf(b, o) {
 
 /**
  * What the timeline shows: the scenes (where each starts), the highlights (from and
- * to, in their colour, a run of the same colour across blocks as one) and the notes.
+ * to, in their colour, a run of the same colour across blocks as one) and the notes. A highlight that
+ * is only a note's colour (all of it inside a note given that colour, `colors`: id -> colour) is left
+ * out: the note's own square shows it, in that colour.
  */
-export function timelineOf(blocks, pages) {
+export function timelineOf(blocks, pages, colors = null) {
   const scenes = [], highlights = [], notes = [];
   let run = null; // the highlight still open at the end of the previous block
   for (let bi = 0; bi < blocks.length; bi++) {
@@ -112,20 +114,27 @@ export function timelineOf(blocks, pages) {
       if (m.k === 'cm') { notes.push({ x: scriptPos(pages, bi, lineOf(b, m.s)), id: m.v, b: bi, s: m.s, e: m.e }); continue; }
       if (m.k !== 'hl') continue;
       const x0 = scriptPos(pages, bi, lineOf(b, m.s)), x1 = lineEnd(Math.max(m.s, m.e - 1));
+      const inside = (colors && b.marks.find((c) => c.k === 'cm' && c.s <= m.s && m.e <= c.e && colors.get(c.v) === m.v)?.v) || null;
       // A highlight that carries on from the end of the previous block's is the same stretch.
-      if (run && run.color === m.v && m.s === 0) { run.x1 = Math.max(run.x1, x1); carried = run; }
-      else { carried = { x0, x1, color: m.v }; highlights.push(carried); }
+      if (run && run.color === m.v && m.s === 0) { run.x1 = Math.max(run.x1, x1); if (run.note !== inside) run.note = null; carried = run; }
+      else { carried = { x0, x1, color: m.v, note: inside }; highlights.push(carried); }
       if (m.e < b.text.length) carried = null;
     }
     run = carried;
   }
-  return { scenes, highlights, notes };
+  return { scenes, highlights: highlights.filter((hl) => !hl.note).map(({ note, ...hl }) => hl), notes };
+}
+
+/** Position x moved onto the nearest whole second of `time` (never past `len`): where anything on the
+ *  bar is drawn (a mark, the playhead, the pointer's line), so nothing is ever between two seconds. */
+export function onSecond(time, x, len) {
+  return Math.max(0, Math.min(len, time.pos(Math.round(time.at(x)))));
 }
 
 /** The timeline with every scene, note and highlight moved onto the nearest whole second of `time`
  *  (never past `len`, the end of the script), so none sits between two; `at` keeps where it really is. */
 export function onSeconds({ scenes, highlights, notes }, time, len) {
-  const sec = (x) => Math.max(0, Math.min(len, time.pos(Math.round(time.at(x)))));
+  const sec = (x) => onSecond(time, x, len);
   const put = (m) => ({ ...m, at: m.x, x: sec(m.x) });
   return {
     scenes: scenes.map(put),

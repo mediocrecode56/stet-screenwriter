@@ -168,7 +168,8 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   await app.click(view.left + view.width * 0.6, view.top + 8);
   await app.until('!__stet.view.glide', { what: 'the glide' });
   const band = await tl('[t.bandA, t.bandB, t.head.offsetLeft / t.drawn]');
-  assert.ok(Math.abs((band[0] + band[1]) / 2 - band[2] - 0.5 / 54) < 0.005 || band[0] === 0, `in the middle of the band (${band.map((x) => x.toFixed(3))})`);
+  assert.ok(Math.abs((band[0] + band[1]) / 2 - band[2] - 0.5 / 54) < 0.005 + 0.5 / 60 || band[0] === 0, `in the middle of the band (${band.map((x) => x.toFixed(3))})`); // (the playhead on that line's whole second: up to half a second off)
+  assert.equal(await tl('((s) => Math.abs(s - Math.round(s)) < 1e-6)(t.time.at(parseFloat(t.head.style.left) / t.drawn))'), true, 'the playhead on a whole second');
   // The cursor says what a press does: drawn to a mark, on the ruler too, it is a click on it, not a zoom.
   const note = await app.rect('#timeline .tl-note');
   const bar0 = await app.rect('#timeline .tl-inner');
@@ -185,6 +186,16 @@ test('the timeline: a tick for each scene, note and highlight; a click goes ther
   const pink = await app.rect('#timeline .tl-hl.hl-pink');
   await app.move(pink.left + 1, pink.top + 3);
   assert.match(await tl('t.hover.textContent'), /pink highlight/, 'a highlight says which');
+  // A note outside the band: it glides to the top with a scene heading's room above it, made of whole lines; the playhead on its square.
+  await app.eval('__stet.view.scroller.scrollTop = __stet.view.scroller.scrollHeight');
+  await app.until(`__stet.timeline.bandA > ${await tl('t.tl.notes[0].x')} + 0.2`, { what: 'the band past the note' });
+  const sq = await app.rect('#timeline .tl-note');
+  await app.click(sq.left + 3, sq.top + 6);
+  await app.until(`__stet.editor.caret.b === 8 && !__stet.view.glide`, { what: 'the glide to the note' });
+  const top = await app.eval(`(() => { const v = __stet.view; return { off: v.caretRect().y - v.scroller.scrollTop, row: v.row }; })()`);
+  assert.ok(Math.abs(top.off - 2 * top.row) <= 1, `two rows of room above it (${top.off}px for ${top.row}px rows)`);
+  assert.ok(Math.abs(top.off % top.row) <= 1 || Math.abs(top.off % top.row - top.row) <= 1, 'no part of a line at the top');
+  await app.until(async () => { const h = await app.rect('#timeline .tl-head'), n = await app.rect('#timeline .tl-note'); return Math.abs(h.left + 0.5 - (n.left + n.width / 2)) < 0.5; }, { what: 'the playhead on the note' });
 });
 
 test('the timeline: zoom by dragging the ruler, the whole script again by double-clicking it, scroll by dragging the band', async () => {

@@ -221,3 +221,13 @@ test('the glass band flows with the scroll: on a line as lineFrom reads it, acro
   assert.equal(flowAt(pages, -1, 0, span), 0, 'the title page: the start');
   assert.equal(flowAt(pages, pages.length, 0, span), pages.length, 'past the end: the end');
 });
+
+test('a highlight that is only a note\'s colour is shown by the note alone; one that reaches past it stays', () => {
+  const { blocks } = script(3, 4);
+  blocks[2] = { ...blocks[2], marks: [{ s: 0, e: 4, k: 'hl', v: 'blue' }, { s: 0, e: 6, k: 'cm', v: 'n1' }] };
+  blocks[7] = { ...blocks[7], marks: [{ s: 0, e: 9, k: 'hl', v: 'pink' }, { s: 2, e: 6, k: 'cm', v: 'n2' }] };
+  const p = paginate(blocks, newDocument().settings);
+  const colors = new Map([['n1', 'blue'], ['n2', 'pink']]);
+  assert.deepEqual(timelineOf(blocks, p, colors).highlights.map((h) => h.color), ['pink'], 'the blue is the note\'s; the pink runs past its note');
+  assert.deepEqual(timelineOf(blocks, p).highlights.map((h) => h.color), ['blue', 'pink'], 'without the notes\' colours, every highlight');
+});

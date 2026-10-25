@@ -1,7 +1,7 @@
 // How File > Restore Backup says when a backup was made (core/when.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dayLabel, ago, daysAgo } from '../../src/core/when.js';
+import { dayLabel, ago, daysAgo, restoredName } from '../../src/core/when.js';
 
 const now = new Date(2026, 9, 24, 18, 30).getTime();
 const at = (d, h, m = 0) => new Date(2026, 9, d, h, m).getTime();
@@ -22,4 +22,10 @@ test('how long ago, short', () => {
   assert.equal(ago(at(23, 12), now), '1 day ago');
   assert.equal(ago(at(19, 12), now), '5 days ago');
   assert.equal(ago(now + 5000, now), 'just now', 'a clock a moment behind');
+});
+
+test('a restored backup is offered under the screenplay\'s name and the backup\'s time, safe for a file name', () => {
+  assert.equal(restoredName('Heist', new Date(2026, 9, 5, 9, 7).getTime()), 'Heist 2026-10-05 0907');
+  assert.equal(restoredName('', at(24, 14, 30)), 'Untitled 2026-10-24 1430');
+  assert.doesNotMatch(restoredName('Heist', now), /[<>:"/\|?*]/);
 });

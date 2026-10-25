@@ -21,8 +21,10 @@
   --inv-fg: #fff;
   --sel: rgba(0, 0, 0, .16);
   --caret: #000;
-  --hl-blue: #cfdcf0; /* a touch muted (0.43): they sit with the grey page rather than on it */
-  --hl-yellow: #f3ebb4;
+  /* The three highlights are one set, like highlighter on paper: the same lightness and about the same
+     softness (OKLCH ~0.9 / 0.03-0.05), the yellow a warm cream rather than a bright lemon. */
+  --hl-blue: #cfdcf0;
+  --hl-yellow: #ede2b8;
   --hl-pink: #f1d4e1;
   --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
   --tl-blue: #4a8ee8;
@@ -74,7 +76,7 @@
   --sel: rgba(255, 255, 255, .20);
   --caret: #fff;
   --hl-blue: #2a4260;
-  --hl-yellow: #4f4719;
+  --hl-yellow: #4d3f20; /* (warm, not olive: with the blue and pink, ~0.37 / 0.05-0.06) */
   --hl-pink: #5a2f46;
   --tl-line: #f0f0ed;
   --tl-blue: #5b9cf0;
@@ -195,7 +197,10 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 /* The Tab cycle: a box around each run of element types Tab steps through, with a grip at each end. */
 #eltypes { position: relative; }
 #tabcycle { position: absolute; inset: 0; pointer-events: none; }
-.cyc-box { position: absolute; top: -2px; bottom: -2px; box-shadow: inset 0 0 0 1px var(--ink-3); } /* 2px out on every side (app.js renderTabTypes): its line a pixel clear of the fill all round */
+/* Its top and bottom lie on the toolbar's own rules (the menu bar's above, the toolbar's below: 4px out from the
+   buttons, #elbar's padding and rule), drawn firmer along the box, so the box is cut from the bar's outline
+   rather than drawn inside it; its sides stand the same three pixels clear of a filled button (app.js CYC_GAP). */
+.cyc-box { position: absolute; top: -4px; bottom: -4px; box-shadow: inset 0 0 0 1px var(--ink-3); }
 .cyc-box.drag, #elbar:hover .cyc-box { box-shadow: inset 0 0 0 1px var(--ink-2); }
 .cyc-h { position: absolute; top: 0; bottom: 0; width: 7px; pointer-events: auto; cursor: ew-resize; }
 .cyc-h.l { left: -3px; } .cyc-h.r { right: -3px; }
@@ -366,11 +371,12 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tc-ok:focus-visible, .tc-del:focus-visible { outline: 1px solid var(--rule-strong); }
 .tc-err { display: none; max-width: 300px; padding: 4px 2px 0; font-size: 10px; letter-spacing: .04em; color: var(--ink-2); }
 .tc-pop.bad .tc-err { display: block; }
-.tl-head { position: absolute; top: 0; bottom: 15px; width: 1px; background: var(--ink); pointer-events: none; } /* down to the ruler, never through its labels */
-.tl-head.glide { transition: left var(--dur-tl) var(--ease-out); } /* to where the caret went, unless the bar was redrawn */
-/* The cap: a 1px core (the line's own width) with 3px sides, so it is centred on the line at any
-   display scale (Chromium rounds a border down to whole pixels: 3.5px sides drew it off to the left). */
-.tl-head::before, .tl-hover.fine::before { content: ''; position: absolute; top: 0; left: -3px; width: 1px; border: 3px solid transparent; border-bottom: 0; border-top: 4px solid var(--ink); }
+/* The playhead: a hairline on the caret's own second (timeline.js update()), hung from a small flat tab flush
+   with the top of the bar, and thinning into the ruler rather than stopping on it. The tab is a box, not
+   borders, five pixels about the line's one, so it is centred on it at any display scale. */
+.tl-head { position: absolute; top: 0; bottom: 15px; width: 1px; background: linear-gradient(to bottom, var(--ink), var(--ink) calc(100% - 7px), transparent); opacity: .9; pointer-events: none; }
+.tl-head.glide { transition: left var(--dur-tl) var(--ease-out), opacity var(--dur-fast) var(--ease-out); } /* to where the caret went, unless the bar was redrawn */
+.tl-head::before, .tl-hover.fine::before { content: ''; position: absolute; top: 0; left: -2px; width: 5px; height: 3px; background: var(--ink); }
 .tl-hover { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); pointer-events: none; transition: opacity var(--dur-tl) var(--ease-out), background-color var(--dur-tl) var(--ease-out); }
 @starting-style { .tl-hover { opacity: 0; } } /* fades in as the pointer comes onto the bar */
 .tl-hover span { position: absolute; bottom: 1px; left: 4px; padding: 0 5px; font-size: 9px; line-height: 13px; letter-spacing: .06em; white-space: pre; background: var(--bar); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); font-variant-numeric: tabular-nums; }
@@ -457,11 +463,8 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 #scenes > * { zoom: var(--pz-scenes, 1); }
 .empty { padding: 16px 14px; color: var(--ink-2); line-height: 1.6; }
 .empty .hint { display: block; }
-/* A button waiting for its second press (ui/arm.js): filled, a bar under it running out (none when it waits). */
+/* A button waiting for its second press (ui/arm.js): filled, until a press lands elsewhere. No clock runs it out. */
 .armed { position: relative; background: var(--inv-bg) !important; color: var(--inv-fg) !important; border-color: var(--inv-bg) !important; opacity: 1 !important; transition: none !important; }
-.armed::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--inv-fg); opacity: .55; transform-origin: 0 50%; animation: arm-run var(--arm-ms, 2600ms) linear forwards; }
-.armed.held::after { display: none; }
-@keyframes arm-run { to { transform: scaleX(0); } }
 
 /* ---- the screenplay -------------------------------------------------- */
 #scroller { flex: 1; overflow: auto; position: relative; }
@@ -489,7 +492,8 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .mk.hl-blue { background: var(--hl-blue); }
 .mk.hl-yellow { background: var(--hl-yellow); }
 .mk.hl-pink { background: var(--hl-pink); }
-.mk.cm { border-bottom: 1px dashed var(--note-line); z-index: 3; }
+/* A note's passage: a fine dotted line under it, a dot every three pixels, half the ink's strength. */
+.mk.cm { background: linear-gradient(to right, color-mix(in srgb, var(--note-line) 45%, transparent) 1px, transparent 1px) left bottom / 3px 1px repeat-x; z-index: 3; }
 .mk.cmtick { background: var(--ink); z-index: 3; cursor: pointer; } /* a square (view.js sizes it) */
 .mk.cmtick.c-blue { background: var(--tl-blue); } .mk.cmtick.c-yellow { background: var(--tl-yellow); } .mk.cmtick.c-pink { background: var(--tl-pink); } /* in the note's colour */
 .layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 4; }

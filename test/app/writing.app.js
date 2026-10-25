@@ -294,7 +294,7 @@ test('+NOTE again on the same selection goes back to its note; a new selection m
   await app.until('!document.getElementById("right").getAnimations().length', { what: 'the panel in place' });
   await app.clickOn(del);
   assert.deepEqual(await app.eval(`(() => { const b = document.querySelector('${del}'); return [b.classList.contains('armed'), b.textContent, !!b.querySelector('svg'), b.title]; })()`), [true, '', true, 'Press again to delete this note'], 'armed: an X, no word');
-  assert.deepEqual(await app.eval(`(() => { const b = document.querySelector('${del}'); return [b.classList.contains('held'), b._arm ?? null, getComputedStyle(b, '::after').display]; })()`), [true, null, 'none'], 'no countdown: it waits for a press elsewhere');
+  assert.deepEqual(await app.eval(`(() => { const b = document.querySelector('${del}'); return [b._arm ?? null, getComputedStyle(b, '::after').content]; })()`), [null, 'none'], 'no countdown: it waits for a press elsewhere');
   assert.equal(await n(), 2, 'one press deletes nothing');
   await app.clickOn(del);
   await app.until(`__stet.editor.commentAnchors().length === 1 && document.querySelectorAll('#notes .note').length === 1`, { what: 'the note folded away' });
@@ -495,4 +495,17 @@ test('switching rapidly between screenplays and reopening them counts nothing ne
   await app.eval(`__stet.openPath(${JSON.stringify(files[1])})`);
   assert.equal(await exact('reopened after writing in it'), 52);
   assert.equal(await todayNow(), t0 + 3, 'no words from opening and switching');
+});
+
+test('the click that brings the window back from another application presses nothing', async () => {
+  const at = await app.eval(`(() => { const b = document.getElementById('btn-scenes').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+  const open = () => app.eval(`document.getElementById('btn-scenes').classList.contains('on')`);
+  const was = await open();
+  await app.eval(`dispatchEvent(new FocusEvent('blur')); dispatchEvent(new FocusEvent('focus'))`); // (away, and back with this click)
+  await app.click(at.x, at.y);
+  assert.equal(await open(), was, 'the waking click did nothing');
+  await app.click(at.x, at.y);
+  await app.until(async () => (await open()) !== was, { what: 'the next click pressing the button' });
+  await app.click(at.x, at.y);
+  await app.until(async () => (await open()) === was, { what: 'back as it was' });
 });

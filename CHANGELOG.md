@@ -2,6 +2,19 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.45.0 · 25 Oct 2026
+
+- Confirm buttons never time out. Deleting a note or a backup, restoring a backup, or resetting the guidelines waits for the second press for as long as you like; a press anywhere else (or Esc) cancels it. The bar that ran out under the button is gone.
+- When STET is in the background, the click that brings it forward only brings it forward: it presses no button, moves no caret and starts no drag. The next click works as usual.
+- Restore Backup now makes a new screenplay. It is named after the screenplay and the time of the backup (for example "Heist 2026-10-25 1430"), saved by default in the same folder, with its own backup folder named to match. You can change the name and the folder first. The screenplay you have open stays exactly as it is.
+- Timeline: the playhead is a fine line hung from a small flat tab, and it fades into the ruler instead of stopping on it. It sits on the caret's whole second, like every mark, so after you click a note, highlight or scene it sits exactly on that mark instead of a little to one side. The line under the pointer also moves from second to second; nothing on the timeline sits between two seconds.
+- Timeline: a coloured note shows just its coloured square. Before, its highlight was drawn there as well.
+- Timeline: a note, highlight or timecode chosen outside the glass box comes to the top of the window with the same room above it as a scene heading. The room is made of whole lines, so no part of a line shows at the top edge.
+- Tab cycle: the outline's top and bottom now lie on the toolbar's own lines, and its sides stand the same three pixels clear of a filled button as the top and bottom do, in every combination. Each element button is a whole number of pixels wide, so no edge is soft.
+- The line under a note's passage is now a fine, light dotted line instead of a black dashed one.
+- Highlights: the yellow is a warm cream instead of a bright lemon, and the three colours now match in lightness and softness, like highlighter on paper (in the dark theme too).
+- Notes and timecodes list their colours in the toolbar's order (blue, yellow, pink, then none).
+
 ## 0.44.0 · 25 Oct 2026
 
 - Timeline, zooming: what you zoom around stays perfectly still. Before, the whole strip shivered by half a pixel on every frame, the mark under the pointer blinked, and ruler labels and grid lines popped in and out as the steps changed; now they fade. With the pointer drawn to a scene, note or highlight, the zoom holds that mark under the line.

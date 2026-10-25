@@ -1,6 +1,7 @@
 // Composition root: builds the editor, view and session and wires them to
 // the UI. Document logic lives in ../core, persistence in ./session.js.
 
+import './ui/wake.js'; // (first: the click that wakes the window reaches nothing else)
 import { Editor, pos } from '../core/editor.js';
 import { makeBlock, TYPES, TYPE_LABEL, HIGHLIGHT_COLORS, STYLES, newDocument, uuid } from '../core/model.js';
 import { buildPrintPages } from '../core/printmodel.js';
@@ -31,6 +32,7 @@ import { stepZoom, panelScale } from '../core/wheelzoom.js';
 import { castOrder, touchCast } from '../core/cast.js';
 import { parseFdx } from '../core/fdx.js';
 import { alignOf } from '../core/format.js';
+import { restoredName } from '../core/when.js';
 import { documentWords } from '../core/text.js';
 
 const api = window.stet;
@@ -492,6 +494,7 @@ function toggleTabType(t) {
   const cur = editor.tabTypes || TYPES;
   setTabTypes(cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]);
 }
+const CYC_GAP = 4; // (the rule, then three pixels clear of the fill: as above and below it)
 function renderTabTypes() {
   const keep = editor.tabTypes || TYPES;
   const btns = typeButtons();
@@ -502,11 +505,15 @@ function renderTabTypes() {
     const last = runs[runs.length - 1];
     if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]);
   });
-  // Each box stands a pixel clear of the buttons' fill on every side (style.css .cyc-box), from
-  // their exact edges: offsetLeft and offsetWidth round, and the line would miss the fill by a part of a pixel.
+  // Each button is a whole number of pixels wide, so every edge (a fill's, a box's) falls on a pixel
+  // and none is drawn soft or a part of a pixel off. Each box's top and bottom are the toolbar's own rules,
+  // and its sides stand as far from the buttons' fill as those rules do (style.css .cyc-box: CYC_GAP).
+  for (const b of btns) b.style.width = '';
+  const ws = btns.map((b) => Math.ceil(b.getBoundingClientRect().width - 0.01));
+  btns.forEach((b, i) => { b.style.width = ws[i] + 'px'; });
   const x0 = $('eltypes').getBoundingClientRect().left;
   tabTypesEl.replaceChildren(...runs.map(([a, z]) => {
-    const l = btns[a].getBoundingClientRect().left - x0 - 2, r = btns[z].getBoundingClientRect().right - x0 + 2;
+    const l = Math.round(btns[a].getBoundingClientRect().left - x0) - CYC_GAP, r = Math.round(btns[z].getBoundingClientRect().right - x0) + CYC_GAP;
     const box = dlg.h('div', { class: 'cyc-box' + (tabDrag ? ' drag' : ''), style: `left:${l}px;width:${r - l}px` },
       dlg.h('i', { class: 'cyc-h l', 'data-a': a, 'data-z': z }), dlg.h('i', { class: 'cyc-h r', 'data-a': a, 'data-z': z }));
     box.title = 'Tab steps through the outlined elements. Drag an end to take more in or leave some out.';
@@ -886,8 +893,12 @@ async function importFdx(file = null) {
   }
 }
 
-/** File > Restore Backup: the open screenplay's backups (or, `asNew`, those of one that can't be opened). */
+/** File > Restore Backup: the open screenplay's backups (or, `asNew`, those of one that can't be opened).
+ *  A backup chosen comes back as a new screenplay of its own, named after the one it came from and when
+ *  it was made, saved by default in the same folder (with its own backups beside it): the one open now is
+ *  left as it is, never replaced. */
 async function restoreFromBackups(ref, asNew = false) {
+  const name = asNew ? (ref.path || 'Untitled').split(/[\\/]/).pop().replace(/\.stet$/i, '') : session.name;
   const v = await dialogs.backupsDialog(ref, asNew ? (ref.path || 'untitled').split(/[\\/]/).pop() : session.name, {
     words: asNew ? null : editor.words,
     readWords: async (file) => { const r = await Session.readFile(file, 'backup:read'); return r.ok ? documentWords(r.doc.blocks) : null; },
@@ -898,17 +909,26 @@ async function restoreFromBackups(ref, asNew = false) {
   if (!v || !v.file) return;
   const r = await Session.readFile(v.file, 'backup:read');
   if (!r.ok) { dlg.alertBox('BACKUP DAMAGED', 'This backup cannot be read. Try an older one.', r.error); return; }
-  if (asNew) {
-    r.doc.meta.id = uuid();
-    session.load(r.doc, null, { dirty: true });
-    dlg.alertBox('RESTORED', 'The backup is open as a new, unsaved screenplay. Save it (Ctrl+S) to keep it.');
+  if (!asNew && !(await releaseCurrent())) return;
+  let dir = ref.path ? ref.path.replace(/[\\/][^\\/]*$/, '') : await api.invoke('path:default-dir');
+  let as = restoredName(name, v.time);
+  const doc = r.doc;
+  for (;;) {
+    const cfg = await dialogs.setupDialog({ title: 'RESTORE AS NEW SCREENPLAY', name: as, dir, backup: doc.settings.backup, allowUntitled: false, ok: 'Restore' });
+    if (!cfg) return;
+    ({ name: as, dir } = cfg);
+    const target = await api.invoke('path:join', cfg.dir, cfg.name + '.stet');
+    if (await api.invoke('doc:exists', target)) {
+      await dlg.alertBox('FILE EXISTS', `${target} already exists. Choose another name or folder: a restored backup never replaces a screenplay.`);
+      continue;
+    }
+    doc.meta.id = uuid(); // (a screenplay of its own: its own recovery, statistics and backups)
+    doc.settings.backup = cfg.backup;
+    session.load(doc, null);
+    const w = await session.saveTo(target);
+    if (!w.ok) dlg.alertBox('COULD NOT CREATE FILE', 'The backup is open as a new screenplay but not saved yet.', w.error);
     return;
   }
-  // (RESTORE took its second press in the window: what is open now is backed up, then replaced)
-  await session.maybeBackup(true);
-  r.doc.meta.id = session.doc.meta.id;
-  const path = session.path;
-  session.load(r.doc, path, { dirty: true });
 }
 
 async function checkRecovery(auto = true) {

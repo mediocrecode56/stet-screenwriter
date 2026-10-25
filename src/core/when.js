@@ -27,3 +27,10 @@ export function ago(t, now = Date.now()) {
   const n = Math.max(1, daysAgo(t, now));
   return n === 1 ? '1 day ago' : `${n} days ago`;
 }
+
+/** The name a restored backup is offered under: the screenplay's, then when the backup was made
+ *  ("Heist 2026-10-25 1430"), so it never takes the place of the one it came from. */
+export function restoredName(name, t) {
+  const d = new Date(t), p = (n) => String(n).padStart(2, '0');
+  return `${name || 'Untitled'} ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}${p(d.getMinutes())}`;
+}

@@ -113,7 +113,7 @@ page.
 | another program changed the file | mtime check before every save → explicit overwrite / save-as choice |
 | app crash / power loss | debounced recovery snapshot of unsaved state in `userData/recovery`, offered at next start |
 | never-saved document | lives in recovery (with its own backups) until given a location |
-| bad edit discovered later | timed backups next to the file; restore backs up the current state first |
+| bad edit discovered later | timed backups next to the file; a restored backup becomes a new screenplay beside it; the current one is never replaced |
 | backups deleting the last copy | retention skips the newest *valid* backup and deletes nothing unless the primary file verifies |
 | corrupt / unknown file | container checksum + schema validation; refused files are never written to |
 | format evolution | schema version + migrations; pre-migration original is backed up |
