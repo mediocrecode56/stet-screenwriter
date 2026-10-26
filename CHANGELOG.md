@@ -2,6 +2,10 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.51.2 · 26 Oct 2026
+
+- Revise is faster and uses much less of your Claude usage. It now runs on Claude Sonnet 5.5 at medium effort instead of Claude Opus 5.5 at high effort, so each review costs a fraction of the usage. The suggestions it gives are the same kind; the change only affects how much thinking Claude does for each section.
+
 ## 0.51.1 · 25 Oct 2026
 
 - Opening the scene list now shows the scenes of the screenplay you have open straight away. Before, it could show the previous screenplay's scenes for a moment.

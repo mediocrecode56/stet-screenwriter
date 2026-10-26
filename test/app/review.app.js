@@ -69,7 +69,7 @@ test('a review sends a structured request with a progress indicator; one list in
   mode = {};
   assert.equal(await app.eval('!!document.querySelector("#rev .rv-progress")'), false, 'the indicator gone when finished');
   const req = mock.requests.find((r) => r.body && r.body.messages);
-  assert.equal(req.body.model, 'claude-opus-5-5');
+  assert.equal(req.body.model, 'claude-sonnet-5-5');
   assert.equal(req.body.output_config.format.type, 'json_schema');
   assert.equal(req.headers['x-api-key'], KEY);
   const f = await findings();
@@ -334,7 +334,7 @@ test('with no API key the review runs through Claude Code: no tools, no settings
   const [c] = await calls();
   const arg = (k) => c.args[c.args.indexOf(k) + 1];
   assert.ok(c.args.includes('-p'));
-  assert.deepEqual([arg('--output-format'), arg('--model'), arg('--tools'), arg('--setting-sources')], ['json', 'claude-opus-5-5', '', ''], 'json out, the model, all tools off, no user or project settings');
+  assert.deepEqual([arg('--output-format'), arg('--model'), arg('--tools'), arg('--setting-sources')], ['json', 'claude-sonnet-5-5', '', ''], 'json out, the model, all tools off, no user or project settings');
   assert.ok(c.args.includes('--strict-mcp-config') && c.args.includes('--no-session-persistence') && c.args.includes('--disable-slash-commands'));
   assert.equal(JSON.parse(arg('--json-schema')).type, 'object');
   assert.match(c.system, /screenplay/i, 'the system prompt from a file');

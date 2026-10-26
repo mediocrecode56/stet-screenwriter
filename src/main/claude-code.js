@@ -116,7 +116,7 @@ function runCli(cli, args, { cwd, input, signal, timeoutMs = 10 * 60 * 1000 }) {
 export async function reviewChunkCli(cli, cwd, systemFile, chunk, signal, alt = '') {
   const args = [
     '-p', '--output-format', 'json',
-    '--model', MODEL, '--effort', 'high',
+    '--model', MODEL, '--effort', 'medium',
     '--system-prompt-file', systemFile,
     '--json-schema', JSON.stringify(FINDINGS_SCHEMA),
     '--tools', '', '--strict-mcp-config', '--setting-sources', '',

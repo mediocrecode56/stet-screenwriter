@@ -161,7 +161,7 @@ export class ClaudeService {
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         thinking: { type: 'adaptive' },
-        output_config: { effort: 'high', format: { type: 'json_schema', schema: FINDINGS_SCHEMA } },
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema: FINDINGS_SCHEMA } },
         system,
         messages: [{ role: 'user', content: chunk.prompt }],
       }, { signal });
