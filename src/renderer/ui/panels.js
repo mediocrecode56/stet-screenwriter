@@ -355,12 +355,15 @@ export class NotesPanel {
       const quote = b.text.slice(a.s, a.e).replace(/\s+/g, ' ');
       const pg = pageOf(this.view.pages, a.b, lineIndexOf(linesOf(b), a.s)) + 1, sc = this.sceneOf(scenes, a.b);
       const scene = sc ? sc.text.trim() || `Scene ${sc.n}` : 'Before the first scene';
-      const when = c.modified ? new Date(c.modified).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      // When: the time if it was today, else the day (both in full on the pointer).
+      const d = c.modified ? new Date(c.modified) : null, today = d && d.toDateString() === new Date().toDateString();
+      const when = d ? d.toLocaleString([], today ? { hour: '2-digit', minute: '2-digit' } : { month: 'short', day: 'numeric' }) : '';
+      const whenFull = d ? d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
       // A card: the scene it is in and when it was written (and, on the pointer, its colour, pin and
       // bin), the passage it is about, then the note itself.
       const sws = NOTE_COLORS.map((k) => `<button class="nsw" data-sw="${k || ''}" title="${k ? 'Mark ' + k : 'No colour'}" aria-label="${k || 'no colour'}"><span class="sw ${k || 'none'}"></span></button>`).join('');
       h += `<div class="note${a.id === this.view.activeComment ? ' cur' : ''}${color ? ' c-' + color : ''}${c.pinned ? ' pinned' : ''}" data-id="${esc(a.id)}">
-        <div class="nh"><span class="sc" title="${esc(scene)} · page ${pg}">${esc(scene)}</span><span class="when">${esc(when)}</span><span class="nacts"><span class="nsws">${sws}</span><button class="nb ncol" data-x="col" title="Colour" aria-label="Colour"><i></i></button><button class="nb npin" data-x="pin" title="${c.pinned ? 'Unpin' : 'Pin to the top'}" aria-label="${c.pinned ? 'Unpin' : 'Pin'}">${PIN_ICON}</button><button class="nb ndel" data-x="del" title="Delete this note (press twice)" aria-label="Delete">${TRASH_ICON}</button></span></div>
+        <div class="nh"><span class="sc" title="${esc(scene)} · page ${pg}">${esc(scene)}</span><span class="when" title="${esc(whenFull)}">${esc(when)}</span><span class="nacts"><span class="nsws">${sws}</span><button class="nb ncol" data-x="col" title="Colour" aria-label="Colour"><i></i></button><button class="nb npin" data-x="pin" title="${c.pinned ? 'Unpin' : 'Pin to the top'}" aria-label="${c.pinned ? 'Unpin' : 'Pin'}">${PIN_ICON}</button><button class="nb ndel" data-x="del" title="Delete this note (press twice)" aria-label="Delete">${TRASH_ICON}</button></span></div>
         <div class="q" dir="auto" title="Go to the passage">${esc(quote.slice(0, 160))}</div>
         <textarea spellcheck="true" dir="auto" placeholder="Write a note…">${esc(c.text)}</textarea>
       </div>`;

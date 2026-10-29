@@ -27,13 +27,13 @@
   --hl-blue: #cfe0f7;
   --hl-yellow: #fbf1bf;
   --hl-pink: #f9d6e5;
-  --hl-red: #f9d3cf;
+  --hl-red: #f7cbc5;
   --hl-green: #d3efdc;
   --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
   --tl-blue: #8db4e6; /* the same colours as small marks (timeline, squares, notes): a step fuller, so they read on the bar */
   --tl-yellow: #e3c862;
   --tl-pink: #e79bbd;
-  --tl-red: #e58a82;
+  --tl-red: #e07b6e;
   --tl-green: #84c99a;
   --spell: rgba(206, 38, 38, .74); /* a misspelling's underline: a clear red line under the word */
   --find: rgba(0, 0, 0, .10);
@@ -80,12 +80,13 @@
   --inv-fg: #0f0f0f;
   --sel: rgba(255, 255, 255, .20);
   --caret: #fff;
-  /* (the same colours, on the dark page as much as keeps the light text readable) */
-  --hl-blue: color-mix(in srgb, var(--tl-blue) 45%, var(--page));
-  --hl-yellow: color-mix(in srgb, var(--tl-yellow) 45%, var(--page));
-  --hl-pink: color-mix(in srgb, var(--tl-pink) 45%, var(--page));
-  --hl-red: color-mix(in srgb, var(--tl-red) 45%, var(--page));
-  --hl-green: color-mix(in srgb, var(--tl-green) 45%, var(--page));
+  /* (the same colours on the dark page: deep but clearly each its colour, never a grey, so the light
+     text on them stays fully readable) */
+  --hl-blue: #34557f;
+  --hl-yellow: #66592a;
+  --hl-pink: #713b59;
+  --hl-red: #773a33;
+  --hl-green: #315f43;
   --tl-line: #f0f0ed;
   --tl-blue: #8fb6e8;
   --tl-yellow: #e8d88a;
@@ -519,8 +520,8 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .note.cur, .rv-item.cur { background: var(--page); box-shadow: inset 2px 0 0 var(--ink); }
 .nh { display: flex; align-items: center; gap: 8px; min-height: 18px; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 /* The scene the note is in, as a small label (ending in "…" if it doesn't fit), then when it was written. */
-.nh .sc { flex: 0 1 auto; min-width: 0; max-width: 62%; color: var(--ink-2); border: 1px solid var(--rule); padding: 0 4px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
-.nh .when { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nh .sc { flex: 0 1 auto; min-width: 0; color: var(--ink-2); border: 1px solid var(--rule); padding: 0 4px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
+.nh .when { flex: 1 0 auto; white-space: nowrap; }
 /* The card's small buttons, on the pointer (or the card you are on): its colour, its pin and the bin.
    A pinned note keeps its pin in sight; the colour shows on the passage's rule (and on the timeline). */
 .nacts { flex: none; display: flex; align-items: center; gap: 1px; }
@@ -902,7 +903,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .sheet { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2); position: relative; overflow: hidden; flex: none; color: #000; font-family: var(--script); }
 .sheet .l { position: absolute; white-space: pre; line-height: 1; }
 .sheet .mk { position: absolute; }
-.sheet .mk.hl-blue { background: #cfe0f7; } .sheet .mk.hl-yellow { background: #fbf1bf; } .sheet .mk.hl-pink { background: #f9d6e5; } .sheet .mk.hl-red { background: #f9d3cf; } .sheet .mk.hl-green { background: #d3efdc; }
+.sheet .mk.hl-blue { background: #cfe0f7; } .sheet .mk.hl-yellow { background: #fbf1bf; } .sheet .mk.hl-pink { background: #f9d6e5; } .sheet .mk.hl-red { background: #f7cbc5; } .sheet .mk.hl-green { background: #d3efdc; }
 .sheet .cap { position: absolute; bottom: -1px; right: 0; font: 9px var(--ui); background: #000; color: #fff; padding: 1px 4px; }
 
 /* changelog */

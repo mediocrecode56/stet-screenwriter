@@ -66,7 +66,9 @@ function showDrop(b, ids) {
     const c = cmd.get(id);
     if (!c) continue;
     const label = typeof c.label === 'function' ? c.label() : c.label;
-    const row = h('div', { class: 'mi' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id }, h('span', {}, label), h('span', { class: 'k' }, cmd.keyLabel(c)));
+    // (a highlight with its colour beside it, as on the toolbar)
+    const sw = id.startsWith('hl-') ? h('span', { class: 'sw ' + (id === 'hl-none' ? 'none' : id.slice(3)) }) : null;
+    const row = h('div', { class: 'mi' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id }, h('span', sw ? { class: 'mi-sw' } : {}, sw, label), h('span', { class: 'k' }, cmd.keyLabel(c)));
     row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; e.stopPropagation(); closeSelectionMenu(); setTimeout(() => cmd.run(id), 0); });
     d.appendChild(row);
   }

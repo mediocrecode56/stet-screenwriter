@@ -124,7 +124,7 @@ function showMenu(btn, items) {
   }
   document.body.appendChild(el);
   const r = btn.getBoundingClientRect();
-  el.style.left = r.left + 'px';
+  el.style.left = Math.max(0, Math.min(r.left, window.innerWidth - el.offsetWidth)) + 'px'; // (a button at the right edge: the menu stays in the window)
   el.style.top = r.bottom + 'px';
   btn.classList.add('open');
   openMenu = { btn, el };

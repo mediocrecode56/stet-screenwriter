@@ -4,7 +4,7 @@
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // The script font's faces, from `fonts` (a URL ending in /): file, weight, style.
 const FACES = [['Regular', 400, 'normal'], ['Bold', 700, 'normal'], ['Italic', 400, 'italic'], ['BoldItalic', 700, 'italic']];
-const HL = { blue: '#cfe0f7', yellow: '#fbf1bf', pink: '#f9d6e5', red: '#f9d3cf', green: '#d3efdc' };
+const HL = { blue: '#cfe0f7', yellow: '#fbf1bf', pink: '#f9d6e5', red: '#f7cbc5', green: '#d3efdc' };
 
 export function printHTML(pages, title = 'Screenplay', fonts = '') {
   let body = '';
