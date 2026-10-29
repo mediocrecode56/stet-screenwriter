@@ -147,4 +147,8 @@ On a Mac, use Cmd where it says Ctrl.
 - Pages are A4 and look like Final Draft's: the same Courier, spacing, margins and page breaks.
 - STET is young and improving often: see [what's new](CHANGELOG.md).
 
+## Beta, free, written with AI
+
+STET is a free beta, written largely with AI tools. Keep backups of your work. It is provided "as is", without warranty of any kind, and its author is not liable for any loss of work, data or other damage arising from its use ([MIT License](LICENSE)). Revise sends the passages it reviews to Anthropic's Claude, only when you run it; nothing else you write leaves your computer.
+
 <sub>Building or changing STET? See [STET for developers](docs/DEVELOPING.md).</sub>

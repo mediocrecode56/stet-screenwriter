@@ -514,7 +514,9 @@ app.whenReady().then(async () => {
     : installKind({ platform: process.platform, packaged: app.isPackaged, execPath: process.execPath, env: process.env, exists: existsSync });
   // Most updates are a small patch of STET's code (src/main/patch.js); a new Electron needs the full download.
   const patches = (app.isPackaged || process.env.STET_PATCH_DIR) ? patchRoot() : null;
-  updater = new Updater({ current: pkg.version, fetch: (url, opts) => net.fetch(url, opts), kind, patches, electron: process.versions.electron, dir: path.join(app.getPath('temp'), 'STET-update'), url: process.env.STET_UPDATE_URL || undefined });
+  // (another update source only for the tests or a development run: a released STET updates from GitHub alone)
+  const testUrl = (E2E || !app.isPackaged) && process.env.STET_UPDATE_URL || undefined;
+  updater = new Updater({ current: pkg.version, fetch: (url, opts) => net.fetch(url, opts), kind, patches, electron: process.versions.electron, dir: path.join(app.getPath('temp'), 'STET-update'), url: testUrl });
   if (kind.kind === 'portable') cleanupPortable(kind.target);
   cleanupPatches({ root: patches, running: pkg.version, keep: process.env.STET_PATCH });
   await fs.mkdir(recovery.dir, { recursive: true });

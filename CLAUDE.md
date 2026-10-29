@@ -17,3 +17,5 @@
   assertions). New behaviour gets a unit test (test/unit), and a step in
   test/app/smoke.app.js when it is a workflow a release must not break. App tests wait
   with `app.until`, never a fixed sleep, and drive the app with real input (test/app/harness.js).
+- Read docs/DESIGN_DIRECTION.md before design or UI work, and add to it when the owner gives new
+  feedback that sets a direction (it is the reference for decisions a request leaves open).

@@ -563,7 +563,10 @@ body.note-drag, body.note-drag * { cursor: grabbing !important; user-select: non
 .armed { position: relative; background: var(--inv-bg) !important; color: var(--inv-fg) !important; border-color: var(--inv-bg) !important; opacity: 1 !important; transition: none !important; }
 
 /* ---- the screenplay -------------------------------------------------- */
-#scroller { flex: 1; overflow: auto; position: relative; }
+/* (no scroll anchoring: STET places the script itself, and the browser's own adjustment as pages are
+   drawn and dropped could carry it off, to the end of the script) */
+#scroller { flex: 1; overflow: auto; position: relative; overflow-anchor: none; }
+.list { overflow-anchor: none; }
 #content { position: relative; margin: 0 auto; }
 /* Script text is laid out on a character grid: nothing from the interface
    typography (kerning, ligatures) may change glyph advances. Characters sit 7pt
@@ -835,7 +838,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-acts .tb:hover { border-color: var(--ink-3); }
 .rv-acts .tb[data-act="accept"] { border-color: var(--ink); color: var(--ink); }
 .rv-acts .hint { margin-right: 6px; }
-.rv-foot { display: flex; align-items: center; border-top: 1px solid var(--rule); padding: 4px 6px; min-height: 30px; }
+.rv-foot { flex: none; display: flex; align-items: center; border-top: 1px solid var(--rule); padding: 4px 6px; min-height: 30px; }
 .rv-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .rv-list { flex: 1; }
 .rv-kind { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
@@ -972,3 +975,5 @@ html.focus #timeline, html.focus #status, html.focus #dino { display: none !impo
 #focus-rail .tb { display: flex; align-items: center; justify-content: flex-start; gap: 6px; padding: 5px 10px; letter-spacing: .12em; text-align: left; }
 #focus-rail .tb.on { box-shadow: inset 2px 0 0 var(--ink); }
 #focus-rail .fr-exit { margin-bottom: 4px; padding-bottom: 7px; border-bottom: 1px solid var(--rule); }
+/* A panel's head and foot keep their height in a short window (only the list between them gives way), so their text is never cut off. */
+.rv-head, .panel-foot, .panel-head { flex-shrink: 0; }
