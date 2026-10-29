@@ -23,7 +23,7 @@ export const TYPE_LABEL = {
 };
 
 export const UPPER_TYPES = new Set(['scene', 'character', 'transition', 'shot']);
-export const HIGHLIGHT_COLORS = ['blue', 'yellow', 'pink'];
+export const HIGHLIGHT_COLORS = ['blue', 'yellow', 'pink', 'red', 'green'];
 
 /** Text styles, printed with the script: bold, italic, underline, strikethrough. */
 export const STYLES = ['b', 'i', 'u', 's'];

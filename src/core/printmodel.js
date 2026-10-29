@@ -55,7 +55,7 @@ export function buildPrintPages(doc, options = {}) {
     const number = pi + 1;
     if (!inRange(number)) return;
     const lines = [], rects = [], notes = [], markers = [];
-    if (pi > 0) { const label = `${number}.`; lines.push({ col: PAGE.numberCol - label.length * PITCH, row: PAGE.numberRow, text: label }); }
+    { const label = `${number}.`; lines.push({ col: PAGE.numberCol - label.length * PITCH, row: PAGE.numberRow, text: label }); } // (every script page, the first too)
     const top = PAGE.topRows;
     if (page.cont) lines.push({ col: ELEMENT.character.left, row: top, text: page.cont });
     for (const it of page.items) {

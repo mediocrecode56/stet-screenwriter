@@ -37,8 +37,10 @@ test('the page: A4, the script font embedded, characters 7pt apart, the number 7
   assert.match(pdf, /\/MediaBox \[0 0 595\.32 841\.92\]/);
   assert.match(pdf, /\/BaseFont \/STETCourier-Regular .*\/Subtype \/TrueType|\/Subtype \/TrueType \/BaseFont \/STETCourier-Regular/);
   assert.match(pdf, /\/FontFile2 \d+ 0 R/);
-  // First line: 1.5in from the left, its baseline 80.52pt from the top (Final Draft: 108, 80.52).
-  assert.match(pdf, new RegExp(`BT\\n-0\\.2 Tc\\n/F1 12 Tf\\n108 ${Math.round((PAPER.h - 80.52) * 100) / 100} Td \\(1\\. INTRO\\) Tj`));
+  // First line: 1.5in from the left, its baseline 80.52pt from the top (Final Draft: 108, 80.52), drawn
+  // after the page's number (508, 797.4: the first page is numbered too), so a step of -400 -36 from it.
+  assert.match(pdf, /BT\n-0\.2 Tc\n\/F1 12 Tf\n508 797\.4 Td \(1\.\) Tj\n-400 -36 Td \(1\. INTRO\) Tj/);
+  assert.equal(Math.round((PAPER.h - 80.52) * 100) / 100, 797.4 - 36);
   const n = pages[1].lines.find((l) => l.text === '2.');
   assert.ok(Math.abs(n.col * 7.2 + 2 * 7 - 522) < 1e-9, 'the page number ends at 522pt');
   assert.equal(n.row, PAGE.numberRow);

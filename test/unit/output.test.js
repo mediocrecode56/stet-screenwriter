@@ -38,6 +38,7 @@ test('page range selects script pages independently of the title page', () => {
   const { pages } = buildPrintPages(doc, { titlePage: true, range: '2-3' });
   assert.deepEqual(pages.map((p) => p.kind + p.number), ['title0', 'script2', 'script3']);
   assert.ok(pages[1].lines.some((l) => l.text === '2.'), 'page number printed');
+  assert.ok(buildPrintPages(doc, { titlePage: true, range: '1' }).pages[1].lines.some((l) => l.text === '1.'), 'the first script page numbered too');
   const { pages: noTitle } = buildPrintPages(doc, { titlePage: false, range: `${total}` });
   assert.deepEqual(noTitle.map((p) => p.number), [total]);
 });
@@ -55,11 +56,11 @@ test('highlights and notes are only exported when requested', () => {
   assert.equal(buildPrintPages(doc, { titlePage: false, comments: true }).pages.flatMap((p) => p.rects).length, 0, 'no highlights unless asked for');
 });
 
-test('first page carries no number; later pages do, at the right margin', () => {
+test('every script page carries its number at the right margin, the first too', () => {
   const doc = newDocument();
   doc.blocks = generateScript(10);
   const { pages } = buildPrintPages(doc, { titlePage: false });
-  assert.ok(!pages[0].lines.some((l) => l.row === 3));
+  assert.equal(pages[0].lines.find((l) => l.row === 3).text, '1.');
   const n = pages[1].lines.find((l) => l.row === 3);
   assert.equal(n.text, '2.');
   assert.ok(Math.abs(n.col + n.text.length * PITCH - 72.5) < 1e-9, 'ending 7.25in from the left edge, as Final Draft prints it');

@@ -1,22 +1,23 @@
-// The right-click menu on selected text: four square buttons in a row, the element type, text style,
-// alignment and a note. The first three open their own dropdown under the bar: on a click, or after
-// resting on one for 0.3 seconds, or at once when another one is already open. The note adds one on the selection at once and opens the notes panel to write it.
+// The right-click menu on selected text: five square buttons in a row, the element type, text style,
+// alignment, a highlight and a note. The first four open their own dropdown under the bar on a click
+// only (hovering just lights the icon); it drops in as the top menu's do, and a click on another
+// button swaps it at once. The note adds one on the selection at once and opens the notes panel to write it.
 
 import { h } from './dialog.js';
 import * as cmd from './commands.js';
-import { arrive, leave, DUR_FAST, DUR_PANEL } from './motion.js';
+import { arrive, leave, DUR_FAST } from './motion.js';
 
-export const HOVER_MS = 300; // resting on a button this long opens its dropdown
 const STYLE = '<span class="gb" aria-hidden="true">B</span>';
 const NOTE = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><rect x=".5" y=".5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="4" width="4" height="4" fill="currentColor"/></svg>';
+const HL = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><rect x=".5" y="3.5" width="11" height="5" fill="currentColor" fill-opacity=".35" stroke="currentColor" stroke-width="1"/></svg>';
 const DN = '<span class="dn" aria-hidden="true">▾</span>';
 
-let open = null; // { el, off, drop, wait }
+let open = null; // { el, off, drop }
 
-/** The menu at (x, y): `types`, `styles` and `aligns` are the command ids of each dropdown (`types()`
- *  read as it opens: the element types in the Tab cycle), `typeLabel()` the selection's element
+/** The menu at (x, y): `types`, `styles`, `aligns` and `highlights` are the command ids of each dropdown
+ *  (`types()` read as it opens: the element types in the Tab cycle), `typeLabel()` the selection's element
  *  as it is now, `alignIcon()` the icon for the paragraph's alignment. */
-export function selectionMenu(x, y, { types, typeLabel, styles, aligns, alignIcon }) {
+export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highlights, alignIcon }) {
   closeSelectionMenu(false);
   cmd.closeMenu(false);
   const el = h('div', { class: 'menu selbar', role: 'toolbar', 'aria-label': 'Selection' });
@@ -30,23 +31,16 @@ export function selectionMenu(x, y, { types, typeLabel, styles, aligns, alignIco
     [btn('type', 'Element', `<span class="tl">${typeLabel()}</span>` + DN), types],
     [btn('style', 'Text style', STYLE + DN), () => styles],
     [btn('align', 'Alignment', alignIcon() + DN), () => aligns],
+    [btn('highlight', 'Highlight', HL + DN), () => highlights],
   ];
   const note = btn('note', 'Add a note', NOTE);
   for (const [b, ids] of drops) {
     b.setAttribute('aria-haspopup', 'menu');
-    b.addEventListener('mouseenter', () => {
-      if (!open || (open.drop && open.drop.btn === b)) return;
-      if (open.drop) return showDrop(b, ids()); // (one already open: the next at once)
-      wait(b, () => showDrop(b, ids()));
-    });
-    b.addEventListener('mouseleave', () => wait(null));
     b.addEventListener('mouseup', (e) => {
       if (e.button !== 0 || !open) return;
-      wait(null);
       if (open.drop && open.drop.btn === b) hideDrop(); else showDrop(b, ids());
     });
   }
-  note.addEventListener('mouseenter', () => { wait(null); hideDrop(); });
   note.addEventListener('mouseup', (e) => { if (e.button !== 0) return; closeSelectionMenu(); setTimeout(() => cmd.run('note-add'), 0); });
   document.body.appendChild(el);
   // (a step off the pointer, so the button under it doesn't take it for resting there)
@@ -54,26 +48,19 @@ export function selectionMenu(x, y, { types, typeLabel, styles, aligns, alignIco
   el.style.top = Math.max(0, Math.min(y + 2, innerHeight - el.offsetHeight)) + 'px';
   arrive(el, { dist: 2, dur: DUR_FAST, scale: 0.98 }); // (as every other menu opens: commands.js)
   const off = new AbortController();
-  open = { el, off, drop: null, wait: null };
+  open = { el, off, drop: null };
   addEventListener('mousedown', (e) => { if (!el.contains(e.target)) closeSelectionMenu(); }, { capture: true, signal: off.signal });
   addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (open.drop) hideDrop(); else closeSelectionMenu(); } }, { capture: true, signal: off.signal });
   addEventListener('blur', () => closeSelectionMenu(), { signal: off.signal });
   return el;
 }
 
-/** Wait on button b and then run `then`; none: stop waiting. */
-function wait(b, then) {
-  if (!open) return;
-  if (open.wait) { clearTimeout(open.wait.t); open.wait = null; }
-  if (!b) return;
-  open.wait = { b, t: setTimeout(() => { if (!open || !open.wait || open.wait.b !== b) return; open.wait = null; then(); }, HOVER_MS) };
-}
-
 /** A button's dropdown, under the bar from the button's left edge (inside the bar, so a click in it
- *  is a click in the menu): each command with its shortcut, the current ones marked. It slides out
- *  from under the bar in one decelerating move, as a side panel does from its edge (motion.js). */
+ *  is a click in the menu): each command with its shortcut, the current ones marked. It arrives as
+ *  every menu does (commands.js), with the same short drop and fade. */
 function showDrop(b, ids) {
-  hideDrop();
+  const switching = !!open.drop; // from one dropdown to the next: simply there, as along the menu bar
+  hideDrop(false);
   const el = open.el, d = h('div', { class: 'menu msub seldrop', role: 'menu', 'data-k': b.dataset.k });
   for (const id of ids) {
     const c = cmd.get(id);
@@ -89,22 +76,20 @@ function showDrop(b, ids) {
   d.style.top = (up ? -d.offsetHeight : r.height - el.clientTop - 1) + 'px';
   b.classList.add('open');
   open.drop = { btn: b, el: d };
-  // (never a clip: a click on it at once must still land in it)
-  arrive(d, { dist: up ? -6 : 6, dur: DUR_PANEL });
+  if (!switching) arrive(d, { dist: up ? -2 : 2, dur: DUR_FAST, scale: 0.98 });
 }
 
-function hideDrop() {
+function hideDrop(animated = true) {
   if (!open || !open.drop) return;
   const { btn, el } = open.drop;
   open.drop = null;
   btn.classList.remove('open');
-  leave(el, () => el.remove(), { dist: 0, dur: DUR_FAST });
+  if (animated) leave(el, () => el.remove(), { dist: 2 }); else el.remove();
 }
 
 export function closeSelectionMenu(animated = true) {
   if (!open) return;
   const { el, off } = open;
-  if (open.wait) clearTimeout(open.wait.t);
   open = null;
   off.abort();
   if (animated) leave(el, () => el.remove(), { dist: 3 }); else el.remove();

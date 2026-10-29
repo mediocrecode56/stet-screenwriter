@@ -207,10 +207,12 @@ export function anchorsOf(timecodes, blocks, pages) {
   }
   out.sort((a, b) => a.x - b.x);
   // Each must come later in the script and later in time than the one before (and the start, 0:00).
+  // The first may also mark the start itself: 00:00:00 at the very start, or at a later line (the
+  // first scene) whose time is then 00:00:00 too.
   const ok = [];
   for (const a of out) {
-    const p = ok[ok.length - 1] || { x: 0, t: 0 };
-    if (a.x > p.x && a.t > p.t) ok.push(a);
+    const p = ok[ok.length - 1] || { x: 0, t: 0 }, first = !ok.length;
+    if (first && a.x === 0 ? a.t === 0 : a.x > p.x && (a.t > p.t || (first && a.t === 0))) ok.push(a);
   }
   return ok;
 }
@@ -232,7 +234,7 @@ export function sceneTimecodes(timecodes, blocks, pages) {
 
 /** Time at position x and position at time t, through the anchors. */
 export function timeScale(anchors) {
-  const pts = [{ x: 0, t: 0 }, ...anchors];
+  const pts = [{ x: 0, t: 0 }, ...anchors.filter((a) => a.x > 0)]; // (one pinned at the start is the start itself)
   const last = pts[pts.length - 1];
   const pace = last.x > 0 ? last.t / last.x : SEC_PER_PAGE; // seconds a page after the last timecode
   const seg = (v, k) => { // the segment a value of key k falls in

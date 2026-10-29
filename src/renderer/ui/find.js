@@ -7,8 +7,8 @@ import { pos, cmp } from '../../core/editor.js';
 import { setPanel, isOpen } from './motion.js';
 
 export class FindBar {
-  constructor({ editor, view, jump, focusEditor }) {
-    this.ed = editor; this.view = view; this.jump = jump; this.focusEditor = focusEditor;
+  constructor({ editor, view, jump, focusEditor, onFound }) {
+    this.ed = editor; this.view = view; this.jump = jump; this.focusEditor = focusEditor; this.onFound = onFound || (() => {});
     const $ = (id) => document.getElementById(id);
     this.bar = $('findbar'); this.q = $('find-q'); this.r = $('find-r');
     this.cs = $('find-case'); this.ww = $('find-word'); this.countEl = $('find-count');
@@ -21,6 +21,10 @@ export class FindBar {
     $('find-one').addEventListener('click', () => this.replaceOne());
     $('find-all').addEventListener('click', () => this.replaceAll());
     $('find-close').addEventListener('click', () => this.close());
+    // The box's right edge on the script's (the side panels beside it stay uncovered).
+    const main = $('main'), sc = $('scroller');
+    this.place = () => { this.bar.style.right = Math.max(0, main.getBoundingClientRect().right - sc.getBoundingClientRect().right) + 'px'; };
+    new ResizeObserver(() => { if (this.open) this.place(); }).observe(sc);
     this.bar.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); this.close(); }
       else if (e.key === 'Enter') {
@@ -34,6 +38,7 @@ export class FindBar {
   get open() { return isOpen(this.bar); }
 
   show(replace = false) {
+    this.place();
     setPanel(this.bar, true);
     const sel = this.ed.hasSelection() ? this.ed.selectedText() : '';
     if (sel && !sel.includes('\n') && sel.length < 80) this.q.value = sel;
@@ -78,7 +83,10 @@ export class FindBar {
     const onMatch = this.cur >= 0 && this.matches[this.cur] && cmp(sel[0], pos(this.matches[this.cur].b, this.matches[this.cur].s)) === 0 && cmp(sel[1], pos(this.matches[this.cur].b, this.matches[this.cur].e)) === 0;
     if (onMatch || dir < 0) this.cur = (this.cur + dir + this.matches.length) % this.matches.length;
     const m = this.matches[this.cur];
+    const field = this.bar.contains(document.activeElement) ? document.activeElement : null;
     this.jump(pos(m.b, m.s), false, pos(m.b, m.e));
+    this.onFound(m);
+    if (field) field.focus({ preventScroll: true }); // (Enter again in the field: the next one)
     this.update();
   }
 

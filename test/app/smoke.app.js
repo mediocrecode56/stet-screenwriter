@@ -281,12 +281,12 @@ test('the timeline: zoom by dragging the ruler, the whole script again by double
   assert.ok(await app.eval('__stet.view.scroller.scrollTop') > 300, 'dragging the band moves the window');
 });
 
-test('a right-click on selected text: element, style, alignment and a note, as four square buttons; note underlines can be hidden', async () => {
+test('a right-click on selected text: element, style, alignment, highlight and a note, as five square buttons; note underlines can be hidden', async () => {
   await app.load(SCRIPT);
   await app.caret(1, 0, 20);
   await app.frame();
   const bar = '.menu.selbar';
-  const rightClick = async () => { const r = await app.rect('.selr'); await app.click(r.left + r.width / 2, r.top + r.height / 2, { button: 'right' }); await app.until(`document.querySelectorAll('${bar} .selb').length === 4`, { what: 'the selection menu' }); };
+  const rightClick = async () => { const r = await app.rect('.selr'); await app.click(r.left + r.width / 2, r.top + r.height / 2, { button: 'right' }); await app.until(`document.querySelectorAll('${bar} .selb').length === 5`, { what: 'the selection menu' }); };
   const choose = async (k, label) => {
     await app.clickOn(`${bar} .selb[data-k="${k}"]`);
     await app.until(`!!document.querySelector('${bar} .seldrop')`, { what: `the ${k} dropdown` });
@@ -298,11 +298,15 @@ test('a right-click on selected text: element, style, alignment and a note, as f
   };
   await rightClick();
   assert.equal(await app.eval(`getComputedStyle(document.querySelector('${bar}')).borderRadius`), '0px', 'square');
-  // Resting on a button opens its dropdown after a moment, without a click; the element one lists
-  // the types in the Tab cycle, the paragraph's own marked.
+  // Resting on a button opens nothing; a click opens its dropdown. The element one lists the types
+  // in the Tab cycle, the paragraph's own marked.
   const tb = await app.rect(`${bar} .selb[data-k="type"]`);
   await app.move(tb.left + tb.width / 2, tb.top + tb.height / 2);
-  await app.until(`document.querySelector('${bar} .seldrop')?.dataset.k === 'type'`, { what: 'the element dropdown on hover' });
+  await app.until(`document.querySelector('${bar} .selb[data-k="type"]').matches(':hover')`, { what: 'the pointer on the element button' });
+  await app.frame();
+  assert.equal(await app.eval(`!!document.querySelector('${bar} .seldrop')`), false, 'no dropdown on hover');
+  await app.clickOn(`${bar} .selb[data-k="type"]`);
+  await app.until(`document.querySelector('${bar} .seldrop')?.dataset.k === 'type'`, { what: 'the element dropdown on a click' });
   assert.deepEqual(await app.eval(`[...document.querySelectorAll('${bar} .seldrop .mi')].map((r) => r.dataset.id + (r.classList.contains('cur') ? '*' : ''))`),
     ['type-scene', 'type-action*', 'type-character', 'type-dialogue', 'type-paren', 'type-transition', 'type-shot'], 'every type, action marked');
   await app.key('Escape');
@@ -330,6 +334,9 @@ test('a right-click on selected text: element, style, alignment and a note, as f
   await rightClick();
   await choose('align', 'Center');
   await app.until(`document.getElementById('btn-align').dataset.a === 'center'`, { what: 'the paragraph centred' });
+  await rightClick();
+  await choose('highlight', 'Highlight green');
+  await app.until(`__stet.editor.blocks[1].marks.some((m) => m.k === 'hl' && m.v === 'green')`, { what: 'the selection highlighted green' });
   // The note: added on the selection at once, the notes panel open to write it.
   await rightClick();
   const before = await app.eval('Object.keys(__stet.session.doc.comments).length');
@@ -465,9 +472,13 @@ test('the timeline: a click on a timecode edits it; a right-click on a scene giv
   await app.frame();
   const t0 = await app.eval('__stet.session.doc.timecodes[0].t');
   const tc = await app.rect('#timeline .tl-tcm');
-  await app.move(tc.left + 9, tc.top + 20);
+  // High on the bar a timecode's line is like any other: a click there goes to the line. Low, by its label, it edits it.
+  await app.move(tc.left + 9, tc.top + 6);
+  assert.notEqual(await tl('t.inner.dataset.zone'), 'tc', 'high on the bar: no editing');
+  const low = (await app.rect('#timeline .tl-inner')).bottom - 7;
+  await app.move(tc.left + 9, low);
   assert.equal(await tl('t.inner.dataset.zone'), 'tc', 'drawn to it from 9px off, with the edit pointer');
-  await app.click(tc.left + 9, tc.top + 20);
+  await app.click(tc.left + 9, low);
   assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-time').value`), hms(t0));
   await app.clickOn('.tc-pop .tc-del');
   assert.equal(await app.eval('__stet.session.doc.timecodes.length + document.querySelectorAll(".tc-pop, #timeline .tl-tcm").length'), 0, 'the bin removes it');
@@ -475,7 +486,8 @@ test('the timeline: a click on a timecode edits it; a right-click on a scene giv
   // away makes nothing; typed in, the check keeps it.
   const s4 = await app.rect('#timeline .tl-scene', 3);
   await app.click(s4.left + 1, s4.top + 6, { button: 'right' });
-  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-head').textContent`), 'INT. ROOM 4 - DAY');
+  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-head .tc-name').textContent`), 'INT. ROOM 4 - DAY');
+  assert.match(await app.eval(`document.querySelector('.tc-pop .tc-head .tc-wpm').textContent`), /^\d+ WPM$/, 'its dialogue\'s words a minute');
   assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-time').value`), hms(await tl('Math.round(t.time.at(t.tl.scenes[3].x))')), 'on its second');
   await app.click(s4.left + 200, s4.bottom + 120); // (on the script)
   assert.equal(await app.eval('__stet.session.doc.timecodes.length + document.querySelectorAll(".tc-pop").length'), 0, 'not confirmed: no timecode');
@@ -505,7 +517,7 @@ test('the scene list: each scene at its time; a right-click gives it its own tim
   const r = await app.rect('#scenes .row', 4);
   await app.click(r.x, r.y, { button: 'right' });
   await app.until(`!!document.querySelector('.tc-pop')`, { what: 'the editor' });
-  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-head').textContent`), 'INT. ROOM 5 - DAY');
+  assert.equal(await app.eval(`document.querySelector('.tc-pop .tc-head .tc-name').textContent`), 'INT. ROOM 5 - DAY');
   await app.key('Mod+A'); await app.type('00:09:00'); await app.key('Enter');
   await app.until(`document.querySelectorAll('#scenes .row .n')[4].textContent === '9:00'`, { what: 'the list showing it' });
   assert.ok(await app.eval(`document.querySelectorAll('#scenes .row .n')[4].classList.contains('pin')`), 'pinned');

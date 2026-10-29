@@ -392,3 +392,39 @@ test('Tab round the cycle and round again changes only the element: the text com
   for (let i = 0; i < 15; i++) ed.tab();
   assert.deepEqual(ed.blocks.map((x) => [x.type, x.text]), [['action', 'Rain.'], ['character', ''], ['action', 'After.']], 'one new line, whatever the laps');
 });
+
+test('deleting a line between two elements leaves the line below as it was; only text joining a line takes its element', () => {
+  // Delete on an empty line: the character cue under it moves up, still a cue.
+  let ed = new Editor([makeBlock('action', 'She waits.'), makeBlock('action', ''), makeBlock('character', 'BOB')]);
+  ed.setSel(pos(1, 0)); ed.deleteForward();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['action', 'She waits.'], ['character', 'BOB']]);
+  // A whole line selected up to the start of the next and deleted: the same.
+  ed = new Editor([makeBlock('scene', 'INT. HOUSE'), makeBlock('action', 'Rain.'), makeBlock('character', 'BOB')]);
+  const id = ed.blocks[2].id;
+  ed.setSel(pos(1, 0), pos(2, 0)); ed.backspace();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['scene', 'INT. HOUSE'], ['character', 'BOB']]);
+  assert.equal(ed.blocks[1].id, id, 'its id kept (a timecode on it stays)');
+  // Backspace at the start of a line joins it to the written line above, which keeps its element.
+  ed = new Editor([makeBlock('action', 'She waits.'), makeBlock('character', 'BOB')]);
+  ed.setSel(pos(1, 0)); ed.backspace();
+  assert.deepEqual(ed.blocks.map((b) => [b.type, b.text]), [['action', 'She waits.BOB']]);
+});
+
+test('a change of element on a line of nothing but spaces stays on that line', () => {
+  const ed = new Editor([makeBlock('scene', 'INT. HOUSE'), makeBlock('action', '  ')]);
+  ed.setSel(pos(1, 2)); ed.applyType('character');
+  assert.deepEqual(types(ed), ['scene', 'character']);
+  ed.applyType('scene');
+  assert.deepEqual(types(ed), ['scene', 'scene']);
+});
+
+test('Clear Formatting takes bold, italic, underline and strikethrough off the selection, keeping highlights', () => {
+  const ed = new Editor([makeBlock('action', 'One two three.', [{ s: 0, e: 7, k: 'b' }, { s: 4, e: 13, k: 'i' }, { s: 0, e: 3, k: 'hl', v: 'blue' }])]);
+  ed.setSel(pos(0, 0), pos(0, 14)); ed.clearStyles();
+  assert.deepEqual(ed.blocks[0].marks, [{ s: 0, e: 3, k: 'hl', v: 'blue' }]);
+  ed.undo();
+  assert.equal(ed.blocks[0].marks.length, 3, 'one undo brings them back');
+  // No selection: what is typed next is plain.
+  ed.setSel(pos(0, 5)); ed.clearStyles(); typeStr(ed, 'x');
+  assert.ok(!ed.blocks[0].marks.some((m) => (m.k === 'b' || m.k === 'i') && m.s <= 5 && m.e > 5));
+});

@@ -58,6 +58,7 @@ export class View {
     this.els = new Map();   // view index -> page element
     this.find = null;       // { matches, cur }
     this.activeComment = null;
+    this.noteFilter = null; // the notes panel's colour filter: null (all), a highlight colour, or 'none' (notes without one)
     this.focused = true;
     this.onFrame = null;
     this.onTitleInput = null;
@@ -198,6 +199,7 @@ export class View {
       if (tc) sig += `${tc.t}.${tc.tag},`;
     }
     if (this.activeComment) sig += '|' + this.activeComment;
+    if (this.noteFilter) sig += '|f' + this.noteFilter;
     let node = this.els.get(vi);
     if (node && node._sig === sig) return;
     if (!node) {
@@ -219,6 +221,12 @@ export class View {
   /** A note's colour: the highlight on its passage ('' for none). */
   noteColor(id) { return this.editor.noteColors().get(id) || ''; }
 
+  /** Whether note id passes the colour filter (notes panel): shown in the script, the panel and the timeline. */
+  noteShown(id) {
+    const f = this.noteFilter;
+    return !f || (f === 'none' ? !this.noteColor(id) : this.noteColor(id) === f);
+  }
+
   /** The scenes' own timecodes (core/timeline.js), shown beside their headings: by block id. */
   sceneTimes() {
     const tcs = this.doc && this.doc.timecodes;
@@ -233,7 +241,7 @@ export class View {
     const { row } = this;
     const top = PAGE.topRows;
     let h = '';
-    if (pi > 0) {
+    { // every script page is numbered, the first after the title page too
       const label = `${pi + 1}.`;
       h += `<div class="pn" style="left:${this.xAt(PAGE.numberCol - label.length, 0)}px;top:${PAGE.numberRow * row}px">${label}</div>`;
     }
@@ -257,7 +265,7 @@ export class View {
           if (z <= a) continue;
           const x = this.xAt(x0, colIn(gaps, a - ls)), w = (colIn(gaps, z - ls) - colIn(gaps, a - ls)) * this.cw;
           if (m.k === 'hl') h += `<div class="mk hl-${m.v}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
-          else if (m.k === 'cm') {
+          else if (m.k === 'cm' && this.noteShown(m.v)) {
             // A note's marker takes the colour of the highlight on its passage.
             const c = this.noteColor(m.v);
             h += `<div class="mk cm" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
@@ -556,7 +564,7 @@ export class View {
     if (r) { const lx = r.x - sc.scrollLeft; if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2; }
     if (reducedMotion()) { sc.scrollTop = goal(); return; }
     const from = sc.scrollTop, t0 = performance.now();
-    const dur = 0.9 * Math.min(700, 280 + Math.abs(goal() - from) / 10);
+    const dur = 0.873 * Math.min(700, 280 + Math.abs(goal() - from) / 10); // (3% quicker than 0.9 in 0.52)
     const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
     const g = this.glide = { from, goal }; // (the timeline's band travels along with it)
     const step = () => {

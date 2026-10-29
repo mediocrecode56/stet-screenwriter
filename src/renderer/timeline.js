@@ -7,6 +7,7 @@
 
 import { pos } from '../core/editor.js';
 import { linesOf } from '../core/layout.js';
+import { dialogueWords, wordsPerMinute } from '../core/text.js';
 import { timelineOf, anchorsOf, timeScale, scriptPos, placeAt, flowAt, formatTime, rulerLabel, parseTime, rulerStep, minorStep, snapTo, fineTime, makeTimecode, placeLabels, clearOf, isSceneTimecode, onSeconds, onSecond, maxScale, keyBand, bandTravel } from '../core/timeline.js';
 import { HIGHLIGHT_COLORS } from '../core/model.js';
 import { h, esc } from './ui/dialog.js';
@@ -15,6 +16,7 @@ import { MAC } from '../core/keys.js';
 
 const PADX = 14; // room at either end of the strip (style.css .tl-inner)
 const COVER = 0.62; // the part of the fade at the right end (zoomed in) dense enough that nothing under it is in play
+const TC_ROW = 18; // how high above the bar's bottom a timecode's label takes the pointer (the ruler, and a little more)
 const SNAP_PX = 10; // how near a scene, note, highlight or timecode draws the pointer to it (none while stepping)
 const PULL_PX = 24; // the band's start is drawn softly to a mark whose line is within this many pixels of it
 const PIN_ROWS = 4; // how many rows of scrolling a mark clicked from outside the band lets go of it over
@@ -82,9 +84,10 @@ export class Timeline {
     this.bandDrag = null; // the band being dragged: { x, top, k }, see showBand()
     // (the grid under the band, whose glass softens it: the marks over the band read clearly)
     host.innerHTML = '<div class="tl-scroll"><div class="tl-inner"><div class="tl-grid"></div><div class="tl-view"></div><div class="tl-cur" hidden></div><div class="tl-marks"></div><div class="tl-lens l"></div><div class="tl-lens r"></div><div class="tl-ruler"></div>'
-      + '<div class="tl-hover" hidden><span></span></div><div class="tl-head"></div></div></div>'
-      + LENS + '<div class="tl-fade" hidden></div>' // (under the reset button: the strip fades out softly behind it while the pointer is on the bar)
-      + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
+      + '<div class="tl-hover" hidden><span></span></div><div class="tl-find" hidden></div><div class="tl-head"></div></div></div>'
+      + LENS + '<div class="tl-fade" hidden></div><div class="tl-fade l" hidden></div>' // (under the reset buttons: the strip fades out softly behind them while the pointer is near that end)
+      + `<button class="tl-reset" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`
+      + `<button class="tl-reset l" hidden title="Whole script (double-click the ruler)" aria-label="Whole script">${RESET_ICON}</button>`;
     this.scroll = host.querySelector('.tl-scroll');
     this.inner = host.querySelector('.tl-inner');
     this.grid = host.querySelector('.tl-grid');
@@ -93,12 +96,17 @@ export class Timeline {
     this.hover = host.querySelector('.tl-hover');
     this.head = host.querySelector('.tl-head');
     this.cur = host.querySelector('.tl-cur');
+    this.findEl = host.querySelector('.tl-find');
+    this.found = null; // the find bar's match just gone to: { b, s, e, rev }, marked on the bar until the writer does anything else
     this.band = host.querySelector('.tl-view');
     this.lens = host.querySelectorAll('.tl-lens');
-    this.reset = host.querySelector('.tl-reset');
-    this.fade = host.querySelector('.tl-fade');
+    this.reset = host.querySelector('.tl-reset:not(.l)');
+    this.fade = host.querySelector('.tl-fade:not(.l)');
+    this.resetL = host.querySelector('.tl-reset.l');
+    this.fadeL = host.querySelector('.tl-fade.l');
     this.reset.addEventListener('click', () => this.whole());
-    // The fade and the reset button come up only as the pointer nears the right end (the button included).
+    this.resetL.addEventListener('click', () => this.whole());
+    // At each end, the fade and the reset button come up only as the pointer nears it (the button included).
     host.addEventListener('mousemove', (e) => this.nearEnd(this.endX = e.clientX));
     host.addEventListener('mouseleave', () => this.nearEnd(this.endX = null));
 
@@ -108,7 +116,7 @@ export class Timeline {
     this.inner.addEventListener('contextmenu', (e) => { e.preventDefault(); this.menu(e); });
     // Double-click on the ruler or the band: the whole script, as in Ableton.
     this.inner.addEventListener('dblclick', (e) => {
-      if (this.stepping || this.covered(e.clientX) || this.snapAt(e.clientX)?.kind === 'tc') return;
+      if (this.stepping || this.covered(e.clientX) || this.snapAt(e.clientX, e.clientY)?.kind === 'tc') return;
       if (this.zone(e) !== 'zoom' || this.onRuler(e)) this.whole();
     });
     // Ctrl pressed with the pointer on the bar starts stepping right there; letting go ends it,
@@ -135,6 +143,7 @@ export class Timeline {
     // The ruler and grid are drawn around the part in view; scrolling far draws the next part.
     this.scroll.addEventListener('scroll', () => {
       if (this.inner.style.translate && this.scroll.scrollLeft !== this.subAt) this.inner.style.translate = ''; // (scrolled by other means: no part of a pixel to make up)
+      this.ends();
       if (!this.time) return;
       const l = this.scroll.scrollLeft - PADX, w = this.scroll.clientWidth;
       if ((l < this.rulerA && this.rulerA > 0) || (l + w > this.rulerB && this.rulerB < this.length * this.drawn)) this.paintRuler();
@@ -331,30 +340,59 @@ export class Timeline {
     return x >= this.bandA && x <= this.bandB && this.bandB - this.bandA < this.length * 0.98 ? 'band' : 'zoom';
   }
 
-  /** The scene, note, highlight or timecode close enough to clientX to draw the pointer to it. */
-  snapAt(clientX) {
+  /** Is clientY low on the bar, by the timecodes' labels on the ruler (where a click edits one)? */
+  byLabels(clientY) { return clientY >= this.inner.getBoundingClientRect().bottom - TC_ROW; }
+
+  /** The scene, note, highlight or timecode close enough to clientX to draw the pointer to it. A
+   *  timecode only low on the bar, by its label (given clientY); above that, the line it is pinned to
+   *  is like any other: its scene, or the line itself. */
+  snapAt(clientX, clientY = null) {
     if (this.covered(clientX)) return null;
     const r = this.scroll.getBoundingClientRect(), left = this.inner.getBoundingClientRect().left;
     const at = (cx) => (cx - left) / this.drawn; // only marks in view, clear of the fade
-    return snapTo(this.targets, this.posAt(clientX), SNAP_PX / this.drawn, at(r.left), at(Math.min(r.right, this.coveredFrom)));
+    const list = clientY == null || this.byLabels(clientY) ? this.targets : this.targets.filter((t) => t.kind !== 'tc');
+    return snapTo(list, this.posAt(clientX), SNAP_PX / this.drawn, Math.max(at(r.left), at(this.coveredTo)), at(Math.min(r.right, this.coveredFrom)));
   }
 
   /** The clientX past which the strip is under the fade, zoomed in (Infinity otherwise): nothing there
    *  lights up, shows its time or takes a click. The reset button above it is the one thing in play. */
-  get coveredFrom() { return this.zoomed ? this.scroll.getBoundingClientRect().right - this.fade.offsetWidth * COVER : Infinity; }
-  covered(clientX) { return clientX >= this.coveredFrom; }
+  get coveredFrom() { return this.zoomed && this.endOn.r ? this.scroll.getBoundingClientRect().right - this.fade.offsetWidth * COVER : Infinity; }
+  /** The same at the left end: the clientX before which the strip is under that fade (-Infinity: none). */
+  get coveredTo() { return this.zoomed && this.endOn.l ? this.scroll.getBoundingClientRect().left + this.fadeL.offsetWidth * COVER : -Infinity; }
+  covered(clientX) { return clientX >= this.coveredFrom || clientX <= this.coveredTo; }
+
+  /** Which ends have their fade and reset button, zoomed in: only one with more of the script past
+   *  it. Scrolled (nearly) all the way to an end, that end is the script's own and stays in view. */
+  get endOn() {
+    const sc = this.scroll, room = this.fade.offsetWidth * COVER || 0, l = sc.scrollLeft;
+    return { l: l > room, r: l < sc.scrollWidth - sc.clientWidth - room };
+  }
+  ends() {
+    const z = this.zoomed, on = this.endOn;
+    this.reset.hidden = this.fade.hidden = !(z && on.r);
+    this.resetL.hidden = this.fadeL.hidden = !(z && on.l);
+    this.nearEnd(this.endX);
+  }
 
   /** Bring up the fade with the pointer at clientX, zoomed in: it comes up gradually as the pointer
    *  nears the right end (over END_RAMP pixels), all the way within END_PX of the fade, and goes the
    *  same way, so there is no edge where it switches on. Fully up, the reset button sharpens
    *  (tl-end-near). Never while stepping: the strip under the pointer is what is in play then. */
   nearEnd(clientX) {
-    const full = this.host.getBoundingClientRect().right - this.fade.offsetWidth - END_PX;
-    const p = clientX != null && this.zoomed && !this.stepping ? Math.max(0, Math.min(1, (clientX - full + END_RAMP) / END_RAMP)) : 0;
-    if (p === this.endP) return;
-    this.endP = p;
-    this.host.style.setProperty('--tl-end', p.toFixed(3));
-    this.host.classList.toggle('tl-end-near', p === 1);
+    const r = this.host.getBoundingClientRect(), on = clientX != null && this.zoomed && !this.stepping ? this.endOn : {};
+    const full = r.right - this.fade.offsetWidth - END_PX, fullL = r.left + this.fadeL.offsetWidth + END_PX;
+    const p = on.r ? Math.max(0, Math.min(1, (clientX - full + END_RAMP) / END_RAMP)) : 0;
+    const q = on.l ? Math.max(0, Math.min(1, (fullL - clientX + END_RAMP) / END_RAMP)) : 0;
+    if (p !== this.endP) {
+      this.endP = p;
+      this.host.style.setProperty('--tl-end', p.toFixed(3));
+      this.host.classList.toggle('tl-end-near', p === 1);
+    }
+    if (q !== this.startP) {
+      this.startP = q;
+      this.host.style.setProperty('--tl-start', q.toFixed(3));
+      this.host.classList.toggle('tl-start-near', q === 1);
+    }
   }
 
   /** Light up the mark the pointer is drawn to (null: none). */
@@ -381,7 +419,7 @@ export class Timeline {
     const where = this.zone(e);
     const at0 = this.posAt(x0), ppp0 = this.drawn, top0 = this.view.scroller.scrollTop;
     const hold = this.anchor(x0); // (a drag zooms around the mark the pointer is drawn to, or the point pressed)
-    const near = this.snapAt(x0);
+    const near = this.snapAt(x0, y0);
     const note = e.target.closest('.tl-note') ? this.tl.notes[+e.target.closest('.tl-note').dataset.i] : near && near.kind === 'note' ? near : null;
     let mode = null; // set by the first real movement
     this.dragging = true;
@@ -647,12 +685,41 @@ export class Timeline {
     this.head.style.left = x + 'px';
     this.showScene(c.b, !redraw && !this.dragging);
     this.showBand();
+    this.showFound();
     // Zoomed in, the bar follows the caret when it leaves the part in view.
     const at = c.b + ':' + l;
     if (at !== this.caretSeen) {
       this.caretSeen = at;
       this.reveal(x + PADX);
     }
+  }
+
+  /** Mark the find bar's match m ({ b, s, e }) on the bar: where the phrase starts. */
+  markFound(m) {
+    this.found = m && { ...m, rev: this.ed.rev };
+    this.findEl.classList.remove('gone');
+    if (m) { this.findEl.classList.remove('new'); void this.findEl.offsetWidth; this.findEl.classList.add('new'); }
+    this.showFound();
+  }
+
+  /** The match's mark, while it is still the selection; it fades once it is not (unselected, edited, anything else). */
+  showFound() {
+    const f = this.found, el = this.findEl;
+    if (!f) return;
+    const [a, z] = this.ed.ordered();
+    if (this.ed.rev !== f.rev || a.b !== f.b || a.o !== f.s || z.b !== f.b || z.o !== f.e) {
+      this.found = null;
+      el.classList.add('gone');
+      clearTimeout(this.foundOff);
+      this.foundOff = setTimeout(() => { if (!this.found) el.hidden = true; }, 400);
+      return;
+    }
+    const lines = linesOf(this.ed.blocks[f.b] || { text: '', type: 'action' });
+    let l = 0;
+    while (l + 1 < lines.length && lines[l + 1] <= f.s) l++;
+    const x = scriptPos(this.view.pages, f.b, l);
+    el.style.left = (this.time ? onSecond(this.time, x, this.length) : x) * this.drawn + 'px';
+    el.hidden = false;
   }
 
   /** The caret's scene, drawn as a thicker stretch of the line from its tick to the next. */
@@ -745,10 +812,10 @@ export class Timeline {
     const anchors = again ? this.anchorsDrawn : (this.anchorsDrawn = this.anchors());
     if (!again) this.time = timeScale(anchors);
     const colors = this.ed.noteColors();
-    const tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages, colors), this.time, len)); // each on its second, never between two
+    let tl = again ? this.tl : (this.tl = onSeconds(timelineOf(this.ed.blocks, this.view.pages, colors), this.time, len)); // each on its second, never between two
+    if (!again && this.view.noteFilter) tl = this.tl = { ...tl, notes: tl.notes.filter((n) => this.view.noteShown(n.id)) }; // (the notes panel's colour filter)
     this.paintRuler();
-    this.reset.hidden = this.fade.hidden = !this.zoomed;
-    this.nearEnd(this.endX); // (zoomed in or out under a pointer at the end)
+    this.ends(); // (zoomed in or out under a pointer at an end)
 
     // Mid-zoom the marks are the same ones, just moved to the new scale: nothing is made again, so
     // nothing under the pointer blinks.
@@ -828,7 +895,7 @@ export class Timeline {
       return this.mark(null);
     }
     const where = this.zone(e);
-    const near = this.snapAt(e.clientX);
+    const near = this.snapAt(e.clientX, e.clientY);
     this.band.classList.toggle('hot', where === 'band');
     // The cursor says what a press does: on a timecode it edits it; drawn to a scene, a note or a highlight
     // it goes there (whatever row it is on); else a drag zooms (on the ruler) or moves the band (on it).
@@ -873,7 +940,7 @@ export class Timeline {
     if (mod(e) && !this.stepping) this.startStep(e.clientX); // Ctrl held without moving yet
     if (this.stepping) return this.pinStep();
     if (this.covered(e.clientX)) return;
-    const near = this.snapAt(e.clientX);
+    const near = this.snapAt(e.clientX, e.clientY);
     if (near && near.kind === 'tc') return this.editTimecode(near.x, near);
     if (near && near.kind === 'scene') return this.editTimecode(near.x, { id: this.ed.blocks[near.b].id, line: 0 });
     const x = this.posAt(e.clientX);
@@ -931,9 +998,11 @@ export class Timeline {
   }
 
   /** A small editor under the timecode at x (or at { id, line }, or a new one at x): its exact
-   *  time (Up and Down nudge it a second, ten with Shift), an optional tag and a colour; a scene's
-   *  own names the scene. Only the check (or Enter) keeps it; the bin removes it, or drops a new one;
-   *  Esc or a click away leaves everything as it was, so a new one not confirmed is never made.
+   *  time (Up and Down nudge it a second, ten with Shift; the wheel steps the hours, minutes or
+   *  seconds under the pointer; a click selects the part clicked), an optional tag and a colour; a
+   *  scene's own names the scene. The check (or Enter) keeps it, and so does a click away once
+   *  something was changed; the bin removes it, or drops a new one; Esc, or a click away with nothing
+   *  changed, leaves everything as it was, so a new one never touched is never made.
    *  Offers t0, or the whole second there now; shows `err` at once. Opens under the bar, or under
    *  `under` (a box: the scene list's row) with the same logic. */
   editTimecode(x, existing = null, t0 = null, err = '', under = null) {
@@ -955,7 +1024,15 @@ export class Timeline {
       this.closeEditor();
       if (old && this.session.doc === doc) this.setTimecodes(this.tcs().filter((tc) => tc !== old));
     });
-    const scene = isSceneTimecode({ id: at.b.id, line: at.line }, [at.b]) ? h('div', { class: 'tc-head', title: at.b.text }, at.b.text || 'SCENE') : null;
+    // A scene's own: its heading, and the words a minute of its dialogue over the time it runs (to the next scene).
+    let scene = null;
+    if (isSceneTimecode({ id: at.b.id, line: at.line }, [at.b])) {
+      const blocks = this.ed.blocks, next = blocks.findIndex((x, i) => i > at.bi && x.type === 'scene'), z = next < 0 ? blocks.length : next;
+      const sec = this.timeAt(z < blocks.length ? scriptPos(this.view.pages, z) : this.length) - this.timeAt(at.here);
+      const words = dialogueWords(blocks, at.bi, z), wpm = wordsPerMinute(words, sec);
+      scene = h('div', { class: 'tc-head' }, h('span', { class: 'tc-name', title: at.b.text }, at.b.text || 'SCENE'),
+        wpm == null ? null : h('span', { class: 'tc-wpm', title: `${words} words of dialogue over ${formatTime(sec)}` }, `${wpm} WPM`));
+    }
     const pop = h('div', { class: 'tc-pop', role: 'dialog', 'aria-label': scene ? 'Scene timecode' : 'Timecode' }, scene, h('div', { class: 'tc-row' }, time, tag, h('div', { class: 'tc-sws' }, sws), ok, del), msg);
     const fail = (why) => { msg.textContent = why; pop.classList.add('bad'); time.focus(); };
     const commit = () => {
@@ -969,6 +1046,26 @@ export class Timeline {
       this.flash(at);
     };
     time.addEventListener('input', () => pop.classList.remove('bad'));
+    // The part of HH:MM:SS at character i (0 hours, 1 minutes, 2 seconds) and its seconds.
+    const PART = [3600, 60, 1];
+    const partAt = (i) => Math.max(0, Math.min(2, Math.floor(i / 3)));
+    const selectPart = (k) => time.setSelectionRange(k * 3, k * 3 + 2);
+    const charAt = (clientX) => { // (the field's font is monospaced, its text centred)
+      const cs = getComputedStyle(time), cw = parseFloat(cs.fontSize) * 0.6 + parseFloat(cs.letterSpacing || 0);
+      const r = time.getBoundingClientRect(), w = time.value.length * cw;
+      return Math.floor((clientX - (r.left + (r.width - w) / 2)) / cw);
+    };
+    time.addEventListener('mouseup', () => { if (time.selectionStart === time.selectionEnd && parseTime(time.value) != null) selectPart(partAt(time.selectionStart)); });
+    time.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const t = parseTime(time.value);
+      if (t == null || !e.deltaY) return;
+      const k = partAt(charAt(e.clientX));
+      time.value = formatTime(Math.max(0, t + (e.deltaY < 0 ? 1 : -1) * PART[k]));
+      if (document.activeElement !== time) time.focus();
+      selectPart(k);
+      pop.classList.remove('bad');
+    }, { passive: false });
     pop.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeEditor(); }
       else if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -979,8 +1076,14 @@ export class Timeline {
         pop.classList.remove('bad');
       }
     });
-    // A click elsewhere changes nothing (only the check keeps it).
-    const away = (e) => { if (!pop.contains(e.target)) this.closeEditor(); };
+    // A click elsewhere keeps what was changed (a time typed in counts as set), and changes nothing otherwise.
+    const was = () => [time.value, tag.value, color].join('|'), start = was();
+    const away = (e) => {
+      if (pop.contains(e.target)) return;
+      if (was() === start) return this.closeEditor();
+      commit();
+      if (this.editing && this.editing.pop === pop) this.closeEditor(); // (it doesn't fit there: nothing kept)
+    };
     document.body.appendChild(pop);
     // Zoomed in, the bar brings the timecode into view first.
     if (this.visible) this.reveal(at.here * this.drawn + PADX);
@@ -1006,6 +1109,9 @@ export class Timeline {
 
   /** The time at position x of the script, by the timecodes (a minute a page until there are some). */
   timeAt(x) { return (this.visible && this.time ? this.time : timeScale(this.anchors())).at(x); }
+
+  /** The script's whole length in seconds, by the timecodes. */
+  runtime() { return this.timeAt(this.length); }
 
   /** The time each scene starts at, and whether it is pinned: (b) => { t, pinned }. */
   sceneTimes() {

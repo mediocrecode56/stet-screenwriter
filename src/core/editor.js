@@ -303,6 +303,13 @@ export class Editor {
       return s;
     }
     const first = this.blocks[s.b], last = this.blocks[e.b];
+    // Whole lines gone from the start of one (an empty line deleted, a line selected to the start of
+    // the next): what is left is the last line's own text, so it keeps its element (and id, for its
+    // timecode). Only text that joins a line's written text takes that line's element.
+    if (s.o === 0 && e.o < last.text.length) {
+      this._splice(s.b, e.b - s.b + 1, [sliceBlock(last, e.o, last.text.length, last.id)]);
+      return s;
+    }
     const head = first.text.slice(0, s.o);
     let tail = last.text.slice(e.o);
     let tailMarks = sliceMarks(last.marks, e.o, last.text.length);
@@ -527,7 +534,7 @@ export class Editor {
    * Change of element type (Tab, the toolbar, Ctrl+number). A new type only ever applies to
    * what is selected or to what is written next, never to other text already there:
    *  - with a selection, only the selected text changes type (split off from the rest);
-   *  - an empty element changes type;
+   *  - an empty element (nothing but spaces in it counts as empty) changes type where it is;
    *  - in written text an empty element of the type starts at the caret: after the element
    *    at its end, before it at its start, else between the text before and after the caret.
    */
@@ -538,7 +545,7 @@ export class Editor {
       return;
     }
     const b = this.block;
-    if (b.text === '' || b.text === '()') return this.setType(type);
+    if (/^\(?\s*\)?$/.test(b.text)) return this.setType(type);
     if (b.type !== type) this._startAt(type);
   }
 
@@ -747,6 +754,29 @@ export class Editor {
     return true;
   }
 
+  /** Clear every text style (bold, italic, underline, strikethrough) from the selection, or from
+   *  what is typed next with none; highlights and notes stay. */
+  clearStyles() {
+    if (!this.hasSelection()) {
+      const p = this.caret;
+      this.pending = { at: p, set: Object.fromEntries(STYLES.map((k) => [k, false])) };
+      this._emit();
+      return true;
+    }
+    const [s, e] = this.ordered();
+    this.edit('mark', () => {
+      for (let i = s.b; i <= e.b; i++) {
+        const b = this.blocks[i];
+        const a = i === s.b ? s.o : 0, z = i === e.b ? e.o : b.text.length;
+        if (z <= a) continue;
+        let marks = b.marks;
+        for (const k of STYLES) marks = setStyle(marks, a, z, k, false);
+        if (marks !== b.marks) this._replace(i, withText(b, b.text, marks));
+      }
+    }, { close: true });
+    return true;
+  }
+
   /** Attach comment `id` to the selection (or the whole current block). */
   attachComment(id) {
     let [s, e] = this.ordered();
@@ -763,11 +793,23 @@ export class Editor {
     return true;
   }
 
-  detachComment(id) {
+  /** Remove notes (an id, or several) from the script; their passages keep their text. A note's
+   *  colour is the highlight on its passage, so it goes with the note: one step, one undo brings both back. */
+  detachComment(ids) {
+    const list = Array.isArray(ids) ? ids : [ids];
+    const colored = list.filter((id) => this.noteColors().has(id)).map((id) => this.noteRange(id)).filter(Boolean);
     this.edit('mark', () => {
+      for (const [s, e] of colored) {
+        for (let i = s.b; i <= e.b; i++) {
+          const b = this.blocks[i];
+          const a = i === s.b ? s.o : 0, z = i === e.b ? e.o : b.text.length;
+          if (z > a) this._replace(i, withText(b, b.text, setHighlight(b.marks, a, z, null)));
+        }
+      }
       for (let i = 0; i < this.blocks.length; i++) {
         const b = this.blocks[i];
-        const m = removeCommentMarks(b.marks, id);
+        let m = b.marks;
+        for (const id of list) m = removeCommentMarks(m, id);
         if (m !== b.marks) this._replace(i, withText(b, b.text, m));
       }
     }, { close: true });

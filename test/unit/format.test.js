@@ -40,7 +40,7 @@ test('a note keeps its pin, written only when set; a colour from 0.40-0.43 becom
   assert.deepEqual(JSON.parse(text).comments.b, { text: 'y', created: '', modified: '' });
   assert.equal(deserialize(text).doc.comments.a.pinned, true);
   const p = JSON.parse(text);
-  p.comments.a.color = 'pink'; p.comments.b.color = 'red'; p.comments.c.color = 'yellow'; p.comments.b.pinned = 'yes';
+  p.comments.a.color = 'pink'; p.comments.b.color = 'purple'; p.comments.c.color = 'yellow'; p.comments.b.pinned = 'yes';
   const back = deserialize(JSON.stringify(p)).doc;
   assert.deepEqual(back.blocks[0].marks.filter((m) => m.k === 'hl').map((m) => [m.s, m.e, m.v]), [[0, 3, 'pink'], [8, 13, 'blue']], 'its passage in pink; one highlighted already keeps its own; no colour of no highlight');
   assert.deepEqual(back.comments.b, { text: 'y', created: '', modified: '' });

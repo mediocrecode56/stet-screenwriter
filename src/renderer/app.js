@@ -92,11 +92,12 @@ const jump = (p, center = false, end = null, glide = false) => {
 const scenes = new ScenePanel($('left'), $('scenes'), $('scene-count'), {
   editor, view, jump: (p) => jumpScene(p.b),
   times: () => timeline.sceneTimes(), // each scene's time, as the timeline has it
+  runtime: () => timeline.runtime(), // and the script's whole length
   editTime: (b, box) => timeline.editScene(b, box),
   focusEditor: () => input.focus(),
 });
 const notes = new NotesPanel($('right'), $('notes'), $('note-count'), { editor, view, session, jump, onChange: () => session.touch(), onMark: () => { timeline.update(true); view.schedule(); } });
-const find = new FindBar({ editor, view, jump, focusEditor: () => input.focus() });
+const find = new FindBar({ editor, view, jump, focusEditor: () => input.focus(), onFound: (m) => timeline.markFound(m) });
 
 const revision = new Revision({
   host: $('rev'), editor, view, session, jump,
@@ -126,12 +127,14 @@ view.scroller.addEventListener('contextmenu', (e) => {
     types: () => (editor.tabTypes || TYPES).map((t) => 'type-' + t),
     typeLabel: () => { const ts = new Set(selectedBlocks().map((b) => b.type)); return ts.size === 1 ? TYPE_SHORT[[...ts][0]] : 'MIXED'; },
     styles: styleCmds.map((c) => c.id), aligns: alignCmds.map((c) => c.id), alignIcon: () => alignIcon(alignOf(editor.block)),
+    highlights: [...hlCmds.map((c) => c.id), 'hl-none'],
   });
 });
 
 const timeline = new Timeline($('timeline'), {
   editor, view, session, jump,
-  openNote: (id, b, s, e) => { jump(pos(b, s), true, pos(b, e), 'key'); view.activeComment = id; openNote(id); view.invalidate(); },
+  // (the caret at the note's start, as for a scene: its text not selected; the notes panel open on it)
+  openNote: (id, b, s) => { jump(pos(b, s), true, null, 'key'); view.activeComment = id; openNote(id); view.invalidate(); },
   onToggle: (on) => api.invoke('settings:set', { timeline: on }),
   lockPointer: () => api.invoke('pointer:lock'),
   onTimecodes: () => scenes.refresh(),
@@ -597,6 +600,12 @@ for (const s of STYLE_CMDS) {
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-' + s.k); });
   $('stbar').appendChild(b);
 }
+{ // Clear Formatting: a T struck through, after the four styles
+  const b = dlg.h('button', { class: 'tb st', id: 'btn-unstyle', html: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><path d="M2 2.5h8M6 2.5v8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1.5 10.5l9-9" fill="none" stroke="currentColor" stroke-width="1" shape-rendering="auto"/></svg>' });
+  tip(b, 'Clear formatting', 'style-clear');
+  b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-clear'); });
+  $('stbar').appendChild(b);
+}
 const alignBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-align', title: 'Alignment', 'aria-haspopup': 'menu', html: alignIcon('left') + '<span class="dn">▾</span>' });
 alignBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(alignBtn, ALIGN_CMDS.map((x) => 'align-' + x.a)); });
 $('albar').appendChild(alignBtn);
@@ -606,8 +615,8 @@ spellBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(sp
 $('btn-comment').after(dlg.h('div', { class: 'sep' }), spellBtn);
 // On a narrow window the toolbar tightens a step at a time, only as far as it must for every button,
 // NOTES at the right end too, to stay in the window: closer buttons, then without the element
-// shortcuts' small numbers, then closer still, twice, and at the narrowest CHAR, DIAL and SPELL. (Hidden, it is fitted again when shown.)
-const TIGHT = ['tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5'];
+// shortcuts' small numbers, then closer still, twice, then CHAR, DIAL and SPELL, and at the narrowest closer again. (Hidden, it is fitted again when shown.)
+const TIGHT = ['tight-1', 'tight-2', 'tight-3', 'tight-4', 'tight-5', 'tight-6'];
 function fitToolbar() {
   const bar = $('elbar'), end = $('elright');
   const fits = () => end.getBoundingClientRect().right <= bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight) + 0.5;
@@ -640,6 +649,10 @@ tbClick('btn-comment', 'note-add');
 tbClick('btn-scenes', 'panel-scenes');
 tbClick('btn-notes', 'panel-notes');
 tbClick('btn-rev', 'revise-panel');
+tip($('btn-title'), 'Show or hide the title page', 'title-toggle');
+tbClick('btn-title', 'title-toggle');
+const renderTitleBtn = () => { $('btn-title').classList.toggle('on', view.showTitle); $('btn-title').setAttribute('aria-pressed', String(view.showTitle)); };
+renderTitleBtn();
 
 // The side panels widen by dragging their inner edge (up to twice their usual width); the lock beside
 // REVISE keeps them as they are. Their widths are kept, and the page re-centres as they change.
@@ -1018,7 +1031,7 @@ function addNote() {
 function stepNote(dir) {
   const a = notes.step(dir);
   if (!a) return;
-  jump(pos(a.b, a.s), true, pos(a.b, a.e), 'key');
+  jump(pos(a.b, a.s), true, null, 'key');
   view.activeComment = a.id;
   if (notes.visible) notes.select(a.id);
   view.invalidate();
@@ -1105,6 +1118,7 @@ const styleCmds = STYLE_CMDS.map((s) => ({
   id: 'style-' + s.k, cat: 'Format', label: s.label, keys: s.keys, checked: () => editor.styleActive(s.k),
   run: () => { editor.toggleStyle(s.k); input.after(); input.focus(); },
 }));
+styleCmds.push({ id: 'style-clear', cat: 'Format', label: 'Clear Formatting', keys: 'Ctrl+Shift+Space', run: () => { editor.clearStyles(); input.after(); input.focus(); } });
 
 // The File menu's hover list of recent screenplays: one click opens one; the full Open Recent
 // window (dismiss, move to bin, details) is still the row itself.
@@ -1192,8 +1206,8 @@ cmd.register([
   { id: 'timeline', cat: 'View', label: () => (timeline.visible ? 'Hide Timeline' : 'Timeline'), keys: 'Ctrl+Shift+T', global: true, run: () => timeline.show() },
   { id: 'companion', cat: 'View', label: () => (dino && dino.enabled ? 'Hide Writing Companion' : 'Show Writing Companion'), run: () => { dino.setEnabled(!dino.enabled); api.invoke('settings:set', { companion: dino.enabled }); } },
   { id: 'note-lines', cat: 'View', label: () => (document.body.classList.contains('no-note-lines') ? 'Show Note Underlines' : 'Hide Note Underlines'), run: async () => { const on = document.body.classList.toggle('no-note-lines'); settings = await api.invoke('settings:set', { noteLines: !on }); } },
-  { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => { view.showTitle = !view.showTitle; api.invoke('settings:set', { showTitlePage: view.showTitle }); view.invalidate(); view.revealCaret(); } },
-  { id: 'title-edit', cat: 'View', label: 'Edit Title Page', run: () => { if (!view.showTitle) { view.showTitle = true; view.invalidate(); } view.scroller.scrollTop = 0; view.frame(); setTimeout(() => { const f = document.querySelector('.tp-f'); if (f) f.focus(); }, 30); } },
+  { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => { view.showTitle = !view.showTitle; api.invoke('settings:set', { showTitlePage: view.showTitle }); renderTitleBtn(); view.invalidate(); view.revealCaret(); } },
+  { id: 'title-edit', cat: 'View', label: 'Edit Title Page', run: () => { if (!view.showTitle) { view.showTitle = true; renderTitleBtn(); view.invalidate(); } view.scroller.scrollTop = 0; view.frame(); setTimeout(() => { const f = document.querySelector('.tp-f'); if (f) f.focus(); }, 30); } },
   { id: 'goto-page', cat: 'View', label: 'Go to Page…', keys: 'Ctrl+G', global: true, run: async () => {
     const v = await dlg.prompt('GO TO PAGE', `Page (1–${view.pages.length})`, String(view.currentPage() + 1));
     const n = parseInt(v, 10);
@@ -1364,6 +1378,20 @@ await Promise.race([document.fonts?.ready, new Promise((r) => setTimeout(r, 400)
 await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 started();
 if (info.e2e) window.__stet.started = true; // the tests begin once STET has finished starting
+// The first start of each version: a short word that STET is a free beta, written with AI, used at one's own risk.
+if (!info.e2e && !info.perf && !info.shot && settings.betaNotice !== info.version) {
+  setTimeout(async () => {
+    await dlg.open({
+      title: `STET ${info.version} β`,
+      cls: 'beta-note',
+      body: dlg.h('div', { class: 'body' },
+        dlg.h('p', {}, 'STET is a free beta, written largely with AI tools. It may have bugs, so keep backups of your work.'),
+        dlg.h('p', { class: 'fine' }, 'It is provided "as is", without warranty of any kind. You use it at your own risk: its author is not liable for any loss of work, data or any other damage arising from its use.')),
+      buttons: [{ label: 'I understand', value: true, primary: true }],
+    });
+    settings = await api.invoke('settings:set', { betaNotice: info.version });
+  }, 450);
+}
 if (info.run) setTimeout(() => cmd.run(info.run), 300);
 if (info.updateCheck && settings.updateCheck !== false) setTimeout(() => updates.check(false), info.updateDelay);
 

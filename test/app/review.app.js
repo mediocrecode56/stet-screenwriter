@@ -272,16 +272,25 @@ test('suggestions, decisions and ignored passages are kept across a restart; a n
   const sys = mock.requests.find((r) => r.body && r.body.system).body.system[0].text;
   assert.match(sys, /guidelines[\s\S]*\[hint\] awkward: "ITNRO"[\s\S]*a band name/);
   assert.match(sys, /already reviewed[\s\S]*looking to him since five minutes/);
-  // The guidelines window: what it is for in one sentence, no double rule at its end, and RESET only on a second press.
+  // The guidelines window: the passages ignored in this screenplay first, then the guidelines (what
+  // they are for in one sentence), each section folding from its header with its own RESET, which
+  // works only on a second press and empties that section alone.
   await app.eval(`__stet.cmd.run('revise-guides')`);
-  await app.until(`!!document.querySelector('#overlay .dlg .foot .grow .btn')`, { what: 'the guidelines window' });
-  assert.equal(await app.eval(`document.querySelector('#overlay .dlg .body > p.hint').textContent`), 'What Revise leaves alone in every screenplay, learned from the suggestions you set aside.');
-  assert.equal(await app.eval(`getComputedStyle([...document.querySelectorAll('#overlay .dlg .body > table.t')].at(-1).querySelector('tr:last-child td')).borderBottomWidth`), '0px', 'the foot\'s rule is the only one');
-  await app.clickOn('#overlay .dlg .foot .grow .btn');
-  assert.equal(await app.eval(`document.querySelector('#overlay .dlg .foot .grow .btn').textContent`), 'CONFIRM RESET');
+  const sec = (k) => `#overlay .dlg .gl-sec[data-k="${k}"]`;
+  await app.until(`!!document.querySelector('${sec('guides')} .gl-reset')`, { what: 'the guidelines window' });
+  assert.deepEqual(await app.eval(`[...document.querySelectorAll('#overlay .dlg .gl-sec')].map((s) => s.dataset.k)`), ['ignored', 'guides'], 'ignored at the top');
+  assert.equal(await app.eval(`document.querySelector('${sec('guides')} .gl-in > p.hint').textContent`), 'What Revise leaves alone in every screenplay, learned from the suggestions you set aside.');
+  await app.clickOn(`${sec('guides')} .gl-fold`);
+  await app.until(`document.querySelector('${sec('guides')}').classList.contains('shut')`, { what: 'the guidelines folded shut' });
+  await app.clickOn(`${sec('guides')} .gl-fold`);
+  await app.until(`!document.querySelector('${sec('guides')}').classList.contains('shut')`, { what: 'and open again' });
+  const ignored = await app.eval('__stet.session.doc.revision.ignored.length');
+  await app.clickOn(`${sec('guides')} .gl-reset`);
+  assert.equal(await app.eval(`document.querySelector('${sec('guides')} .gl-reset').textContent`), 'CONFIRM');
   assert.ok((await app.eval('__stet.settings().guidelines.length')) > 0, 'one press: nothing forgotten');
-  await app.clickOn('#overlay .dlg .foot .grow .btn');
-  await app.until(`(__stet.settings().guidelines || []).length === 0 && document.querySelector('#overlay .dlg .foot .grow .btn').disabled`, { what: 'the guidelines reset' });
+  await app.clickOn(`${sec('guides')} .gl-reset`);
+  await app.until(`(__stet.settings().guidelines || []).length === 0 && document.querySelector('${sec('guides')} .gl-reset').disabled`, { what: 'the guidelines reset' });
+  assert.equal(await app.eval('__stet.session.doc.revision.ignored.length'), ignored, 'the ignored passages left as they were');
   await app.key('Escape');
 });
 

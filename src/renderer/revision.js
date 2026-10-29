@@ -15,8 +15,10 @@ import {
 import { applyGuidelines, guidelinesPrompt, guidelinesOf, patternsOf, flagOf, noteFlag, addFlag, removeGuideline, cleanFlags } from '../core/guidelines.js';
 import { arm } from './ui/arm.js';
 import { pos } from '../core/editor.js';
+import { pageOf, linesOf } from '../core/layout.js';
+import { lineIndexOf } from '../core/nav.js';
 import * as dlg from './ui/dialog.js';
-import { setPanel, isOpen } from './ui/motion.js';
+import { setPanel, isOpen, reducedMotion, DUR_PANEL, EASE_IN_OUT } from './ui/motion.js';
 
 const api = window.stet;
 const esc = dlg.esc;
@@ -472,11 +474,23 @@ export class Revision {
     if (this.near) this.nearEnd(true);
   }
 
+  /** Where a suggestion is: the scene (its heading, ending in "…" if it doesn't fit) and the page. */
+  whereHTML(at) {
+    if (!at) return '';
+    const blocks = this.editor.blocks, b = blocks[at.b];
+    if (!b) return '';
+    let k = at.b;
+    while (k >= 0 && blocks[k].type !== 'scene') k--;
+    const scene = k < 0 ? 'Before the first scene' : blocks[k].text.trim() || 'Untitled scene';
+    const pg = pageOf(this.view.pages, at.b, lineIndexOf(linesOf(b), at.s)) + 1;
+    return `<div class="rv-where" title="${esc(scene)} · page ${pg}"><span class="rv-sc">${esc(scene)}</span><span class="rv-pg">PAGE ${pg}</span></div>`;
+  }
+
   item(f) {
     const cls = [f.id === this.cur ? 'cur' : '', f.id === this.hover ? 'hov' : '', f.decision ? 'decided' : ''].join(' ');
     const at = this.located(f);
     const guide = f.guide && !f.decision ? `<span class="rv-guide" title="${esc(`Close to something you set aside before${f.guide.notes.length ? ': ' + f.guide.notes.join('; ') : ''}`)}">GUIDELINE?</span>` : '';
-    const head = `<div class="nh"><span class="rv-kind">${CATEGORY_LABEL[f.category]}</span>${guide}<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span></div>`;
+    const head = `<div class="nh"><span class="rv-kind">${CATEGORY_LABEL[f.category]}</span>${guide}<span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span></div>${this.whereHTML(at)}`;
     const diff = `<span class="rv-old">${esc(f.shownOriginal)}</span> <span class="rv-arrow">→</span> <span class="rv-new">${esc(f.shownReplacement)}</span>`;
     let actions, note = '';
     if (!f.decision) {
@@ -566,9 +580,17 @@ export async function keyDialog(lead = '') {
 
 const LEVEL = { firm: 'FIRM', soft: 'LEARNING', note: 'NOTE', kept: 'PATTERN', voice: 'VOICE' };
 
-/** The writer's guidelines (every screenplay), what they show, and the passages ignored in this one:
- *  each can be removed, a guideline can be written by hand, and RESET (pressed twice) starts over. */
+// Which of the guidelines window's two sections are folded shut (kept while STET runs).
+const folded = { ignored: false, guides: false };
+
+/** The passages ignored in this screenplay (at the top) and the writer's guidelines for every
+ *  screenplay, with what they show (below): two sections, each folding open or shut from its header,
+ *  each with its own RESET (pressed twice) that empties only that section. Each entry can be removed,
+ *  and a guideline can be written by hand. */
 export async function guidelinesDialog(rev) {
+  const section = (k, title, n, inner, resetTitle) => `<section class="gl-sec${folded[k] ? ' shut' : ''}" data-k="${k}">
+      <div class="gl-h"><button class="gl-fold" data-x="fold" data-k="${k}" aria-expanded="${!folded[k]}"><span class="dn">▾</span>${title} <span class="gl-n">· ${n}</span></button><button class="tb gl-reset" data-x="reset" data-k="${k}" title="${resetTitle} (press twice)"${n ? '' : ' disabled'}>RESET</button></div>
+      <div class="gl-in">${inner}</div></section>`;
   const render = () => {
     const list = guidelinesOf(rev.flags), learned = patternsOf(rev.flags), ign = rev.lists().ignored;
     const what = (g) => {
@@ -580,18 +602,21 @@ export async function guidelinesDialog(rev) {
     const row = (html, act, i, tag = '') => `<tr><td>${tag ? `<span class="gl-lv">${tag}</span>` : ''}${html}</td><td style="text-align:right">${act ? `<button class="tb" data-x="${act}" data-i="${i}">REMOVE</button>` : ''}</td></tr>`;
     // (what the flags show together: learned, so not removed on its own; it goes with its examples)
     const pattern = (p) => `${p.kind === 'kept' ? `keeps “${esc(p.what)}”` : `${esc(p.what)}’s lines`} <span class="hint">· ${CATEGORY_LABEL[p.category] || ''} · ${p.count} times</span>`;
-    return `<p class="hint">What Revise leaves alone in every screenplay, learned from the suggestions you set aside.</p>
+    return section('ignored', 'IGNORED IN THIS SCREENPLAY', ign.length,
+      `<table class="t">${ign.map((x, i) => row(`${esc(x.text)} <span class="hint">· ${CATEGORY_LABEL[x.category] || x.category}</span>`, 'i', i)).join('') || '<tr><td class="hint">none: IGNORE on a suggestion adds one</td></tr>'}</table>`,
+      'Flag every passage ignored in this screenplay again')
+      + section('guides', 'GUIDELINES · EVERY SCREENPLAY', list.length,
+        `<p class="hint">What Revise leaves alone in every screenplay, learned from the suggestions you set aside.</p>
       <table class="t">${list.map((g, i) => row(what(g), 'g', i, LEVEL[g.level])).join('') || '<tr><td class="hint">none yet: +GUIDELINE on a suggestion adds one</td></tr>'}${learned.map((p) => row(pattern(p), '', 0, LEVEL[p.kind])).join('')}</table>
-      <div class="gl-add"><input type="text" placeholder="write one for Claude: Rosa's dialogue mixes in Spanish on purpose" spellcheck="false"><button class="tb" data-x="add">ADD</button></div>
-      <p class="hint" style="margin-top:14px">Ignored in this screenplay (${ign.length})</p><table class="t">${ign.map((x, i) => row(`${esc(x.text)} <span class="hint">· ${CATEGORY_LABEL[x.category] || x.category}</span>`, 'i', i)).join('') || '<tr><td class="hint">none</td></tr>'}</table>`;
+      <div class="gl-add"><input type="text" placeholder="write one for Claude: Rosa's dialogue mixes in Spanish on purpose" spellcheck="false"><button class="tb" data-x="add">ADD</button></div>`,
+        'Forget every guideline');
   };
-  const body = dlg.h('div', { class: 'body', style: 'width:560px', html: render() });
+  const body = dlg.h('div', { class: 'body gl-body', style: 'width:560px', html: render() });
   const add = async () => {
     const field = body.querySelector('.gl-add input'), v = field.value.trim();
     if (!v) return field.focus();
     await rev.saveFlags(addFlag(rev.flags, noteFlag(v)));
     body.innerHTML = render();
-    sync();
     body.querySelector('.gl-add input').focus();
   };
   // Enter in the field adds what is written (and doesn't close the window).
@@ -599,8 +624,28 @@ export async function guidelinesDialog(rev) {
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-x]');
     if (!b) return;
-    const i = +b.dataset.i;
+    const i = +b.dataset.i, k = b.dataset.k;
     if (b.dataset.x === 'add') return add();
+    if (b.dataset.x === 'fold') {
+      // Folded open or shut in one smooth move of its contents' height.
+      folded[k] = !folded[k];
+      const sec = b.closest('.gl-sec'), inner = sec.querySelector('.gl-in'), h0 = inner.offsetHeight;
+      sec.classList.toggle('shut', folded[k]);
+      b.setAttribute('aria-expanded', String(!folded[k]));
+      if (!reducedMotion()) {
+        const h1 = folded[k] ? 0 : inner.scrollHeight;
+        if (!folded[k]) inner.style.display = 'block';
+        inner.animate([{ height: h0 + 'px', opacity: folded[k] ? 1 : 0 }, { height: h1 + 'px', opacity: folded[k] ? 0 : 1 }], { duration: DUR_PANEL, easing: EASE_IN_OUT }).onfinish = () => { inner.style.display = ''; };
+      }
+      return;
+    }
+    if (b.dataset.x === 'reset') {
+      return arm(b, async () => {
+        if (k === 'guides') await rev.saveFlags([]);
+        else if (rev.doc.revision) { rev.doc.revision.ignored = []; rev.session.touch(); }
+        body.innerHTML = render();
+      }, { label: 'CONFIRM' });
+    }
     if (b.dataset.x === 'g') await rev.saveFlags(removeGuideline(rev.flags, guidelinesOf(rev.flags)[i]));
     else {
       const x = rev.lists().ignored[i], all = rev.doc.revision.ignored;
@@ -608,11 +653,6 @@ export async function guidelinesDialog(rev) {
       rev.session.touch();
     }
     body.innerHTML = render();
-    sync();
   });
-  const reset = dlg.h('button', { class: 'btn', title: 'Forget every guideline (press twice)' }, 'RESET');
-  const sync = () => { reset.disabled = !rev.flags.length; };
-  reset.addEventListener('click', () => arm(reset, async () => { await rev.saveFlags([]); body.innerHTML = render(); sync(); }, { label: 'CONFIRM RESET' }));
-  sync();
-  return dlg.open({ title: 'REVISE GUIDELINES', body, foot: reset, buttons: [{ label: 'Close', value: null, primary: true }] });
+  return dlg.open({ title: 'REVISE GUIDELINES', body, buttons: [{ label: 'Close', value: null, primary: true }] });
 }

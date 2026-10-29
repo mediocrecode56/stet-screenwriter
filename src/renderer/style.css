@@ -21,14 +21,20 @@
   --inv-fg: #fff;
   --sel: rgba(0, 0, 0, .16);
   --caret: #000;
-  /* A highlight in the script is the same colour as its mark on the timeline and a note's (--tl-*). */
-  --hl-blue: var(--tl-blue);
-  --hl-yellow: var(--tl-yellow);
-  --hl-pink: var(--tl-pink);
+  /* A highlight behind the script's text: one family of pale pastels leaning to white (never grey),
+     each still clearly its colour, black text fully readable on all of them. The same in print
+     (core/pdf.js, core/printhtml.js, .sheet). */
+  --hl-blue: #cfe0f7;
+  --hl-yellow: #fbf1bf;
+  --hl-pink: #f9d6e5;
+  --hl-red: #f9d3cf;
+  --hl-green: #d3efdc;
   --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
-  --tl-blue: #75a1dc; /* the marks' colours (timeline, squares, notes): pastel too (~0.70-0.80 / 0.10) */
-  --tl-yellow: #d6bc6b;
-  --tl-pink: #d987ac;
+  --tl-blue: #8db4e6; /* the same colours as small marks (timeline, squares, notes): a step fuller, so they read on the bar */
+  --tl-yellow: #e3c862;
+  --tl-pink: #e79bbd;
+  --tl-red: #e58a82;
+  --tl-green: #84c99a;
   --spell: rgba(206, 38, 38, .74); /* a misspelling's underline: a clear red line under the word */
   --find: rgba(0, 0, 0, .10);
   --find-cur: rgba(0, 0, 0, .32);
@@ -53,10 +59,10 @@
   --dur-out: 60ms; /* what shows only while the pointer is there clears faster than it came */
   --dur-fade: 120ms; /* a fade that follows the pointer: each step smoothed, never lagging behind */
   /* The timeline's glass band (the part of the script in the window). */
-  --glass-hi: rgba(255, 255, 255, .62);
-  --glass-lo: rgba(255, 255, 255, .30);
-  --glass-foot: rgba(0, 0, 0, .05);
-  --glass-side: rgba(0, 0, 0, .09);
+  --glass-hi: rgba(255, 255, 255, .70);
+  --glass-lo: rgba(255, 255, 255, .36);
+  --glass-foot: rgba(0, 0, 0, .07);
+  --glass-side: rgba(0, 0, 0, .12);
   --glass-lift: rgba(255, 255, 255, .34);
 }
 @media (prefers-reduced-motion: reduce) { :root { --dur-fast: 0ms; --dur-panel: 0ms; --dur-tl: 0ms; --dur-out: 0ms; --dur-fade: 0ms; } }
@@ -78,10 +84,14 @@
   --hl-blue: color-mix(in srgb, var(--tl-blue) 45%, var(--page));
   --hl-yellow: color-mix(in srgb, var(--tl-yellow) 45%, var(--page));
   --hl-pink: color-mix(in srgb, var(--tl-pink) 45%, var(--page));
+  --hl-red: color-mix(in srgb, var(--tl-red) 45%, var(--page));
+  --hl-green: color-mix(in srgb, var(--tl-green) 45%, var(--page));
   --tl-line: #f0f0ed;
-  --tl-blue: #80aae3;
-  --tl-yellow: #dfca7d;
-  --tl-pink: #e192b5;
+  --tl-blue: #8fb6e8;
+  --tl-yellow: #e8d88a;
+  --tl-pink: #e9a8c6;
+  --tl-red: #e89a94;
+  --tl-green: #9fd8b2;
   --spell: rgba(255, 102, 102, .78);
   --find: rgba(255, 255, 255, .12);
   --find-cur: rgba(255, 255, 255, .34);
@@ -92,10 +102,10 @@
   --rev-cur: rgba(255, 255, 255, .14);
   --hover: rgba(255, 255, 255, .08);
   --hover-on: rgba(255, 255, 255, .15);
-  --glass-hi: rgba(255, 255, 255, .085);
-  --glass-lo: rgba(255, 255, 255, .035);
+  --glass-hi: rgba(255, 255, 255, .10);
+  --glass-lo: rgba(255, 255, 255, .045);
   --glass-foot: rgba(0, 0, 0, .35);
-  --glass-side: rgba(255, 255, 255, .07);
+  --glass-side: rgba(255, 255, 255, .09);
   --glass-lift: rgba(255, 255, 255, .035);
 }
 
@@ -119,10 +129,17 @@ body {
 }
 button { font: inherit; color: inherit; letter-spacing: inherit; }
 input, textarea, select { font: inherit; color: var(--ink); background: transparent; }
-input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { cursor: text; }
+input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { cursor: text; user-select: text; } /* (a field always takes a selection) */
 [hidden] { display: none !important; }
 /* Starting (the window not shown yet: ui/startup.js): everything takes its place at once. */
 .starting *, .starting *::before, .starting *::after { transition: none !important; }
+/* Opening (ui/startup.js): the window is shown in the bar's colour, then its contents fade up together,
+   unhurried and without a move, once it is on screen. */
+.opening body > * { opacity: 0; }
+.opened body > :not(#overlay):not(#input) { animation: stet-open 280ms var(--ease-out) both; }
+@keyframes stet-open { from { opacity: 0; } }
+.beta-note { max-width: 420px; }
+.beta-note .fine { font-size: 10px; line-height: 1.55; color: var(--ink-3); }
 ::selection { background: var(--sel); }
 /* Scrollbars, side and bottom: a quiet hairline-thin square bar, inset from the edge, that firms up
    only under the pointer (the clear border keeps the space to grab it by). */
@@ -183,14 +200,13 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .sp-acts { display: flex; gap: 2px; margin-top: 3px; padding: 3px 4px 0; border-top: 1px solid var(--rule); }
 .sp-act { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: 9px; letter-spacing: .08em; cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .sp-act:hover { background: var(--hover-on); color: var(--ink); }
-/* The right-click menu on selected text (ui/selmenu.js): four square buttons, three with a dropdown
-   under the bar. Resting on one (selmenu.js HOVER_MS) opens its dropdown;
-   open, a line marks the button and its arrow turns up. */
+/* The right-click menu on selected text (ui/selmenu.js): five square buttons, four with a dropdown
+   under the bar that a click opens; open, a line marks the button and its arrow turns up. */
 .menu.selbar { min-width: 0; display: flex; padding: 0; transform-origin: top left; }
 .selb { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; height: 28px; min-width: 32px; padding: 0 8px; border: 0; background: none; color: var(--ink-2); cursor: default; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .selb + .selb { box-shadow: inset 1px 0 0 var(--rule); }
-.selb:hover, .selb.open { background: var(--hover-on); color: var(--ink); }
-.selb:active { background: var(--hover); }
+/* Only the icon takes the hover (as the top menu's): the button's box stays as it is. */
+.selb:hover, .selb.open { color: var(--ink); }
 .selb::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform var(--dur-out) var(--ease-out); }
 .selb.open::after { transform: scaleX(1); transition: transform var(--dur-fast) var(--ease-out); }
 .selb svg { display: block; }
@@ -199,7 +215,7 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .selb .dn { display: inline-block; font-size: 8px; color: var(--ink-3); transition: transform var(--dur-panel) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .selb:hover .dn, .selb.open .dn { color: var(--ink-2); }
 .selb.open .dn { transform: rotate(180deg); }
-.seldrop { min-width: 190px; }
+.seldrop { min-width: 190px; transform-origin: top left; }
 .seldrop > .mi { transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
 .seldrop > .mi:hover { box-shadow: inset 2px 0 0 var(--ink-3); }
 .menu.seldrop > .mi.cur, .menu.seldrop > .mi.cur:hover { color: var(--ink); box-shadow: inset 2px 0 0 var(--ink); }
@@ -247,8 +263,9 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 #elbar.tight-1 .tb { padding: 0 5px; } #elbar.tight-1 .sep { margin: 2px 3px; }
 #elbar.tight-2 #eltypes sup { display: none; }
 #elbar.tight-3 .tb { padding: 0 4px; letter-spacing: .07em; }
-#elbar.tight-4 .tb { padding: 0 3px; letter-spacing: .05em; } #elbar.tight-4 .sep { margin: 2px 2px; }
+#elbar.tight-4 .tb { padding: 0 3px; letter-spacing: .05em; } #elbar.tight-4 .sep { margin: 2px 1px; } #elbar.tight-4 #btn-title, #elbar.tight-4 #btn-lock { width: 18px; }
 #elbar.tight-5 .more { display: none; }
+#elbar.tight-6 .tb { padding: 0 2px; } #elbar.tight-6 .sep { margin: 2px 0; } #elbar.tight-6 #hlbar .sw { width: 10px; height: 10px; } /* (the narrowest: every button a step closer still) */
 /* The rule between the menu bar and the toolbar stops a clear margin before
    REVISE instead of running over the right-hand panel buttons. */
 #elright { display: flex; position: relative; }
@@ -257,6 +274,13 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 #btn-lock { width: 24px; padding: 0; display: grid; place-items: center; color: var(--ink-3); margin-right: 2px; }
 #btn-lock.locked { color: var(--ink); }
 #btn-lock:hover { color: var(--ink); }
+/* The title page's switch: as quiet as the lock, in full ink while the title page shows. */
+#btn-title { width: 24px; padding: 0; display: grid; place-items: center; color: var(--ink-3); }
+#btn-title.on { background: none; color: var(--ink); }
+#btn-title.on:hover { background: var(--hover-on); }
+#btn-title:hover { color: var(--ink); }
+#btn-title:not(.on) svg { opacity: .7; }
+#btn-unstyle { display: grid; place-items: center; }
 /* Pressed feedback is painted at pointerdown, before the command's own result. */
 .tb.pressed, .btn.pressed { background: var(--inv-bg); color: var(--inv-fg); }
 .tb.pressed sup { color: inherit; }
@@ -271,17 +295,20 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 .sep { width: 1px; background: var(--rule); margin: 5px 6px; }
 .grow { flex: 1; }
 .sw { width: 12px; height: 12px; display: inline-block; vertical-align: -2px; border: 1px solid var(--rule-strong); }
-.sw.blue { background: var(--hl-blue); } .sw.yellow { background: var(--hl-yellow); } .sw.pink { background: var(--hl-pink); }
+.sw.blue { background: var(--hl-blue); } .sw.yellow { background: var(--hl-yellow); } .sw.pink { background: var(--hl-pink); }  .sw.red { background: var(--hl-red); }  .sw.green { background: var(--hl-green); }
 .sw.none { background: linear-gradient(to top right, transparent 45%, var(--ink) 45% 55%, transparent 55%); }
 
 /* ---- find bar -------------------------------------------------------- */
-/* The find bar slides out from under the toolbar (motion.js setPanel, side top). */
+/* The find bar: a compact box at the top right of the script, over it (so the script never moves),
+   sliding out from under the toolbar (motion.js setPanel, side top; #main clips it). Its right edge
+   follows the script's, so an open side panel is never covered (find.js). */
 #elbar { position: relative; z-index: 2; }
-#findbar { position: relative; z-index: 1; flex: none; display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--rule); background: var(--bar); }
-#findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 220px; }
+#main { position: relative; }
+#findbar { position: absolute; top: 0; right: 0; z-index: 6; display: flex; gap: 6px; align-items: center; padding: 4px 6px 4px 8px; border: 1px solid var(--rule); border-top: 0; background: var(--bar); box-shadow: 3px 3px 0 var(--rule); max-width: calc(100% - 16px); }
+#findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 150px; min-width: 0; flex: 0 1 150px; }
 #findbar input:focus { border-color: var(--rule-strong); }
 .chk { display: flex; align-items: center; gap: 3px; color: var(--ink-2); }
-#find-count { color: var(--ink-3); min-width: 70px; }
+#find-count { color: var(--ink-3); min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---- timeline (View > Timeline) ----------------------------------------
    Calm at rest: the script line (coloured only where highlighted), quiet scene ticks, the notes
@@ -308,9 +335,9 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
   transition: --tl-side var(--dur-tl) var(--ease-out), --tl-lift var(--dur-tl) var(--ease-out); }
 /* Over each edge, a lens (timeline.js LENS), above the marks: what is under it blurs more toward the edge and bends a
    little, like the rim of a pane of glass. Very slight, so the marks there still read. */
-.tl-lens { position: absolute; top: 0; bottom: 0; pointer-events: none; -webkit-backdrop-filter: blur(1.2px); backdrop-filter: blur(1.2px); }
-.tl-lens.l { -webkit-mask-image: linear-gradient(to right, #000, transparent); mask-image: linear-gradient(to right, #000, transparent); backdrop-filter: url(#tl-bend-l) blur(1.2px); }
-.tl-lens.r { -webkit-mask-image: linear-gradient(to left, #000, transparent); mask-image: linear-gradient(to left, #000, transparent); backdrop-filter: url(#tl-bend-r) blur(1.2px); }
+.tl-lens { position: absolute; top: 0; bottom: 0; pointer-events: none; -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); }
+.tl-lens.l { -webkit-mask-image: linear-gradient(to right, #000, transparent); mask-image: linear-gradient(to right, #000, transparent); backdrop-filter: url(#tl-bend-l) blur(1.5px); }
+.tl-lens.r { -webkit-mask-image: linear-gradient(to left, #000, transparent); mask-image: linear-gradient(to left, #000, transparent); backdrop-filter: url(#tl-bend-r) blur(1.5px); }
 .tl-defs { position: absolute; width: 0; height: 0; }
 /* Let go after a drag: it eases from where the pointer had it to the window as it is. */
 .tl-inner.settle .tl-view { transition: left var(--dur-tl) var(--ease-out), width var(--dur-tl) var(--ease-out), --tl-side var(--dur-tl) var(--ease-out), --tl-lift var(--dur-tl) var(--ease-out); }
@@ -345,7 +372,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-cur { position: absolute; top: 18px; height: 4px; background: color-mix(in srgb, var(--tl-line) 24%, transparent); pointer-events: none; } /* the caret's scene: the line just a little fuller there */
 .tl-cur.glide { transition: left var(--dur-tl) var(--ease-out), width var(--dur-tl) var(--ease-out); }
 .tl-hl { position: absolute; top: 17px; height: 6px; }
-.tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }
+.tl-hl.hl-blue { background: var(--tl-blue); } .tl-hl.hl-yellow { background: var(--tl-yellow); } .tl-hl.hl-pink { background: var(--tl-pink); }  .tl-hl.hl-red { background: var(--tl-red); }  .tl-hl.hl-green { background: var(--tl-green); }
 .tl-scene, .tl-note, .tl-hl { transition: transform var(--dur-tl) var(--ease-out), color var(--dur-tl) var(--ease-out), background-color var(--dur-tl) var(--ease-out), box-shadow var(--dur-tl) var(--ease-out), filter var(--dur-tl) var(--ease-out); }
 .tl-scene { position: absolute; top: 12px; height: 16px; width: 1px; background: var(--ink-3); } /* across the line */
 .tl-scene.near { background: var(--ink); box-shadow: 0 0 0 .5px var(--ink); transform: scaleY(1.25); }
@@ -354,7 +381,7 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-note::before { content: ''; position: absolute; left: 3px; top: 0; width: 1px; height: 4px; background: currentColor; opacity: .6; }
 .tl-note::after { content: ''; position: absolute; left: 0; top: 4px; width: 7px; height: 7px; background: currentColor; }
 .tl-note.near { color: var(--ink); transform: scale(1.2); }
-.tl-note.c-blue { color: var(--tl-blue); } .tl-note.c-yellow { color: var(--tl-yellow); } .tl-note.c-pink { color: var(--tl-pink); } /* a note given a colour in the notes panel */
+.tl-note.c-blue { color: var(--tl-blue); } .tl-note.c-yellow { color: var(--tl-yellow); } .tl-note.c-pink { color: var(--tl-pink); }  .tl-note.c-red { color: var(--tl-red); }  .tl-note.c-green { color: var(--tl-green); } /* a note given a colour in the notes panel */
 .tl-hl.near { filter: brightness(1.15); transform: scaleY(1.34); }
 .tl-ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 15px; }
 .tl-lb { position: absolute; top: 2px; padding-left: 4px; border-left: 1px solid var(--rule); font-size: 9px; line-height: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
@@ -362,20 +389,20 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 .tl-lb.tl-tc { color: var(--ink); border-left-color: var(--ink); padding: 0 3px 0 9px; background: var(--bar); z-index: 1; } /* above the grid and the regular labels */
 .tl-tc::before { content: ''; position: absolute; left: 2px; top: 3px; width: 4px; height: 4px; background: var(--ink); transform: rotate(45deg); } /* pinned */
 .tl-tc b { font-weight: 400; margin-left: 5px; color: var(--ink-2); letter-spacing: .04em; }
-.tl-tc.c-blue::before { background: var(--tl-blue); } .tl-tc.c-yellow::before { background: var(--tl-yellow); } .tl-tc.c-pink::before { background: var(--tl-pink); }
-.tl-tc.c-blue { border-left-color: var(--tl-blue); } .tl-tc.c-yellow { border-left-color: var(--tl-yellow); } .tl-tc.c-pink { border-left-color: var(--tl-pink); }
+.tl-tc.c-blue::before { background: var(--tl-blue); } .tl-tc.c-yellow::before { background: var(--tl-yellow); } .tl-tc.c-pink::before { background: var(--tl-pink); }  .tl-tc.c-red::before { background: var(--tl-red); }  .tl-tc.c-green::before { background: var(--tl-green); }
+.tl-tc.c-blue { border-left-color: var(--tl-blue); } .tl-tc.c-yellow { border-left-color: var(--tl-yellow); } .tl-tc.c-pink { border-left-color: var(--tl-pink); }  .tl-tc.c-red { border-left-color: var(--tl-red); }  .tl-tc.c-green { border-left-color: var(--tl-green); }
 .tl-tc.loose { color: var(--ink-3); } /* outside a scene heading: quieter */
-.tl-tc.loose:not(.c-blue):not(.c-yellow):not(.c-pink) { border-left-color: var(--ink-3); }
+.tl-tc.loose:not(.c-blue):not(.c-yellow):not(.c-pink):not(.c-red):not(.c-green) { border-left-color: var(--ink-3); }
 .tl-tc.loose::before { background: none; box-shadow: inset 0 0 0 1px var(--ink-3); }
 .tl-tc.loose b { color: var(--ink-3); }
-.tl-tc.loose.c-blue::before { box-shadow: inset 0 0 0 1px var(--tl-blue); } .tl-tc.loose.c-yellow::before { box-shadow: inset 0 0 0 1px var(--tl-yellow); } .tl-tc.loose.c-pink::before { box-shadow: inset 0 0 0 1px var(--tl-pink); }
+.tl-tc.loose.c-blue::before { box-shadow: inset 0 0 0 1px var(--tl-blue); } .tl-tc.loose.c-yellow::before { box-shadow: inset 0 0 0 1px var(--tl-yellow); } .tl-tc.loose.c-pink::before { box-shadow: inset 0 0 0 1px var(--tl-pink); }  .tl-tc.loose.c-red::before { box-shadow: inset 0 0 0 1px var(--tl-red); }  .tl-tc.loose.c-green::before { box-shadow: inset 0 0 0 1px var(--tl-green); }
 .tl-tc.mute { width: 0; padding: 0; overflow: hidden; color: transparent; } /* too close to a newer one: just its line */
 .tl-tc.mute::before { display: none; }
 /* A pinned timecode, the full height of the bar; it draws the pointer like the other marks. */
 .tl-tcm { position: absolute; top: 0; bottom: 15px; width: 1px; background: var(--ink-3); opacity: .55; pointer-events: none; transition: opacity var(--dur-fast) var(--ease-out); }
 .tl-tcm.sc { background: var(--ink-2); opacity: .8; }
 .tl-tcm.loose { opacity: .3; }
-.tl-tcm.c-blue { background: var(--tl-blue); } .tl-tcm.c-yellow { background: var(--tl-yellow); } .tl-tcm.c-pink { background: var(--tl-pink); }
+.tl-tcm.c-blue { background: var(--tl-blue); } .tl-tcm.c-yellow { background: var(--tl-yellow); } .tl-tcm.c-pink { background: var(--tl-pink); }  .tl-tcm.c-red { background: var(--tl-red); }  .tl-tcm.c-green { background: var(--tl-green); }
 .tl-tcm.near { opacity: 1; width: 2px; margin-left: -.5px; }
 .tl-tcm.new { animation: tc-new 600ms var(--ease-out); }
 @keyframes tc-new { from { opacity: 1; box-shadow: 0 0 0 2px var(--ink-3); } }
@@ -386,7 +413,9 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 @starting-style { .tc-pop { opacity: 0; transform: translateY(-3px); } } /* drops in from the bar */
 .tc-pop::before { content: ''; position: absolute; top: -5px; left: calc(var(--notch) - 4px); width: 7px; height: 7px; background: var(--page); border: solid var(--rule-strong); border-width: 1px 0 0 1px; transform: rotate(45deg); }
 .tc-row { display: flex; align-items: center; gap: 5px; }
-.tc-head { max-width: 300px; padding: 1px 2px 5px; font-size: 9px; letter-spacing: .08em; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* a scene's own timecode: which scene */
+.tc-head { display: flex; gap: 8px; max-width: 300px; padding: 1px 2px 5px; font-size: 9px; letter-spacing: .08em; color: var(--ink-3); white-space: nowrap; } /* a scene's own timecode: which scene, and its dialogue's pace */
+.tc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tc-wpm { flex: none; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .tc-pop input { height: 22px; border: 1px solid var(--rule); padding: 0 6px; background: var(--page); color: var(--ink); font: inherit; font-size: 12px; outline: 0; }
 .tc-pop input:focus { border-color: var(--rule-strong); }
 .tc-time { width: 76px; text-align: center; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
@@ -404,6 +433,13 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
 /* The playhead: a hairline on the caret's own second (timeline.js update()), hung from a small flat tab flush
    with the top of the bar, and thinning into the ruler rather than stopping on it. The tab is a box, not
    borders, five pixels about the line's one, so it is centred on it at any display scale. */
+/* The find bar's match just gone to: a small open square at the top and a line down to where the
+   phrase starts, there until the writer does anything else (timeline.js showFound()), then fading. */
+.tl-find { position: absolute; top: 0; bottom: 15px; width: 1px; margin-left: -.5px; background: var(--ink-2); pointer-events: none; z-index: 2; transition: opacity 360ms var(--ease-in-out); }
+.tl-find::before { content: ''; position: absolute; top: 2px; left: -3px; width: 5px; height: 5px; border: 1px solid var(--ink); background: var(--bar); }
+.tl-find.new { animation: tl-find-in 520ms var(--ease-out); }
+.tl-find.gone { opacity: 0; }
+@keyframes tl-find-in { from { opacity: 0; transform: scaleY(.6); transform-origin: top; } }
 .tl-head { position: absolute; top: 0; bottom: 15px; width: 1px; background: linear-gradient(to bottom, var(--ink), var(--ink) calc(100% - 7px), transparent); opacity: .9; pointer-events: none; }
 .tl-head.glide { transition: left var(--dur-tl) var(--ease-out), opacity var(--dur-fast) var(--ease-out); } /* to where the caret went, unless the bar was redrawn */
 .tl-head::before, .tl-hover.fine::before { content: ''; position: absolute; top: 0; left: -2px; width: 5px; height: 3px; background: var(--ink); }
@@ -429,8 +465,15 @@ body.tl-fine .tl-inner { cursor: none !important; } /* stepping with Ctrl: the l
     color-mix(in srgb, var(--bar) 54%, transparent) 54%, color-mix(in srgb, var(--bar) 82%, transparent) 68%, var(--bar) 80%);
   transition: opacity var(--dur-fade) linear; }
 .tl-fade[hidden] { display: none; }
-#timeline:has(.tl-reset:focus-visible) .tl-fade { opacity: 1; }
-#timeline.tl-end-near .tl-reset { color: var(--ink-2); border-color: var(--ink-3); }
+/* The same at the left end, mirrored (--tl-start, tl-start-near). An end the strip is scrolled all the
+   way to has neither: the script's own end shows there (timeline.js ends()). */
+.tl-reset.l { right: auto; left: 8px; }
+.tl-fade.l { right: auto; left: 0; opacity: var(--tl-start, 0);
+  background: linear-gradient(to left, transparent,
+    color-mix(in srgb, var(--bar) 8%, transparent) 20%, color-mix(in srgb, var(--bar) 26%, transparent) 38%,
+    color-mix(in srgb, var(--bar) 54%, transparent) 54%, color-mix(in srgb, var(--bar) 82%, transparent) 68%, var(--bar) 80%); }
+#timeline:has(.tl-reset:not(.l):focus-visible) .tl-fade:not(.l), #timeline:has(.tl-reset.l:focus-visible) .tl-fade.l { opacity: 1; }
+#timeline.tl-end-near .tl-reset:not(.l), #timeline.tl-start-near .tl-reset.l { color: var(--ink-2); border-color: var(--ink-3); }
 @starting-style { .tl-reset { opacity: 0; } }
 .tl-reset:hover { color: var(--ink); background: var(--hover); border-color: var(--ink-3); }
 .tl-reset:focus-visible { outline: 1px solid var(--rule-strong); }
@@ -444,8 +487,22 @@ aside.rs-near, aside.rs-near * { cursor: col-resize !important; }
 aside.rs-near[data-edge="right"] { box-shadow: inset -1px 0 0 var(--ink-3); }
 aside.rs-near[data-edge="left"] { box-shadow: inset 1px 0 0 var(--ink-3); }
 body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none; }
-.panel-head { padding: 8px 10px 6px; letter-spacing: .2em; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
+.panel-head { display: flex; align-items: center; gap: 4px; min-height: 30px; box-sizing: border-box; padding: 6px 6px 5px 10px; letter-spacing: .2em; color: var(--ink-3); border-bottom: 1px solid var(--rule); white-space: nowrap; flex: none; }
+/* Small header buttons (the notes' filter and CLEAR ALL), at the right. */
+.ph-acts { margin-left: auto; display: flex; gap: 2px; }
+.ph-b { display: flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border: 1px solid transparent; background: none; color: var(--ink-3); font-size: 9px; letter-spacing: .14em; transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.ph-b:hover, .ph-b.open { color: var(--ink); border-color: var(--rule-strong); }
+.ph-b:disabled { opacity: .4; pointer-events: none; }
+.ph-b .sw { width: 9px; height: 9px; vertical-align: 0; }
+.ph-b .dn { font-size: 7px; }
+.ph-b.on { color: var(--ink); border-color: var(--rule); }
+.sw.all { background: linear-gradient(to right, var(--hl-blue) 0 20%, var(--hl-yellow) 20% 40%, var(--hl-pink) 40% 60%, var(--hl-red) 60% 80%, var(--hl-green) 80%); }
+.mi-sw { display: flex; align-items: center; gap: 7px; }
+.mi-sw .sw { vertical-align: 0; }
 .list { overflow-y: auto; flex: 1; }
+/* The scene list's foot: the dialogue's words a minute and the runtime, small, at the bottom right. */
+.panel-foot { flex: none; display: flex; justify-content: flex-end; gap: 12px; padding: 5px 10px 6px; border-top: 1px solid var(--rule); font-size: 9px; letter-spacing: .12em; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+#scene-runtime { color: var(--ink-2); }
 .row { padding: 4px 10px 4px 6px; display: flex; gap: 8px; cursor: pointer; border-bottom: 1px solid transparent; transition: background-color var(--dur-fast) var(--ease-out); }
 .row:hover { background: var(--hover); }
 .row.cur { box-shadow: inset 2px 0 0 var(--ink); }
@@ -461,8 +518,9 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .note:hover, .rv-item.hov { background: var(--hover); }
 .note.cur, .rv-item.cur { background: var(--page); box-shadow: inset 2px 0 0 var(--ink); }
 .nh { display: flex; align-items: center; gap: 8px; min-height: 18px; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
-.nh .pg { color: var(--ink-2); border: 1px solid var(--rule); padding: 0 4px; line-height: 14px; font-variant-numeric: tabular-nums; }
-.nh .when { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The scene the note is in, as a small label (ending in "…" if it doesn't fit), then when it was written. */
+.nh .sc { flex: 0 1 auto; min-width: 0; max-width: 62%; color: var(--ink-2); border: 1px solid var(--rule); padding: 0 4px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .08em; }
+.nh .when { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The card's small buttons, on the pointer (or the card you are on): its colour, its pin and the bin.
    A pinned note keeps its pin in sight; the colour shows on the passage's rule (and on the timeline). */
 .nacts { flex: none; display: flex; align-items: center; gap: 1px; }
@@ -470,7 +528,7 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .note:hover .nb, .note.cur .nb, .note.picking .nb, .nb:focus-visible, .nb.armed, .note.pinned .npin { opacity: 1; }
 .nb:hover { color: var(--ink); border-color: var(--rule-strong); transition: none; }
 .ncol i { width: 9px; height: 9px; border: 1px solid currentColor; }
-.note.c-blue .ncol i { background: var(--tl-blue); border-color: var(--tl-blue); } .note.c-yellow .ncol i { background: var(--tl-yellow); border-color: var(--tl-yellow); } .note.c-pink .ncol i { background: var(--tl-pink); border-color: var(--tl-pink); }
+.note.c-blue .ncol i { background: var(--tl-blue); border-color: var(--tl-blue); } .note.c-yellow .ncol i { background: var(--tl-yellow); border-color: var(--tl-yellow); } .note.c-pink .ncol i { background: var(--tl-pink); border-color: var(--tl-pink); }  .note.c-red .ncol i { background: var(--tl-red); border-color: var(--tl-red); }  .note.c-green .ncol i { background: var(--tl-green); border-color: var(--tl-green); }
 .note.pinned .npin:not(:hover) { color: var(--ink-2); }
 .note.pinned .npin .head { fill: currentColor; }
 .nsws { display: none; gap: 1px; margin-right: 2px; }
@@ -484,9 +542,15 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .note.cur.lift { background: var(--page); box-shadow: inset 2px 0 0 var(--ink), 0 0 0 1px var(--rule); }
 .note .q { margin: 6px 0 7px; padding-left: 8px; border-left: 2px solid var(--rule); font: 12px/1.4 var(--script); color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; cursor: pointer; transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .note .q:hover, .note.cur .q { border-left-color: var(--ink); color: var(--ink); }
-.note.c-blue .q { border-left-color: var(--tl-blue); } .note.c-yellow .q { border-left-color: var(--tl-yellow); } .note.c-pink .q { border-left-color: var(--tl-pink); } /* (on the card you are on too) */
+.note.c-blue .q { border-left-color: var(--tl-blue); } .note.c-yellow .q { border-left-color: var(--tl-yellow); } .note.c-pink .q { border-left-color: var(--tl-pink); }  .note.c-red .q { border-left-color: var(--tl-red); }  .note.c-green .q { border-left-color: var(--tl-green); } /* (on the card you are on too) */
 .note textarea { display: block; width: 100%; min-height: 1.5em; field-sizing: content; resize: none; overflow: hidden; border: 0; outline: 0; background: none; color: var(--ink); padding: 0; margin: 0; font: 12px/1.5 var(--ui); letter-spacing: .01em; cursor: text; }
 .note { cursor: pointer; } /* (a press anywhere on the card goes to its page: panels.js) */
+.note.pinned { cursor: grab; } /* (and a pinned one can be dragged among the pinned) */
+.note.dragging { z-index: 2; box-shadow: 3px 3px 0 var(--rule), 0 0 0 1px var(--rule-strong); }
+body.note-drag, body.note-drag * { cursor: grabbing !important; user-select: none; }
+/* What can be pressed inside a card or a row shows the same hand as the card, so the pointer never
+   turns to an arrow over something that still takes a click (a bin waiting for its second press too). */
+.note button, .row button, .rv-item button, .note .nb, .note .nsw, .ph-b { cursor: pointer; }
 .note textarea::placeholder { color: var(--ink-3); }
 /* The script's zoom carries into the panels, a share of it (app.js renderZoom): the cards of the notes
    and Revise at half, the scene rows at a tenth. Each card scales whole, its icons with its text. */
@@ -522,13 +586,13 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 .su, .ss { text-decoration-thickness: max(1px, .06em); text-underline-offset: .12em; }
 .mk.hl-blue { background: var(--hl-blue); }
 .mk.hl-yellow { background: var(--hl-yellow); }
-.mk.hl-pink { background: var(--hl-pink); }
+.mk.hl-pink { background: var(--hl-pink); } .mk.hl-red { background: var(--hl-red); } .mk.hl-green { background: var(--hl-green); }
 /* A note's passage: a dotted line under it, a two-pixel dot every four pixels, at 70% of the ink's
    strength. View > Hide Note Underlines leaves it out (the square in the margin stays). */
 .mk.cm { background: linear-gradient(to right, color-mix(in srgb, var(--note-line) 70%, transparent) 2px, transparent 2px) left bottom / 4px 1px repeat-x; z-index: 3; }
 .no-note-lines .mk.cm { background: none; }
 .mk.cmtick { background: var(--ink); z-index: 3; cursor: pointer; } /* a square (view.js sizes it) */
-.mk.cmtick.c-blue { background: var(--tl-blue); } .mk.cmtick.c-yellow { background: var(--tl-yellow); } .mk.cmtick.c-pink { background: var(--tl-pink); } /* in the note's colour */
+.mk.cmtick.c-blue { background: var(--tl-blue); } .mk.cmtick.c-yellow { background: var(--tl-yellow); } .mk.cmtick.c-pink { background: var(--tl-pink); }  .mk.cmtick.c-red { background: var(--tl-red); }  .mk.cmtick.c-green { background: var(--tl-green); } /* in the note's colour */
 .layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 4; }
 .selr { position: absolute; background: var(--sel); }
 .findr { position: absolute; background: var(--find); }
@@ -730,8 +794,26 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-gh { display: flex; align-items: center; padding: 8px 10px 6px; border-bottom: 1px solid var(--rule); min-height: 30px; }
 .rv-gh .tb { font-size: 9px; letter-spacing: .14em; color: var(--ink-3); padding: 2px 6px; }
 .rv-gh .tb:hover { color: var(--ink); }
-.rv-item { cursor: pointer; } /* a place in the script, like a scene row or a note card (its buttons keep the arrow) */
-.rv-item button, .rv-item .ra { cursor: default; }
+.rv-item { cursor: pointer; } /* a place in the script, like a scene row or a note card (its buttons the same hand: they take a click too) */
+.rv-item button, .rv-item .ra { cursor: pointer; }
+.rv-item button:disabled { cursor: default; }
+/* Where a suggestion is: its scene and page, small, under its kind. */
+.rv-where { display: flex; gap: 8px; margin-top: 3px; font-size: 9px; letter-spacing: .1em; color: var(--ink-3); white-space: nowrap; }
+.rv-sc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rv-pg { flex: none; font-variant-numeric: tabular-nums; }
+/* The guidelines window: two sections that fold from their headers, each with its own reset. */
+.gl-body { max-height: min(62vh, 560px); overflow-y: auto; padding-top: 0; }
+.gl-sec + .gl-sec { margin-top: 10px; }
+.gl-h { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 8px 0 5px; background: var(--page); border-bottom: 1px solid var(--rule-strong); }
+.gl-fold { flex: 1; display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 0; text-align: left; font-size: 10px; letter-spacing: .14em; color: var(--ink); cursor: pointer; }
+.gl-fold .dn { display: inline-block; font-size: 8px; color: var(--ink-3); transition: transform var(--dur-panel) var(--ease-out); }
+.gl-sec.shut .gl-fold .dn { transform: rotate(-90deg); }
+.gl-fold:hover .dn { color: var(--ink); }
+.gl-n { color: var(--ink-3); }
+.gl-reset { font-size: 9px; letter-spacing: .14em; padding: 2px 8px; }
+.gl-reset:disabled { opacity: .35; }
+.gl-in { overflow: hidden; padding-top: 6px; }
+.gl-sec.shut .gl-in { display: none; }
 .rv-item.decided .rv-diff, .rv-item.decided .rv-why { opacity: .6; }
 .rv-item .nh { gap: 6px; }
 .rv-acts .tb:disabled { opacity: .35; }
@@ -820,7 +902,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .sheet { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2); position: relative; overflow: hidden; flex: none; color: #000; font-family: var(--script); }
 .sheet .l { position: absolute; white-space: pre; line-height: 1; }
 .sheet .mk { position: absolute; }
-.sheet .mk.hl-blue { background: #cee0f8; } .sheet .mk.hl-yellow { background: #f2e9bb; } .sheet .mk.hl-pink { background: #f6d3e3; }
+.sheet .mk.hl-blue { background: #cfe0f7; } .sheet .mk.hl-yellow { background: #fbf1bf; } .sheet .mk.hl-pink { background: #f9d6e5; } .sheet .mk.hl-red { background: #f9d3cf; } .sheet .mk.hl-green { background: #d3efdc; }
 .sheet .cap { position: absolute; bottom: -1px; right: 0; font: 9px var(--ui); background: #000; color: #fff; padding: 1px 4px; }
 
 /* changelog */

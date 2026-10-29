@@ -63,6 +63,18 @@ export function documentWords(blocks) {
   return n;
 }
 
+/** The words of dialogue (speech only: no cues, parentheticals or action) in blocks [a, z). */
+export function dialogueWords(blocks, a = 0, z = blocks.length) {
+  let n = 0;
+  for (let i = a; i < z; i++) if (blocks[i].type === 'dialogue') n += blockWords(blocks[i]);
+  return n;
+}
+
+/** Words a minute for `words` over `sec` seconds, rounded; null when there is no time to speak them in. */
+export function wordsPerMinute(words, sec) {
+  return sec > 0 ? Math.round(words / (sec / 60)) : null;
+}
+
 export function isWordChar(ch) {
   return ch !== undefined && ch !== '' && WORD_CHAR.test(ch);
 }

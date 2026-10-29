@@ -93,7 +93,8 @@ test('bold, italic, underline and strikeout: the shortcuts toggle the selection 
 test('the style buttons sit after the highlights, work with no selection, and the Format menu lists them', async () => {
   assert.deepEqual(await app.eval(`(() => { const h = document.getElementById('hlbar'); return [h.nextElementSibling.className, h.nextElementSibling.nextElementSibling.id]; })()`), ['sep', 'stbar']);
   const mod = process.platform === 'darwin' ? '⌘' : 'Ctrl+';
-  assert.deepEqual(await app.eval(`[...document.querySelectorAll('#stbar .tb')].map((b) => b.title)`), ['Bold', 'Italic', 'Underline', 'Strikethrough'].map((n, i) => `${n} (${mod}${'BIUD'[i]})`));
+  assert.deepEqual(await app.eval(`[...document.querySelectorAll('#stbar .tb[data-s]')].map((b) => b.title)`), ['Bold', 'Italic', 'Underline', 'Strikethrough'].map((n, i) => `${n} (${mod}${'BIUD'[i]})`));
+  assert.match(await app.eval(`document.querySelector('#stbar .tb:last-child').title`), /^Clear formatting \(/, 'then Clear Formatting, with its shortcut');
   await app.key('End');
   await app.until(async () => (await pressed()) === '', { what: 'nothing styled after the full stop' });
   await app.clickOn('#stbar [data-s="b"]');
@@ -105,6 +106,7 @@ test('the style buttons sit after the highlights, work with no selection, and th
   await app.eval(`[...document.querySelectorAll('#menubar .mb')].find((b) => b.textContent === 'Format').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
   const items = await app.until(`(() => { const t = [...document.querySelectorAll('.mi')].map((r) => r.textContent); return t.length && t; })()`);
   for (const n of ['Bold', 'Italic', 'Underline', 'Strikethrough']) assert.ok(items.some((t) => t.startsWith(n + mod)), `${n} in ${items.join(' | ')}`);
+  assert.ok(items.some((t) => t.startsWith('Clear Formatting')), 'Clear Formatting in the Format menu');
   await app.key('Escape');
   await app.until('document.querySelectorAll(".menu").length === 0', { what: 'the menu to slide away' });
 });
