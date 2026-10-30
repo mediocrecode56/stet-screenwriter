@@ -290,10 +290,10 @@ test('a right-click on selected text: element, style, alignment, highlight and a
   const choose = async (k, label) => {
     await app.clickOn(`${bar} .selb[data-k="${k}"]`);
     await app.until(`!!document.querySelector('${bar} .seldrop')`, { what: `the ${k} dropdown` });
-    const i = await app.eval(`[...document.querySelectorAll('${bar} .seldrop .mi')].findIndex((r) => r.firstChild.textContent === ${JSON.stringify(label)})`);
+    const i = await app.eval(`[...document.querySelectorAll('${bar} .seldrop .mi')].findIndex((r) => (r.getAttribute('aria-label') || r.firstChild.textContent) === ${JSON.stringify(label)})`);
     assert.ok(i >= 0, `${label} in the ${k} dropdown`);
     const row = await app.rect(`${bar} .seldrop .mi`, i);
-    await app.click(row.left + 10, row.top + row.height / 2);
+    await app.click(row.left + row.width / 2, row.top + row.height / 2);
     await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
   };
   await rightClick();
@@ -325,6 +325,14 @@ test('a right-click on selected text: element, style, alignment, highlight and a
   await app.frame();
   await rightClick();
   assert.equal(await app.eval(`document.querySelector('${bar} .selb[data-k="type"] .tl').textContent`), 'ACTION', 'the element named on its button');
+  await app.key('Escape');
+  await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
+  await rightClick();
+  // Style, alignment and highlight: the toolbar's own icons in a row, not words.
+  await app.clickOn(`${bar} .selb[data-k="style"]`);
+  await app.until(`document.querySelector('${bar} .seldrop')?.dataset.k === 'style'`, { what: 'the style dropdown' });
+  assert.deepEqual(await app.eval(`[...document.querySelectorAll('${bar} .seldrop .mi')].map((r) => r.classList.contains('ic') && !!r.querySelector('.st-ic') && r.dataset.id)`), ['style-b', 'style-i', 'style-u', 'style-s', 'style-clear'], 'the style icons');
+  await app.key('Escape');
   await app.key('Escape');
   await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
   await rightClick();

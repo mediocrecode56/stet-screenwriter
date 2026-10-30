@@ -34,6 +34,7 @@ test('words a minute count only dialogue, over the time given', () => {
   const blocks = [makeBlock('scene', 'INT. ROOM - DAY'), makeBlock('action', 'Many words of action here.'), makeBlock('character', 'BOB'), makeBlock('dialogue', 'One two three four.'), makeBlock('paren', '(quietly)'), makeBlock('dialogue', 'Five six.')];
   assert.equal(dialogueWords(blocks), 6);
   assert.equal(dialogueWords(blocks, 0, 4), 4);
+  assert.equal(dialogueWords([makeBlock('transition', 'CUT TO:'), makeBlock('shot', 'CLOSE ON BOB'), makeBlock('dialogue', 'Well (beat) fine, then.')]), 3, 'only the spoken words of dialogue: no other element, no aside in the line');
   assert.equal(wordsPerMinute(6, 30), 12);
   assert.equal(wordsPerMinute(6, 0), null);
 });

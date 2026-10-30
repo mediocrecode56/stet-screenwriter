@@ -1,7 +1,9 @@
 // The right-click menu on selected text: five square buttons in a row, the element type, text style,
 // alignment, a highlight and a note. The first four open their own dropdown under the bar on a click
 // only (hovering just lights the icon); it drops in as the top menu's do, and a click on another
-// button swaps it at once. The note adds one on the selection at once and opens the notes panel to write it.
+// button swaps it at once. The element's is a list of the types by name; style, alignment and
+// highlight show a row of the toolbar's own icons, each named with its shortcut on hover. The note
+// adds one on the selection at once and opens the notes panel to write it.
 
 import { h } from './dialog.js';
 import * as cmd from './commands.js';
@@ -16,8 +18,8 @@ let open = null; // { el, off, drop }
 
 /** The menu at (x, y): `types`, `styles`, `aligns` and `highlights` are the command ids of each dropdown
  *  (`types()` read as it opens: the element types in the Tab cycle), `typeLabel()` the selection's element
- *  as it is now, `alignIcon()` the icon for the paragraph's alignment. */
-export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highlights, alignIcon }) {
+ *  as it is now, `alignIcon()` the icon for the paragraph's alignment, `icon(id)` a command's toolbar icon. */
+export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highlights, alignIcon, icon }) {
   closeSelectionMenu(false);
   cmd.closeMenu(false);
   const el = h('div', { class: 'menu selbar', role: 'toolbar', 'aria-label': 'Selection' });
@@ -38,7 +40,7 @@ export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highligh
     b.setAttribute('aria-haspopup', 'menu');
     b.addEventListener('mouseup', (e) => {
       if (e.button !== 0 || !open) return;
-      if (open.drop && open.drop.btn === b) hideDrop(); else showDrop(b, ids());
+      if (open.drop && open.drop.btn === b) hideDrop(); else showDrop(b, ids(), b.dataset.k === 'type' ? null : icon);
     });
   }
   note.addEventListener('mouseup', (e) => { if (e.button !== 0) return; closeSelectionMenu(); setTimeout(() => cmd.run('note-add'), 0); });
@@ -56,19 +58,20 @@ export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highligh
 }
 
 /** A button's dropdown, under the bar from the button's left edge (inside the bar, so a click in it
- *  is a click in the menu): each command with its shortcut, the current ones marked. It arrives as
+ *  is a click in the menu): each command with its shortcut, the current ones marked; or, given
+ *  `icon`, a row of the commands' toolbar icons, each named with its shortcut on hover. It arrives as
  *  every menu does (commands.js), with the same short drop and fade. */
-function showDrop(b, ids) {
+function showDrop(b, ids, icon) {
   const switching = !!open.drop; // from one dropdown to the next: simply there, as along the menu bar
   hideDrop(false);
-  const el = open.el, d = h('div', { class: 'menu msub seldrop', role: 'menu', 'data-k': b.dataset.k });
+  const el = open.el, d = h('div', { class: 'menu msub seldrop' + (icon ? ' icons' : ''), role: 'menu', 'data-k': b.dataset.k });
   for (const id of ids) {
     const c = cmd.get(id);
     if (!c) continue;
-    const label = typeof c.label === 'function' ? c.label() : c.label;
-    // (a highlight with its colour beside it, as on the toolbar)
-    const sw = id.startsWith('hl-') ? h('span', { class: 'sw ' + (id === 'hl-none' ? 'none' : id.slice(3)) }) : null;
-    const row = h('div', { class: 'mi' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id }, h('span', sw ? { class: 'mi-sw' } : {}, sw, label), h('span', { class: 'k' }, cmd.keyLabel(c)));
+    const label = typeof c.label === 'function' ? c.label() : c.label, keys = cmd.keyLabel(c);
+    const row = icon
+      ? h('div', { class: 'mi ic' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id, title: label + (keys ? ` (${keys})` : ''), 'aria-label': label, html: icon(id) })
+      : h('div', { class: 'mi' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id }, h('span', {}, label), h('span', { class: 'k' }, keys));
     row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; e.stopPropagation(); closeSelectionMenu(); setTimeout(() => cmd.run(id), 0); });
     d.appendChild(row);
   }

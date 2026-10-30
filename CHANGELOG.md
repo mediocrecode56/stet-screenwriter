@@ -2,6 +2,26 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.53.0 · 30 Oct 2026
+
+### FEATURES
+
+- The right-click menu shows the toolbar's icons for text style, alignment and highlight, instead of words.
+- The words-per-minute count sits at the top right of the scene list.
+- Words per minute counts only spoken dialogue. Notes like (beat) inside a line no longer count.
+- Revise guidelines: a cleaner, easier-to-read list, with each detail on its own line and a small × to remove an entry.
+- The dinosaur never freezes. While it rests it glances around, blinks or taps its tail every few seconds.
+- The dinosaur gets a short break after a reaction, so several things no longer happen at once.
+- Small things drift by now and then: a falling leaf, dandelion fluff, a butterfly, a feather, a firefly at night, a breeze. The dinosaur looks their way.
+- New dinosaur habits: humming a tune, watching the clouds on its back, and dribbling a pebble.
+- Preferences: the explanation under the automatic theme is gone, and each section has a clear heading.
+
+### BUGS, PERFORMANCE
+
+- The yellow and pink highlights look softer and more natural, in both themes and in print.
+- The Clear Formatting button lines up with the other style buttons and has the same look.
+- Revise guidelines: notes no longer sit under the label, and empty details no longer leave a stray dot.
+
 ## 0.52.0 · 30 Oct 2026
 
 ### FEATURES

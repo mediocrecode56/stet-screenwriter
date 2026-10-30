@@ -279,7 +279,7 @@ test('suggestions, decisions and ignored passages are kept across a restart; a n
   const sec = (k) => `#overlay .dlg .gl-sec[data-k="${k}"]`;
   await app.until(`!!document.querySelector('${sec('guides')} .gl-reset')`, { what: 'the guidelines window' });
   assert.deepEqual(await app.eval(`[...document.querySelectorAll('#overlay .dlg .gl-sec')].map((s) => s.dataset.k)`), ['ignored', 'guides'], 'ignored at the top');
-  assert.equal(await app.eval(`document.querySelector('${sec('guides')} .gl-in > p.hint').textContent`), 'What Revise leaves alone in every screenplay, learned from the suggestions you set aside.');
+  assert.equal(await app.eval(`document.querySelector('${sec('guides')} .gl-in > p.gl-lead').textContent`), 'What Revise leaves alone everywhere, learned from the suggestions you set aside.');
   await app.clickOn(`${sec('guides')} .gl-fold`);
   await app.until(`document.querySelector('${sec('guides')}').classList.contains('shut')`, { what: 'the guidelines folded shut' });
   await app.clickOn(`${sec('guides')} .gl-fold`);

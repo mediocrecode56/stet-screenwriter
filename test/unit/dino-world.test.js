@@ -73,7 +73,7 @@ test('every environmental event runs its course from many situations, one at a t
   const reacted = new Set();
   for (const kind of kinds) {
     for (const [activity, setup] of [['rest'], ['look'], ['walk'], ['sleep'], ['look', (c) => c.spawn('palm', { x: c.clampProp(c.center() - 70, 11), frame: 3, life: 1e9 })], ['look', (c) => c.wear('party', 60000)]]) for (let seed = 0; seed < 3; seed++) {
-      const c = doing(activity, kind.length * 13 + activity.length + seed * 101, (d) => { d.clock = () => night; if (setup) setup(d); });
+      const c = doing(activity, kind.length * 13 + activity.length + seed * 101, (d) => { d.clock = () => night; d.glimpseNext = Infinity; d.stirGap = Infinity; if (setup) setup(d); });
       c.startEvent(kind, c.now);
       assert.ok(c.event, `${kind} under way`);
       until(c, () => !c.event && !c.inReaction && !c.envDue, 60000, `${kind} from ${activity} ends`, () => {
@@ -234,6 +234,7 @@ test('visitors and finds now and then: a balloon, a paper plane, a frog, a ladyb
     for (let seed = 0; seed < 6; seed++) {
       const c = wide(seed * 17 + a.length);
       c.envNext = Infinity;
+      c.glimpseNext = Infinity; // (nothing small passing by meanwhile: only the visitor's own props)
       c.pending = a;
       const seen = new Set();
       const look = () => { for (const p of c.props) seen.add(p.kind); if (c.hat) seen.add(c.hat.kind); inView(c); };

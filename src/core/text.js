@@ -63,10 +63,20 @@ export function documentWords(blocks) {
   return n;
 }
 
-/** The words of dialogue (speech only: no cues, parentheticals or action) in blocks [a, z). */
+// A dialogue block's spoken words: its text without any (aside) written into the line, which is a
+// direction, not speech. Cached by identity, as blockWords.
+const spokenCache = new WeakMap();
+function spokenWords(block) {
+  let n = spokenCache.get(block);
+  if (n === undefined) { n = countWords(block.text.replace(/\([^()]*\)/g, ' ')); spokenCache.set(block, n); }
+  return n;
+}
+
+/** The words of dialogue in blocks [a, z): only what is spoken in dialogue elements (no cues,
+ *  parentheticals, action or other elements, and no (aside) written into a line of dialogue). */
 export function dialogueWords(blocks, a = 0, z = blocks.length) {
   let n = 0;
-  for (let i = a; i < z; i++) if (blocks[i].type === 'dialogue') n += blockWords(blocks[i]);
+  for (let i = a; i < z; i++) if (blocks[i].type === 'dialogue') n += spokenWords(blocks[i]);
   return n;
 }
 

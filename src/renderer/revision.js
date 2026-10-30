@@ -582,36 +582,40 @@ const LEVEL = { firm: 'FIRM', soft: 'LEARNING', note: 'NOTE', kept: 'PATTERN', v
 
 // Which of the guidelines window's two sections are folded shut (kept while STET runs).
 const folded = { ignored: false, guides: false };
+const GL_X = '<svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3L3 9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>';
 
 /** The passages ignored in this screenplay (at the top) and the writer's guidelines for every
  *  screenplay, with what they show (below): two sections, each folding open or shut from its header,
- *  each with its own RESET (pressed twice) that empties only that section. Each entry can be removed,
- *  and a guideline can be written by hand. */
+ *  each with its own RESET (pressed twice) that empties only that section. Each is a plain list: a
+ *  small tag for how sure the guideline is, the passage, one quiet line of detail under it, and an ×
+ *  that removes it. A guideline can be written by hand at the foot of the list. */
 export async function guidelinesDialog(rev) {
-  const section = (k, title, n, inner, resetTitle) => `<section class="gl-sec${folded[k] ? ' shut' : ''}" data-k="${k}">
-      <div class="gl-h"><button class="gl-fold" data-x="fold" data-k="${k}" aria-expanded="${!folded[k]}"><span class="dn">▾</span>${title} <span class="gl-n">· ${n}</span></button><button class="tb gl-reset" data-x="reset" data-k="${k}" title="${resetTitle} (press twice)"${n ? '' : ' disabled'}>RESET</button></div>
-      <div class="gl-in">${inner}</div></section>`;
+  const section = (k, title, n, lead, inner, resetTitle) => `<section class="gl-sec${folded[k] ? ' shut' : ''}" data-k="${k}">
+      <div class="gl-h"><button class="gl-fold" data-x="fold" data-k="${k}" aria-expanded="${!folded[k]}"><span class="dn">▾</span><span>${title}</span><span class="gl-n">${n}</span></button><button class="tb gl-reset" data-x="reset" data-k="${k}" title="${resetTitle} (press twice)"${n ? '' : ' disabled'}>RESET</button></div>
+      <div class="gl-in"><p class="gl-lead">${lead}</p>${inner}</div></section>`;
+  // One entry: its tag (or none), the passage, the details under it, and its × (none for what was learned).
+  const row = (tag, main, meta, act, i) => `<li class="gl-row${tag == null ? ' notag' : ''}">${tag == null ? '' : `<span class="gl-lv">${tag}</span>`}<div class="gl-txt"><div class="gl-main">${main}</div>${meta.length ? `<div class="gl-meta">${meta.join(' · ')}</div>` : ''}</div>${act ? `<button class="gl-x" data-x="${act}" data-i="${i}" title="Remove" aria-label="Remove">${GL_X}</button>` : '<span class="gl-x-none"></span>'}</li>`;
+  const list = (rows, empty) => (rows.length ? `<ul class="gl-list">${rows.join('')}</ul>` : `<p class="gl-empty">${empty}</p>`);
+  const cat = (c) => CATEGORY_LABEL[c] || '';
   const render = () => {
-    const list = guidelinesOf(rev.flags), learned = patternsOf(rev.flags), ign = rev.lists().ignored;
-    const what = (g) => {
-      if (g.level === 'note') return esc(g.notes[0]);
+    const guides = guidelinesOf(rev.flags), learned = patternsOf(rev.flags), ign = rev.lists().ignored;
+    const guide = (g, i) => {
+      if (g.level === 'note') return row(LEVEL.note, esc(g.notes[0]), [], 'g', i);
       const pattern = g.key.startsWith('edit:') && g.edit && g.examples.length > 1;
-      const head = pattern ? `${esc(g.edit.replace('→', ' → '))} <span class="hint">· ${g.examples.slice(0, 3).map(esc).join(' · ')}</span>` : esc(g.text);
-      return `${head} <span class="hint">· ${CATEGORY_LABEL[g.category] || ''}</span>${g.notes.length ? `<div class="hint">${g.notes.map(esc).join(' · ')}</div>` : ''}`;
+      const meta = [cat(g.category), ...(pattern ? [g.examples.slice(0, 3).map(esc).join(', ')] : []), ...g.notes.map((n) => `“${esc(n)}”`)].filter(Boolean);
+      return row(LEVEL[g.level], pattern ? esc(g.edit.replace('→', ' → ')) : esc(g.text), meta, 'g', i);
     };
-    const row = (html, act, i, tag = '') => `<tr><td>${tag ? `<span class="gl-lv">${tag}</span>` : ''}${html}</td><td style="text-align:right">${act ? `<button class="tb" data-x="${act}" data-i="${i}">REMOVE</button>` : ''}</td></tr>`;
     // (what the flags show together: learned, so not removed on its own; it goes with its examples)
-    const pattern = (p) => `${p.kind === 'kept' ? `keeps “${esc(p.what)}”` : `${esc(p.what)}’s lines`} <span class="hint">· ${CATEGORY_LABEL[p.category] || ''} · ${p.count} times</span>`;
-    return section('ignored', 'IGNORED IN THIS SCREENPLAY', ign.length,
-      `<table class="t">${ign.map((x, i) => row(`${esc(x.text)} <span class="hint">· ${CATEGORY_LABEL[x.category] || x.category}</span>`, 'i', i)).join('') || '<tr><td class="hint">none: IGNORE on a suggestion adds one</td></tr>'}</table>`,
+    const pattern = (p) => row(LEVEL[p.kind], p.kind === 'kept' ? `keeps “${esc(p.what)}”` : `${esc(p.what)}’s lines`, [cat(p.category), `${p.count} times`].filter(Boolean));
+    return section('ignored', 'IGNORED IN THIS SCREENPLAY', ign.length, 'Passages Revise won’t flag again in this screenplay.',
+      list(ign.map((x, i) => row(null, esc(x.text), [cat(x.category) || esc(x.category || '')].filter(Boolean), 'i', i)), 'None yet. IGNORE on a suggestion adds one.'),
       'Flag every passage ignored in this screenplay again')
-      + section('guides', 'GUIDELINES · EVERY SCREENPLAY', list.length,
-        `<p class="hint">What Revise leaves alone in every screenplay, learned from the suggestions you set aside.</p>
-      <table class="t">${list.map((g, i) => row(what(g), 'g', i, LEVEL[g.level])).join('') || '<tr><td class="hint">none yet: +GUIDELINE on a suggestion adds one</td></tr>'}${learned.map((p) => row(pattern(p), '', 0, LEVEL[p.kind])).join('')}</table>
-      <div class="gl-add"><input type="text" placeholder="write one for Claude: Rosa's dialogue mixes in Spanish on purpose" spellcheck="false"><button class="tb" data-x="add">ADD</button></div>`,
+      + section('guides', 'GUIDELINES FOR EVERY SCREENPLAY', guides.length, 'What Revise leaves alone everywhere, learned from the suggestions you set aside.',
+        list([...guides.map(guide), ...learned.map(pattern)], 'None yet. +GUIDELINE on a suggestion adds one.')
+        + `<div class="gl-add"><input type="text" placeholder="Write one for Claude, e.g. Rosa mixes Spanish into her lines" spellcheck="false" aria-label="A new guideline"><button class="tb" data-x="add">ADD</button></div>`,
         'Forget every guideline');
   };
-  const body = dlg.h('div', { class: 'body gl-body', style: 'width:560px', html: render() });
+  const body = dlg.h('div', { class: 'body gl-body', html: render() });
   const add = async () => {
     const field = body.querySelector('.gl-add input'), v = field.value.trim();
     if (!v) return field.focus();

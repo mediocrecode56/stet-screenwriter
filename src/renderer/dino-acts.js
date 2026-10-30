@@ -1820,6 +1820,52 @@ export const ACTIVITIES = {
     else { yield { f: 'stand', t: 700, fx: 'dots' }; yield { f: 'blink', t: 150 }; }
     yield { f: 'stand', t: 400 };
   },
+  *hum(d) {
+    // Sits and hums a tune only it can hear: the head sways one way and the other in time, the tail
+    // taps, a note now and then; it loses the thread, and picks it up again.
+    yield* d.getTo('sit');
+    const beat = d.rnd(300, 380), bars = d.rint(3, 5);
+    for (let b = 0; b < bars; b++) {
+      for (let k = 0; k < 4; k++) yield { f: k % 2 ? 'sitTap2' : 'sitUp', t: beat, face: k === 2 ? -d.face : undefined, fx: k === 0 && d.chance(0.6) ? 'note' : null };
+      if (b === 1 && d.chance(0.35)) { yield { f: 'sit', t: 700, fx: '?' }; yield { f: 'sitBlink', t: 160 }; } // …how did it go?
+    }
+    yield { f: 'sitUp', t: 500, fx: d.chance(0.4) ? 'heart' : null };
+    yield { f: 'sit', t: 400 };
+  },
+  *cloudGaze(d) {
+    // Flat on its back, feet in the air, finding shapes in the sky: a long look, a thought, a turn
+    // of the head; then it rolls back over.
+    yield* d.getTo('lie');
+    yield { f: 'lieBreath', t: 400 };
+    yield { f: 'fallen', t: 500 };
+    for (let i = 0, n = d.rint(3, 6); i < n; i++) {
+      yield { f: 'fallen', t: d.rnd(900, 1400), fx: d.chance(0.45) ? d.pick({ '?': 1, heart: 1, star: d.night() ? 1.5 : 0.4, note: 0.5 }) : null };
+      if (d.chance(0.3)) yield { f: 'fallen', t: 500, face: -d.face }; // (over there: that one looks like a bone)
+    }
+    yield { f: 'lie', t: 500 };
+    yield { f: 'lieUp', t: 600 };
+    yield { f: 'lieUpBlink', t: 200 };
+  },
+  *kickPebble(d) {
+    // Finds a pebble and dribbles it along the ground: a nudge, a few steps after it, another nudge;
+    // the last one goes too far, and it lets it be.
+    yield* d.getTo('stand');
+    yield { f: 'sniff', t: 450, fx: '?' };
+    const dir = d.inward() || d.face;
+    yield { f: 'stand', t: 300, face: dir };
+    const peb = d.spawn('pebble', { x: d.front(PROPS.pebble[0][0].length, 1), life: 60000 });
+    for (let i = 0, n = d.rint(3, 5); i < n && d.has(peb); i++) {
+      yield* d.walkTo(() => d.reach(peb), 1.2, { max: 50 });
+      if (!d.has(peb) || Math.abs(d.reach(peb) - d.x) > 4) break;
+      yield { f: 'stand', t: 140, face: d.dirTo(peb) };
+      const last = i === n - 1;
+      yield { f: 'kick', t: 200, do: (c) => { peb.vx = c.face * (last ? c.rnd(60, 80) : c.rnd(18, 28)); peb.vy = last ? c.rnd(10, 16) : 0; peb.gravity = true; } };
+      yield { f: 'stand', t: 300 };
+    }
+    yield* d.watch(peb, 1500);
+    yield { f: 'stand', t: 400, fx: d.chance(0.5) ? 'note' : 'dots' };
+    if (d.has(peb)) d.expire(peb, 20000);
+  },
   *shadowbox(d) {
     yield* d.getTo('stand');
     const n = d.rint(6, 12);

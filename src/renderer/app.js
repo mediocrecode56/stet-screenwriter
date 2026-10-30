@@ -128,6 +128,7 @@ view.scroller.addEventListener('contextmenu', (e) => {
     typeLabel: () => { const ts = new Set(selectedBlocks().map((b) => b.type)); return ts.size === 1 ? TYPE_SHORT[[...ts][0]] : 'MIXED'; },
     styles: styleCmds.map((c) => c.id), aligns: alignCmds.map((c) => c.id), alignIcon: () => alignIcon(alignOf(editor.block)),
     highlights: [...hlCmds.map((c) => c.id), 'hl-none'],
+    icon: toolIcon,
   });
 });
 
@@ -475,6 +476,15 @@ const ALIGN_CMDS = [
   { a: 'justify', label: 'Justify', keys: 'Ctrl+J' },
 ];
 const ALIGN_ICON = { left: [10, 6, 10, 6], center: [10, 6, 10, 6], right: [10, 6, 10, 6], justify: [10, 10, 10, 10] };
+// A style, alignment or highlight command's icon, as its toolbar button shows it (the selection menu).
+const toolIcon = (id) => {
+  const [k, v] = [id.slice(0, id.indexOf('-')), id.slice(id.indexOf('-') + 1)];
+  if (k === 'align') return alignIcon(v);
+  if (k === 'hl') return `<span class="sw ${v}"></span>`;
+  if (v === 'clear') return '<span class="st-ic"><span class="sclr">T</span></span>';
+  const s = STYLE_CMDS.find((x) => x.k === v);
+  return s ? `<span class="st-ic"><span class="s${s.k}">${s.glyph}</span></span>` : '';
+};
 const alignIcon = (a) => '<svg viewBox="0 0 10 7" width="10" height="7" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor">'
   + ALIGN_ICON[a].map((w, i) => `<rect x="${a === 'right' ? 10 - w : a === 'center' ? (10 - w) / 2 : 0}" y="${i * 2}" width="${w}" height="1"/>`).join('') + '</svg>';
 
@@ -600,8 +610,8 @@ for (const s of STYLE_CMDS) {
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-' + s.k); });
   $('stbar').appendChild(b);
 }
-{ // Clear Formatting: a T struck through, after the four styles
-  const b = dlg.h('button', { class: 'tb st', id: 'btn-unstyle', html: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><path d="M2 2.5h8M6 2.5v8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1.5 10.5l9-9" fill="none" stroke="currentColor" stroke-width="1" shape-rendering="auto"/></svg>' });
+{ // Clear Formatting: a T struck through, in the same type and size as the four styles beside it
+  const b = dlg.h('button', { class: 'tb st', id: 'btn-unstyle' }, dlg.h('span', { class: 'sclr' }, 'T'));
   tip(b, 'Clear formatting', 'style-clear');
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-clear'); });
   $('stbar').appendChild(b);

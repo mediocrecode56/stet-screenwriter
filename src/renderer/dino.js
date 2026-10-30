@@ -34,6 +34,14 @@
 // typing, sleeping, under a palm tree, in the rain…), its mood, and what it
 // did recently. The pointer merely passing over it does nothing at all.
 //
+// It never freezes, and things never pile up: in a pose held a long while (sitting, standing, lying
+// awake) something small happens every few seconds (a glance, a blink, the tail: a stir), and after
+// a reaction the world gives it a moment's breather before the next event or noticing a new plant.
+// Between the bigger events, small things pass by now and then (a glimpse: a leaf drifting down,
+// dandelion fluff, a butterfly, a feather, a firefly at night, a breath of wind), which it may
+// glance at in its next stir. Stirs and glimpses draw on random numbers of their own, so they never
+// change what it chooses to do.
+//
 // It walks whenever it moves: the body only ever moves as far as its legs
 // step, one stride per frame, so its feet never slide.
 //
@@ -65,6 +73,10 @@ const MIN = 60000;
 const HOLD = new Set(['stand', 'blink', 'up', 'sit', 'sitBlink', 'sitBreath', 'sitUp', 'armsUp', 'yawn', 'oneLeg', 'wag', 'hunch', 'lie', 'lieBreath', 'lieUp', 'lieUpBlink']);
 const isHold = (s) => HOLD.has(s.f) && !s.dx && !s.jump && !s.lift && !s.flip;
 const BLINK_MS = 140; // one of its own blinks
+const STIR_MS = [3800, 6500];   // a pose held this long: a stir (see Critter.stirred)
+const NO_STIR = new Set(['sleep', 'doze', 'cornerBite', 'tightrope', 'headstand']); // where stillness is the point, or a stir would not fit
+const BREATHER = 5000;          // after a reaction: this long before an event or a new plant noticed
+const GLIMPSE_MS = [30000, 70000]; // how often something small passes by
 const LAND_MS = 110;  // the crouch as it lands from a jump
 const WALKING = new Set(['walk', 'patrol', 'zoomies', 'ponder', 'explore', 'cornerBite']);
 // Frames whose legs carry it along the ground (any other move on the ground would slide).
@@ -179,6 +191,11 @@ const CHOICES = {
   strut: ['lively', (s) => (0.08 + 0.3 * s.e) * LIVE + (s.goalMet ? 0.45 : 0)],
   burp: ['easy', (s) => (s.fedAgo < 2 * MIN ? 2.4 : 0)],
   photobomb: ['easy', (s, c) => (c.since('photobomb') > 5 * MIN && s.sight ? 0.5 : 0)],
+  // Three newer habits: humming to itself (the more while you write), watching the clouds on its back
+  // (only on a calm day), dribbling a pebble along.
+  hum: ['calm', (s) => 0.25 + (s.writing ? 0.35 : 0) + 0.2 * (1 - s.e)],
+  cloudGaze: ['calm', (s) => (!s.night && s.calmSky && !s.raining ? 0.2 + 0.3 * (1 - s.e) : 0)],
+  kickPebble: ['easy', (s) => (s.free ? 0.2 + 0.4 * s.e : 0)],
   // The environment: new things now and then, and what it does with them while they last.
   palmTree: ['easy', (s) => (!s.palm && s.ok('palm', 6 * MIN) ? 0.12 * (s.wet ? 1.5 : 1) : 0)],
   treeShade: ['calm', (s) => (s.tree ? 1.1 * (s.night ? 0.6 : 1) : 0)],
@@ -347,12 +364,20 @@ export class Critter {
     this.landAt = -Infinity; // when it last came down from a jump
     this.hideIn = null;     // what it is hiding behind (hide and seek)
     this.ownSeed = 0x2545f491;
+    // Stirs and glimpses: random numbers of their own (as the blinks), so they never change its choices.
+    this.stirSeed = 0x6b43a9b5;
+    this.stirAt = 0;        // when it last did anything to see (a move, a glyph, a turn, a stir)
+    this.stirGap = null;    // how long a pose may be held before the next stir
+    this.reactEnd = -Infinity; // when the last reaction ended (the breather)
+    this.glimpseNext = null; // when something small may next pass by
+    this.glimpse = null;    // what passed by last, to glance at
   }
 
   // -- randomness --
   /** The small touches' own random numbers (blinks, a landing's dust), so they never change what
    *  it does: the rest of its life runs exactly as it would without them. */
   ownRnd(a, b) { this.ownSeed = (this.ownSeed * 1664525 + 1013904223) >>> 0; return a + (this.ownSeed / 4294967296) * (b - a); }
+  stirRnd(a, b) { this.stirSeed = (this.stirSeed * 1664525 + 1013904223) >>> 0; return a + (this.stirSeed / 4294967296) * (b - a); }
   rnd(a, b) { return a + this.rng() * (b - a); }
   rint(a, b) { return Math.floor(this.rnd(a, b + 1)); }
   chance(p) { return this.rng() < p; }
@@ -846,7 +871,7 @@ export class Critter {
     if (this.envNext == null) this.envNext = now + this.rnd(2, 5) * MIN;
     if (now < this.envNext) return;
     if (this.deep) { this.envNext = now + this.rnd(3.5, 8) * MIN; return; } // nothing happens around a deep sleeper
-    if (!this.canHost()) { this.envNext = now + 4000; return; }
+    if (!this.canHost() || now - this.reactEnd < BREATHER) { this.envNext = Math.max(now + 1500, this.reactEnd + BREATHER); return; } // (a breather after a reaction)
     this.envNext = now + this.rnd(3.5, 8) * MIN; // a few well-spaced events an hour, not a constant bustle
     const w = {};
     for (const [k, E] of Object.entries(EVENTS)) if (now - (this.lastEnv[k] ?? -1e12) > E.cool && E.ok(this)) w[k] = E.w;
@@ -1088,6 +1113,7 @@ export class Critter {
       if (!r.done) return r.value;
       if (this.inReaction) {
         this.inReaction = null;
+        this.reactEnd = now;
         this.gen = this.wakeUp ? null : this.paused; // a poked sleeper stays awake
         if (this.wakeUp) this.deep = false;
         this.wakeUp = false;
@@ -1109,6 +1135,7 @@ export class Critter {
       if (p.fadeIn && p.fadeOutAt == null) { p.alpha = Math.min(1, (p.alpha ?? 0) + s / 1.2); p.live = p.alpha < 1; if (p.alpha >= 1) p.fadeIn = false; }
       if (p.fadeOutAt != null) { p.alpha = Math.max(0, 1 - (now - p.fadeOutAt) / p.fadeMs); p.live = true; if (p.alpha <= 0) { this.remove(p); continue; } }
       if (p.carried) continue;
+      if (p.glimpse && p.fadeOutAt == null && now - p.born > p.life - 1500) { this.fadeOut(p, 1400); continue; } // a glimpse fades away
       if (now - p.born > p.life) {
         if (GROW[p.kind] || p.kind === 'bubble' || p.kind === 'rocket') this.puffAt(p.x + (cols * u) / 2 - 3, p.kind === 'bubble' ? p.y : 1);
         this.remove(p);
@@ -1117,7 +1144,7 @@ export class Critter {
       if (p.wobble) { p.wobble = Math.max(0, p.wobble - dt); p.live = true; }
       if (p.wild && !p.noticed && now >= p.noticeAt) {
         // It notices the new plant when it is free to (not asleep, not busy with something else).
-        if (!this.envDue && !this.inReaction && !this.queue.length && !this.held.length && !this.asleep() && !ABSORBED.has(this.activity) && this.onstage()) {
+        if (!this.envDue && !this.inReaction && !this.queue.length && !this.held.length && !this.asleep() && !ABSORBED.has(this.activity) && this.onstage() && now - this.reactEnd > BREATHER) {
           p.noticed = now; p.visitAt = now + this.rnd(5000, 60000);
           this.envDue = { name: 'plantNotice', at: now };
         } else p.noticeAt = now + this.rnd(2000, 6000);
@@ -1509,13 +1536,14 @@ export class Critter {
     if (goal > 0 && today >= goal && this.celebrated !== day) { this.celebrated = day; if (this.lastWrite && now - this.lastWrite < 60000) this.pending = 'celebrate'; }
     this.updateWorld(dt, now);
     this.maybeEvent(now);
+    this.maybeGlimpse(now);
     let s = this.step;
     // A reaction that has fallen due starts as soon as the pose being held allows.
     if (s && now < s.end && !this.inReaction && this.dueNow(now) && isHold(s) && this.onstage()) s.end = now;
     if (!s || now >= s.end) {
       if (s) { this.x = s.x1; this.y = s.lift ? s.lift[1] : 0; }
       if (s && s.jump >= 3 && !s.lift && !s.flip) this.land(now);
-      const v = this.bridged(this.held.length ? this.held.shift() : this.nextStep(now));
+      const v = this.bridged(this.stirred(this.held.length ? this.held.shift() : this.nextStep(now), now));
       if (v.do) v.do(this);
       if (v.face) this.face = v.face;
       // Legs never walk on the spot: a stride given nowhere to go (a dance step, a turn on the spot)
@@ -1561,6 +1589,82 @@ export class Critter {
     for (const dir of [-1, 1]) for (let i = 0; i < 2; i++) this.particles.push({ x: fx + dir * this.ownRnd(3, 6) * this.du, y: 1, vx: dir * this.ownRnd(14, 30), vy: this.ownRnd(8, 18), t0: now });
   }
 
+  /**
+   * A stir: the step `v` is a pose merely held, and nothing has moved for a while (STIR_MS), so first
+   * something small fitting its posture: a glance (at whatever passed by, if anything did), a blink,
+   * the tail, a sniff. Then `v` as it was. Never asleep, in a reaction, unseen, or where stillness is
+   * the point (NO_STIR).
+   */
+  stirred(v, now) {
+    if (!isHold(v) || v.fx || (v.face && v.face !== this.face)) { this.stirAt = now; return v; }
+    const pose = postureOf(v.f);
+    if (this.inReaction || !this.focused || this.deep || this.asleep() || NO_STIR.has(this.activity) || pose !== postureOf(this.frame)) return v;
+    if (this.stirGap == null) this.stirGap = this.stirRnd(...STIR_MS);
+    const g = this.glimpse, glance = g && this.has(g) && g.fadeOutAt == null && now - g.born > 1200; // (something passed by: a look its way first)
+    if (now - this.stirAt < this.stirGap && !glance) return v;
+    this.stirAt = now;
+    this.stirGap = this.stirRnd(...STIR_MS);
+    const [first, ...rest] = this.stir(pose);
+    this.held.unshift(...rest, v);
+    return first;
+  }
+  /** The stir's steps for a posture (Critter.stirred). */
+  stir(pose) {
+    const r = this.stirRnd(0, 1), g = this.glimpse, look = g && this.has(g) && g.fadeOutAt == null ? this.dirTo(g) : 0, back = -this.face;
+    if (look) this.glimpse = null; // (seen)
+    if (pose === 'lie') {
+      if (look || r < 0.5) return [{ f: 'lieUp', t: 650, face: look || undefined }, { f: 'lieUpBlink', t: 150 }, { f: 'lieUp', t: 350 }];
+      return [{ f: 'lieUpTail', t: 220 }, { f: 'lieUp', t: 220 }, { f: 'lieUpTail', t: 220 }, { f: 'lie', t: 260 }];
+    }
+    if (pose === 'sit') {
+      if (look) return [{ f: 'sitUp', t: 750, face: look }, { f: 'sitBlink', t: 140 }, { f: 'sitUp', t: 300 }];
+      if (r < 0.35) return [0, 1, 2, 3].map((k) => ({ f: k % 2 ? 'sitTap2' : 'sitTap1', t: 150 }));
+      if (r < 0.6) return [{ f: 'sit', t: 500, face: back }, { f: 'sitBlink', t: 140 }, { f: 'sit', t: 350, face: -back }];
+      return [{ f: 'sitUp', t: 600 }, { f: 'sitBlink', t: 140 }];
+    }
+    if (look) return [{ f: 'up', t: 650, face: look }, { f: 'blink', t: 140 }, { f: 'up', t: 300 }];
+    if (r < 0.3) return [0, 1, 2, 3].map((k) => ({ f: k % 2 ? 'wag' : 'stand', t: 160 }));
+    if (r < 0.55) return [{ f: 'sniff', t: 420 }, { f: 'sniffBlink', t: 160 }, { f: 'stand', t: 200 }];
+    if (r < 0.8) return [{ f: 'stand', t: 450, face: back }, { f: 'blink', t: 130 }, { f: 'stand', t: 300, face: -back }];
+    return [{ f: 'up', t: 550 }, { f: 'blink', t: 130 }];
+  }
+
+  /**
+   * A glimpse: now and then (GLIMPSE_MS), while you are here and nothing bigger is going on,
+   * something small passes by on its own: a leaf drifting down, dandelion fluff on the air, a
+   * butterfly, a feather, a firefly at night, or a breath of wind. It needs nothing of the dinosaur,
+   * which may glance at it in its next stir; it fades away in its own time.
+   */
+  maybeGlimpse(now) {
+    if (this.glimpseNext == null) this.glimpseNext = now + this.stirRnd(12000, 35000);
+    if (now < this.glimpseNext) return;
+    this.glimpseNext = now + this.stirRnd(...GLIMPSE_MS);
+    if (!this.focused || this.deep || this.event || this.wind || this.floating() >= 2 || this.loose >= 5 || !this.onstage()) return;
+    const night = this.night(), w = { leaf: 1.2, fluff: 1, butterfly: night ? 0 : 0.9, feather: 0.35, firefly: night ? 1.6 : 0, breeze: 0.6 };
+    let r = this.stirRnd(0, Object.values(w).reduce((a, b) => a + b, 0)), kind = 'leaf';
+    for (const [k, x] of Object.entries(w)) { if ((r -= x) < 0) { kind = k; break; } }
+    this.startGlimpse(kind, now);
+  }
+  /** One glimpse (also the test hook). */
+  startGlimpse(kind, now = this.now) {
+    const side = this.stirRnd(0, 1) < 0.5 ? -1 : 1;
+    // (somewhere along the strip a little way from it, in view)
+    const off = this.stirRnd(40, 140) * (this.stirRnd(0, 1) < 0.5 ? -1 : 1), at = (cols) => this.clampProp(this.center() + off, cols);
+    let p = null;
+    if (kind === 'leaf') p = this.spawn('leaf', { x: at(4), y: 26, fall: true, life: this.stirRnd(12000, 18000) });
+    else if (kind === 'fluff') p = this.spawn('seed', this.arrive({ y: this.stirRnd(10, 18), vx: -side * this.stirRnd(9, 14), vy: 0.5, life: 22000 }, 3, side));
+    else if (kind === 'butterfly') p = this.spawn('butterfly', this.arrive({ y: 14, vx: -side * 14, life: this.stirRnd(10000, 14000) }, 3, side));
+    else if (kind === 'feather') p = this.spawn('feather', { x: at(4), y: H + 18, sway: this.stirRnd(0, 6), life: 16000 });
+    else if (kind === 'firefly') p = this.spawn('firefly', { x: at(1), y: this.stirRnd(6, 16), wander: true, alpha: 0, fadeIn: true, life: this.stirRnd(9000, 13000) });
+    else if (kind === 'breeze') {
+      const dir = -side, from = dir > 0 ? Math.max(-this.margin + 1, this.zone(0) - 60) : Math.min(this.stripW + this.margin - 14, this.zone(1) + this.dw + 60);
+      this.streaks.push({ x: from, y: this.stirRnd(6, 20), len: this.stirRnd(8, 12), vx: dir * this.stirRnd(85, 110), to: from + dir * (this.zone(1) - this.zone(0) + this.dw + 120) });
+      return null;
+    }
+    if (p) { p.glimpse = true; this.glimpse = p; } // (a glance at it in its next held pose: Critter.stirred)
+    return p;
+  }
+
   /** Just landed: the knees take the weight for a moment. */
   landing(now) { return now - this.landAt < LAND_MS; }
 
@@ -1582,6 +1686,7 @@ export class Critter {
     if (this.landAt + LAND_MS > this.now) t = Math.min(t, this.landAt + LAND_MS);
     // Its own blinks, on time, while anyone can see them (never asleep or dormant).
     if (this.focused && !this.dormant && this.blinkAt != null && this.eyesOpen()) t = Math.min(t, this.blinkAt > this.now ? this.blinkAt : this.blinkAt + BLINK_MS);
+    if (this.focused && this.glimpseNext != null) t = Math.min(t, this.glimpseNext);
     if (!this.focused && this.tuftNext != null) t = Math.min(t, this.tuftNext);
     if (!this.focused && this.deep && this.lushNext != null) t = Math.min(t, this.lushNext);
     return t;

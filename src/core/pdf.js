@@ -15,7 +15,7 @@ export const PAPER = { w: 595.32, h: 841.92 }; // A4, as Final Draft prints it (
 const PAGE_W = PAPER.w, PAGE_H = PAPER.h;
 const BASELINE = 8.52; // baseline offset inside a 12pt row: 0.71em, where Final Draft prints it
 
-const HL_RGB = { blue: '0.812 0.878 0.969', yellow: '0.984 0.945 0.749', pink: '0.976 0.839 0.898', red: '0.969 0.796 0.773', green: '0.827 0.937 0.863' };
+const HL_RGB = { blue: '0.812 0.878 0.969', yellow: '0.992 0.945 0.710', pink: '0.984 0.847 0.886', red: '0.969 0.796 0.773', green: '0.827 0.937 0.863' };
 
 const CP1252 = new Map([
   [0x20ac, 0x80], [0x201a, 0x82], [0x0192, 0x83], [0x201e, 0x84], [0x2026, 0x85], [0x2020, 0x86], [0x2021, 0x87],

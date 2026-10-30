@@ -89,23 +89,27 @@ function timePicker(hhmm) {
   return { node: h('span', { class: 'inline tp' }, hour, h('span', {}, ':'), minute, ampm), value: () => formatTime(fromAmPm(+hour.value, +minute.value, ampm.value)), els: [hour, minute, ampm] };
 }
 
-/** Schedule section shared by Preferences and the quick schedule dialog. */
-function scheduleFields(sched) {
+/** Schedule section shared by Preferences and the quick schedule dialog. Preferences leaves out the
+ *  line that explains it (`explain` false) and says only when the two times are the same. */
+function scheduleFields(sched, { explain = true } = {}) {
   const on = h('input', { type: 'checkbox', checked: !!sched.enabled });
   const dark = timePicker(sched.darkAt), light = timePicker(sched.lightAt);
   const hint = h('div', { class: 'hint' });
   const upd = () => {
     const d = dark.value(), l = light.value();
     hint.textContent = d === l ? 'Both times are the same: the schedule would stay light. Pick different times.'
-      : `Dark from ${timeLabel(d)} until ${timeLabel(l)}${parseTime(d) > parseTime(l) ? ' the next morning' : ''}; light the rest of the day. Uses this computer's clock and time zone. Picking LIGHT or DARK by hand turns the schedule off.`;
+      : !explain ? '' : `Dark from ${timeLabel(d)} until ${timeLabel(l)}${parseTime(d) > parseTime(l) ? ' the next morning' : ''}; light the rest of the day. Uses this computer's clock and time zone. Picking LIGHT or DARK by hand turns the schedule off.`;
+    hint.hidden = !hint.textContent;
   };
   for (const x of [...dark.els, ...light.els]) x.addEventListener('change', upd);
   upd();
+  const lightField = field('Light mode from', light.node);
+  lightField.lastChild.append(hint);
   return {
     nodes: [
       field('Automatic theme', h('label', { class: 'chk' }, on, 'switch on a schedule')),
       field('Dark mode from', dark.node),
-      field('Light mode from', light.node, hint),
+      lightField,
     ],
     value: () => ({ enabled: on.checked, darkAt: dark.value(), lightAt: light.value() }),
   };
@@ -118,7 +122,7 @@ export async function scheduleDialog(sched) {
 }
 
 export async function preferencesDialog(settings, doc) {
-  const sched = scheduleFields({ enabled: false, darkAt: '19:00', lightAt: '07:00', ...(settings.schedule || {}) });
+  const sched = scheduleFields({ enabled: false, darkAt: '19:00', lightAt: '07:00', ...(settings.schedule || {}) }, { explain: false });
   const theme = h('select', {}, ...['dark', 'light', 'system'].map((t) => h('option', { value: t, selected: settings.theme === t }, t)));
   const dirIn = h('input', { type: 'text', value: settings.defaultDir || '', spellcheck: false });
   const browse = h('button', { class: 'btn', onclick: async () => { const d = await api.invoke('dialog:folder', dirIn.value); if (d) dirIn.value = d; } }, 'Browse');
@@ -133,7 +137,7 @@ export async function preferencesDialog(settings, doc) {
   const every = h('input', { type: 'number', min: 1, max: 120, value: doc.settings.backup.intervalMin, style: 'width:70px' });
   const keep = h('input', { type: 'number', min: 1, max: 3650, value: doc.settings.backup.retentionDays, style: 'width:70px' });
   const body = h('div', { class: 'body' },
-    h('div', { class: 'hint', style: 'margin-bottom:6px' }, 'APPLICATION'),
+    h('div', { class: 'pref-sec' }, 'APPLICATION'),
     field('Theme', theme),
     ...sched.nodes,
     field('Default save folder', h('div', { class: 'inline' }, dirIn, browse)),
@@ -141,7 +145,7 @@ export async function preferencesDialog(settings, doc) {
     field('Daily goal', h('div', { class: 'inline' }, daily, h('span', {}, 'words'))),
     field('Weekly goal', h('div', { class: 'inline' }, weekly, h('span', {}, 'words'))),
     field('Updates', h('label', { class: 'chk' }, upd, 'check for a new version when STET starts')),
-    h('div', { class: 'hint', style: 'margin:12px 0 6px' }, 'THIS SCREENPLAY'),
+    h('div', { class: 'pref-sec' }, 'THIS SCREENPLAY'),
     field('Character names', h('label', { class: 'chk' }, cap, 'capitalize on first appearance in action')),
     field('Scene headings', h('label', { class: 'chk' }, dbl, 'two blank lines before')),
     field('Auto backups', h('div', { class: 'inline' }, h('label', { class: 'chk' }, bkOn, 'on'), h('span', {}, 'every'), every, h('span', {}, 'min · keep'), keep, h('span', {}, 'days'))),

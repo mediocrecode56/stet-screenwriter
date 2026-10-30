@@ -16,6 +16,11 @@ lessons go at the end of their section. Update this file whenever new feedback a
 - Readable colours. Highlights are pale pastels leaning to white, never grey, dark or washed out,
   each still clearly its colour. In the dark theme they are deep but clearly coloured, so light text
   stays readable. Small marks (timeline, squares) are a step fuller than highlights.
+- No colour may look metallic: no olive, brass or mauve casts. Yellow is a clean warm yellow (honey in
+  the dark), pink a warm rose rather than lavender.
+- Icons over words wherever the toolbar already has an icon: a menu offering the same action shows
+  the toolbar's own icon (the right-click menu's style, alignment and highlight rows).
+- A button in a group is set exactly like its neighbours (same type, size, width); no stray dividers.
 
 ## Interaction
 
@@ -31,7 +36,16 @@ lessons go at the end of their section. Update this file whenever new feedback a
 - Fields always allow normal text selection; a time field selects the part clicked and the wheel steps it.
 - Overlays (Find) sit over the script at the top right rather than pushing it down, so nothing jumps.
 - Every end of a symmetric control behaves the same (the timeline's left and right ends).
+- Lists in windows (Revise guidelines) are plain rows: a small tag column, the main text, one quiet
+  line of detail under it, a small × to remove. No tables of oversized buttons; no explanatory
+  paragraphs where a short lead line will do. Settings need no legends explaining how they work.
 - Show context in plain words (a scene's name, "page 3"), never cryptic codes like "P.3".
+
+## The dinosaur
+
+- It should feel alive and continuous: never frozen for long while awake, never several things at
+  once. Small stirs fill held poses; a breather follows each reaction; small things drift by between
+  the bigger events. Keep its character: unhurried, a little silly, never nagging.
 
 ## Words
 

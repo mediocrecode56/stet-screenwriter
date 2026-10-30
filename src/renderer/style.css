@@ -25,14 +25,14 @@
      each still clearly its colour, black text fully readable on all of them. The same in print
      (core/pdf.js, core/printhtml.js, .sheet). */
   --hl-blue: #cfe0f7;
-  --hl-yellow: #fbf1bf;
-  --hl-pink: #f9d6e5;
+  --hl-yellow: #fdf1b5;
+  --hl-pink: #fbd8e2;
   --hl-red: #f7cbc5;
   --hl-green: #d3efdc;
   --tl-line: #8f8f8a; /* the script line: white in the dark, a mid grey on the light bar */
   --tl-blue: #8db4e6; /* the same colours as small marks (timeline, squares, notes): a step fuller, so they read on the bar */
-  --tl-yellow: #e3c862;
-  --tl-pink: #e79bbd;
+  --tl-yellow: #edcf4f;
+  --tl-pink: #ee9db6;
   --tl-red: #e07b6e;
   --tl-green: #84c99a;
   --spell: rgba(206, 38, 38, .74); /* a misspelling's underline: a clear red line under the word */
@@ -83,14 +83,14 @@
   /* (the same colours on the dark page: deep but clearly each its colour, never a grey, so the light
      text on them stays fully readable) */
   --hl-blue: #34557f;
-  --hl-yellow: #66592a;
-  --hl-pink: #713b59;
+  --hl-yellow: #776019;
+  --hl-pink: #7a3750;
   --hl-red: #773a33;
   --hl-green: #315f43;
   --tl-line: #f0f0ed;
   --tl-blue: #8fb6e8;
-  --tl-yellow: #e8d88a;
-  --tl-pink: #e9a8c6;
+  --tl-yellow: #f0da74;
+  --tl-pink: #f0a8bf;
   --tl-red: #e89a94;
   --tl-green: #9fd8b2;
   --spell: rgba(255, 102, 102, .78);
@@ -220,6 +220,13 @@ input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea { curso
 .seldrop > .mi { transition: background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
 .seldrop > .mi:hover { box-shadow: inset 2px 0 0 var(--ink-3); }
 .menu.seldrop > .mi.cur, .menu.seldrop > .mi.cur:hover { color: var(--ink); box-shadow: inset 2px 0 0 var(--ink); }
+/* Style, alignment and highlight: a row of the toolbar's icons, each a square cell, the current one underlined. */
+.menu.seldrop.icons { min-width: 0; display: flex; padding: 3px; gap: 1px; }
+.menu.seldrop.icons > .mi.ic { width: 28px; height: 26px; padding: 0; gap: 0; align-items: center; justify-content: center; color: var(--ink-2); box-shadow: none; }
+.menu.seldrop.icons > .mi.ic:hover { color: var(--ink); background: var(--hover-on); box-shadow: none; }
+.menu.seldrop.icons > .mi.ic.cur, .menu.seldrop.icons > .mi.ic.cur:hover { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.mi.ic svg { display: block; }
+.st-ic { font: 13px/1 var(--script); }
 .msep { height: 1px; background: var(--rule); margin: 3px 0; }
 /* A menu row with a quick flyout (Open Recent), and the flyout: short, long titles end in "…". */
 .mi.has-sub .k::after { content: '›'; margin-left: 10px; }
@@ -281,7 +288,9 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 #btn-title.on:hover { background: var(--hover-on); }
 #btn-title:hover { color: var(--ink); }
 #btn-title:not(.on) svg { opacity: .7; }
-#btn-unstyle { display: grid; place-items: center; }
+/* Clear Formatting: a T with a stroke through it, set like B I U S beside it. */
+.sclr { position: relative; display: inline-block; }
+.sclr::after { content: ''; position: absolute; left: -2px; right: -2px; top: 50%; height: 1px; background: currentColor; transform: rotate(-45deg); }
 /* Pressed feedback is painted at pointerdown, before the command's own result. */
 .tb.pressed, .btn.pressed { background: var(--inv-bg); color: var(--inv-fg); }
 .tb.pressed sup { color: inherit; }
@@ -504,6 +513,8 @@ body.rs-drag, body.rs-drag * { cursor: col-resize !important; user-select: none;
 /* The scene list's foot: the dialogue's words a minute and the runtime, small, at the bottom right. */
 .panel-foot { flex: none; display: flex; justify-content: flex-end; gap: 12px; padding: 5px 10px 6px; border-top: 1px solid var(--rule); font-size: 9px; letter-spacing: .12em; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
 #scene-runtime { color: var(--ink-2); }
+/* The dialogue's words a minute: in the top-right corner of the scene list's head. */
+#scene-wpm { margin-left: auto; padding-right: 4px; font-size: 9px; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
 .row { padding: 4px 10px 4px 6px; display: flex; gap: 8px; cursor: pointer; border-bottom: 1px solid transparent; transition: background-color var(--dur-fast) var(--ease-out); }
 .row:hover { background: var(--hover); }
 .row.cur { box-shadow: inset 2px 0 0 var(--ink); }
@@ -635,7 +646,7 @@ body.note-drag, body.note-drag * { cursor: grabbing !important; user-select: non
 .toast { position: fixed; z-index: 60; left: 50%; bottom: 34px; transform: translateX(-50%); padding: 6px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: none; box-shadow: 3px 3px 0 var(--rule); } /* a short notice (ui/toast.js) */
 #status { height: 24px; flex: none; display: flex; align-items: stretch; border-top: 1px solid var(--rule); background: var(--bar); color: var(--ink-2); padding: 0 4px; }
 .st { display: flex; align-items: center; padding: 0 8px; white-space: nowrap; }
-.st + .st { box-shadow: -1px 0 0 var(--rule); }
+#status .st + .st { box-shadow: -1px 0 0 var(--rule); }
 /* Application icon and version: bottom left, small and quiet. Click for the changelog. */
 #brand { gap: 6px; padding: 0 8px; color: var(--ink-3); font-size: 10px; letter-spacing: .04em; cursor: default; }
 #brand:hover { color: var(--ink-2); }
@@ -699,6 +710,9 @@ body.note-drag, body.note-drag * { cursor: grabbing !important; user-select: non
 .field .inline input[type=number] { flex: none; }
 input[type=checkbox] { accent-color: var(--ink); margin: 0 4px 0 0; }
 .hint { color: var(--ink-3); font-size: 10px; }
+/* Preferences: each section headed by its name over a rule, with the same room above every one. */
+.pref-sec { margin: 0 0 10px; padding-bottom: 5px; border-bottom: 1px solid var(--rule); color: var(--ink-3); font-size: 10px; letter-spacing: .14em; }
+.field + .pref-sec { margin-top: 18px; }
 .err-text { border-left: 2px solid var(--ink); padding: 4px 8px; margin: 6px 0; }
 .palette { width: 560px; }
 .palette input { width: 100%; border: 0; border-bottom: 1px solid var(--rule); padding: 10px 14px; font-size: 13px; background: var(--page); }
@@ -805,18 +819,33 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-where { display: flex; gap: 8px; margin-top: 3px; font-size: 9px; letter-spacing: .1em; color: var(--ink-3); white-space: nowrap; }
 .rv-sc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rv-pg { flex: none; font-variant-numeric: tabular-nums; }
-/* The guidelines window: two sections that fold from their headers, each with its own reset. */
-.gl-body { max-height: min(62vh, 560px); overflow-y: auto; padding-top: 0; }
-.gl-sec + .gl-sec { margin-top: 10px; }
-.gl-h { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 8px 0 5px; background: var(--page); border-bottom: 1px solid var(--rule-strong); }
-.gl-fold { flex: 1; display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 0; text-align: left; font-size: 10px; letter-spacing: .14em; color: var(--ink); cursor: pointer; }
-.gl-fold .dn { display: inline-block; font-size: 8px; color: var(--ink-3); transition: transform var(--dur-panel) var(--ease-out); }
+/* The guidelines window: two sections that fold from their headers, each with its own reset, each a
+   plain list (a tag, the passage, a quiet line of detail, an × to remove it). */
+.gl-body { width: 560px; max-width: calc(100vw - 80px); max-height: min(64vh, 580px); overflow-y: auto; padding-top: 0; }
+.gl-sec + .gl-sec { margin-top: 16px; }
+.gl-h { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 10px 0 6px; background: var(--page); border-bottom: 1px solid var(--rule-strong); }
+.gl-fold { flex: 1; display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 2px 0; text-align: left; font-size: 10px; letter-spacing: .12em; color: var(--ink); cursor: pointer; }
+.gl-fold .dn { display: inline-block; width: 8px; font-size: 8px; color: var(--ink-3); transition: transform var(--dur-panel) var(--ease-out); }
 .gl-sec.shut .gl-fold .dn { transform: rotate(-90deg); }
 .gl-fold:hover .dn { color: var(--ink); }
-.gl-n { color: var(--ink-3); }
-.gl-reset { font-size: 9px; letter-spacing: .14em; padding: 2px 8px; }
+.gl-n { min-width: 16px; padding: 0 4px; border: 1px solid var(--rule); color: var(--ink-3); font-size: 9px; letter-spacing: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.gl-reset { font-size: 9px; letter-spacing: .14em; padding: 3px 8px; color: var(--ink-3); }
 .gl-reset:disabled { opacity: .35; }
-.gl-in { overflow: hidden; padding-top: 6px; }
+.gl-in { overflow: hidden; }
+.gl-lead { margin: 8px 0 4px 16px; color: var(--ink-3); font-size: 10px; line-height: 1.5; }
+.gl-empty { margin: 6px 0 4px 16px; color: var(--ink-3); font-size: 10px; }
+.gl-list { list-style: none; margin: 0; padding: 0; }
+.gl-row { display: grid; grid-template-columns: 72px 1fr 22px; align-items: start; gap: 10px; padding: 7px 0 7px 16px; border-bottom: 1px solid var(--rule); transition: background-color var(--dur-fast) var(--ease-out); }
+.gl-row.notag { grid-template-columns: 1fr 22px; } /* (an ignored passage: no tag) */
+.gl-row:last-child { border-bottom: 0; }
+.gl-row:hover { background: var(--hover); }
+.gl-lv { padding-top: 2px; font-size: 9px; letter-spacing: .12em; color: var(--ink-3); }
+.gl-txt { min-width: 0; }
+.gl-main { color: var(--ink); line-height: 1.45; overflow-wrap: anywhere; }
+.gl-meta { margin-top: 2px; color: var(--ink-3); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.gl-x { width: 22px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); opacity: .5; cursor: default; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.gl-row:hover .gl-x, .gl-x:focus-visible { opacity: 1; }
+.gl-x:hover { color: var(--ink); background: var(--hover-on); }
 .gl-sec.shut .gl-in { display: none; }
 .rv-item.decided .rv-diff, .rv-item.decided .rv-why { opacity: .6; }
 .rv-item .nh { gap: 6px; }
@@ -906,7 +935,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .sheet { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2); position: relative; overflow: hidden; flex: none; color: #000; font-family: var(--script); }
 .sheet .l { position: absolute; white-space: pre; line-height: 1; }
 .sheet .mk { position: absolute; }
-.sheet .mk.hl-blue { background: #cfe0f7; } .sheet .mk.hl-yellow { background: #fbf1bf; } .sheet .mk.hl-pink { background: #f9d6e5; } .sheet .mk.hl-red { background: #f7cbc5; } .sheet .mk.hl-green { background: #d3efdc; }
+.sheet .mk.hl-blue { background: #cfe0f7; } .sheet .mk.hl-yellow { background: #fdf1b5; } .sheet .mk.hl-pink { background: #fbd8e2; } .sheet .mk.hl-red { background: #f7cbc5; } .sheet .mk.hl-green { background: #d3efdc; }
 .sheet .cap { position: absolute; bottom: -1px; right: 0; font: 9px var(--ui); background: #000; color: #fff; padding: 1px 4px; }
 
 /* changelog */
@@ -949,8 +978,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 
 /* ---- Revise guidelines -------------------------------------------------- */
 .rv-guide { font: 9px var(--ui); letter-spacing: .12em; color: var(--ink-2); border: 1px dashed var(--ink-3); padding: 0 4px; margin-left: 6px; vertical-align: 1px; cursor: help; } /* close to a guideline: still shown */
-.gl-lv { display: inline-block; min-width: 64px; margin-right: 8px; font-size: 9px; letter-spacing: .12em; color: var(--ink-3); }
-.gl-add { display: flex; gap: 6px; margin-top: 8px; }
+.gl-add { display: flex; gap: 6px; margin: 10px 0 2px 16px; }
 .gl-add input { flex: 1; border: 1px solid var(--rule); padding: 3px 6px; }
 .gl-add input:focus { border-color: var(--rule-strong); }
 .gl-add .tb { border: 1px solid var(--rule); padding: 0 10px; }
