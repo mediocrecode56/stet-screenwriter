@@ -24,6 +24,10 @@ export const TYPE_LABEL = {
 
 export const UPPER_TYPES = new Set(['scene', 'character', 'transition', 'shot']);
 export const HIGHLIGHT_COLORS = ['blue', 'yellow', 'pink', 'red', 'green'];
+/** A highlight on paper (the light theme, the print preview, the PDF and the print dialog): pale
+ *  pastels of one lightness and colourfulness, black text fully readable on all of them. The CSS
+ *  keeps the same values as --paper-hl-* (test/unit/palette.test.js checks they agree). */
+export const HIGHLIGHT_PAPER = { blue: '#c6e3ff', yellow: '#ffefa0', pink: '#ffd1de', red: '#ffccbe', green: '#c4efd2' };
 
 /** Text styles, printed with the script: bold, italic, underline, strikethrough. */
 export const STYLES = ['b', 'i', 'u', 's'];

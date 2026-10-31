@@ -8,18 +8,17 @@
 import { h } from './dialog.js';
 import * as cmd from './commands.js';
 import { arrive, leave, DUR_FAST } from './motion.js';
+import { TEXT_STYLE, HIGHLIGHT, NOTE, DROP, alignIcon, toolIcon } from './icons.js';
 
-const STYLE = '<span class="gb" aria-hidden="true">B</span>';
-const NOTE = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><rect x=".5" y=".5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="4" width="4" height="4" fill="currentColor"/></svg>';
-const HL = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" shape-rendering="crispEdges"><rect x=".5" y="3.5" width="11" height="5" fill="currentColor" fill-opacity=".35" stroke="currentColor" stroke-width="1"/></svg>';
-const DN = '<span class="dn" aria-hidden="true">▾</span>';
+// Every icon in a slot of one size (style.css .selb .ico).
+const ico = (html) => `<span class="ico" aria-hidden="true">${html}</span>`;
 
 let open = null; // { el, off, drop }
 
 /** The menu at (x, y): `types`, `styles`, `aligns` and `highlights` are the command ids of each dropdown
  *  (`types()` read as it opens: the element types in the Tab cycle), `typeLabel()` the selection's element
- *  as it is now, `alignIcon()` the icon for the paragraph's alignment, `icon(id)` a command's toolbar icon. */
-export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highlights, alignIcon, icon }) {
+ *  as it is now, `align()` the paragraph's alignment (its icon on the button). */
+export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highlights, align }) {
   closeSelectionMenu(false);
   cmd.closeMenu(false);
   const el = h('div', { class: 'menu selbar', role: 'toolbar', 'aria-label': 'Selection' });
@@ -30,17 +29,17 @@ export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highligh
     return b;
   };
   const drops = [
-    [btn('type', 'Element', `<span class="tl">${typeLabel()}</span>` + DN), types],
-    [btn('style', 'Text style', STYLE + DN), () => styles],
-    [btn('align', 'Alignment', alignIcon() + DN), () => aligns],
-    [btn('highlight', 'Highlight', HL + DN), () => highlights],
+    [btn('type', 'Element', `<span class="tl">${typeLabel()}</span>` + DROP), types],
+    [btn('style', 'Text style', ico(TEXT_STYLE) + DROP), () => styles],
+    [btn('align', 'Alignment', ico(alignIcon(align())) + DROP), () => aligns],
+    [btn('highlight', 'Highlight', ico(HIGHLIGHT) + DROP), () => highlights],
   ];
-  const note = btn('note', 'Add a note', NOTE);
+  const note = btn('note', 'Add a note', ico(NOTE));
   for (const [b, ids] of drops) {
     b.setAttribute('aria-haspopup', 'menu');
     b.addEventListener('mouseup', (e) => {
       if (e.button !== 0 || !open) return;
-      if (open.drop && open.drop.btn === b) hideDrop(); else showDrop(b, ids(), b.dataset.k === 'type' ? null : icon);
+      if (open.drop && open.drop.btn === b) hideDrop(); else showDrop(b, ids(), b.dataset.k !== 'type');
     });
   }
   note.addEventListener('mouseup', (e) => { if (e.button !== 0) return; closeSelectionMenu(); setTimeout(() => cmd.run('note-add'), 0); });
@@ -59,18 +58,18 @@ export function selectionMenu(x, y, { types, typeLabel, styles, aligns, highligh
 
 /** A button's dropdown, under the bar from the button's left edge (inside the bar, so a click in it
  *  is a click in the menu): each command with its shortcut, the current ones marked; or, given
- *  `icon`, a row of the commands' toolbar icons, each named with its shortcut on hover. It arrives as
+ *  `icons`, a row of the commands' toolbar icons, each named with its shortcut on hover. It arrives as
  *  every menu does (commands.js), with the same short drop and fade. */
-function showDrop(b, ids, icon) {
+function showDrop(b, ids, icons) {
   const switching = !!open.drop; // from one dropdown to the next: simply there, as along the menu bar
   hideDrop(false);
-  const el = open.el, d = h('div', { class: 'menu msub seldrop' + (icon ? ' icons' : ''), role: 'menu', 'data-k': b.dataset.k });
+  const el = open.el, d = h('div', { class: 'menu msub seldrop' + (icons ? ' icons' : ''), role: 'menu', 'data-k': b.dataset.k });
   for (const id of ids) {
     const c = cmd.get(id);
     if (!c) continue;
     const label = typeof c.label === 'function' ? c.label() : c.label, keys = cmd.keyLabel(c);
-    const row = icon
-      ? h('div', { class: 'mi ic' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id, title: label + (keys ? ` (${keys})` : ''), 'aria-label': label, html: icon(id) })
+    const row = icons
+      ? h('div', { class: 'mi ic' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id, title: label + (keys ? ` (${keys})` : ''), 'aria-label': label, html: toolIcon(id) })
       : h('div', { class: 'mi' + (c.checked && c.checked() ? ' cur' : ''), role: 'menuitem', 'data-id': id }, h('span', {}, label), h('span', { class: 'k' }, keys));
     row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; e.stopPropagation(); closeSelectionMenu(); setTimeout(() => cmd.run(id), 0); });
     d.appendChild(row);

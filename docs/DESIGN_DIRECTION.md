@@ -18,9 +18,15 @@ lessons go at the end of their section. Update this file whenever new feedback a
   stays readable. Small marks (timeline, squares) are a step fuller than highlights.
 - No colour may look metallic: no olive, brass or mauve casts. Yellow is a clean warm yellow (honey in
   the dark), pink a warm rose rather than lavender.
+- Highlights in each theme share one lightness and one colourfulness (they are chosen in OKLCH), so
+  no colour looks heavier, greyer or more washed out than its neighbours. A selection over a
+  highlight deepens that highlight's own colour; it never lays a grey or white wash over it (that
+  wash is what made yellow look brass and pink mauve).
 - Icons over words wherever the toolbar already has an icon: a menu offering the same action shows
   the toolbar's own icon (the right-click menu's style, alignment and highlight rows).
 - A button in a group is set exactly like its neighbours (same type, size, width); no stray dividers.
+- Icon buttons are cells of one width with the icon exactly in the middle (the toolbar's --cell, the
+  selection menu's icon slot), so swatches, B I U S and the small icons keep one rhythm.
 
 ## Interaction
 
@@ -52,6 +58,12 @@ lessons go at the end of their section. Update this file whenever new feedback a
 - Public changelog: short, simple phrases anyone understands. Each version has exactly two
   sections, FEATURES and BUGS, PERFORMANCE. No internals.
 - In-app text says what a thing does, in one short sentence at most.
+
+## Code
+
+- A colour is named once: :root holds its values, one line in style.css's colours section maps it
+  to --hl / --mark / --paper, and every rule reads those. HIGHLIGHT_PAPER (core/model.js) is the
+  same paper colours for print. Icons live in ui/icons.js; a new toolbar or menu icon goes there.
 
 ## Process
 

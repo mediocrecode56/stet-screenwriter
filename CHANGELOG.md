@@ -2,6 +2,22 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.54.0 · 31 Oct 2026
+
+### FEATURES
+
+- Highlights have clearer, more natural colours: fuller pastels in light mode, deep rich tones in dark mode, with yellow a warm honey.
+- Selected text over a highlight now shows a deeper shade of that colour, instead of turning it grey or metallic.
+- The timeline marks and note colours match the new highlight colours.
+
+### BUGS, PERFORMANCE
+
+- The toolbar's colour swatches, B I U S and small icons are evenly spaced and centred.
+- The right-click menu's buttons are the same width, with their icons lined up.
+- SPELLING on the toolbar no longer shows a gap in the middle of the word.
+- The panel lock icon has square corners, like the rest of STET.
+- Behind the scenes: colours and icons are each defined in one place, so future changes are simpler and more consistent.
+
 ## 0.53.0 · 30 Oct 2026
 
 ### FEATURES

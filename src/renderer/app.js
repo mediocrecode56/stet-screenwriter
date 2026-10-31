@@ -27,6 +27,7 @@ import { toast } from './ui/toast.js';
 import { resizable } from './ui/resize.js';
 import { Timeline } from './timeline.js';
 import { selectionMenu } from './ui/selmenu.js';
+import { alignIcon, styleIcon, swatch, lockIcon, DROP } from './ui/icons.js';
 import { launchOrder, rememberPlace, placeFor } from '../core/recent.js';
 import { effectiveTheme, label as timeLabel, DEFAULT_SCHEDULE } from '../core/schedule.js';
 import { MAC, macKeys } from '../core/keys.js';
@@ -126,9 +127,8 @@ view.scroller.addEventListener('contextmenu', (e) => {
   selectionMenu(e.clientX, e.clientY, {
     types: () => (editor.tabTypes || TYPES).map((t) => 'type-' + t),
     typeLabel: () => { const ts = new Set(selectedBlocks().map((b) => b.type)); return ts.size === 1 ? TYPE_SHORT[[...ts][0]] : 'MIXED'; },
-    styles: styleCmds.map((c) => c.id), aligns: alignCmds.map((c) => c.id), alignIcon: () => alignIcon(alignOf(editor.block)),
+    styles: styleCmds.map((c) => c.id), aligns: alignCmds.map((c) => c.id), align: () => alignOf(editor.block),
     highlights: [...hlCmds.map((c) => c.id), 'hl-none'],
-    icon: toolIcon,
   });
 });
 
@@ -463,10 +463,10 @@ systemDark.addEventListener('change', refreshTheme);
 
 // element, highlight and text style bars
 const STYLE_CMDS = [
-  { k: 'b', label: 'Bold', keys: 'Ctrl+B', glyph: 'B' },
-  { k: 'i', label: 'Italic', keys: 'Ctrl+I', glyph: 'I' },
-  { k: 'u', label: 'Underline', keys: 'Ctrl+U', glyph: 'U' },
-  { k: 's', label: 'Strikethrough', keys: 'Ctrl+D', glyph: 'S' },
+  { k: 'b', label: 'Bold', keys: 'Ctrl+B' },
+  { k: 'i', label: 'Italic', keys: 'Ctrl+I' },
+  { k: 'u', label: 'Underline', keys: 'Ctrl+U' },
+  { k: 's', label: 'Strikethrough', keys: 'Ctrl+D' },
 ];
 // Alignment: a small menu on the toolbar, its button showing the paragraph's alignment.
 const ALIGN_CMDS = [
@@ -475,18 +475,6 @@ const ALIGN_CMDS = [
   { a: 'right', label: 'Align Right', keys: 'Ctrl+R' },
   { a: 'justify', label: 'Justify', keys: 'Ctrl+J' },
 ];
-const ALIGN_ICON = { left: [10, 6, 10, 6], center: [10, 6, 10, 6], right: [10, 6, 10, 6], justify: [10, 10, 10, 10] };
-// A style, alignment or highlight command's icon, as its toolbar button shows it (the selection menu).
-const toolIcon = (id) => {
-  const [k, v] = [id.slice(0, id.indexOf('-')), id.slice(id.indexOf('-') + 1)];
-  if (k === 'align') return alignIcon(v);
-  if (k === 'hl') return `<span class="sw ${v}"></span>`;
-  if (v === 'clear') return '<span class="st-ic"><span class="sclr">T</span></span>';
-  const s = STYLE_CMDS.find((x) => x.k === v);
-  return s ? `<span class="st-ic"><span class="s${s.k}">${s.glyph}</span></span>` : '';
-};
-const alignIcon = (a) => '<svg viewBox="0 0 10 7" width="10" height="7" aria-hidden="true" shape-rendering="crispEdges" fill="currentColor">'
-  + ALIGN_ICON[a].map((w, i) => `<rect x="${a === 'right' ? 10 - w : a === 'center' ? (10 - w) / 2 : 0}" y="${i * 2}" width="${w}" height="1"/>`).join('') + '</svg>';
 
 // Tooltips name each command's shortcut as it is now, so they follow changes made in Help > Keyboard Shortcuts.
 const tips = [];
@@ -593,34 +581,34 @@ tabTypesEl.addEventListener('mousedown', (e) => {
   addEventListener('blur', up); // (Alt+Tab mid-drag: no mouseup comes)
 });
 for (const c of HIGHLIGHT_COLORS) {
-  const b = dlg.h('button', { class: 'tb' }, dlg.h('span', { class: 'sw ' + c }));
+  const b = dlg.h('button', { class: 'tb sq', html: swatch(c) });
   tip(b, `Highlight ${c}`, 'hl-' + c);
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('hl-' + c); });
   $('hlbar').appendChild(b);
 }
 {
-  const b = dlg.h('button', { class: 'tb' }, dlg.h('span', { class: 'sw none' }));
+  const b = dlg.h('button', { class: 'tb sq', html: swatch('none') });
   tip(b, 'Remove highlight', 'hl-none');
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('hl-none'); });
   $('hlbar').appendChild(b);
 }
 for (const s of STYLE_CMDS) {
-  const b = dlg.h('button', { class: 'tb st', 'data-s': s.k }, dlg.h('span', { class: 's' + s.k }, s.glyph));
+  const b = dlg.h('button', { class: 'tb sq st', 'data-s': s.k, html: styleIcon(s.k) });
   tip(b, s.label, 'style-' + s.k);
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-' + s.k); });
   $('stbar').appendChild(b);
 }
 { // Clear Formatting: a T struck through, in the same type and size as the four styles beside it
-  const b = dlg.h('button', { class: 'tb st', id: 'btn-unstyle' }, dlg.h('span', { class: 'sclr' }, 'T'));
+  const b = dlg.h('button', { class: 'tb sq st', id: 'btn-unstyle', html: styleIcon('clear') });
   tip(b, 'Clear formatting', 'style-clear');
   b.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.run('style-clear'); });
   $('stbar').appendChild(b);
 }
-const alignBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-align', title: 'Alignment', 'aria-haspopup': 'menu', html: alignIcon('left') + '<span class="dn">▾</span>' });
+const alignBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-align', title: 'Alignment', 'aria-haspopup': 'menu', html: alignIcon('left') + DROP });
 alignBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(alignBtn, ALIGN_CMDS.map((x) => 'align-' + x.a)); });
 $('albar').appendChild(alignBtn);
 // Spelling: its switch, Suggestions, Auto and the dictionaries installed, in a small menu.
-const spellBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-spell', title: 'Spelling', 'aria-haspopup': 'menu', html: 'SPELL<span class="more">ING</span><span class="dn">▾</span>' });
+const spellBtn = dlg.h('button', { class: 'tb mbtn', id: 'btn-spell', title: 'Spelling', 'aria-haspopup': 'menu', html: '<span>SPELL<span class="more">ING</span></span>' + DROP });
 spellBtn.addEventListener('mousedown', (e) => { e.preventDefault(); cmd.popup(spellBtn, () => spelling.menuItems()); });
 $('btn-comment').after(dlg.h('div', { class: 'sep' }), spellBtn);
 // On a narrow window the toolbar tightens a step at a time, only as far as it must for every button,
@@ -666,10 +654,9 @@ renderTitleBtn();
 
 // The side panels widen by dragging their inner edge (up to twice their usual width); the lock beside
 // REVISE keeps them as they are. Their widths are kept, and the page re-centres as they change.
-const LOCK = (shut) => `<svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="5.5" width="8" height="6" rx="1" fill="currentColor"/><path d="M2.8 5.5V3.6a2.2 2.2 0 0 1 4.4 0${shut ? 'V5.5' : 'V3'}" fill="none" stroke="currentColor" stroke-width="1.3" ${shut ? '' : 'transform="translate(2.6 -1)"'}/></svg>`;
 function renderLock() {
   const on = !!settings.panelsLocked, b = $('btn-lock');
-  b.innerHTML = LOCK(on);
+  b.innerHTML = lockIcon(on);
   b.classList.toggle('locked', on);
   b.setAttribute('aria-pressed', String(on));
   b.title = on ? 'Side panel sizes locked (click to unlock)' : 'Lock the side panel sizes (drag a panel\'s edge to widen it)';

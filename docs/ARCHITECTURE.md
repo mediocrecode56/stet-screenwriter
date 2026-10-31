@@ -7,7 +7,7 @@ by the renderer, the main process, a PDF worker thread and the Node test suite.
 ```
 src/
   core/        pure document engine — no DOM, no Node APIs; unit-tested in Node
-    model.js       blocks, marks, document defaults
+    model.js       blocks, marks, document defaults, the highlight colours on paper
     format.js      page geometry on a character grid, word wrap
     layout.js      per-block layout cache, incremental pagination
     editor.js      editing engine: selection, transactions, undo/redo, smart Enter/Tab
@@ -37,6 +37,7 @@ src/
     spelling.js    spelling: underlines, the right-click fixes, Auto, the toolbar menu
     ui/resize.js   side panels widened by dragging their inner edge (the lock beside REVISE)
     dino.js        the writing companion: behaviour engine and canvas;  dino-acts.js  its repertoire;  dino-art.js  its pixel art
+    ui/icons.js    every toolbar and menu icon, shared so a menu shows the toolbar's own
     ui/            menus + palette (one command registry), dialogs, panels, find bar
   preload.cjs  whitelisted IPC bridge
 ```

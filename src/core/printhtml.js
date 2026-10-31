@@ -1,16 +1,17 @@
 // HTML rendering of print-model pages for the OS print dialog. Positions are in
 // inches on the same grid as the PDF (characters 7pt apart), independent of editor zoom.
 
+import { HIGHLIGHT_PAPER } from './model.js';
+
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // The script font's faces, from `fonts` (a URL ending in /): file, weight, style.
 const FACES = [['Regular', 400, 'normal'], ['Bold', 700, 'normal'], ['Italic', 400, 'italic'], ['BoldItalic', 700, 'italic']];
-const HL = { blue: '#cfe0f7', yellow: '#fdf1b5', pink: '#fbd8e2', red: '#f7cbc5', green: '#d3efdc' };
 
 export function printHTML(pages, title = 'Screenplay', fonts = '') {
   let body = '';
   for (const p of pages) {
     body += '<div class="p">';
-    for (const r of p.rects) body += `<i style="left:${r.col / 10}in;top:${r.row / 6}in;width:${r.w / 10}in;background:${HL[r.color] || '#ddd'}"></i>`;
+    for (const r of p.rects) body += `<i style="left:${r.col / 10}in;top:${r.row / 6}in;width:${r.w / 10}in;background:${HIGHLIGHT_PAPER[r.color] || '#ddd'}"></i>`;
     for (const u of p.notes) body += `<u style="left:${u.col / 10}in;top:${u.row / 6}in;width:${u.w / 10}in"></u>`;
     for (const l of p.lines) body += `<b${l.st ? ` class="${[...l.st].map((k) => 's' + k).join(' ')}"` : ''} style="left:${l.col / 10}in;top:${l.row / 6}in">${esc(l.text)}</b>`;
     body += '</div>';
