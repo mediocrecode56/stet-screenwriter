@@ -28,6 +28,10 @@ export const HIGHLIGHT_COLORS = ['blue', 'yellow', 'pink', 'red', 'green'];
  *  pastels of one lightness and colourfulness, black text fully readable on all of them. The CSS
  *  keeps the same values as --paper-hl-* (test/unit/palette.test.js checks they agree). */
 export const HIGHLIGHT_PAPER = { blue: '#c6e3ff', yellow: '#ffefa0', pink: '#ffd1de', red: '#ffccbe', green: '#c4efd2' };
+/** How far a highlight reaches past its line, in lines: a little room above the capitals and below
+ *  the descenders, as word processors give it (the letters sit low in the line: 0.71em ascent), so the
+ *  colour is evenly around them rather than tight on them. Same everywhere: page, preview, print, PDF. */
+export const HIGHLIGHT_REACH = { above: 0.07, below: 0.13 };
 
 /** Text styles, printed with the script: bold, italic, underline, strikethrough. */
 export const STYLES = ['b', 'i', 'u', 's'];

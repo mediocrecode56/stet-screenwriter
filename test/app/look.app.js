@@ -164,6 +164,34 @@ test('every panel, bar, dialog and menu arrives with the same slide; Find search
   await app.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
+test('Find holds still while you type, and Enter glides the match to where a click on the timeline puts it', async () => {
+  await app.load([...Array.from({ length: 150 }, (_, i) => ['action', `The rain goes on, line ${i + 1}.`]), ['action', 'A heron lands.'],
+    ...Array.from({ length: 60 }, (_, i) => ['action', `After, line ${i + 1}.`])], {}, 'FIND');
+  await app.eval('document.getElementById("scroller").scrollTop = 0');
+  await app.key('Mod+F');
+  const left = () => app.eval(`Math.round(document.getElementById('find-q').getBoundingClientRect().left)`);
+  const at = [await left()];
+  await app.type('line');
+  await app.until(`document.getElementById('find-count').textContent === '1 / 210'`, { what: 'every line' });
+  at.push(await left());
+  await app.key('Mod+A');
+  await app.type('heron');
+  await app.until(`document.getElementById('find-count').textContent === '1 / 1'`, { what: 'the one heron' });
+  at.push(await left());
+  await app.type('x');
+  await app.until(`document.getElementById('find-count').textContent === 'no matches'`);
+  at.push(await left());
+  assert.equal(new Set(at).size, 1, `the field never shifts (${at})`);
+  await app.key('Backspace');
+  await app.until(`document.getElementById('find-count').textContent === '1 / 1'`);
+  await app.key('Enter');
+  await app.until('__stet.editor.hasSelection() && !__stet.view.glide', { what: 'the glide to end' });
+  const w = await app.eval(`(() => { const v = __stet.view; return { top: Math.round(v.scroller.scrollTop), key: v.keyOf(__stet.editor.ordered()[0]), row: v.row, focus: document.activeElement.id }; })()`);
+  assert.ok(Math.abs(w.top - w.key) <= 1, `10% of the window above its middle, as the timeline does (${w.top} vs ${w.key})`);
+  assert.equal(w.focus, 'find-q', 'Enter again finds the next');
+  await app.key('Escape');
+});
+
 test('one calm easing, nothing bounces; panels glide while you type; toolbar buttons change colour only; the status bar never shifts', async () => {
   const curves = await app.eval(`(() => { const out = []; for (const sh of document.styleSheets) for (const r of sh.cssRules) { const t = r.cssText; for (const m of t.matchAll(/cubic-bezier\\(([^)]+)\\)/g)) out.push(m[1]); if (/bounce|elastic|spring/i.test(t)) out.push('NAMED:' + t.slice(0, 60)); } return out; })()`);
   for (const c of curves) {

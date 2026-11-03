@@ -84,7 +84,8 @@ export class FindBar {
     if (onMatch || dir < 0) this.cur = (this.cur + dir + this.matches.length) % this.matches.length;
     const m = this.matches[this.cur];
     const field = this.bar.contains(document.activeElement) ? document.activeElement : null;
-    this.jump(pos(m.b, m.s), false, pos(m.b, m.e));
+    // It glides to 10% of the window above the middle, as a highlight or note clicked on the timeline does.
+    this.jump(pos(m.b, m.s), false, pos(m.b, m.e), 'key');
     this.onFound(m);
     if (field) field.focus({ preventScroll: true }); // (Enter again in the field: the next one)
     this.update();

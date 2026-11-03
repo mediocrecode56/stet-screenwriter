@@ -6,6 +6,7 @@ import { reducedMotion, DUR_PANEL, EASE_IN_OUT } from './motion.js';
 import { dayLabel, ago } from '../../core/when.js';
 import { MAC, macKeys, comboOf, showKeys, unusable, MAX_STEPS, SEQ_MS } from '../../core/keys.js';
 import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
+import { HIGHLIGHT_REACH } from '../../core/model.js';
 import { paginate } from '../../core/layout.js';
 import { PAGE } from '../../core/format.js';
 import { parseTime, formatTime, toAmPm, fromAmPm, label as timeLabel } from '../../core/schedule.js';
@@ -474,7 +475,7 @@ export async function previewDialog(doc, initial) {
     // Previewing hundreds of pages is wasteful; show the first 40 of the selection.
     for (const p of pages.slice(0, 40)) {
       let s = '';
-      for (const r of p.rects) s += `<div class="mk hl-${r.color}" style="left:${r.col * col}px;top:${r.row * row}px;width:${r.w * col}px;height:${row}px"></div>`;
+      for (const r of p.rects) s += `<div class="mk hl-${r.color}" style="left:${r.col * col}px;top:${(r.row - HIGHLIGHT_REACH.above) * row}px;width:${r.w * col}px;height:${(1 + HIGHLIGHT_REACH.above + HIGHLIGHT_REACH.below) * row}px"></div>`;
       for (const u of p.notes) s += `<div class="mk" style="left:${u.col * col}px;top:${u.row * row}px;width:${u.w * col}px;height:${row}px;border-bottom:1px dashed #000"></div>`;
       for (const l of p.lines) s += `<div class="l${l.st ? [...l.st].map((k) => ' s' + k).join('') : ''}" style="left:${l.col * col}px;top:${l.row * row}px">${esc(l.text)}</div>`;
       const cap = p.kind === 'title' ? 'title' : p.kind === 'notes' ? 'notes' : 'p.' + p.number;

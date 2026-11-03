@@ -12,7 +12,7 @@ import { linesOf, paginate, pageOf, rowOf, roomRows, keyTop } from '../core/layo
 import { lineIndexOf, lineEndOffset } from '../core/nav.js';
 import { cmp, pos } from '../core/editor.js';
 import { TITLE_FIELDS_SPEC } from '../core/titlepage.js';
-import { styleRuns } from '../core/model.js';
+import { styleRuns, HIGHLIGHT_REACH } from '../core/model.js';
 import { reducedMotion } from './ui/motion.js';
 import { sceneTimecodes, formatTime } from '../core/timeline.js';
 
@@ -239,6 +239,7 @@ export class View {
 
   pageHTML(page, pi, blocks, times = NONE) {
     const { row } = this;
+    const hlA = Math.round(row * HIGHLIGHT_REACH.above), hlB = Math.round(row * HIGHLIGHT_REACH.below); // (a highlight's room around its letters)
     const top = PAGE.topRows;
     let h = '';
     { // every script page is numbered, the first after the title page too
@@ -264,7 +265,7 @@ export class View {
           const a = Math.max(m.s, ls), z = Math.min(m.e, le);
           if (z <= a) continue;
           const x = this.xAt(x0, colIn(gaps, a - ls)), w = (colIn(gaps, z - ls) - colIn(gaps, a - ls)) * this.cw;
-          if (m.k === 'hl') h += `<div class="mk hl-${m.v}" style="left:${x}px;top:${y}px;width:${w}px;height:${row}px"></div>`;
+          if (m.k === 'hl') h += `<div class="mk hl-${m.v}" style="left:${x}px;top:${y - hlA}px;width:${w}px;height:${row + hlA + hlB}px"></div>`;
           else if (m.k === 'cm' && this.noteShown(m.v)) {
             // A note's marker takes the colour of the highlight on its passage.
             const c = this.noteColor(m.v);

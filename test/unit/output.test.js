@@ -56,6 +56,16 @@ test('highlights and notes are only exported when requested', () => {
   assert.equal(buildPrintPages(doc, { titlePage: false, comments: true }).pages.flatMap((p) => p.rects).length, 0, 'no highlights unless asked for');
 });
 
+test('a highlight has room above and below its line, the same in the PDF and the print dialog', () => {
+  const page = { kind: 'script', number: 1, lines: [{ col: 15, row: 10, text: 'Hy' }], rects: [{ col: 15, row: 10, w: 2, color: 'yellow' }], notes: [] };
+  const [, y, h] = Buffer.from(buildPdf([page])).toString('latin1').match(/ ([\d.]+) [\d.]+ ([\d.]+) re f/).map(Number);
+  const top = 841.92 - 10 * 12, bottom = top - 12; // the line's 12pt row
+  assert.ok(y < bottom - 1 && y > bottom - 2.5, `below the descenders (${y} vs ${bottom})`);
+  assert.ok(y + h > top && y + h < top + 1.5, `above the capitals, a little less (${y + h} vs ${top})`);
+  const i = printHTML([page]).match(/<i style="[^"]*top:([-\d.]+)in;[^"]*height:([\d.]+)in/);
+  assert.ok(+i[1] < 10 / 6 && +i[2] > 1 / 6, 'the print dialog the same');
+});
+
 test('every script page carries its number at the right margin, the first too', () => {
   const doc = newDocument();
   doc.blocks = generateScript(10);

@@ -8,7 +8,7 @@
 // (cp1252); characters outside it become "?", and the one cp1252 character STET Courier lacks
 // (the euro sign) prints in Courier.
 
-import { HIGHLIGHT_PAPER } from './model.js';
+import { HIGHLIGHT_PAPER, HIGHLIGHT_REACH } from './model.js';
 
 const PT_COL = 7.2;   // 0.1in
 const PT_CHAR = 7;    // a character's advance
@@ -55,8 +55,8 @@ const UNDER = -1.6, STRIKE = 3.2; // rule heights from the baseline, in pt
 function pageStream(page, embedded, used) {
   let s = '';
   for (const r of page.rects) {
-    const x = r.col * PT_COL, y = PAGE_H - (r.row + 1) * PT_ROW - 1;
-    s += `${HL_RGB[r.color] || '0.9 0.9 0.9'} rg ${n(x)} ${n(y)} ${n(r.w * PT_COL)} ${PT_ROW + 1} re f\n`;
+    const x = r.col * PT_COL, y = PAGE_H - (r.row + 1 + HIGHLIGHT_REACH.below) * PT_ROW;
+    s += `${HL_RGB[r.color] || '0.9 0.9 0.9'} rg ${n(x)} ${n(y)} ${n(r.w * PT_COL)} ${n((1 + HIGHLIGHT_REACH.above + HIGHLIGHT_REACH.below) * PT_ROW)} re f\n`;
   }
   if (page.notes.length) {
     s += '0 0 0 RG 0.6 w [2 1.5] 0 d\n';

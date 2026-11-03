@@ -2,6 +2,14 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.54.1 · 3 Nov 2026
+
+### BUGS, PERFORMANCE
+
+- Highlights leave a little room above and below the words, like in a word processor, instead of sitting tight on the letters. The same in print and PDF.
+- Find no longer shifts as you type: the match count keeps one width.
+- Pressing Enter in Find glides to the match and places it near the middle of the window, the same way a click on the timeline does.
+
 ## 0.54.0 · 31 Oct 2026
 
 ### FEATURES

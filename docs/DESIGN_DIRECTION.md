@@ -22,6 +22,8 @@ lessons go at the end of their section. Update this file whenever new feedback a
   no colour looks heavier, greyer or more washed out than its neighbours. A selection over a
   highlight deepens that highlight's own colour; it never lays a grey or white wash over it (that
   wash is what made yellow look brass and pink mauve).
+- A highlight is never tight on its letters: like a word processor's, it reaches a little above the
+  capitals and below the descenders (HIGHLIGHT_REACH in core/model.js), the same on paper and in the PDF.
 - Icons over words wherever the toolbar already has an icon: a menu offering the same action shows
   the toolbar's own icon (the right-click menu's style, alignment and highlight rows).
 - A button in a group is set exactly like its neighbours (same type, size, width); no stray dividers.
@@ -41,6 +43,9 @@ lessons go at the end of their section. Update this file whenever new feedback a
   click away changes nothing.
 - Fields always allow normal text selection; a time field selects the part clicked and the wheel steps it.
 - Overlays (Find) sit over the script at the top right rather than pushing it down, so nothing jumps.
+- Nothing in a bar shifts as you type: a readout that changes (Find's count) keeps one width.
+- Going to a place in the script (a Find match, a timeline mark) glides it to the same spot, 10% of
+  the window above the middle, never a bare scroll that leaves it at an edge.
 - Every end of a symmetric control behaves the same (the timeline's left and right ends).
 - Lists in windows (Revise guidelines) are plain rows: a small tag column, the main text, one quiet
   line of detail under it, a small × to remove. No tables of oversized buttons; no explanatory

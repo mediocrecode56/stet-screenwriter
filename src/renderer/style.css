@@ -345,7 +345,8 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 #findbar input[type=text], #findbar input:not([type]) { border: 1px solid var(--rule); padding: 2px 6px; width: 150px; min-width: 0; flex: 0 1 150px; }
 #findbar input:focus { border-color: var(--rule-strong); }
 .chk { display: flex; align-items: center; gap: 3px; color: var(--ink-2); }
-#find-count { color: var(--ink-3); min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+/* (one width whatever it says, "3 / 12" or "no matches": the bar, held by its right edge, never shifts as you type) */
+#find-count { color: var(--ink-3); flex: none; width: 13ch; overflow: hidden; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---- timeline (View > Timeline) ----------------------------------------
    Calm at rest: the script line (coloured only where highlighted), quiet scene ticks, the notes
