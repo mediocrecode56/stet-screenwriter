@@ -8,12 +8,12 @@
 
 import { PAGE, ELEMENT, lineText, lineX, lineGaps, colIn, offsetAtCol, setText } from '../core/format.js';
 import { ZOOM_MIN, ZOOM_MAX } from '../core/wheelzoom.js';
-import { linesOf, paginate, pageOf, rowOf, roomRows, keyTop } from '../core/layout.js';
+import { linesOf, paginate, pageOf, rowOf, roomRows, keyTop, titleSlide } from '../core/layout.js';
+import { EASE_OUT, EASE_IN_OUT, DUR_PAGE, reducedMotion } from './ui/motion.js';
 import { lineIndexOf, lineEndOffset } from '../core/nav.js';
 import { cmp, pos } from '../core/editor.js';
 import { TITLE_FIELDS_SPEC } from '../core/titlepage.js';
 import { styleRuns, HIGHLIGHT_REACH } from '../core/model.js';
-import { reducedMotion } from './ui/motion.js';
 import { sceneTimecodes, formatTime } from '../core/timeline.js';
 
 const PX_COL = 9.6;   // 0.1in at 96dpi
@@ -163,7 +163,7 @@ export class View {
         if (w > cw) this.scroller.scrollLeft = (w - cw) / 2;
       }
     }
-    const top = this.scroller.scrollTop, bottom = top + this.scroller.clientHeight;
+    const top = this.scroller.scrollTop, bottom = top + this.scroller.clientHeight + (this.slide?.reach || 0);
     const span = this.PH + this.gap;
     const first = Math.max(0, Math.floor((top - PAD) / span) - BUFFER_PAGES);
     const last = Math.min(this.viewCount - 1, Math.floor((bottom - PAD) / span) + BUFFER_PAGES);
@@ -184,6 +184,45 @@ export class View {
     if (this.titleEl) { this.titleEl.remove(); this.titleEl = null; }
     this.layoutDirty = true;
     this.schedule();
+  }
+
+  /**
+   * Show or hide the title page. Near the top it slides in from above the script, or up and away, the
+   * script gliding with it as a side panel moves the page beside it; further down the script stands
+   * still. A toggle during the slide carries on from where it is.
+   */
+  setTitle(on) {
+    if (on === this.showTitle) return;
+    const sc = this.scroller, s = sc.scrollTop, span = this.PH + this.gap;
+    const was = this.stopSlide();
+    this.stopGlide();
+    const ghost = !on && this.titleEl?.isConnected ? this.titleEl : null; // (it stays to be seen leaving)
+    if (ghost) { this.els.delete(0); this.titleEl = null; }
+    this.showTitle = on;
+    this.invalidate();
+    this.content.style.height = this.pageTop(this.viewCount) + PAD - this.gap + 'px';
+    const { top, from } = titleSlide(s, span, on, Math.max(0, sc.scrollHeight - sc.clientHeight));
+    sc.scrollTop = top;
+    const start = from + was;
+    if (!start || reducedMotion()) { ghost?.remove(); this.frame(); return; }
+    if (ghost) Object.assign(ghost.style, { top: this.pageTop(0) - span + 'px', pointerEvents: 'none' });
+    const anim = this.content.animate([{ translate: `0 ${start}px` }, { translate: '0 0' }], { duration: DUR_PAGE, easing: on ? EASE_OUT : EASE_IN_OUT });
+    this.slide = { anim, ghost, reach: Math.abs(start) };
+    anim.onfinish = () => this.stopSlide();
+    setTimeout(() => { if (this.slide?.anim === anim) this.stopSlide(); }, DUR_PAGE + 80); // (a hidden window runs no animations)
+    this.frame();
+  }
+
+  /** End the title page's slide; returns how far from its place the script still stood. */
+  stopSlide() {
+    if (!this.slide) return 0;
+    const { anim, ghost } = this.slide;
+    const at = parseFloat(getComputedStyle(this.content).translate.split(' ')[1]) || 0;
+    this.slide = null;
+    anim.cancel();
+    ghost?.remove();
+    this.schedule();
+    return at;
   }
 
   paintPage(vi, left) {

@@ -242,6 +242,17 @@ export function keyTop(y, h, viewH, max) {
   return Math.max(0, Math.min(max, Math.round(y + h / 2 - KEY_AT * viewH)));
 }
 
+/**
+ * The title page shown or hidden with the view at scroll `s` (`span`: one page and its gap; `max`: the
+ * furthest the script scrolls afterwards). Viewing the title page or the first page of the script, the
+ * view ends at the top and the script slides there: `top` is the new scroll, `from` how far from its
+ * new place the script starts, so nothing jumps. Further down the script stands still (`from` 0).
+ */
+export function titleSlide(s, span, on, max) {
+  const top = Math.max(0, Math.min(max, s < span ? 0 : on ? s + span : s - span));
+  return { top, from: on ? top - s - span : top + span - s };
+}
+
 /** Rows of room kept above a line when it goes to the top of the view (view.topOf()): the `blank`
  *  rows before it, so no line of the text before it shows; with none, on a paragraph's second `line`
  *  or later two, its own lines before it, and right under a line of text (dialogue under its character) one. */

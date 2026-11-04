@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { wrap, lineText, PAGE, ELEMENT } from '../../src/core/format.js';
-import { paginate, linesOf, mergeDirty, pageOf, roomRows, keyTop, KEY_AT } from '../../src/core/layout.js';
+import { paginate, linesOf, mergeDirty, pageOf, roomRows, keyTop, KEY_AT, titleSlide } from '../../src/core/layout.js';
 import { makeBlock, withText, defaultDocSettings } from '../../src/core/model.js';
 import { generateScript } from '../../src/dev/sample.js';
 
@@ -164,4 +164,15 @@ test('a key point (a note, a highlight, a timecode) goes 10% of the view above i
   assert.equal(keyTop(1000, 20, 800, 5000), 1000 + 10 - 320, 'its line\'s middle at 40% of the view');
   assert.equal(keyTop(100, 20, 800, 5000), 0, 'near the start: the script at its top');
   assert.equal(keyTop(4900, 20, 800, 4500), 4500, 'near the end: as far as it scrolls');
+});
+
+test('the title page: near the top the script slides from where it stood, further down it stands still', () => {
+  const span = 1000;
+  assert.deepEqual(titleSlide(0, span, false, 5000), { top: 0, from: 1000 }, 'hidden from the top: the script rises a whole page');
+  assert.deepEqual(titleSlide(300, span, false, 5000), { top: 0, from: 700 }, 'partly scrolled: only what is left');
+  assert.deepEqual(titleSlide(0, span, true, 5000), { top: 0, from: -1000 }, 'shown at the top: it comes down from above');
+  assert.deepEqual(titleSlide(300, span, true, 5000), { top: 0, from: -1300 }, 'shown from the first page: the view goes to it');
+  assert.deepEqual(titleSlide(2500, span, false, 5000), { top: 1500, from: 0 }, 'further down, hidden: nothing moves');
+  assert.deepEqual(titleSlide(2500, span, true, 5000), { top: 3500, from: 0 }, 'further down, shown: nothing moves');
+  assert.equal(titleSlide(1500, span, false, 200).top, 200, 'never past the end of a shorter script');
 });

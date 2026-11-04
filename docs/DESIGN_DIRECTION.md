@@ -51,6 +51,14 @@ lessons go at the end of their section. Update this file whenever new feedback a
   line of detail under it, a small × to remove. No tables of oversized buttons; no explanatory
   paragraphs where a short lead line will do. Settings need no legends explaining how they work.
 - Show context in plain words (a scene's name, "page 3"), never cryptic codes like "P.3".
+- Showing or hiding the title page moves like a side panel: it slides in from above the script and
+  the script glides with it. A writer further down the script stays exactly where they are.
+- Focus mode hides everything, but never what the writer is changing: the toolbar's element buttons
+  come to the top left corner when the element changes or the pointer goes there, and move on with
+  the rest of the toolbar. Moving the caret or starting a new line is not a change and shows nothing.
+  In that corner they have one plain outline: no shadow, no box inside a box.
+- The dinosaur stays out of focus mode unless the writer asks for it (View menu). Then it is the only
+  thing at the bottom, standing on the window's edge: no status bar, not even kept out of sight.
 
 ## The dinosaur
 

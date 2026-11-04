@@ -143,6 +143,7 @@ const timeline = new Timeline($('timeline'), {
 
 view.onTitleInput = () => session.touch();
 view.showTitle = settings.showTitlePage !== false;
+document.documentElement.classList.toggle('focus-dino', settings.focusDino === true);
 document.body.classList.toggle('no-note-lines', settings.noteLines === false);
 
 // ---- change propagation ----------------------------------------------------------
@@ -651,6 +652,14 @@ tip($('btn-title'), 'Show or hide the title page', 'title-toggle');
 tbClick('btn-title', 'title-toggle');
 const renderTitleBtn = () => { $('btn-title').classList.toggle('on', view.showTitle); $('btn-title').setAttribute('aria-pressed', String(view.showTitle)); };
 renderTitleBtn();
+// The title page slides in or away (view.setTitle()); the choice is kept.
+function setTitlePage(on) {
+  if (on === view.showTitle) return;
+  if (!on && document.activeElement?.closest('.title-page')) input.focus(); // (the script takes the keyboard back)
+  view.setTitle(on);
+  api.invoke('settings:set', { showTitlePage: on });
+  renderTitleBtn();
+}
 
 // The side panels widen by dragging their inner edge (up to twice their usual width); the lock beside
 // REVISE keeps them as they are. Their widths are kept, and the page re-centres as they change.
@@ -1065,8 +1074,10 @@ const focus = new FocusMode({
     { key: 'scenes', label: 'SCENES', title: 'Scene navigator', isOpen: () => isOpen($('left')), set: (on) => showPanel('scenes', on) },
     { key: 'notes', label: 'NOTES', title: 'Comments', isOpen: () => isOpen($('right')), set: (on) => showPanel('notes', on) },
   ],
-  onChange: () => { view.layoutDirty = true; view.schedule(); fitTitle(); input.focus(); },
+  onChange: () => { view.layoutDirty = true; view.schedule(); fitTitle(); dino.place(); input.focus(); },
 });
+
+editor.onRetype = () => focus.showElement(); // (moving to another line or starting a new one shows nothing)
 
 function sceneStep(dir) {
   const s = editor.scenes();
@@ -1152,7 +1163,7 @@ cmd.register([
   { id: 'print', cat: 'File', label: 'Print / Export Preview…', keys: 'Ctrl+P', global: true, run: preview },
   { id: 'export-pdf', cat: 'File', label: 'Export PDF…', keys: 'Ctrl+Shift+E', global: true, run: () => exportPdf() },
   { id: 'prefs', cat: 'File', label: 'Preferences…', keys: 'Ctrl+,', global: true, run: async () => {
-    const v = await dialogs.preferencesDialog(settings, session.doc);
+    const v = await dialogs.preferencesDialog(settings, session.doc, focus.on);
     if (!v) return;
     settings = await api.invoke('settings:set', v.app);
     refreshTheme();
@@ -1163,6 +1174,8 @@ cmd.register([
     session.touch();
     if (spacingChanged) { view.pages = []; view.relayout(); view.invalidate(); }
     renderGoal(); renderSaveState(session);
+    if (v.focus !== focus.on) focus.toggle();
+    if (v.keys) cmd.run('keys');
   } },
 
   { id: 'undo', cat: 'Edit', label: 'Undo', display: 'Ctrl+Z', run: () => { editor.undo(); input.after(); input.focus(); } },
@@ -1202,9 +1215,10 @@ cmd.register([
   { id: 'focus', cat: 'View', label: () => (focus.on ? 'Leave Focus Mode' : 'Focus Mode'), keys: 'F11', global: true, run: () => focus.toggle() },
   { id: 'timeline', cat: 'View', label: () => (timeline.visible ? 'Hide Timeline' : 'Timeline'), keys: 'Ctrl+Shift+T', global: true, run: () => timeline.show() },
   { id: 'companion', cat: 'View', label: () => (dino && dino.enabled ? 'Hide Writing Companion' : 'Show Writing Companion'), run: () => { dino.setEnabled(!dino.enabled); api.invoke('settings:set', { companion: dino.enabled }); } },
+  { id: 'focus-dino', cat: 'View', label: 'Writing Companion in Focus Mode', checked: () => settings.focusDino === true, run: async () => { const on = settings.focusDino !== true; document.documentElement.classList.toggle('focus-dino', on); settings = await api.invoke('settings:set', { focusDino: on }); dino.place(); } },
   { id: 'note-lines', cat: 'View', label: () => (document.body.classList.contains('no-note-lines') ? 'Show Note Underlines' : 'Hide Note Underlines'), run: async () => { const on = document.body.classList.toggle('no-note-lines'); settings = await api.invoke('settings:set', { noteLines: !on }); } },
-  { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => { view.showTitle = !view.showTitle; api.invoke('settings:set', { showTitlePage: view.showTitle }); renderTitleBtn(); view.invalidate(); view.revealCaret(); } },
-  { id: 'title-edit', cat: 'View', label: 'Edit Title Page', run: () => { if (!view.showTitle) { view.showTitle = true; renderTitleBtn(); view.invalidate(); } view.scroller.scrollTop = 0; view.frame(); setTimeout(() => { const f = document.querySelector('.tp-f'); if (f) f.focus(); }, 30); } },
+  { id: 'title-toggle', cat: 'View', label: () => (view.showTitle ? 'Hide Title Page' : 'Show Title Page'), run: () => setTitlePage(!view.showTitle) },
+  { id: 'title-edit', cat: 'View', label: 'Edit Title Page', run: () => { setTitlePage(true); if (view.scroller.scrollTop) { view.scroller.scrollTop = 0; view.frame(); } setTimeout(() => { const f = document.querySelector('.tp-f'); if (f) f.focus({ preventScroll: !!view.slide }); }, 30); } },
   { id: 'goto-page', cat: 'View', label: 'Go to Page…', keys: 'Ctrl+G', global: true, run: async () => {
     const v = await dlg.prompt('GO TO PAGE', `Page (1–${view.pages.length})`, String(view.currentPage() + 1));
     const n = parseInt(v, 10);
@@ -1263,7 +1277,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
-  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'focus', 'toolbar', 'panel-scenes', 'panel-notes', 'timeline', 'note-lines', 'title-toggle', 'title-edit', 'companion', '-', 'goto-page', 'scene-next', 'scene-prev'] },
+  { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'focus', 'toolbar', 'panel-scenes', 'panel-notes', 'timeline', 'note-lines', 'title-toggle', 'title-edit', 'companion', 'focus-dino', '-', 'goto-page', 'scene-next', 'scene-prev'] },
   { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-guides', 'claude-key', '-', 'spell-toggle', 'spell-suggest', 'spell-auto', 'spell-dict', '-', 'perf'] },
   { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
 ]);

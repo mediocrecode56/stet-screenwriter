@@ -1810,10 +1810,13 @@ export class Dino {
    * the feet stand on the line and never cover it.
    */
   place() {
-    const r = this.anchor.getBoundingClientRect(), bar = this.anchor.parentElement.getBoundingClientRect();
+    // Focus mode has no status bar: the dinosaur (View > Writing Companion in Focus Mode) stands on the window's edge, around the middle.
+    const free = document.documentElement.classList.contains('focus');
+    const r = free ? { left: window.innerWidth / 2, width: 0 } : this.anchor.getBoundingClientRect();
+    const bar = free ? { top: window.innerHeight } : this.anchor.parentElement.getBoundingClientRect();
     const a = this.area ? this.area.getBoundingClientRect() : { left: 0, right: window.innerWidth };
     const lo = Math.max(a.left, 0), hi = Math.min(a.right - 10, window.innerWidth); // 10: the editor's scrollbar
-    const visible = this.enabled && r.width > 0 && getComputedStyle(this.anchor).display !== 'none' && hi - lo >= 140;
+    const visible = this.enabled && (free || r.width > 0 && getComputedStyle(this.anchor).display !== 'none') && hi - lo >= 140;
     this.root.hidden = !visible;
     if (!visible) return;
     const c = this.c, dpr = window.devicePixelRatio || 1, p = this.pxDev;

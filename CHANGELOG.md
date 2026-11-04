@@ -2,6 +2,20 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.55.0 · 5 Nov 2026
+
+### FEATURES
+
+- The title page slides in and out smoothly when you show or hide it, like the side panels.
+- Focus Mode can be turned on and off in Preferences.
+- Preferences has a Keyboard Shortcuts button that opens the shortcuts list.
+- In Focus Mode, the SCENE, ACTION and other element buttons appear at the top left when you change the element or move the pointer there.
+- View has a new option to keep the dinosaur in Focus Mode. It is off by default.
+
+### BUGS, PERFORMANCE
+
+- Showing or hiding the title page further down the script no longer moves your place.
+
 ## 0.54.1 · 3 Nov 2026
 
 ### BUGS, PERFORMANCE

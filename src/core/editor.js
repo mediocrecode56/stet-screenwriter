@@ -65,6 +65,7 @@ export class Editor {
     this.retired = 0;      // credit of transactions dropped off the end of the undo history
     this.loads = 0;        // increments on every document load
     this.onChange = null;  // (editor) => void
+    this.onRetype = null;  // () => void: the writer set an element (Tab, a shortcut, a button)
     this.autoCapitalize = true;
     this.pending = null;   // { at, set: { k: on } }: styles toggled with no selection, for text typed at `at`
     this.now = () => Date.now();
@@ -539,6 +540,7 @@ export class Editor {
    *    at its end, before it at its start, else between the text before and after the caret.
    */
   applyType(type) {
+    this.onRetype?.();
     if (this.hasSelection()) {
       // Already all of that type: nothing to change, nothing to split.
       if (!this._touched().every((b) => b.type === type)) this.retypeSelection(type);

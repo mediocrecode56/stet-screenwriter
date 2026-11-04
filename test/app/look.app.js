@@ -266,6 +266,86 @@ test('View > Hide Toolbar slides it away and is kept; Focus Mode: full screen, t
   await app.eval(`__stet.cmd.run('panel-scenes')`);
 });
 
+test('the title page slides away and back with the script, and further down nothing moves', async () => {
+  await app.load(Array.from({ length: 300 }, (_, i) => ['action', 'Line ' + i]), {}, 'Slide');
+  const v = '__stet.view', thirdTop = `[...document.querySelectorAll('.page')].find((p) => p._vi === 2 + ${v}.offset).getBoundingClientRect().top`;
+  await app.eval(`${v}.scroller.scrollTop = 0; ${v}.frame()`);
+  await app.eval(`__stet.cmd.run('title-toggle')`);
+  const s = await app.eval(`(() => { const a = document.getElementById('content').getAnimations(); return { anims: a.length, ghost: !!document.querySelector('.title-page'), shown: ${v}.showTitle, pressed: document.getElementById('btn-title').getAttribute('aria-pressed') }; })()`);
+  assert.deepEqual(s, { anims: 1, ghost: true, shown: false, pressed: 'false' }, 'the title page leaves in one move');
+  await app.until(`!document.querySelector('.title-page') && !document.getElementById('content').getAnimations().length`, { what: 'the title page gone' });
+  assert.equal((await settings()).showTitlePage, false, 'kept');
+  await app.eval(`__stet.cmd.run('title-toggle')`);
+  assert.equal(await app.eval(`document.getElementById('content').getAnimations().length`), 1, 'it comes back the same way');
+  // Turned around halfway, it carries on from where it is.
+  await app.eval(`__stet.cmd.run('title-toggle')`);
+  await app.eval(`__stet.cmd.run('title-toggle')`);
+  await app.until(`!document.getElementById('content').getAnimations().length && !!document.querySelector('.title-page')`, { what: 'the title page back' });
+  assert.equal(await app.eval(`document.querySelectorAll('.title-page').length`), 1, 'only one of it');
+  // Further down the script stands exactly where it was.
+  await app.eval(`${v}.scroller.scrollTop = ${v}.pageTop(3); ${v}.frame()`);
+  const before = await app.eval(thirdTop);
+  await app.eval(`__stet.cmd.run('title-toggle')`);
+  assert.equal(await app.eval(`document.getElementById('content').getAnimations().length`), 0, 'no slide');
+  assert.equal(Math.round(await app.eval(thirdTop)), Math.round(before), 'not a pixel');
+  await app.eval(`__stet.cmd.run('title-toggle')`);
+});
+
+test('Focus Mode from Preferences; the element buttons at the top left on a change or the pointer; Keyboard Shortcuts from Preferences; the dinosaur only on request', async () => {
+  await app.load([['action', 'Rain.'], ['action', 'Wind.']], {}, 'Corner');
+  const apply = `[...document.querySelectorAll('.dlg .foot .btn')].find((b) => b.textContent === 'Apply')`;
+  const inCorner = `(() => { const e = document.getElementById('eltypes').getBoundingClientRect(); return e.top >= 0 && e.top < 10 && document.documentElement.classList.contains('peek-el'); })()`;
+  await app.eval(`__stet.cmd.run('prefs')`);
+  await app.until(`!!document.getElementById('pref-focus')`, { what: 'Preferences' });
+  assert.equal(await app.eval(`document.getElementById('pref-focus').checked`), false);
+  await app.clickOn('#pref-focus');
+  await app.eval(`${apply}.click()`);
+  await app.until(`document.documentElement.classList.contains('focus-ready')`, { what: 'focus mode' });
+  // Moving between lines shows nothing; changing the element does, for a moment.
+  await app.key('ArrowDown');
+  await app.until(`__stet.editor.caret.b === 1`, { what: 'the next line' });
+  assert.equal(await app.eval(`document.documentElement.classList.contains('peek-el')`), false, 'only a move');
+  await app.eval(`__stet.cmd.run('type-scene')`);
+  await app.until(inCorner, { what: 'the element buttons in the corner' });
+  await app.until(`document.querySelector('#eltypes .tb.on').dataset.t === 'scene'`, { what: 'the new element lit' });
+  const clipped = await app.eval(`getComputedStyle(document.getElementById('elbar')).clipPath`);
+  assert.notEqual(clipped, 'none', 'the rest of the toolbar clipped away');
+  assert.deepEqual(await app.eval(`[getComputedStyle(document.getElementById('elbar')).boxShadow, getComputedStyle(document.querySelector('.cyc-box')).boxShadow]`), ['none', 'none'], 'one plain outline');
+  await app.until(`!document.documentElement.classList.contains('peek-el')`, { what: 'gone again', timeout: 4000 });
+  // The pointer at the top left brings them, and they are the real buttons.
+  await app.move(400, 300); await app.move(60, 20);
+  await app.until(inCorner, { what: 'the pointer brings them' });
+  await app.until(`!document.getElementById('elbar').getAnimations().length`, { what: 'in place' });
+  await app.clickOn('#eltypes [data-t="action"]');
+  await app.until(`__stet.editor.block.type === 'action'`, { what: 'a click changes the element' });
+  // Up against the edge, the whole toolbar.
+  await app.move(60, 1);
+  await app.until(`document.documentElement.classList.contains('peek') && document.getElementById('elbar').getBoundingClientRect().top >= 29`, { what: 'the whole toolbar' });
+  await app.move(400, 400);
+  await app.until(`!document.documentElement.classList.contains('peek') && !document.documentElement.classList.contains('peek-el')`, { what: 'all away' });
+  // The dinosaur: out of focus mode by default, on the window's edge when asked for.
+  const dino = `getComputedStyle(document.getElementById('dino')).display`;
+  assert.equal(await app.eval(dino), 'none', 'off by default');
+  assert.equal((await settings()).focusDino, false);
+  await app.eval(`__stet.cmd.run('focus-dino')`);
+  await app.until(`${dino} !== 'none' && !document.getElementById('dino').hidden`, { what: 'the dinosaur' });
+  await app.until(`Math.abs(document.getElementById('dino').getBoundingClientRect().bottom - innerHeight) <= 2`, { what: 'its feet on the edge' });
+  assert.equal((await settings()).focusDino, true, 'kept');
+  assert.equal(await app.eval(`getComputedStyle(document.getElementById('status')).display`), 'none', 'the dinosaur alone: no status bar at all');
+  await app.eval(`__stet.cmd.run('focus-dino')`);
+  await app.until(`${dino} === 'none'`, { what: 'the dinosaur away' });
+  // Preferences shows focus mode on, leaves it, and its Keyboard Shortcuts opens the real dialog.
+  await app.eval(`__stet.cmd.run('prefs')`);
+  await app.until(`!!document.getElementById('pref-focus')`, { what: 'Preferences' });
+  assert.equal(await app.eval(`document.getElementById('pref-focus').checked`), true);
+  await app.clickOn('#pref-focus');
+  await app.clickOn('#pref-keys');
+  await app.until(`!document.getElementById('pref-focus') && /^KEYS/.test(document.querySelector('.dlg h2')?.textContent || '')`, { what: 'the shortcuts' });
+  await app.until(`!document.documentElement.classList.contains('focus')`, { what: 'what was changed is kept' });
+  await app.key('Escape');
+  await app.until(`!document.querySelector('.dlg')`, { what: 'closed' });
+});
+
 test('a narrow window: the toolbar tightens only as far as it must, NOTES and every button still in the window', async () => {
   const inView = `(() => { const bar = document.getElementById('elbar'), r = bar.getBoundingClientRect(), last = document.getElementById('btn-notes').getBoundingClientRect();
     const btns = [...bar.querySelectorAll('.tb')].map((b) => b.getBoundingClientRect()).filter((q) => q.width);

@@ -1002,15 +1002,27 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 /* The menus and toolbar wait above the screen and drop back in over the page when the pointer
    reaches the top edge; the status bar, the timeline and the companion are gone. */
 html.focus #top, html.focus #elbar { position: fixed; left: 0; right: 0; z-index: 70; -webkit-app-region: no-drag; }
-html.focus-ready #top, html.focus-ready #elbar { transition: transform var(--dur-panel) var(--ease-in-out); }
+html.focus-ready #top { transition: transform var(--dur-panel) var(--ease-in-out); }
+/* (the toolbar leaving keeps its full width until it is out of sight) */
+html.focus-ready #elbar { transition: transform var(--dur-panel) var(--ease-in-out), clip-path 0s linear var(--dur-panel); }
 html.focus #top * { -webkit-app-region: no-drag; }
 html.focus #top { top: 0; transform: translateY(-100%); }
-html.focus #elbar { top: 30px; transform: translateY(calc(-100% - 31px)); }
+html.focus #elbar { top: 30px; transform: translateY(calc(-100% - 31px)); clip-path: inset(0 calc(100% - var(--el-w, 100%)) -4px 0); }
 html.focus #elbar[hidden] { display: flex !important; } /* (shown here even when hidden in the window) */
-html.focus.peek #top, html.focus.peek #elbar { transform: none; transition-timing-function: var(--ease-out); }
+html.focus.peek #top { transform: none; transition-timing-function: var(--ease-out); }
+html.focus.peek #elbar { transform: none; clip-path: inset(0 0 -4px 0); transition: transform var(--dur-panel) var(--ease-out); }
 html.focus.peek #elbar { box-shadow: 0 3px 0 var(--rule); }
-html.focus #timeline, html.focus #status, html.focus #dino { display: none !important; }
+/* Just the element buttons, in the top left corner: the toolbar with all but them clipped away, so
+   they are the real buttons, and going on up opens them out into the whole toolbar in one move. */
+html.focus.peek-el:not(.peek) #elbar { transform: translateY(-30px); }
+/* (one plain outline, arriving and leaving: the Tab cycle's box stays in the whole toolbar) */
+html.focus:not(.peek) #elbar { border-bottom-color: var(--rule-strong); }
+html.focus:not(.peek) #elbar .cyc-box { box-shadow: none; }
+html.focus.peek-el #elbar { transition: transform var(--dur-panel) var(--ease-out), clip-path var(--dur-panel) var(--ease-out); }
+html.focus:not(.peek) #eltypes::after { content: ""; position: absolute; top: -3px; bottom: -4px; right: -6px; width: 1px; background: var(--rule-strong); }
+html.focus #timeline, html.focus #status, html.focus:not(.focus-dino) #dino { display: none !important; }
 #focus-edge-top { position: fixed; z-index: 65; left: 0; right: 0; top: 0; height: 6px; }
+#focus-edge-el { position: fixed; z-index: 65; left: 0; top: 6px; height: 34px; width: var(--el-w, 0); }
 #focus-edge-right { position: fixed; z-index: 65; right: 0; top: 25%; height: 50%; width: 6px; }
 /* The rail at the right edge: back to the window, and the side panels. */
 #focus-rail { position: fixed; z-index: 72; right: 0; top: 50%; display: flex; flex-direction: column; gap: 0; padding: 4px; background: var(--page); border: 1px solid var(--rule-strong); border-right: 0; box-shadow: -3px 3px 0 var(--rule); transform: translate(calc(100% + 4px), -50%); transition: transform var(--dur-panel) var(--ease-in-out); }

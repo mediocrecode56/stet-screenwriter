@@ -15,6 +15,7 @@ export const EASE_OUT = 'cubic-bezier(.2, 0, 0, 1)';
 export const EASE_IN_OUT = 'cubic-bezier(.4, 0, .2, 1)';
 export const DUR_FAST = 90;
 export const DUR_PANEL = 140;
+export const DUR_PAGE = 220; // (a whole page moving: the same curves, a longer way to go)
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 // While STET starts (the window still hidden: ui/startup.js) what it restores is simply there.

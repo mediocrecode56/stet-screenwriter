@@ -428,3 +428,15 @@ test('Clear Formatting takes bold, italic, underline and strikethrough off the s
   ed.setSel(pos(0, 5)); ed.clearStyles(); typeStr(ed, 'x');
   assert.ok(!ed.blocks[0].marks.some((m) => (m.k === 'b' || m.k === 'i') && m.s <= 5 && m.e > 5));
 });
+
+test('setting an element is announced, on a written line and an empty one; moving the caret is not', () => {
+  const ed = new Editor([{ type: 'action', text: 'Rain.' }, { type: 'action', text: '' }]);
+  let told = 0;
+  ed.onRetype = () => { told++; };
+  ed.tab();
+  assert.equal(told, 1, 'Tab on a written line (which starts a new line)');
+  ed.setSel(pos(ed.blocks.length - 1, 0));
+  assert.equal(told, 1, 'a move says nothing');
+  ed.applyType('scene');
+  assert.equal(told, 2, 'a shortcut or button on an empty line');
+});

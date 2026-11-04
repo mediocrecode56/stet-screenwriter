@@ -122,7 +122,7 @@ export async function scheduleDialog(sched) {
   return v ? f.value() : null;
 }
 
-export async function preferencesDialog(settings, doc) {
+export async function preferencesDialog(settings, doc, focusOn = false) {
   const sched = scheduleFields({ enabled: false, darkAt: '19:00', lightAt: '07:00', ...(settings.schedule || {}) }, { explain: false });
   const theme = h('select', {}, ...['dark', 'light', 'system'].map((t) => h('option', { value: t, selected: settings.theme === t }, t)));
   const dirIn = h('input', { type: 'text', value: settings.defaultDir || '', spellcheck: false });
@@ -132,6 +132,10 @@ export async function preferencesDialog(settings, doc) {
   const daily = h('input', { type: 'number', min: 0, max: 100000, value: settings.goals.daily, style: 'width:90px' });
   const weekly = h('input', { type: 'number', min: 0, max: 700000, value: settings.goals.weekly, style: 'width:90px' });
   const upd = h('input', { type: 'checkbox', checked: settings.updateCheck !== false });
+  const foc = h('input', { type: 'checkbox', id: 'pref-focus', checked: focusOn });
+  // One dialog at a time: the shortcuts take this one's place, keeping what was changed here.
+  let apply = null, keys = false;
+  const keysBtn = h('button', { class: 'btn', id: 'pref-keys', onclick: () => { keys = true; apply(true); } }, 'Keyboard Shortcuts');
   const cap = h('input', { type: 'checkbox', checked: doc.settings.autoCapitalize });
   const dbl = h('input', { type: 'checkbox', checked: doc.settings.sceneSpacing === 2 });
   const bkOn = h('input', { type: 'checkbox', checked: doc.settings.backup.enabled });
@@ -141,6 +145,8 @@ export async function preferencesDialog(settings, doc) {
     h('div', { class: 'pref-sec' }, 'APPLICATION'),
     field('Theme', theme),
     ...sched.nodes,
+    field('Focus mode', h('label', { class: 'chk' }, foc, 'full screen, the page alone')),
+    field('Shortcuts', keysBtn),
     field('Default save folder', h('div', { class: 'inline' }, dirIn, browse)),
     field('Autosave', h('div', { class: 'inline' }, h('label', { class: 'chk' }, auto, 'on'), h('span', {}, 'after'), delay, h('span', {}, 'ms idle'))),
     field('Daily goal', h('div', { class: 'inline' }, daily, h('span', {}, 'words'))),
@@ -151,9 +157,11 @@ export async function preferencesDialog(settings, doc) {
     field('Scene headings', h('label', { class: 'chk' }, dbl, 'two blank lines before')),
     field('Auto backups', h('div', { class: 'inline' }, h('label', { class: 'chk' }, bkOn, 'on'), h('span', {}, 'every'), every, h('span', {}, 'min · keep'), keep, h('span', {}, 'days'))),
   );
-  const v = await open({ title: 'PREFERENCES', body, buttons: [{ label: 'Cancel', value: null }, { label: 'Apply', value: true, primary: true }] });
+  const v = await open({ title: 'PREFERENCES', body, buttons: [{ label: 'Cancel', value: null }, { label: 'Apply', value: true, primary: true }], init: (_, close) => { apply = close; } });
   if (!v) return null;
   return {
+    focus: foc.checked,
+    keys,
     app: {
       theme: theme.value,
       schedule: sched.value(),
