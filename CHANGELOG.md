@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.55.1 · 5 Nov 2026
+
+### BUGS, PERFORMANCE
+
+- In Focus Mode, the SCENE, ACTION and other element buttons now appear on their own only when you press Tab, and stay for a few seconds so you can click them.
+- Moving the pointer to the top of the screen in Focus Mode always shows the full toolbar.
+
 ## 0.55.0 · 5 Nov 2026
 
 ### FEATURES

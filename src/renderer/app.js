@@ -1077,7 +1077,7 @@ const focus = new FocusMode({
   onChange: () => { view.layoutDirty = true; view.schedule(); fitTitle(); dino.place(); input.focus(); },
 });
 
-editor.onRetype = () => focus.showElement(); // (moving to another line or starting a new one shows nothing)
+editor.onTab = () => focus.showElement();
 
 function sceneStep(dir) {
   const s = editor.scenes();

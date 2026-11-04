@@ -65,7 +65,7 @@ export class Editor {
     this.retired = 0;      // credit of transactions dropped off the end of the undo history
     this.loads = 0;        // increments on every document load
     this.onChange = null;  // (editor) => void
-    this.onRetype = null;  // () => void: the writer set an element (Tab, a shortcut, a button)
+    this.onTab = null;     // () => void: the writer stepped through the elements with Tab
     this.autoCapitalize = true;
     this.pending = null;   // { at, set: { k: on } }: styles toggled with no selection, for text typed at `at`
     this.now = () => Date.now();
@@ -514,6 +514,7 @@ export class Editor {
    * (applyType): only what is selected, or what is written next, takes the new type.
    */
   tab(reverse = false) {
+    this.onTab?.();
     const from = this.hasSelection() ? this.blocks[this.ordered()[0].b].type : this.block.type;
     const type = this.nextType(from, reverse);
     if (type !== from) this.applyType(type);
@@ -540,7 +541,6 @@ export class Editor {
    *    at its end, before it at its start, else between the text before and after the caret.
    */
   applyType(type) {
-    this.onRetype?.();
     if (this.hasSelection()) {
       // Already all of that type: nothing to change, nothing to split.
       if (!this._touched().every((b) => b.type === type)) this.retypeSelection(type);

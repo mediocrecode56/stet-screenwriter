@@ -2,9 +2,9 @@
 // and what comes up as you write (spelling fixes, completions, find). Everything else slides away
 // in one move: the menus and toolbar up, the status bar down, the side panels to their edges.
 //   - the pointer at the top edge brings the menus and toolbar back down over the page;
-//   - the pointer near the top left, or a change of the line's element (Tab, a shortcut), brings just
-//     the toolbar's element buttons (SCENE, ACTION...) to that corner, the rest of the toolbar clipped
-//     away; going on up to the edge opens out into the whole toolbar;
+//   - Tab brings just the toolbar's element buttons (SCENE, ACTION...) to the top left corner for a few
+//     seconds, the rest of the toolbar clipped away, there to be clicked; the pointer on them keeps
+//     them, and up against the top edge they open out into the whole toolbar;
 //   - the pointer at the right edge brings a small rail: WINDOW (back to the window, as Esc does)
 //     and REVISE, SCENES and NOTES, which open their panels beside the page.
 // Leaving puts everything back as it was, the panels open before included.
@@ -14,7 +14,7 @@ import { EASE_OUT, EASE_IN_OUT, reducedMotion } from './motion.js';
 
 const DUR = 220;
 const LINGER = 260; // ms the toolbar or rail stays after the pointer leaves it
-const SHOW_ELEMENT = 1400; // ms the element buttons stay after the element changes
+const SHOW_ELEMENT = 3000; // ms the element buttons stay after Tab
 const EXIT_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>';
 
 export class FocusMode {
@@ -24,12 +24,11 @@ export class FocusMode {
     this.on = false;
     this.saved = null; // the panels open before
     this.edgeTop = h('div', { id: 'focus-edge-top', 'aria-hidden': 'true' });
-    this.edgeEl = h('div', { id: 'focus-edge-el', 'aria-hidden': 'true' });
     this.edgeRight = h('div', { id: 'focus-edge-right', 'aria-hidden': 'true' });
     this.rail = h('div', { id: 'focus-rail', role: 'toolbar', 'aria-label': 'Focus mode' },
       h('button', { class: 'tb fr-exit', 'data-f': 'exit', title: 'Back to the window (Esc)', html: `${EXIT_ICON}<span>WINDOW</span>` }),
       ...panels.map((p) => h('button', { class: 'tb', 'data-f': p.key, title: p.title || '' }, p.label)));
-    this.edges = [this.edgeTop, this.edgeEl, this.edgeRight];
+    this.edges = [this.edgeTop, this.edgeRight];
     for (const el of [...this.edges, this.rail]) { el.hidden = true; document.body.appendChild(el); }
     this.rail.addEventListener('mousedown', (e) => {
       e.preventDefault(); // the script keeps the keyboard
@@ -41,10 +40,9 @@ export class FocusMode {
       this.renderRail();
     });
     this.edgeTop.addEventListener('mouseenter', () => this.peek('top'));
-    this.edgeEl.addEventListener('mouseenter', () => this.peek('el'));
     this.edgeRight.addEventListener('mouseenter', () => this.peek('rail'));
     // The element buttons cover the top edge in their corner: up against it, the whole toolbar comes.
-    // (The pointer reaching them as they leave keeps them: it never touched the corner behind them.)
+    // (The pointer reaching them as they leave keeps them.)
     document.getElementById('elbar').addEventListener('mousemove', (e) => {
       if (e.clientY <= 2) this.peek('top');
       else if (!document.documentElement.classList.contains('peek')) this.peek('el');
@@ -59,7 +57,7 @@ export class FocusMode {
   /** The top bars, as they stand in the window (the toolbar only when it is shown). */
   bars() { return ['top', 'elbar', 'timeline'].map((id) => document.getElementById(id)).filter((el) => el && !el.hidden); }
 
-  /** How much of the toolbar is the element buttons (to their rule), which also sizes the corner that brings them. */
+  /** How much of the toolbar is the element buttons (to their rule). */
   measure() {
     const bar = document.getElementById('elbar').getBoundingClientRect(), types = document.getElementById('eltypes').getBoundingClientRect();
     document.documentElement.style.setProperty('--el-w', Math.ceil(types.right - bar.left) + 7 + 'px');
@@ -124,7 +122,7 @@ export class FocusMode {
 
   // ---- what comes back on the pointer ------------------------------------------------------------
 
-  /** The line's element changed: its buttons come to the corner for a moment. */
+  /** Tab: the element buttons come to the corner for a few seconds. */
   showElement() {
     if (document.documentElement.classList.contains('focus-ready')) this.peek('el', SHOW_ELEMENT);
   }
@@ -140,7 +138,7 @@ export class FocusMode {
     this.timers[what] = setInterval(() => {
       const keep = what === 'top'
         ? document.querySelector('#top:hover, #elbar:hover, #focus-edge-top:hover, .menu') || document.getElementById('doctitle').classList.contains('editing')
-        : what === 'el' ? performance.now() < this.hold || document.querySelector('#elbar:hover, #focus-edge-el:hover')
+        : what === 'el' ? performance.now() < this.hold || document.querySelector('#elbar:hover')
           : document.querySelector('#focus-rail:hover, #focus-edge-right:hover');
       away = keep ? 0 : away + 1;
       if (away * 90 >= LINGER) this.unpeek(what);

@@ -1022,7 +1022,6 @@ html.focus.peek-el #elbar { transition: transform var(--dur-panel) var(--ease-ou
 html.focus:not(.peek) #eltypes::after { content: ""; position: absolute; top: -3px; bottom: -4px; right: -6px; width: 1px; background: var(--rule-strong); }
 html.focus #timeline, html.focus #status, html.focus:not(.focus-dino) #dino { display: none !important; }
 #focus-edge-top { position: fixed; z-index: 65; left: 0; right: 0; top: 0; height: 6px; }
-#focus-edge-el { position: fixed; z-index: 65; left: 0; top: 6px; height: 34px; width: var(--el-w, 0); }
 #focus-edge-right { position: fixed; z-index: 65; right: 0; top: 25%; height: 50%; width: 6px; }
 /* The rail at the right edge: back to the window, and the side panels. */
 #focus-rail { position: fixed; z-index: 72; right: 0; top: 50%; display: flex; flex-direction: column; gap: 0; padding: 4px; background: var(--page); border: 1px solid var(--rule-strong); border-right: 0; box-shadow: -3px 3px 0 var(--rule); transform: translate(calc(100% + 4px), -50%); transition: transform var(--dur-panel) var(--ease-in-out); }

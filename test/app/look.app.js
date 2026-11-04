@@ -291,7 +291,7 @@ test('the title page slides away and back with the script, and further down noth
   await app.eval(`__stet.cmd.run('title-toggle')`);
 });
 
-test('Focus Mode from Preferences; the element buttons at the top left on a change or the pointer; Keyboard Shortcuts from Preferences; the dinosaur only on request', async () => {
+test('Focus Mode from Preferences; the element buttons at the top left on Tab alone; Keyboard Shortcuts from Preferences; the dinosaur only on request', async () => {
   await app.load([['action', 'Rain.'], ['action', 'Wind.']], {}, 'Corner');
   const apply = `[...document.querySelectorAll('.dlg .foot .btn')].find((b) => b.textContent === 'Apply')`;
   const inCorner = `(() => { const e = document.getElementById('eltypes').getBoundingClientRect(); return e.top >= 0 && e.top < 10 && document.documentElement.classList.contains('peek-el'); })()`;
@@ -301,24 +301,29 @@ test('Focus Mode from Preferences; the element buttons at the top left on a chan
   await app.clickOn('#pref-focus');
   await app.eval(`${apply}.click()`);
   await app.until(`document.documentElement.classList.contains('focus-ready')`, { what: 'focus mode' });
-  // Moving between lines shows nothing; changing the element does, for a moment.
+  // Moving between lines or a shortcut shows nothing; Tab does, for long enough to click.
   await app.key('ArrowDown');
   await app.until(`__stet.editor.caret.b === 1`, { what: 'the next line' });
   assert.equal(await app.eval(`document.documentElement.classList.contains('peek-el')`), false, 'only a move');
   await app.eval(`__stet.cmd.run('type-scene')`);
+  await app.until(`document.querySelector('#eltypes .tb.on').dataset.t === 'scene'`, { what: 'the shortcut applied' });
+  assert.equal(await app.eval(`document.documentElement.classList.contains('peek-el')`), false, 'only a shortcut');
+  await app.key('Tab');
   await app.until(inCorner, { what: 'the element buttons in the corner' });
-  await app.until(`document.querySelector('#eltypes .tb.on').dataset.t === 'scene'`, { what: 'the new element lit' });
+  await app.until(`document.querySelector('#eltypes .tb.on').dataset.t === 'action'`, { what: 'the new element lit' });
   const clipped = await app.eval(`getComputedStyle(document.getElementById('elbar')).clipPath`);
   assert.notEqual(clipped, 'none', 'the rest of the toolbar clipped away');
   assert.deepEqual(await app.eval(`[getComputedStyle(document.getElementById('elbar')).boxShadow, getComputedStyle(document.querySelector('.cyc-box')).boxShadow]`), ['none', 'none'], 'one plain outline');
-  await app.until(`!document.documentElement.classList.contains('peek-el')`, { what: 'gone again', timeout: 4000 });
-  // The pointer at the top left brings them, and they are the real buttons.
-  await app.move(400, 300); await app.move(60, 20);
-  await app.until(inCorner, { what: 'the pointer brings them' });
+  // They are the real buttons, and the pointer on them keeps them.
   await app.until(`!document.getElementById('elbar').getAnimations().length`, { what: 'in place' });
-  await app.clickOn('#eltypes [data-t="action"]');
-  await app.until(`__stet.editor.block.type === 'action'`, { what: 'a click changes the element' });
-  // Up against the edge, the whole toolbar.
+  await app.clickOn('#eltypes [data-t="character"]');
+  await app.until(`__stet.editor.block.type === 'character'`, { what: 'a click changes the element' });
+  await app.move(400, 400);
+  await app.until(`!document.documentElement.classList.contains('peek-el')`, { what: 'gone again', timeout: 6000 });
+  await app.until(`!document.getElementById('elbar').getAnimations().length`, { what: 'out of sight' });
+  // The pointer alone never brings them: near the top left nothing comes, on the edge the whole toolbar.
+  await app.move(60, 20);
+  assert.equal(await app.eval(`document.documentElement.classList.contains('peek-el')`), false, 'not on hover');
   await app.move(60, 1);
   await app.until(`document.documentElement.classList.contains('peek') && document.getElementById('elbar').getBoundingClientRect().top >= 29`, { what: 'the whole toolbar' });
   await app.move(400, 400);
