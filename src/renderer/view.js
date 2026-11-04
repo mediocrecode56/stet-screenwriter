@@ -283,7 +283,7 @@ export class View {
     let h = '';
     { // every script page is numbered, the first after the title page too
       const label = `${pi + 1}.`;
-      h += `<div class="pn" style="left:${this.xAt(PAGE.numberCol - label.length, 0)}px;top:${PAGE.numberRow * row}px">${label}</div>`;
+      h += `<div class="pn" style="left:${this.xAt(PAGE.numberCol, -label.length)}px;top:${PAGE.numberRow * row}px">${label}</div>`;
     }
     if (page.cont) h += `<div class="l" style="left:${this.xAt(ELEMENT.character.left, 0)}px;top:${top * row}px">${esc(page.cont)}</div>`;
     const ticks = new Set();

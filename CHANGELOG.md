@@ -2,6 +2,18 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.56.0 · 5 Nov 2026
+
+### FEATURES
+
+- The View menu now says what each option will do: Show or Hide, Enter or Leave, Turn On or Turn Off. That includes the Writing Companion in Focus Mode, the Scene Navigator, the Notes Panel and the Timeline.
+
+### BUGS, PERFORMANCE
+
+- Pages keep the screenplay standard on A4: a full 1 inch margin on the right, so action no longer runs too far across.
+- The page number sits exactly where it should, 1.25 inches from the right edge.
+- Transitions and the title page follow the same margins.
+
 ## 0.55.1 · 5 Nov 2026
 
 ### BUGS, PERFORMANCE

@@ -51,6 +51,8 @@ lessons go at the end of their section. Update this file whenever new feedback a
   line of detail under it, a small × to remove. No tables of oversized buttons; no explanatory
   paragraphs where a short lead line will do. Settings need no legends explaining how they work.
 - Show context in plain words (a scene's name, "page 3"), never cryptic codes like "P.3".
+- A View menu item that turns something on or off says what it will do now (Show ... / Hide ...,
+  Enter / Leave, Turn On / Turn Off), never a tick beside a fixed name.
 - Showing or hiding the title page moves like a side panel: it slides in from above the script and
   the script glides with it. A writer further down the script stays exactly where they are.
 - Focus mode hides everything, but never what the writer is changing: Tab alone brings the toolbar's
@@ -59,6 +61,24 @@ lessons go at the end of their section. Update this file whenever new feedback a
   In that corner they have one plain outline: no shadow, no box inside a box.
 - The dinosaur stays out of focus mode unless the writer asks for it (View menu). Then it is the only
   thing at the bottom, standing on the window's edge: no status bar, not even kept out of sight.
+
+## Page format
+
+The owner's reference is Final Draft's page. These numbers are checked by test/unit/finaldraft.test.js
+and live in core/format.js; change them only on the owner's word.
+
+- A4 is the default page. The standard below is written for Letter, so on A4 every right edge is kept
+  as a distance from the paper's right edge, never as the Letter figure (which is how action came to
+  run too far right). Left indents are measured from the left edge and never change.
+- Courier 12pt, 6 lines an inch, characters 7pt apart.
+- Page: 1.5in left, 1in right, 1in top, 54 lines of body (9in, a page stays about a minute).
+- Page number: 0.5in from the top, ending 1.25in from the right edge, with a full stop after it.
+- Scene heading, action, shot: from 1.5in to the right margin (57 characters on A4, 60 on Letter).
+- Character: from 3.5in, to 1.25in from the right edge.
+- Parenthetical: 3.0in to 5.5in (25 characters). Dialogue: 2.5in to 6.0in (35 characters).
+- Transition: 16 characters wide, ending 1.4in from the right edge.
+- One blank line before scene headings, action, character, transitions and shots; none before
+  parentheticals and dialogue. Two before a scene heading is the writer's choice in Preferences.
 
 ## The dinosaur
 

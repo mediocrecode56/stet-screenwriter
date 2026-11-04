@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
-import { wrap, lineText, PAGE, PITCH } from '../../src/core/format.js';
+import { wrap, lineText, PAGE, PITCH, ELEMENT } from '../../src/core/format.js';
 import { paginate } from '../../src/core/layout.js';
 import { buildPrintPages } from '../../src/core/printmodel.js';
 import { buildPdf, PAPER } from '../../src/core/pdf.js';
@@ -38,14 +38,31 @@ test('the page: A4, the script font embedded, characters 7pt apart, the number 7
   assert.match(pdf, /\/BaseFont \/STETCourier-Regular .*\/Subtype \/TrueType|\/Subtype \/TrueType \/BaseFont \/STETCourier-Regular/);
   assert.match(pdf, /\/FontFile2 \d+ 0 R/);
   // First line: 1.5in from the left, its baseline 80.52pt from the top (Final Draft: 108, 80.52), drawn
-  // after the page's number (508, 797.4: the first page is numbered too), so a step of -400 -36 from it.
-  assert.match(pdf, /BT\n-0\.2 Tc\n\/F1 12 Tf\n508 797\.4 Td \(1\.\) Tj\n-400 -36 Td \(1\. INTRO\) Tj/);
+  // after the page's number (the first page is numbered too), so a step down of 36pt from it.
+  const at = pdf.match(/BT\n-0\.2 Tc\n\/F1 12 Tf\n([\d.]+) 797\.4 Td \(1\.\) Tj\n(-[\d.]+) -36 Td \(1\. INTRO\) Tj/);
+  assert.ok(at, 'the number, then the first line');
+  assert.ok(Math.abs(Number(at[1]) + 14 - (PAPER.w - 90)) < 0.5, 'the number ends 1.25in from the right edge');
+  assert.ok(Math.abs(Number(at[1]) + Number(at[2]) - 108) < 0.1, 'the first line 1.5in from the left');
   assert.equal(Math.round((PAPER.h - 80.52) * 100) / 100, 797.4 - 36);
   const n = pages[1].lines.find((l) => l.text === '2.');
-  assert.ok(Math.abs(n.col * 7.2 + 2 * 7 - 522) < 1e-9, 'the page number ends at 522pt');
+  assert.ok(Math.abs(n.col * 7.2 + 2 * 7 - (82.68 - 12.5) * 7.2) < 1e-9, 'the page number ends 1.25in from the right edge');
   assert.equal(n.row, PAGE.numberRow);
   // Without the font files it still makes a PDF, in the standard Courier.
   assert.match(Buffer.from(buildPdf(pages)).toString('latin1'), /\/BaseFont \/Courier-Bold/);
+});
+
+test('the A4 page keeps the standard: left indents, and right margins measured from the paper\'s right edge', () => {
+  const inches = (t) => [ELEMENT[t].left / 10, ELEMENT[t].left / 10 + ELEMENT[t].width * PITCH / 10];
+  assert.deepEqual(['scene', 'action', 'shot', 'dialogue', 'paren', 'character'].map((t) => ELEMENT[t].left), [15, 15, 15, 25, 30, 35]);
+  assert.deepEqual([ELEMENT.dialogue.width, ELEMENT.paren.width], [35, 25], 'speech wraps as on any page');
+  for (const t of ['scene', 'action', 'shot']) {
+    const free = PAGE.cols / 10 - inches(t)[1];
+    assert.ok(free >= 1 && free < 1.25, `${t} leaves more than the 1in margin (${free})`);
+  }
+  assert.equal(ELEMENT.transition.width, 16);
+  assert.ok(Math.abs(PAGE.cols / 10 - inches('transition')[1] - 1.44) < 0.05, 'a Transition as far from the right edge as on a Letter page');
+  assert.equal(PAGE.topRows, 6); assert.equal(PAGE.bodyRows, 54); assert.equal(PAGE.numberRow, 3);
+  assert.equal(PAGE.leftCol, 15);
 });
 
 test('STET adds no bold and no blank lines of its own', () => {

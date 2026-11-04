@@ -155,7 +155,7 @@ test('alignment: the toolbar menu and the shortcuts; words, element and styles u
     }
     return out;
   })()`);
-  assert.equal(r.width, 60, 'the justified line fills the action width');
+  assert.equal(r.width, 57, 'the justified line fills the action width');
   assert.ok(r.offs.length > 5);
   for (const w of r.offs) { assert.ok(w.dx < 1.5, `caret at ${w.o} is ${w.dx}px off its letter`); assert.equal(w.hit, w.o, 'a click on the letter puts the caret before it'); }
   await app.key('Mod+Z');

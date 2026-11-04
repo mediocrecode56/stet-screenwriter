@@ -73,7 +73,7 @@ test('every script page carries its number at the right margin, the first too', 
   assert.equal(pages[0].lines.find((l) => l.row === 3).text, '1.');
   const n = pages[1].lines.find((l) => l.row === 3);
   assert.equal(n.text, '2.');
-  assert.ok(Math.abs(n.col + n.text.length * PITCH - 72.5) < 1e-9, 'ending 7.25in from the left edge, as Final Draft prints it');
+  assert.ok(Math.abs(n.col + n.text.length * PITCH - (82.68 - 12.5)) < 1e-9, 'ending 1.25in from the right edge, the standard');
 });
 
 test('PDF is structurally valid: header, page count, xref offsets', () => {

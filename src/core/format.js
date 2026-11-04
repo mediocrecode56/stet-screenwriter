@@ -8,27 +8,34 @@
 
 export const PITCH = 7 / 7.2; // columns a character takes
 
+const COLS = 82.68;   // A4: 210mm wide
+
+// The page is A4, set to the screenplay standard. The standard is written for a Letter page, where
+// Final Draft's right edges (7.5in, 7.25in, 7.1in) mean a distance from the paper's right edge
+// (1in, 1.25in, 1.4in), so on the narrower A4 those distances are kept, not the Letter figures.
 export const PAGE = {
-  cols: 82.68,       // A4: 210mm wide
-  rows: 70.16,       // 297mm tall
-  topRows: 6,        // 1in top margin
-  bodyRows: 54,      // 9in of body text, as Final Draft sets an A4 page
-  numberRow: 3,      // page number sits 0.5in from the top
-  numberCol: 72.5,   // and ends 7.25in from the left edge
-  rightCol: 75,      // 7.5in: right margin edge
-  leftCol: 15,       // 1.5in: binding margin
+  cols: COLS,
+  rows: 70.16,        // 297mm tall
+  topRows: 6,         // 1in top margin
+  bodyRows: 54,       // 9in of body text, the standard's, so a page stays about a minute
+  numberRow: 3,       // page number sits 0.5in from the top
+  numberCol: COLS - 12.5, // and ends 1.25in from the right edge
+  rightCol: COLS - 10,    // 1in: right margin edge
+  leftCol: 15,        // 1.5in: binding margin
 };
 
-// The industry-standard element margins (Final Draft's screenplay defaults), in inches from the
-// page's left edge: [left, right]. Everything else is derived from these.
+// The standard element margins, in inches from the page's left edge: [left, right]. Left edges are
+// the standard's own; right edges hang from the paper's right edge, and a Transition, set against
+// it, moves with it and keeps its width. Everything else is derived from these.
+const RIGHT = PAGE.rightCol / 10;
 const MARGINS = {
-  scene:      [1.5, 7.5],
-  action:     [1.5, 7.5],
-  character:  [3.5, 7.25],
+  scene:      [1.5, RIGHT],
+  action:     [1.5, RIGHT],
+  character:  [3.5, RIGHT - 0.25],
   paren:      [3.0, 5.5],
   dialogue:   [2.5, 6.0],
-  transition: [5.5, 7.1],
-  shot:       [1.5, 7.5],
+  transition: [RIGHT - 2, RIGHT - 0.4],
+  shot:       [1.5, RIGHT],
 };
 const STYLE = {
   scene:      { before: 1, upper: true },

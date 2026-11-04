@@ -438,7 +438,7 @@ one only looked at since doesn't take its place.
 - **Dual dialogue, scene numbers, revision marks / colored pages, Final Draft
   (.fdx) export and Fountain import/export** are not implemented (.fdx import is).
   Plain-text paste does recover element types (Fountain-like heuristics).
-- Pages are **A4 only**, laid out as Final Draft lays out its pages (54 lines of body from 1in down, the page number 0.5in down ending 7.25in from the left).
+- Pages are **A4 only**, set to the screenplay standard (docs/DESIGN_DIRECTION.md, Page format): 54 lines of body from 1in down, the page number 0.5in down ending 1.25in from the right edge.
 - A speech of several paragraphs breaks between them, without (MORE) / (CONT'D), as
   Final Draft does; a paragraph too long to move whole, and action, split at line
   boundaries (with 2-line widow/orphan control), not preferentially at sentence ends.

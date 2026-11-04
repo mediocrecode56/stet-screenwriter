@@ -25,7 +25,7 @@ test('every line fits its element width', () => {
   for (const b of generateScript(20)) {
     const s = linesOf(b);
     for (let i = 0; i < s.length; i++) {
-      const w = { scene: 60, action: 60, character: 38, paren: 25, dialogue: 35, transition: 20, shot: 60 }[b.type];
+      const w = { scene: 57, action: 57, character: 35, paren: 25, dialogue: 35, transition: 16, shot: 57 }[b.type];
       assert.ok(lineText(b.text, s, i).length <= w, `${b.type} line too long`);
     }
   }
@@ -140,15 +140,15 @@ test('pageOf finds the page containing a block', () => {
   }
 });
 
-test('element margins are the industry standard (Final Draft defaults), in inches from the page edge', () => {
+test('element margins are the industry standard on A4, in inches from the page edge', () => {
   const inches = (t) => [ELEMENT[t].left / 10, (ELEMENT[t].left + ELEMENT[t].width) / 10];
-  assert.deepEqual(inches('scene'), [1.5, 7.5]);
-  assert.deepEqual(inches('action'), [1.5, 7.5]);
-  assert.deepEqual(inches('character'), [3.5, 7.2]); // to 7.25in: 37 whole characters
+  assert.deepEqual(inches('scene'), [1.5, 7.2]); // to 1in from the right edge (7.27in): 57 whole characters
+  assert.deepEqual(inches('action'), [1.5, 7.2]);
+  assert.deepEqual(inches('character'), [3.5, 7]); // to 1.25in from it: 35 whole characters
   assert.deepEqual(inches('paren'), [3.0, 5.5]);
   assert.deepEqual(inches('dialogue'), [2.5, 6.0]);
-  assert.deepEqual(inches('transition'), [5.5, 7.1]);
-  assert.deepEqual(inches('shot'), [1.5, 7.5]);
+  assert.deepEqual(inches('transition'), [5.3, 6.9]); // 1.4in from it, as wide as ever
+  assert.deepEqual(inches('shot'), [1.5, 7.2]);
 });
 
 test('a line sent to the top of the view keeps room above it: the blank rows before it, else a row or two', () => {

@@ -42,6 +42,21 @@ test('the header: File, Edit, Element at the left edge; the title alone, centred
   assert.equal(await app.eval(`document.getElementById('doctitle').textContent`), 'Second', 'it follows the open screenplay');
 });
 
+test('the View menu says what each item will do; the page number ends 1.25in from the right edge', async () => {
+  const items = async () => { await app.clickOn('#menubar .mb:nth-child(5)'); await app.until(`document.querySelectorAll('.mi').length > 10`); const v = await app.eval(`[...document.querySelectorAll('.mi span:first-child')].map((s) => s.textContent)`); await app.key('Escape'); await app.until(`!document.querySelector('.mi')`); return v; };
+  const before = await items();
+  for (const t of ['Scene Navigator', 'Notes Panel', 'Timeline', 'Writing Companion in Focus Mode']) assert.ok(before.some((s) => s === 'Show ' + t || s === 'Hide ' + t), t);
+  const was = before.find((s) => s.endsWith('Writing Companion in Focus Mode'));
+  await app.eval(`__stet.cmd.run('focus-dino')`);
+  await app.until(`__stet.cmd.get('focus-dino').label() !== ${JSON.stringify(was)}`);
+  assert.ok((await items()).includes((was.startsWith('Show') ? 'Hide' : 'Show') + ' Writing Companion in Focus Mode'));
+  await app.eval(`__stet.cmd.run('focus-dino')`);
+  await app.until(`__stet.cmd.get('focus-dino').label() === ${JSON.stringify(was)}`);
+  await app.until(`!!document.querySelector('.page .pn')`);
+  const free = await app.eval(`(() => { const n = document.querySelector('.page .pn'), p = n.parentElement.getBoundingClientRect(), r = document.createRange(); r.selectNodeContents(n); return (p.right - r.getBoundingClientRect().right) / p.width * 8.268; })()`);
+  assert.ok(Math.abs(free - 1.25) < 0.01, `${free}in from the right edge`);
+});
+
 test('the status bar: a plain clock, no save text (the square beside the title is the only sign); goals take clicks only on their numbers', async () => {
   const v = await app.eval(`(() => { const t = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); return { clock: document.getElementById('st-clock').textContent, now: [t(Date.now() - 5000), t(Date.now())], save: !!document.getElementById('st-save'), dot: document.getElementById('docdot').title }; })()`);
   assert.ok(v.now.includes(v.clock), `the time now, in this computer’s format (${v.clock}, ${v.now})`);
