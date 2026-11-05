@@ -7,7 +7,7 @@
 // Each tag is checked out into a temporary git worktree (your working tree is
 // never touched) and packaged with the Electron version that tag pins.
 // Output: dist/STET-vX.Y.Z-win32-x64/STET.exe (one folder per version, never overwritten
-// unless rebuilt), and Documents\STET\STET.exe: the newest version as a single file.
+// unless rebuilt), and STET.exe in the project folder: the newest version as a single file.
 // What is never run is left out (scripts/package-tools.js): type declarations and sources
 // in node_modules, and Chromium's interface strings other than English.
 // STET_PATCH_OUT=<folder> (the release workflow) also writes the patch for in-app updates
@@ -94,12 +94,12 @@ const newest = tags[tags.length - 1];
 try {
   if (newest) await updateMainExe(newest, rebuiltTags.has(newest));
 } catch (e) {
-  console.error(`STET.exe in Documents\\STET was NOT updated: ${e.message}`);
+  console.error(`The project folder's STET.exe was NOT updated: ${e.message}`);
   process.exitCode = 1;
 } finally {
   fs.rmSync(WORK, { recursive: true, force: true });
 }
-// ---- the unversioned STET.exe in Documents\STET ---------------------------------------
+// ---- the unversioned STET.exe in the project folder -----------------------------------
 // Always the newest version that built successfully: a single self-contained file
 // (scripts/launcher/Launcher.cs with the packaged app embedded), compiled with the C#
 // compiler that ships with Windows. It replaces the previous one only after it has
@@ -111,13 +111,8 @@ async function updateMainExe(tag, rebuilt) {
   const version = tag.replace(/^v/, '');
   const build = path.join(DIST, `STET-${tag}-win32-x64`);
   if (!fs.existsSync(path.join(build, 'STET.exe'))) throw new Error(`the newest version (${tag}) has no successful build in dist/`);
-  // STET_EXE_DIR (set by the release workflow) puts it elsewhere; otherwise Documents\STET.
-  let destDir = process.env.STET_EXE_DIR;
-  if (!destDir) {
-    const docs = ps("[Environment]::GetFolderPath('MyDocuments')");
-    if (!docs) throw new Error('could not find the Documents folder');
-    destDir = path.join(docs, 'STET');
-  }
+  // STET_EXE_DIR (set by the release workflow) puts it elsewhere; otherwise the project folder.
+  const destDir = process.env.STET_EXE_DIR || ROOT;
   fs.mkdirSync(destDir, { recursive: true });
   const dest = path.join(destDir, 'STET.exe');
   const current = fs.existsSync(dest) ? ps(`(Get-Item -LiteralPath '${dest.replace(/'/g, "''")}').VersionInfo.ProductVersion`) : '';

@@ -1,4 +1,4 @@
-// STET.exe (unversioned, in Documents\STET): a self-contained single file.
+// STET.exe (unversioned): a self-contained single file.
 //
 // The packaged app (an Electron folder) is embedded as a zip resource. On the
 // first launch of a given build it is unpacked once into

@@ -35,7 +35,7 @@ builds every released version that isn't built yet into
 Each version is built from its own git tag, so old versions stay runnable.
 `npm run exe -- v0.2.0` rebuilds one version; `npm run exe -- --all` rebuilds all.
 
-It also keeps **`Documents\STET\STET.exe`** up to date: the newest version that
+It also keeps **`STET.exe`** in the project folder up to date: the newest version that
 built successfully, as one self-contained file (no folder needed). It is only
 replaced after the new build has succeeded and been checked; if anything fails,
 the previous one stays and the reason is printed. On the first launch of a new
