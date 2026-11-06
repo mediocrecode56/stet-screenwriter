@@ -1,0 +1,52 @@
+# Tests and publishes the browser version (web/) on GitHub Pages. It has nothing to do with desktop
+# releases: it never builds or changes the app, and the Release workflow never touches the site.
+# Pages must be set to "GitHub Actions" in the repository's settings (Settings > Pages > Source).
+
+name: Web
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - web/**
+      - src/core/**
+      - src/fonts/**
+      - src/renderer/view.js
+      - src/renderer/input.js
+      - src/renderer/style.css
+      - src/renderer/mark.svg
+      - src/renderer/ui/**
+      - .github/workflows/web.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test
+        run: npm test
+        working-directory: web
+      - name: Build
+        run: node build.mjs
+        working-directory: web
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

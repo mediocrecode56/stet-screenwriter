@@ -1,7 +1,7 @@
 // The workflows a release must not break, in one start of the real app, each in well under a
 // second: writing from the keyboard, element and alignment changes, the Tab cycle, scene
 // navigation, the timeline (stepping with Ctrl held, timecodes, a scene's own), a changed
-// shortcut, saving, reopening and the PDF. `npm run quick` runs it after the unit tests.
+// shortcut, saving, reopening, the PDF and the performance probe. `npm run quick` runs it after the unit tests.
 import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -644,4 +644,24 @@ test('save, reopen and export a PDF on A4 in the script font', async () => {
   assert.match(bytes, /\/MediaBox \[0 0 595\.32 841\.92\]/);
   assert.match(bytes, /\/BaseFont \/STETCourier-Regular/);
   assert.match(bytes, /\/FontFile2/);
+});
+
+// Every step of the probe drives the real editor and view: a change that breaks one fails here.
+test('the performance probe runs every step and gives a score', async () => {
+  await app.load([['action', 'Mine.']]);
+  await app.eval('window.__stetPerfSizes = [3]');
+  const r = await app.eval(`(async () => { const x = await __stet.cmd.get('perf').run(); return { score: x.score, failed: x.stages.failed, errors: x.stages.errors, coverage: x.coverage }; })()`);
+  assert.deepEqual(r.errors, {});
+  assert.deepEqual(r.failed, []);
+  assert.equal(r.coverage, 1);
+  assert.ok(Number.isInteger(r.score) && r.score >= 0 && r.score <= 100, `score ${r.score}`);
+  await app.key('Escape');
+  await app.noDialog();
+  assert.equal(await app.eval('__stet.editor.blocks[0].text'), 'Mine.');
+});
+
+test('Tools has the one way to the browser version, and it only opens a link', async () => {
+  const c = await app.eval(`(() => { const c = __stet.cmd.get('browser-version'); return { label: c.label, cat: c.cat, run: String(c.run) }; })()`);
+  assert.equal(c.cat, 'Tools');
+  assert.match(c.run, /app:open-url/);
 });

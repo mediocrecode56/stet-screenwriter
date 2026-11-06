@@ -3,8 +3,10 @@
 // in one move: the menus and toolbar up, the status bar down, the side panels to their edges.
 //   - the pointer at the top edge brings the menus and toolbar back down over the page;
 //   - Tab brings just the toolbar's element buttons (SCENE, ACTION...) to the top left corner for a few
-//     seconds, the rest of the toolbar clipped away, there to be clicked; the pointer on them keeps
-//     them, and up against the top edge they open out into the whole toolbar;
+//     seconds, the rest of the toolbar clipped away. They are the toolbar's own buttons and do all they
+//     do there: a click, Ctrl+click and dragging the Tab cycle's ends. The pointer on them keeps them, a
+//     press gives them their few seconds again, and up against the top edge they open out into the
+//     whole toolbar;
 //   - the pointer at the right edge brings a small rail: WINDOW (back to the window, as Esc does)
 //     and REVISE, SCENES and NOTES, which open their panels beside the page.
 // Leaving puts everything back as it was, the panels open before included.
@@ -19,8 +21,8 @@ const EXIT_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="
 
 export class FocusMode {
   /** panels: [{ key, label, isOpen(), set(on) }] (REVISE, SCENES, NOTES); onChange(on) after each switch. */
-  constructor({ api, panels, onChange = () => {} }) {
-    this.api = api; this.panels = panels; this.onChange = onChange;
+  constructor({ api, panels, onChange = () => {}, fit = () => {} }) {
+    this.api = api; this.panels = panels; this.onChange = onChange; this.fit = fit; // fit(): the toolbar laid out afresh
     this.on = false;
     this.saved = null; // the panels open before
     this.edgeTop = h('div', { id: 'focus-edge-top', 'aria-hidden': 'true' });
@@ -47,6 +49,7 @@ export class FocusMode {
       if (e.clientY <= 2) this.peek('top');
       else if (!document.documentElement.classList.contains('peek')) this.peek('el');
     });
+    document.getElementById('eltypes').addEventListener('mousedown', () => { if (document.documentElement.classList.contains('peek-el')) this.hold = performance.now() + SHOW_ELEMENT; });
     addEventListener('resize', () => { if (this.on) this.measure(); });
     this.timers = {};
     this.hold = 0; // until when the element buttons stay without the pointer
@@ -74,6 +77,7 @@ export class FocusMode {
     let anims = [];
     const done = () => {
       root.classList.add('focus');
+      this.fit(); // (a toolbar hidden in the window shows here, and has never been measured)
       this.measure();
       for (const a of anims) a.cancel();
       void root.offsetHeight; // (the bars arrive out of sight at once; only peeking slides them)
@@ -136,9 +140,10 @@ export class FocusMode {
     clearInterval(this.timers[what]);
     let away = 0;
     this.timers[what] = setInterval(() => {
+      const dragging = document.body.classList.contains('cyc-dragging'); // (an end of the Tab cycle, wherever the pointer has gone)
       const keep = what === 'top'
-        ? document.querySelector('#top:hover, #elbar:hover, #focus-edge-top:hover, .menu') || document.getElementById('doctitle').classList.contains('editing')
-        : what === 'el' ? performance.now() < this.hold || document.querySelector('#elbar:hover')
+        ? dragging || document.querySelector('#top:hover, #elbar:hover, #focus-edge-top:hover, .menu') || document.getElementById('doctitle').classList.contains('editing')
+        : what === 'el' ? dragging || performance.now() < this.hold || document.querySelector('#elbar:hover')
           : document.querySelector('#focus-rail:hover, #focus-edge-right:hover');
       away = keep ? 0 : away + 1;
       if (away * 90 >= LINGER) this.unpeek(what);

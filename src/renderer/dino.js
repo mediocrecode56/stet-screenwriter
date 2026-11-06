@@ -55,6 +55,11 @@
 // natural end; only one event runs at a time, and one starts only when the
 // dinosaur can take part.
 //
+// One thing leads to the next: between two activities it usually does something small that belongs
+// to both (a bridge: getting its breath back, turning round before it settles, a stretch on getting
+// up, its nose down before it digs), and after a reaction it takes a moment to find its place again.
+// Bridges draw on random numbers of their own, so they never change what it chooses to do.
+//
 // It has no shame, either: now and then it flops on its back to scratch an itch (all the more after
 // the rain), swaggers up and down showing off (all the more once today's goal is met), burps after a
 // meal, and poses in front of anything worth a look, a palm or a rainbow or its own sandcastle.
@@ -66,7 +71,7 @@
 // 32 days in a row) and unlocks a special routine at every second one.
 
 import { W, H, FRAMES, PROPS, GLYPHS, ALPHA, MOUTH, HEAD_TOP, GET_UP, postureOf, spriteEdges } from './dino-art.js';
-import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, QUIET, CRITTERS, BASELINE_0_8 } from './dino-acts.js';
+import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, QUIET, CRITTERS, BASELINE_0_8, BRIDGES, settles, findPlace } from './dino-acts.js';
 
 const MIN = 60000;
 // Poses that are merely held: one of these can be cut short (never a move, a jump or a lift).
@@ -75,6 +80,8 @@ const isHold = (s) => HOLD.has(s.f) && !s.dx && !s.jump && !s.lift && !s.flip;
 const BLINK_MS = 140; // one of its own blinks
 const STIR_MS = [3800, 6500];   // a pose held this long: a stir (see Critter.stirred)
 const NO_STIR = new Set(['sleep', 'doze', 'cornerBite', 'tightrope', 'headstand']); // where stillness is the point, or a stir would not fit
+const BRIDGE_CHANCE = 0.8;      // how often one activity is led into the next (see Critter.bridgeTo)
+const PLACE_CHANCE = 0.6;       // how often a reaction ends in finding its place again
 const BREATHER = 5000;          // after a reaction: this long before an event or a new plant noticed
 const GLIMPSE_MS = [30000, 70000]; // how often something small passes by
 const LAND_MS = 110;  // the crouch as it lands from a jump
@@ -366,6 +373,7 @@ export class Critter {
     this.ownSeed = 0x2545f491;
     // Stirs and glimpses: random numbers of their own (as the blinks), so they never change its choices.
     this.stirSeed = 0x6b43a9b5;
+    this.bridgeSeed = 0x2f6e2b1d;
     this.stirAt = 0;        // when it last did anything to see (a move, a glyph, a turn, a stir)
     this.stirGap = null;    // how long a pose may be held before the next stir
     this.reactEnd = -Infinity; // when the last reaction ended (the breather)
@@ -378,6 +386,7 @@ export class Critter {
    *  it does: the rest of its life runs exactly as it would without them. */
   ownRnd(a, b) { this.ownSeed = (this.ownSeed * 1664525 + 1013904223) >>> 0; return a + (this.ownSeed / 4294967296) * (b - a); }
   stirRnd(a, b) { this.stirSeed = (this.stirSeed * 1664525 + 1013904223) >>> 0; return a + (this.stirSeed / 4294967296) * (b - a); }
+  bridgeRnd(a, b) { this.bridgeSeed = (this.bridgeSeed * 1664525 + 1013904223) >>> 0; return a + (this.bridgeSeed / 4294967296) * (b - a); }
   rnd(a, b) { return a + this.rng() * (b - a); }
   rint(a, b) { return Math.floor(this.rnd(a, b + 1)); }
   chance(p) { return this.rng() < p; }
@@ -1073,7 +1082,25 @@ export class Critter {
       yield* R.fn(self);
       if (sleeping && !wakes) yield* self.getTo('lie');
       else if (!sleeping && postureOf(self.frame) !== resume) yield* self.getTo(resume);
+      if (!sleeping && R.cat !== 'subtle' && resume !== 'lie' && self.focused && self.bridgeRnd(0, 1) < PLACE_CHANCE) yield* findPlace(self, resume, self.bridgeRnd(0, 1));
     })();
+  }
+
+  /** The bridge from what it did to what it does next (dino-acts.js BRIDGES), if there is one this time. */
+  bridgeTo(next, after) {
+    if (!after || !this.focused || this.deep || this.bridgeRnd(0, 1) >= BRIDGE_CHANCE) return null;
+    const k = { pose: postureOf(this.frame), after, next, from: TEMPO[after], to: TEMPO[next], down: settles(next), night: this.night(), wet: this.now < this.wetUntil };
+    const fits = Object.entries(BRIDGES).map(([name, b]) => [name, name === this.lastBridge ? 0 : b.fit(k)]).filter(([, w]) => w > 0);
+    let r = this.bridgeRnd(0, fits.reduce((a, [, w]) => a + w, 0));
+    for (const [name, w] of fits) if ((r -= w) <= 0) { this.lastBridge = name; return name; }
+    return null;
+  }
+
+  /** The activity's steps, the bridge first. */
+  ledInto(a, bridge) {
+    if (!bridge) return ACTIVITIES[a](this);
+    const self = this;
+    return (function* () { yield* BRIDGES[bridge].fn(self); yield* ACTIVITIES[a](self); })();
   }
 
   /** Standing up on something: the last step left it off the ground, and the next carries on up there. */
@@ -1100,6 +1127,7 @@ export class Critter {
     }
     for (let guard = 0; guard < 6; guard++) {
       if (!this.gen) {
+        const after = this.activity, urgent = !!this.pending || this.deepDue(now) || this.targetG !== this.g;
         const a = this.pickActivity(now);
         this.inReaction = null; this.paused = null; // a fresh activity: nothing left over from a reaction
         this.tidy();
@@ -1107,7 +1135,7 @@ export class Critter {
         this.lastDone[a] = now;
         this.recent.push(a);
         if (this.recent.length > 4) this.recent.shift();
-        this.gen = ACTIVITIES[a](this);
+        this.gen = this.ledInto(a, urgent ? null : this.bridgeTo(a, after));
       }
       const r = this.gen.next();
       if (!r.done) return r.value;
@@ -2023,4 +2051,4 @@ export class Dino {
   }
 }
 
-export const _test = { CHOICES, TEMPO, FOLLOWS, FRAMES, PROPS, GLYPHS, W, H, ACTIVITIES, REACTIONS, MOODS, EVENTS, SPECIALS, ENV_ACTIVITIES, GET_UP, BASELINE_0_8, postureOf, MOUTH, HEAD_TOP };
+export const _test = { CHOICES, TEMPO, FOLLOWS, BRIDGES, settles, FRAMES, PROPS, GLYPHS, W, H, ACTIVITIES, REACTIONS, MOODS, EVENTS, SPECIALS, ENV_ACTIVITIES, GET_UP, BASELINE_0_8, postureOf, MOUTH, HEAD_TOP };

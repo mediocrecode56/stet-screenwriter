@@ -1,5 +1,34 @@
 # Performance
 
+The numbers on this page are a dated record of 2026-10-19. For how a computer is judged today, see the
+next section.
+
+## The Performance Probe
+
+*Tools → Run Performance Probe* says whether a computer runs STET smoothly, as a score from 0 to 100.
+Its rules are in `src/core/perfscore.js`, its measurements in `src/renderer/perf.js`.
+
+- **The score comes from behaviour, never from hardware.** No CPU or graphics card is looked up, so a
+  future computer, a virtual machine or a remote desktop is judged by what actually happens. What the
+  computer says about itself is shown for the reader only.
+- **Marks are what people notice.** Each measure has an ideal (100), a smooth mark (70) and a limit (0),
+  and the score falls by ratio between them. Marks that wait for a frame follow the display's measured
+  frame time, so a slow display is allowed its own frame and a fast one earns nothing a person cannot see.
+- **A feature-length script counts most** (70%), with a long one for the rest. Typing and scrolling
+  decide: the score stands at most 25 above the worst of them, because a fast computer that stutters
+  while typing is not smooth.
+- **It cannot hang.** Every step has a time limit and asks the clock rather than counting, so a slow
+  computer takes fewer samples. The window stays responsive, the whole run is held to 45 seconds, and
+  Esc ends it at once. A step that fails is named and the rest still score.
+- **It says when not to be trusted.** A covered window, a computer that slowed down during the test, uneven
+  frames or a missing step lower the stated reliability; too little measured gives no score at all.
+
+Keeping it working across releases: the steps call the real editor and view, so a renamed method shows up
+as a failed step. `test/app/smoke.app.js` fails on any failed step, on every release.
+
+Checked with the CPU slowed down in the real app (i9-13900K): 100 at full speed, 84 at 6×, 41 at 20×, 22 at
+60× (there the long script is left out for time). Full speed takes about 7 seconds.
+
 Performance is measured two ways, both reproducible from the repo:
 
 - `npm run bench` — the document engine in Node with high-resolution timers

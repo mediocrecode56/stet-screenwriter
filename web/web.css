@@ -1,0 +1,43 @@
+/* The browser version: the desktop's style.css first, then only what a browser and a small screen need.
+   Same rules as the desktop (docs/DESIGN_DIRECTION.md): square corners, hard rules, one motion language. */
+
+html, body { height: var(--app-h, 100%); }
+body { padding-bottom: env(safe-area-inset-bottom); }
+#top { -webkit-app-region: no-drag; padding-right: 8px; }
+#docname { pointer-events: none; }
+#docdot { display: inline-block; width: 5px; height: 5px; margin-right: 6px; background: transparent; vertical-align: 1px; }
+#docdot.dirty { background: var(--ink-2); }
+#w-alpha { margin-left: auto; flex: none; align-self: center; font-size: 9px; letter-spacing: .16em; color: var(--ink-3); border: 1px solid var(--rule); padding: 0 4px; line-height: 14px; }
+
+/* The toolbar scrolls sideways rather than wrapping; a thumb can reach every button. */
+#elbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; touch-action: pan-x; }
+#elbar::-webkit-scrollbar { display: none; }
+#eltypes, #stbar { flex: none; }
+#elbar > .tb { flex: none; }
+#eltypes .tb { white-space: nowrap; }
+
+#st-save { flex: none; letter-spacing: .1em; }
+#st-save.warn { background: var(--inv-bg); color: var(--inv-fg); }
+
+.w-scene { display: flex; gap: 8px; padding: 6px 10px; cursor: pointer; font: 11px/1.4 var(--script); border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+.w-scene:hover { background: var(--hover); }
+.w-n { flex: none; min-width: 16px; color: var(--ink-3); text-align: right; font-family: var(--ui); }
+
+/* Dialogs never wider than the screen. */
+.dlg { min-width: 0; width: min(420px, calc(100vw - 24px)); box-sizing: border-box; }
+
+@media (max-width: 760px) {
+  #top { height: 36px; }
+  .mb { padding: 0 9px; }
+  #docname { position: static; flex: 1; min-width: 0; text-align: center; transform: none; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #w-alpha { margin-left: 4px; }
+  #elbar { height: 38px; }
+  #elbar .tb { padding: 0 10px; }
+  #elbar .tb.sq { width: 34px; padding: 0; }
+  #status .st { padding: 0 6px; }
+  #st-el, #st-page { display: none; }
+  /* The scenes come over the page rather than squeezing it. */
+  #left { position: absolute; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 20; background: var(--page); border-right: 1px solid var(--rule-strong); box-shadow: 4px 0 0 var(--rule); }
+  #overlay { padding-top: 6vh; }
+  .menu .mi { min-height: 34px; }
+}

@@ -2709,6 +2709,97 @@ export const REACTIONS = {
   } },
 };
 
+// ---- bridges -------------------------------------------------------------------------------------
+//
+// What it does between two activities, so one thing grows out of the last instead of simply starting:
+// it gets its breath back after running about, stretches after lying down, turns round before settling,
+// licks its lips after eating, puts its nose down before digging, gathers itself before something
+// lively. Each lasts a second or two and ends in the posture the next activity wants. Which one comes
+// depends on how it stands now, what it did and what it is about to do (`k`, Critter.bridgeTo).
+// None is an activity of its own: what it chooses to do, and how often, is exactly as before.
+const SETTLES = new Set(['rest', 'sleep', 'scratch', 'doze', 'watchWriter', 'readScript', 'coffeeBreak', 'crumple', 'fireflies', 'groom', 'hum', 'stretch', 'sunbathe', 'daydream', 'cloudGaze', 'stargaze']);
+const NOSE_FIRST = new Set(['dig', 'graze', 'sniffTrail', 'worm', 'beetle', 'critter', 'gem', 'acorn', 'mushroom', 'snail', 'inspect', 'visitPlant', 'cricket', 'flower']);
+const ATE = new Set(['graze', 'drink', 'burp', 'acorn', 'worm', 'beetle', 'cricket', 'mushroom']);
+const DUSTY = new Set(['dig', 'roll', 'sandcastle', 'leafPile', 'puddleJump', 'boulder', 'kickPebble', 'plantSeed']);
+const THE_PAGE = new Set(['readScript', 'writeAlong', 'watchWriter', 'crumple', 'doodle', 'ponder']);
+export const settles = (a) => SETTLES.has(a);
+
+export const BRIDGES = {
+  // Coming up from lying down.
+  wakeStretch: { fit: (k) => (k.pose === 'lie' && !k.down ? 3 : 0), *fn(d) {
+    yield { f: 'lieUp', t: 420 }; yield { f: 'lieUpBlink', t: 140 }; yield { f: 'sitUp', t: 320 }; yield { f: 'sitChew', t: 420 };
+    yield { f: 'crouch', t: 200 }; yield { f: 'stretch', t: 520 }; yield { f: 'stand', t: 220 };
+  } },
+  slowRise: { fit: (k) => (k.pose === 'lie' && !k.down ? 2 : 0), *fn(d) {
+    yield { f: 'lieUp', t: 380 }; yield { f: 'lieUpTail', t: 200 }; yield { f: 'lieUp', t: 200 }; yield { f: 'sitBlink', t: 220 }; yield { f: 'sit', t: 260 };
+    yield { f: 'crouch', t: 200 }; yield { f: 'stand', t: 240 }; yield { f: 'blink', t: 130 };
+  } },
+  // Getting up from sitting.
+  rouse: { fit: (k) => (k.pose === 'sit' && !k.down && k.to !== 'calm' ? 2 : 0), *fn(d) {
+    yield { f: 'sitUp', t: 340 }; yield { f: 'sitBlink', t: 130 }; yield { f: 'crouch', t: 180 }; yield { f: 'stand', t: 180 };
+    for (let i = 0; i < 3; i++) yield { f: i % 2 ? 'stand' : 'wag', t: 150 };
+  } },
+  easeUp: { fit: (k) => (k.pose === 'sit' && !k.down ? 1.2 : 0), *fn(d) {
+    yield { f: 'sitBreath', t: 340 }; yield { f: 'sit', t: 240 }; yield { f: 'crouch', t: 220 }; yield { f: 'stand', t: 240 };
+  } },
+  // Already sitting, and staying down.
+  shuffle: { fit: (k) => (k.pose === 'sit' && k.down ? 1 : 0), *fn(d) {
+    yield { f: 'sitBreath', t: 360 }; yield { f: 'sitBlink', t: 130 }; yield { f: 'sit', t: 320, face: -d.face }; yield { f: 'sit', t: 300, face: -d.face };
+  } },
+  // Settling down from standing.
+  circleDown: { fit: (k) => (k.pose === 'stand' && k.down ? 2 : 0), *fn(d) { // as a dog turns round before lying down
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'walk1' : 'walk2', t: 130, face: i % 2 ? d.face : -d.face };
+    yield { f: 'sniff', t: 260 }; yield { f: 'crouch', t: 200 }; yield { f: 'sit', t: 280 }; yield { f: 'sitBreath', t: 320 };
+  } },
+  sinkDown: { fit: (k) => (k.pose === 'stand' && k.down ? (k.night ? 2.4 : 1.4) : 0), *fn(d) {
+    yield { f: 'blink', t: 200 }; yield { f: 'hunch', t: 320 }; yield { f: 'crouch', t: 240 }; yield { f: 'sit', t: 320 }; yield { f: 'sitBlink', t: 180 };
+  } },
+  // Between two things on its feet.
+  catchBreath: { fit: (k) => (k.pose === 'stand' && k.from === 'lively' && k.to !== 'lively' ? 3 : 0), *fn(d) {
+    for (let i = 0; i < 3; i++) { yield { f: 'hunch', t: 240 }; yield { f: 'stand', t: 240, fx: i === 0 ? 'dots' : null }; }
+    yield { f: 'blink', t: 150 };
+  } },
+  windUp: { fit: (k) => (k.pose === 'stand' && k.to === 'lively' ? 2 : 0), *fn(d) { // the haunches wiggle before it goes
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'wag' : 'crouch', t: 130 };
+    yield { f: 'stand', t: 160 };
+  } },
+  perkUp: { fit: (k) => (k.pose === 'stand' && k.from === 'calm' && k.to === 'lively' ? 2.4 : 0), *fn(d) {
+    yield { f: 'blink', t: 160 }; yield { f: 'up', t: 420, fx: '!' }; yield { f: 'stand', t: 160 };
+  } },
+  lookAround: { fit: (k) => (k.pose === 'stand' ? 1 : 0), *fn(d) {
+    yield { f: 'up', t: 420, face: -d.face }; yield { f: 'blink', t: 130 }; yield { f: 'up', t: 340, face: -d.face }; yield { f: 'stand', t: 180 };
+  } },
+  thinkItOver: { fit: (k) => (k.pose === 'stand' && k.to !== 'calm' ? 0.8 : 0), *fn(d) {
+    yield { f: 'up', t: 520, fx: '?' }; yield { f: 'blink', t: 130 }; yield { f: 'stand', t: 240 };
+  } },
+  noseDown: { fit: (k) => (k.pose === 'stand' && NOSE_FIRST.has(k.next) ? 3 : 0), *fn(d) {
+    yield { f: 'sniff', t: 340 }; yield { f: 'sniffBlink', t: 150 }; yield { f: 'sniff', t: 300 }; yield { f: 'stand', t: 170 };
+  } },
+  lickLips: { fit: (k) => (k.pose === 'stand' && ATE.has(k.after) ? 3 : 0), *fn(d) {
+    yield { f: 'chomp', t: 180 }; yield { f: 'stand', t: 180 }; yield { f: 'chomp', t: 180 }; yield { f: 'stand', t: 200 }; yield { f: 'blink', t: 240 };
+  } },
+  dustOff: { fit: (k) => (k.pose === 'stand' && (DUSTY.has(k.after) || k.wet) ? 2.6 : 0), *fn(d) {
+    for (let i = 0; i < 4; i++) yield { f: i % 2 ? 'stand' : 'wag', t: 120, fx: i === 1 ? (d.now < d.wetUntil ? 'drop' : 'puff') : null };
+    yield { f: 'blink', t: 150 };
+  } },
+  lookAtThePage: { fit: (k) => (k.pose === 'stand' && THE_PAGE.has(k.next) ? 3 : 0), *fn(d) {
+    yield { f: 'up', t: 520 }; yield { f: 'blink', t: 130 }; yield { f: 'up', t: 300 }; yield { f: 'stand', t: 170 };
+  } },
+  bigYawn: { fit: (k) => (k.pose === 'stand' && (k.night || k.to === 'calm') ? 1.2 : 0), *fn(d) {
+    yield { f: 'up', t: 240 }; yield { f: 'yawn', t: 620 }; yield { f: 'blink', t: 260 }; yield { f: 'stand', t: 170 };
+  } },
+  shiftWeight: { fit: (k) => (k.pose === 'stand' ? 0.8 : 0), *fn(d) {
+    yield { f: 'oneLeg', t: 300 }; yield { f: 'stand', t: 240 }; yield { f: 'blink', t: 130 };
+  } },
+};
+
+/** Back to what it was doing after a reaction: it takes a moment to find its place again. */
+export function* findPlace(d, pose, r) {
+  if (pose === 'sit') { yield { f: 'sitBlink', t: 140 }; yield { f: 'sit', t: 260 }; return; }
+  if (r < 0.5) { yield { f: 'blink', t: 140 }; yield { f: 'stand', t: 240 }; return; }
+  yield { f: 'stand', t: 260, face: -d.face }; yield { f: 'blink', t: 130 }; yield { f: 'stand', t: 240, face: -d.face };
+}
+
 export const CATEGORY = {
   subtle: (a) => Math.max(0.15, 1.6 - 0.35 * a),
   normal: () => 1,

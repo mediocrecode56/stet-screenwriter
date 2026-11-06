@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com https://docs.google.com https://drive.google.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; img-src 'self' data: https://*.googleusercontent.com https://*.gstatic.com; font-src 'self'; object-src 'none'; base-uri 'none'">
+<title>STET</title>
+<link rel="stylesheet" href="src/renderer/style.css">
+<link rel="stylesheet" href="web.css">
+<link rel="icon" href="src/renderer/mark.svg">
+</head>
+<body>
+<header id="top">
+  <nav id="menubar"></nav>
+  <div id="docname"><span id="docdot"></span><span id="doctitle">Untitled</span></div>
+  <span id="w-alpha" title="An early browser version">ALPHA</span>
+</header>
+<div id="elbar" data-open="1">
+  <div id="eltypes"></div>
+  <div class="sep"></div>
+  <div id="stbar"></div>
+  <div class="sep"></div>
+  <button id="w-tab" class="tb" title="Next element (Tab)">TAB</button>
+  <button id="w-undo" class="tb" title="Undo (Ctrl+Z)">UNDO</button>
+  <button id="w-redo" class="tb" title="Redo (Ctrl+Y)">REDO</button>
+</div>
+<main id="main">
+  <aside id="left" hidden>
+    <div class="panel-head">SCENES</div>
+    <div id="scenes" class="list"></div>
+  </aside>
+  <div id="scroller" tabindex="-1">
+    <div id="content"></div>
+  </div>
+</main>
+<footer id="status">
+  <span id="st-el" class="st"></span>
+  <span id="st-page" class="st"></span>
+  <span id="st-words" class="st"></span>
+  <span class="grow"></span>
+  <button id="st-save" class="tb st"></button>
+</footer>
+<textarea id="input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="Screenplay editor"></textarea>
+<div id="overlay" hidden></div>
+<script type="module" src="web/src/app.js"></script>
+</body>
+</html>

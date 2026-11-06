@@ -21,6 +21,7 @@ src/
     streak.js      the writing streak: day rules, milestones, growth and unlocks
     chart.js       the weekly chart's adaptive scale and number formatting
     spell.js       spelling with Hunspell dictionaries: affix rules, obvious slips, the words worth checking
+    perfscore.js   the performance probe's rules: keeping to time, the score, how far to trust it
   main/        Electron main process: all disk I/O
     main.js        window, stet:// protocol, IPC handlers, print, close flow
     container.js   binary container (header, CRC-32, gzip)

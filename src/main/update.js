@@ -31,6 +31,9 @@ import { patchAsset, patchReady, patchFailed, installPatch } from './patch.js';
 
 export const REPO_URL = 'https://github.com/mediocrecode56/stet-screenwriter';
 export const RELEASES_URL = REPO_URL + '/releases/latest';
+export const WEB_URL = 'https://mediocrecode56.github.io/stet-screenwriter/'; // the browser version (web/): opened in the browser, and nothing else ties it to the app
+/** Where Help and Tools links go. */
+export const urlFor = (which) => ({ releases: RELEASES_URL, web: WEB_URL })[which] || REPO_URL;
 export const LATEST_API = 'https://api.github.com/repos/mediocrecode56/stet-screenwriter/releases/latest';
 export const ASSETS = { installer: 'STET-Setup.exe', portable: 'STET-Windows.zip' };
 export const INSTALLER_ARGS = ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOCANCEL', '/FORCECLOSEAPPLICATIONS', '/relaunch=1'];

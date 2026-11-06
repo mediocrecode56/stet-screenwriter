@@ -58,7 +58,9 @@ lessons go at the end of their section. Update this file whenever new feedback a
 - Focus mode hides everything, but never what the writer is changing: Tab alone brings the toolbar's
   element buttons to the top left corner, for a few seconds so they can be clicked. The pointer never
   brings them on their own: anywhere along the top it brings the whole toolbar.
-  In that corner they have one plain outline: no shadow, no box inside a box.
+  In that corner they have one plain outline: no shadow, no box inside a box. They are the toolbar's
+  own buttons and work exactly as they do there (click, Ctrl+click, the Tab cycle's ends, its outline
+  when some elements are left out), with the toolbar shown or hidden.
 - The dinosaur stays out of focus mode unless the writer asks for it (View menu). Then it is the only
   thing at the bottom, standing on the window's edge: no status bar, not even kept out of sight.
 
@@ -85,6 +87,9 @@ and live in core/format.js; change them only on the owner's word.
 - It should feel alive and continuous: never frozen for long while awake, never several things at
   once. Small stirs fill held poses; a breather follows each reaction; small things drift by between
   the bigger events. Keep its character: unhurried, a little silly, never nagging.
+- One thing grows out of the last: between two activities it does something small that belongs to
+  both (a bridge, dino-acts.js), and after a reaction it finds its place again. New routines keep to
+  this: never a cut from one thing to another, and a bridge never changes what it chooses to do.
 
 ## Words
 

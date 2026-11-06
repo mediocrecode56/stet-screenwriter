@@ -5,7 +5,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { App, scratch } from './harness.js';
+import { App, scratch, sleep } from './harness.js';
 
 let tmp, app, ud;
 before(async () => {
@@ -304,6 +304,65 @@ test('the title page slides away and back with the script, and further down noth
   assert.equal(await app.eval(`document.getElementById('content').getAnimations().length`), 0, 'no slide');
   assert.equal(Math.round(await app.eval(thirdTop)), Math.round(before), 'not a pixel');
   await app.eval(`__stet.cmd.run('title-toggle')`);
+});
+
+test('Focus mode: the buttons Tab brings do all they do in the toolbar, with the toolbar shown or hidden', async () => {
+  await app.load([['action', 'Rain.']], {}, 'Corner');
+  const root = (c) => `document.documentElement.classList.contains('${c}')`;
+  const widths = `[...document.querySelectorAll('#eltypes .tb')].map((b) => Math.round(b.getBoundingClientRect().width))`;
+  const cycle = `[...document.querySelectorAll('#eltypes .tb.cyc')].map((b) => b.dataset.t)`;
+  const corner = async () => { await app.key('Tab'); await app.until(root('peek-el'), { what: 'the corner' }); await app.until(`!document.getElementById('elbar').getAnimations().length`, { what: 'in place' }); };
+  const leave = async () => { await app.eval(`__stet.cmd.run('focus')`); await app.until(`!${root('focus')}`, { what: 'back to the window' }); };
+  const full = await app.eval(widths);
+  await app.eval(`__stet.cmd.run('focus')`);
+  await app.until(root('focus-ready'), { what: 'focus mode' });
+  await corner();
+  assert.deepEqual(await app.eval(widths), full, 'the same buttons');
+  await app.clickOn('#eltypes [data-t="dialogue"]');
+  assert.equal(await app.eval('__stet.editor.block.type'), 'dialogue', 'a click sets the element');
+  assert.equal(await app.eval(`document.querySelector('#eltypes .tb.on').dataset.t`), 'dialogue', 'and it lights');
+  assert.equal(await app.eval('document.activeElement.id'), 'input', 'the script keeps the keyboard');
+  // A press gives them their seconds again, so they do not vanish the moment the pointer leaves.
+  await app.move(400, 400);
+  await sleep(500);
+  assert.equal(await app.eval(root('peek-el')), true, 'still there');
+  // Ctrl+click takes a type out of the Tab cycle, and the cycle shows, as in the toolbar.
+  await app.down('Control');
+  await app.clickOn('#eltypes [data-t="shot"]');
+  await app.up('Control');
+  assert.ok(!(await app.eval(cycle)).includes('shot'));
+  assert.notEqual(await app.eval(`getComputedStyle(document.querySelector('.cyc-box')).boxShadow`), 'none', 'the cycle outlined');
+  // Dragging an end of the cycle holds the corner, however far the pointer goes and however long it takes.
+  const end = await app.rect('.cyc-box .cyc-h.r');
+  await app.move(end.x, end.y);
+  await app.mouse('mousePressed', end.x, end.y, { button: 'left', buttons: 1, clickCount: 1 });
+  await app.until(`document.body.classList.contains('cyc-dragging')`, { what: 'the drag' });
+  await app.eval('__stet.focus.hold = 0');
+  await app.mouse('mouseMoved', end.x + 40, 500, { button: 'left', buttons: 1 });
+  await sleep(600);
+  assert.equal(await app.eval(root('peek-el')), true, 'held through the drag');
+  await app.mouse('mouseReleased', end.x + 40, 500, { button: 'left', buttons: 0, clickCount: 1 });
+  await app.eval('__stet.focus.hold = 0');
+  await app.until(`!${root('peek-el')}`, { what: 'gone after it' });
+  await app.eval(`__stet.cmd.run('type-action')`);
+  await leave();
+  // With the toolbar hidden in the window, the corner is just the same.
+  await app.eval(`__stet.cmd.run('toolbar')`);
+  await app.until(`document.getElementById('elbar').hidden`, { what: 'the toolbar hidden' });
+  await app.eval(`__stet.cmd.run('focus')`);
+  await app.until(root('focus-ready'), { what: 'focus mode' });
+  await corner();
+  assert.deepEqual(await app.eval(widths), full, 'as wide as in the toolbar');
+  await app.clickOn('#eltypes [data-t="scene"]');
+  assert.equal(await app.eval('__stet.editor.block.type'), 'scene');
+  await app.eval('__stet.focus.hold = 0');
+  await app.move(400, 400);
+  await app.until(`!${root('peek-el')}`, { what: 'gone' });
+  await leave();
+  await app.eval(`__stet.cmd.run('toolbar')`);
+  await app.until(`!document.getElementById('elbar').hidden`, { what: 'the toolbar back' });
+  assert.deepEqual(await app.eval(widths), full, 'and the toolbar as it was');
+  await app.eval(`__stet.editor.tabTypes = null; __stet.api.invoke('settings:set', { tabTypes: null })`);
 });
 
 test('Focus Mode from Preferences; the element buttons at the top left on Tab alone; Keyboard Shortcuts from Preferences; the dinosaur only on request', async () => {

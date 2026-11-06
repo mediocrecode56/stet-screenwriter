@@ -244,3 +244,12 @@ test('a copy that updates from the website is never asked to install, and a miss
   const m = new Updater({ current: '0.19.4', fetch, kind: { kind: 'manual' }, dir: path.join(tmp, 'work4'), url: base + '/latest' });
   await assert.rejects(m.apply({ spawn: () => {}, relaunch: () => {} }), /Nothing has been downloaded/);
 });
+
+test('links: the releases, the browser version, and the repository for anything else', async () => {
+  const { urlFor, REPO_URL, RELEASES_URL, WEB_URL } = await import('../../src/main/update.js');
+  assert.equal(urlFor('releases'), RELEASES_URL);
+  assert.equal(urlFor('web'), WEB_URL);
+  assert.equal(urlFor('repo'), REPO_URL);
+  assert.equal(urlFor('https://evil.example'), REPO_URL, 'never an address from the window');
+  assert.match(WEB_URL, /^https:\/\/[a-z0-9]+\.github\.io\//);
+});

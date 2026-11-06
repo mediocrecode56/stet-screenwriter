@@ -20,7 +20,7 @@ import * as cmd from './ui/commands.js';
 import * as dlg from './ui/dialog.js';
 import * as dialogs from './ui/dialogs.js';
 import { initUpdates } from './ui/update.js';
-import { runPerfProbe } from './perf.js';
+import { runPerfProbe, stopPerfProbe } from './perf.js';
 import { Revision, keyDialog, guidelinesDialog } from './revision.js';
 import { Spelling } from './spelling.js';
 import { toast } from './ui/toast.js';
@@ -525,6 +525,8 @@ function toggleTabType(t) {
 function renderTabTypes() {
   const keep = editor.tabTypes || TYPES;
   const btns = typeButtons();
+  tabTypesEl.classList.toggle('some', keep.length < TYPES.length);
+  if (!$('eltypes').offsetWidth) { for (const b of btns) b.classList.toggle('cyc', keep.includes(b.dataset.t)); return; } // (hidden: nothing to measure, and it is fitted when it shows)
   const runs = [];
   btns.forEach((b, i) => {
     b.classList.toggle('cyc', keep.includes(b.dataset.t));
@@ -1074,6 +1076,7 @@ const focus = new FocusMode({
     { key: 'scenes', label: 'SCENES', title: 'Scene navigator', isOpen: () => isOpen($('left')), set: (on) => showPanel('scenes', on) },
     { key: 'notes', label: 'NOTES', title: 'Comments', isOpen: () => isOpen($('right')), set: (on) => showPanel('notes', on) },
   ],
+  fit: fitToolbar,
   onChange: () => { view.layoutDirty = true; view.schedule(); fitTitle(); dino.place(); input.focus(); },
 });
 
@@ -1251,6 +1254,7 @@ cmd.register([
   { id: 'revise-guides', cat: 'Tools', label: 'Revise Guidelines…', run: () => guidelinesDialog(revision) },
   { id: 'spell-dict', cat: 'Tools', label: 'Spelling Dictionary…', run: () => spelling.listsDialog() },
   { id: 'claude-key', cat: 'Tools', label: 'Claude Connection…', run: () => keyDialog() },
+  { id: 'browser-version', cat: 'Tools', label: 'Open STET in the Browser', run: () => api.invoke('app:open-url', 'web') },
   { id: 'perf', cat: 'Tools', label: 'Run Performance Probe', run: () => runPerfProbe({ editor, view, input, session, writing, api, report: false, ...(info.e2e && window.__stetPerfSizes ? { sizes: window.__stetPerfSizes } : {}) }) },
 
   { id: 'keys', cat: 'Help', label: 'Keyboard Shortcuts', keys: 'F1', global: true, run: () => dialogs.shortcutsDialog({
@@ -1278,7 +1282,7 @@ cmd.buildMenubar($('menubar'), [
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
   { label: 'View', items: () => ['palette', '-', 'theme-toggle', 'theme-auto', 'theme-schedule', 'zoom-in', 'zoom-out', 'zoom-reset', '-', 'focus', 'toolbar', 'panel-scenes', 'panel-notes', 'timeline', 'note-lines', 'title-toggle', 'title-edit', 'companion', 'focus-dino', '-', 'goto-page', 'scene-next', 'scene-prev'] },
-  { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-guides', 'claude-key', '-', 'spell-toggle', 'spell-suggest', 'spell-auto', 'spell-dict', '-', 'perf'] },
+  { label: 'Tools', items: () => ['stats', '-', 'revise-panel', 'revise-run', 'revise-next', 'revise-prev', 'revise-guides', 'claude-key', '-', 'spell-toggle', 'spell-suggest', 'spell-auto', 'spell-dict', '-', 'perf', 'browser-version'] },
   { label: 'Help', items: ['keys', 'changelog', '-', 'check-updates', ...(info.platform === 'win32' || info.platform === 'darwin' ? ['link-files'] : []), 'github', '-', 'about'] },
 ]);
 
@@ -1309,6 +1313,7 @@ function isGlobalKey(e) {
 // Everything STET does before it closes: statistics written, the screenplay saved (or a
 // never-saved one asked about). false if the person cancelled.
 async function prepareQuit() {
+  await stopPerfProbe(); // (the writer's own screenplay back first)
   trackWords();
   await keepPlace(true);
   await writing.flush();
@@ -1326,7 +1331,7 @@ const updates = initUpdates({
   getSettings: () => settings,
   saveSettings: async (patch) => { settings = await api.invoke('settings:set', patch); },
 });
-api.on('app:open-file', (file) => openPath(file));
+api.on('app:open-file', async (file) => { await stopPerfProbe(); openPath(file); });
 api.on('app:fullscreen', (on) => { document.documentElement.classList.toggle('fullscreen', on); fitTitle(); focus.fullscreenChanged(on); }); // a Mac hides its window buttons
 api.on('perf:start', () => runPerfProbe({ editor, view, input, session, writing, api, report: true }));
 
@@ -1334,7 +1339,7 @@ window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => {
   e.preventDefault();
   const f = e.dataTransfer.files[0];
-  if (f && /\.(stet|fdx)$/i.test(f.name)) openPath(api.pathForFile(f));
+  if (f && /\.(stet|fdx)$/i.test(f.name)) { const file = api.pathForFile(f); stopPerfProbe().then(() => openPath(file)); }
 });
 
 // Test hook for the end-to-end driver (only with --e2e).

@@ -93,7 +93,7 @@ export class Session {
 
   /** Autosave tick: save to the file if possible, otherwise to recovery. */
   async flushQuiet() {
-    if (!this.dirty) return;
+    if (!this.dirty || this.quiet) return;
     if (this.path && this.autosave && this.status !== 'conflict') {
       const r = await this.writeFile();
       if (!r.ok) await this.writeRecovery();

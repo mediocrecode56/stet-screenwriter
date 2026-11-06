@@ -31,6 +31,7 @@ export class Spelling {
     this.results = new Map(); // word → null (fine) | { fixes, auto }, with the loaded dictionary
     this.asking = null;      // words on their way to the checker
     this.tokens = new WeakMap(); // block → its words to check (blocks are replaced, never changed)
+    this.nameCache = new WeakMap(); // paragraph -> the names in it
     this.marks = [];         // [{ b, s, e, word, fixes, auto }] in script order
     this.timer = 0;
     this.pop = null;
@@ -142,9 +143,16 @@ export class Spelling {
     const s = new Set(dict.map(normalize));
     for (const x of ign) if (x.category === 'spelling') s.add(normalize(x.text));
     for (const n of this.ed.characterNames()) for (const w of n.split(/\s+/)) s.add(w.toLowerCase());
-    for (const b of this.ed.blocks) if (SPELLED.has(b.type)) namesIn(b.text, s);
+    for (const b of this.ed.blocks) if (SPELLED.has(b.type)) for (const n of this.namesOf(b)) s.add(n);
     this.skip = { key, set: s };
     return s;
+  }
+
+  /** The names in a paragraph, worked out once for each (a paragraph is replaced whenever it changes). */
+  namesOf(b) {
+    let n = this.nameCache.get(b);
+    if (!n) { n = [...namesIn(b.text)]; this.nameCache.set(b, n); }
+    return n;
   }
 
   /** The flagged word at offset o of block b. */

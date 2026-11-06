@@ -17,7 +17,7 @@ const DEAD_DIR = new Set(['src', 'test', 'tests', 'docs', 'example', 'examples',
  * Windows and icon.png elsewhere; the Mac bundle icon is made from icon.icns separately).
  */
 export const APP_IGNORE = [
-  /^\/(dist|bench|test|docs|scripts|\.perf|\.build|\.build-mac)(\/|$)/,
+  /^\/(dist|bench|test|docs|scripts|web|\.perf|\.build|\.build-mac)(\/|$)/,
   /^\/\.git/,
   /^\/build\/(icon-\d+\.png|icon\.svg|icon\.icns)$/,
   /^\/(README\.md|CLAUDE\.md|package-lock\.json)$/,

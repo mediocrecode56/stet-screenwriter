@@ -314,6 +314,56 @@ test('Tools > Run Performance Probe gives a score and leaves no trace', async ()
   assert.deepEqual(await probes(), dirs, 'the scratch folder is gone');
 });
 
+test('the Performance Probe measures every step, keeps the undo history, and runs only once at a time', async () => {
+  await app.load([['action', 'Mine.']]);
+  assert.equal((await app.saveTo(path.join(tmp, 'Probed.stet'))).ok, true);
+  await app.caret(0, 5);
+  await app.type(' More.');
+  await app.eval('window.__stetPerfSizes = [6]');
+  const r = await app.eval(`(async () => { const a = __stet.cmd.get('perf').run(), b = __stet.cmd.get('perf').run(); const x = await a; return { same: x === await b, score: x.score, failed: x.stages.failed, errors: x.stages.errors, coverage: x.coverage, level: x.reliability.level }; })()`);
+  assert.deepEqual(r.errors, {}, 'no step of the probe is broken in this version');
+  assert.deepEqual(r.failed, []);
+  assert.equal(r.coverage, 1, 'every measure taken');
+  assert.equal(r.same, true);
+  assert.ok(Number.isInteger(r.score));
+  await app.key('Escape');
+  await app.noDialog();
+  await app.key('Mod+Z');
+  assert.notEqual(await app.eval(`__stet.editor.blocks[0].text`), 'Mine. More.', 'undo goes on where it was');
+});
+
+test('the Performance Probe ends even with a window that draws no frames, and says the result is unreliable', async () => {
+  await app.load([['action', 'Mine.']]);
+  assert.equal((await app.saveTo(path.join(tmp, 'Probed.stet'))).ok, true);
+  await app.eval('window.__stetPerfSizes = [6]; window.__raf = window.requestAnimationFrame; window.requestAnimationFrame = () => 0');
+  await app.eval(`void __stet.cmd.run('perf')`);
+  await app.until(`document.querySelector('#overlay .pf-score')`, { timeout: 30000, what: 'a result' });
+  await app.eval('window.requestAnimationFrame = window.__raf');
+  assert.match(await app.dialog(), /Not reliable/);
+  await app.key('Escape');
+  await app.noDialog();
+  assert.equal(await app.eval(`__stet.editor.blocks[0].text`), 'Mine.');
+});
+
+test('the Performance Probe can be cancelled at once, and a failing step never stops it', async () => {
+  await app.load([['action', 'Mine.']]);
+  assert.equal((await app.saveTo(path.join(tmp, 'Probed.stet'))).ok, true);
+  await app.eval('window.__stetPerfSizes = [6]');
+  await app.eval(`void __stet.cmd.run('perf')`);
+  await app.until(`/Cancel/i.test(document.querySelector('#overlay')?.innerText || '')`, { what: 'the progress window' });
+  await app.key('Escape');
+  await app.until(`__stet.session.quiet === false && __stet.editor.blocks[0].text === 'Mine.'`, { what: 'the screenplay back' });
+  await app.noDialog();
+  // A step that breaks in some future version is named, and the rest still score.
+  await app.eval(`window.__find = __stet.editor.findAll; __stet.editor.findAll = () => { throw new Error('gone'); }`);
+  const r = await app.eval(`(async () => { const x = await __stet.cmd.get('perf').run(); return { failed: x.stages.failed, score: x.score }; })()`);
+  await app.eval('__stet.editor.findAll = window.__find');
+  assert.ok(r.failed.some((f) => /finding/.test(f)), r.failed.join());
+  assert.ok(Number.isInteger(r.score));
+  await app.key('Escape');
+  await app.noDialog();
+});
+
 // ---- across restarts ----
 
 test('launching opens the last screenplay edited: not one only looked at since, and not lost to a new untitled one', async () => {

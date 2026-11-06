@@ -1,7 +1,7 @@
 // Electron main process: window, app protocol, and all disk I/O on behalf of
 // the renderer (which is sandboxed and never touches the filesystem).
 
-import { app, BrowserWindow, ipcMain, dialog, protocol, net, nativeTheme, shell, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, nativeTheme, shell, Menu, powerMonitor } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -17,7 +17,7 @@ import {
   SaveQueue, Recovery, readDocument, isValidDocument, atomicWrite, cleanTemps,
   backupDirFor, createBackup, listBackups, pruneBackups, deleteBackup, docBase,
 } from './files.js';
-import { Updater, installKind, cleanupPortable, UpdateError, REPO_URL, RELEASES_URL } from './update.js';
+import { Updater, installKind, cleanupPortable, UpdateError, urlFor } from './update.js';
 import { patchRoot, confirmLaunch, cleanupPatches } from './patch.js';
 import { linkFiles } from './assoc.js';
 import { SpellService, findDictionaries, pickDictionary, dictionaryDirs } from './spell.js';
@@ -114,7 +114,7 @@ function createWindow() {
   win.on('closed', () => { win = null; });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('render-process-gone', (_e, d) => console.error('renderer gone', d));
+  win.webContents.on('render-process-gone', (_e, d) => { console.error('renderer gone', d); removeProbeDir(); });
   if (SHOT || PERF || process.env.STET_DEBUG) {
     win.webContents.on('console-message', (e) => console.log(`[renderer:${e.level}] ${e.message} (${e.sourceId}:${e.lineNumber})`));
   }
@@ -166,7 +166,7 @@ function registerIpc() {
     updateDelay: E2E && Number(process.env.STET_UPDATE_DELAY_MS) || 3000, // a few seconds after starting (tests: sooner)
   }));
   handle('app:link-files', (file) => (E2E && !process.env.STET_E2E_LINK ? { ok: true, message: 'e2e' } : linkFiles({ file: typeof file === 'string' && /\.stet$/i.test(file) ? file : null })));
-  handle('app:open-url', (which) => shell.openExternal(which === 'releases' ? RELEASES_URL : REPO_URL));
+  handle('app:open-url', (which) => shell.openExternal(urlFor(which)));
 
   handle('update:check', () => updater.check());
   handle('update:download', async () => {
@@ -441,25 +441,54 @@ function registerIpc() {
   // The performance probe saves into a scratch folder of its own, which never reaches Open Recent
   // and is deleted as soon as the probe ends.
   handle('perf:scratch', async () => {
+    await removeProbeDir(); // (one left by a run that never finished)
     probeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-probe-'));
     return path.join(probeDir, 'probe.stet');
   });
-  handle('perf:cleanup', async () => {
-    if (!probeDir) return;
-    const dir = probeDir;
-    probeDir = null;
-    queue.forget(path.join(dir, 'probe.stet'));
-    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+  handle('perf:cleanup', removeProbeDir);
+  // What the computer says about itself, shown beside the score and never part of it. Any of it can
+  // be missing on a computer or system that will not say; asking never holds the test up.
+  handle('perf:system', async () => {
+    const ask = (fn) => { try { return fn(); } catch { return null; } };
+    const gpu = ask(() => app.getGPUFeatureStatus()) || {};
+    return {
+      cpu: ask(() => os.cpus()[0]?.model) || null,
+      cores: ask(() => os.availableParallelism()) || null,
+      memGB: ask(() => os.totalmem() / 2 ** 30),
+      platform: ask(() => `${os.type()} ${os.release()}`), arch: process.arch,
+      electron: process.versions.electron, chrome: process.versions.chrome,
+      software: /software|disabled/.test(gpu.gpu_compositing || ''),
+      battery: !!ask(() => powerMonitor.isOnBatteryPower()),
+    };
   });
 
   handle('perf:report', async (data) => {
     const dir = app.isPackaged ? path.join(app.getPath('userData'), 'perf') : path.join(ROOT, '.perf');
     await fs.mkdir(dir, { recursive: true });
     const out = path.join(dir, 'renderer-results.json');
-    await fs.writeFile(out, JSON.stringify({ ...data, electron: process.versions.electron, chrome: process.versions.chrome, platform: `${os.type()} ${os.release()}`, cpu: os.cpus()[0]?.model, cores: os.cpus().length, memGB: Math.round(os.totalmem() / 2 ** 30) }, null, 2));
+    await fs.writeFile(out, JSON.stringify(data, null, 2));
     if (PERF) { allowClose = true; setTimeout(() => app.quit(), 100); }
     return out;
   });
+}
+
+/** The probe's scratch folder gone (and its file forgotten by the save queue). */
+async function removeProbeDir() {
+  if (!probeDir) return;
+  const dir = probeDir;
+  probeDir = null;
+  queue.forget(path.join(dir, 'probe.stet'));
+  await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+}
+
+/** Scratch folders a run could not clear (STET was killed during it), an hour old or more. */
+async function removeStaleProbeDirs() {
+  const tmp = os.tmpdir();
+  for (const name of await fs.readdir(tmp).catch(() => [])) {
+    if (!name.startsWith('stet-probe-')) continue;
+    const dir = path.join(tmp, name), st = await fs.stat(dir).catch(() => null);
+    if (st && Date.now() - st.mtimeMs > 3600000) await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 /** Generate a PDF on a worker thread so neither window nor main loop stalls. */
@@ -538,6 +567,8 @@ app.whenReady().then(async () => {
   handle('app:pending-open', () => { const f = pendingOpen; pendingOpen = null; return f; });
   createWindow();
   if (PERF) win.webContents.once('did-finish-load', () => setTimeout(() => win.webContents.send('perf:start'), 800));
+  if (PERF) setTimeout(() => { allowClose = true; app.quit(); }, 120000).unref(); // (npm run perf always ends)
+  setTimeout(removeStaleProbeDirs, 60000).unref(); // (well after starting: nothing here is urgent)
 });
 
 app.on('before-quit', () => { settings?.flush(); stats?.flush(); });

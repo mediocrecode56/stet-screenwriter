@@ -17,5 +17,9 @@
   assertions). New behaviour gets a unit test (test/unit), and a step in
   test/app/smoke.app.js when it is a workflow a release must not break. App tests wait
   with `app.until`, never a fixed sleep, and drive the app with real input (test/app/harness.js).
+- web/ is the browser version (ALPHA), a separate project: read web/README.md first. The desktop never
+  depends on it, and browser needs never go into src/ (its tests in web/test fail if they do). A change
+  to src/core or the shared renderer files can break it: run `npm test` in web/ after one. It publishes on
+  its own (.github/workflows/web.yml), not through releases.
 - Read docs/DESIGN_DIRECTION.md before design or UI work, and add to it when the owner gives new
   feedback that sets a direction (it is the reference for decisions a request leaves open).

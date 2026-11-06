@@ -161,7 +161,7 @@ workflow would remove that warning.
 | `npm run smoke` | the smoke test alone, about six seconds |
 | `npm run e2e` | the real app, every area (`test/app/*.app.js`, four files at a time), about 25 seconds: the smoke test, writing (completion, styles, alignment, shortcuts, notes, the caret at every scale, zoom, the word count), files (saving, autosave, backups, Final Draft, renaming, Open Recent, the performance probe, reopening on launch, crash recovery), statistics and the streak, the companion, the look (header, status bar, themes and their schedule, slides and easing), the English review (a mock API and a fake Claude Code), updates and patches, file links. Run it before a release or after a change to an area the smoke test doesn't reach. `STET_E2E_EXE=path\to\STET.exe npm run e2e` runs it against a packaged build |
 | `npm run bench` | engine benchmarks (Node) |
-| `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` |
+| `npm run perf` | in-app performance probe; writes `.perf/renderer-results.json` (how it scores: [Performance](PERFORMANCE.md)) |
 
 Results and test conditions: [docs/PERFORMANCE.md](PERFORMANCE.md).
 

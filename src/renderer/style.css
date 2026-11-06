@@ -1015,9 +1015,10 @@ html.focus.peek #elbar { box-shadow: 0 3px 0 var(--rule); }
 /* Just the element buttons, in the top left corner: the toolbar with all but them clipped away, so
    they are the real buttons, and going on up opens them out into the whole toolbar in one move. */
 html.focus.peek-el:not(.peek) #elbar { transform: translateY(-30px); }
-/* (one plain outline, arriving and leaving: the Tab cycle's box stays in the whole toolbar) */
+/* (one plain outline, arriving and leaving. With every element in the Tab cycle its box would only be
+   a second outline; with some left out it says which, as in the toolbar.) */
 html.focus:not(.peek) #elbar { border-bottom-color: var(--rule-strong); }
-html.focus:not(.peek) #elbar .cyc-box { box-shadow: none; }
+html.focus:not(.peek) #tabcycle:not(.some) .cyc-box:not(.drag) { box-shadow: none; }
 html.focus.peek-el #elbar { transition: transform var(--dur-panel) var(--ease-out), clip-path var(--dur-panel) var(--ease-out); }
 html.focus:not(.peek) #eltypes::after { content: ""; position: absolute; top: -3px; bottom: -4px; right: -6px; width: 1px; background: var(--rule-strong); }
 html.focus #timeline, html.focus #status, html.focus:not(.focus-dino) #dino { display: none !important; }
