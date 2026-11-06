@@ -2,6 +2,22 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.57.0 · 6 Nov 2026
+
+### FEATURES
+
+- Tools has a new Open STET in the Browser: an early version of STET that runs in any web browser, for writing away from your own computer. It opens and saves .stet files, and works on phones and tablets too. Nothing changes in the app if you don't use it.
+- The dinosaur moves more naturally from one thing to the next: it catches its breath, stretches when it gets up, turns round before it settles, licks its lips after eating and sniffs before it digs.
+- The Performance Probe now tells you plainly whether your computer runs STET smoothly, with a score from 0 to 100 and how reliable that result is. It shows its progress and can be cancelled.
+
+### BUGS, PERFORMANCE
+
+- The Performance Probe no longer freezes the window or gets stuck, and takes seconds instead of nearly a minute.
+- The probe's score is now fair: fast computers no longer show as slow.
+- Typing is lighter on long scripts with spelling turned on.
+- In Focus Mode, the buttons that appear when you press Tab now work exactly like the toolbar's, also when the toolbar is hidden.
+- Undo still works after running the Performance Probe.
+
 ## 0.56.0 · 5 Nov 2026
 
 ### FEATURES
