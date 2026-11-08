@@ -1,7 +1,7 @@
 // Stand-in for the Claude Code CLI in print mode (`claude -p --output-format json`), used
 // by the E2E tests through STET_CLAUDE_CODE. It answers with the same "known mistakes"
 // rules as the API mock and logs each invocation (args, cwd, stdin) to FAKE_CC_LOG.
-// FAKE_CC_MODE: "" | "logged-out" (the review fails) | "auth-out" (`auth status` says so) | "slow" | "garbage";
+// FAKE_CC_MODE: "" | "logged-out" (the review fails) | "limit" (no usage left) | "auth-out" (`auth status` says so) | "slow" | "garbage";
 // or FAKE_CC_MODE_FILE, a file holding the mode, so a test can change it without restarting STET.
 const MODE = (() => { try { return fs.readFileSync(process.env.FAKE_CC_MODE_FILE, 'utf8').trim(); } catch { return process.env.FAKE_CC_MODE || ''; } })();
 import fs from 'node:fs';
@@ -30,6 +30,7 @@ const mode = MODE;
 const out = (o) => process.stdout.write(JSON.stringify({ type: 'result', usage: { input_tokens: 3, cache_creation_input_tokens: 900, cache_read_input_tokens: 0, output_tokens: 80 }, ...o }) + '\n');
 if (mode === 'slow') await new Promise((r) => setTimeout(r, 30000));
 if (mode === 'logged-out') { out({ subtype: 'success', is_error: true, result: 'Not logged in · Please run /login' }); process.exit(1); }
+if (mode === 'limit') { out({ subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1762600000', api_error_status: 429 }); process.exit(1); }
 if (mode === 'garbage') { process.stdout.write('panic: something broke\n'); process.exit(2); }
 
 const findings = [];

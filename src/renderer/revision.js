@@ -528,8 +528,10 @@ const CONNECTIONS = [
 function connectionText(st) {
   const via = st.source === 'saved' ? `a saved API key (${st.hint}), encrypted by the operating system`
     : st.source === 'env' ? 'the ANTHROPIC_API_KEY environment variable'
-    : st.source === 'claude-code' ? `${st.cli} on your existing Claude sign-in — no key needed` : null;
-  if (via) return `Reviews use ${via}.`;
+    : st.source === 'claude-code' ? `${st.cli} on your existing Claude sign-in — no key needed`
+    : st.source === 'codex' ? `${st.codex} on your OpenAI sign-in, since no Claude is set up` : null;
+  const backup = st.codex && st.source !== 'codex' ? ` If Claude has no usage left, ${st.codex} takes over.` : '';
+  if (via) return `Reviews use ${via}.${backup}`;
   if (st.provider === 'cli') return 'Claude Code was not found. Install the Claude desktop app (or Claude Code) and sign in; STET then finds it by itself.' + (st.key ? ' Or choose the API key below.' : '');
   if (st.provider === 'api') return 'No API key is set up yet: paste one below (console.anthropic.com).' + (st.cli ? ` Or choose your Claude sign-in (${st.cli} was found).` : '');
   return 'Claude Code was not found. Install the Claude desktop app or Claude Code and sign in — STET then uses that sign-in automatically. Or paste an Anthropic API key (console.anthropic.com).';

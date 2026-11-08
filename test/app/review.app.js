@@ -381,6 +381,21 @@ test('Claude Code signed out, slow, or answering nonsense: a clear message, a pr
   await cliMode('');
 });
 
+test('when Claude has no usage left, Codex takes over the review; without Codex the limit is reported', async () => {
+  await cliMode('limit');
+  await review();
+  assert.match(await app.eval('[...__stet.revision.run.failed.values()][0].message'), /usage limit/, 'no Codex: the limit, as before');
+  await app.close();
+  app = await App.launch({ userData: path.join(tmp, 'ud-cc'), env: { STET_CLAUDE_CODE: FAKE, FAKE_CC_LOG: log, FAKE_CC_MODE_FILE: modeFile, ANTHROPIC_API_KEY: '', STET_CODEX: path.join(ROOT, 'test', 'helpers', 'fake-codex.mjs') } });
+  await consent();
+  assert.equal((await app.eval(`window.stet.invoke('claude:key-status')`)).codex, 'Codex (test)');
+  await app.load(SCRIPT.filter((b) => !b[1].includes('ITNRO')), {}, 'CODEX');
+  await review();
+  assert.equal(await app.eval('__stet.revision.run.failed.size'), 0, 'every section answered by Codex');
+  assert.equal(await app.eval('__stet.revision.run.fatal || null'), null);
+  await cliMode('');
+});
+
 test('the connection is the writer’s choice, kept across a restart, and never switched behind their back', async () => {
   await app.close();
   await fs.rm(log, { force: true });

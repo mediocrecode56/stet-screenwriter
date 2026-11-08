@@ -2,6 +2,12 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.58.0 · 8 Nov 2026
+
+### FEATURES
+
+- Revise keeps going when Claude has no usage left: if OpenAI Codex is installed and signed in on your computer, it takes over the rest of the review. If no Claude is set up at all, Revise uses Codex on its own. Tools → Claude Connection… says when Codex is there as the backup.
+
 ## 0.57.0 · 6 Nov 2026
 
 ### FEATURES

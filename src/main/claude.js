@@ -10,6 +10,8 @@
 //   'api'   always an API key, never Claude Code
 // A review never switches between them by itself: when the chosen way fails,
 // the error says what to do, and mentions the other way when it is set up.
+// The one exception is OpenAI Codex (codex.js), a backup used only when Claude has no
+// usage left (or, in 'auto', when no Claude is set up at all) and Codex is signed in.
 
 import { safeStorage } from 'electron';
 import fs from 'node:fs/promises';
@@ -17,6 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { atomicWrite } from './files.js';
 import { findClaudeCode, signedIn, reviewChunkCli, NO_CLI } from './claude-code.js';
+import { findCodex, codexSignedIn, prepareCodex, reviewChunkCodex } from './codex.js';
 import { MODEL, SYSTEM_PROMPT, FINDINGS_SCHEMA } from '../core/revision.js';
 
 const CONCURRENCY = 3;
@@ -63,14 +66,17 @@ export class ClaudeService {
     const saved = await this.savedKey();
     const key = saved ? 'saved' : process.env.ANTHROPIC_API_KEY ? 'env' : null;
     const cli = await findClaudeCode();
-    const source = provider === 'cli' ? (cli ? 'claude-code' : 'none')
+    let source = provider === 'cli' ? (cli ? 'claude-code' : 'none')
       : provider === 'api' ? key || 'none'
       : key || (cli ? 'claude-code' : 'none');
+    const codex = await findCodex();
+    if (source === 'none' && provider === 'auto' && codex) source = 'codex';
     return {
       provider, source,
       hint: saved ? saved.slice(0, 10) + '…' + saved.slice(-4) : null,
       key, // an API key that is set up, used or not
       cli: cli ? cli.label : null, // Claude Code that was found, used or not
+      codex: codex ? codex.label : null, // the backup when Claude has no usage left
       canStore: safeStorage.isEncryptionAvailable(),
     };
   }
@@ -111,6 +117,18 @@ export class ClaudeService {
     this.runs.set(reviewId, ac);
     const systemText = extra ? `${SYSTEM_PROMPT}\n\n${extra}` : SYSTEM_PROMPT;
     let review, cleanup = async () => {};
+    // Codex as the backup, set up the first time it is needed.
+    let codexDir = null, codexReady = null, useCodex = false;
+    const codex = () => (codexReady ||= (async () => {
+      const cli = await findCodex();
+      if (!cli || !(await codexSignedIn(cli))) return null;
+      codexDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-codex-'));
+      return { cli, schema: await prepareCodex(codexDir) };
+    })().catch(() => null));
+    const viaCodex = async (chunk) => {
+      const c = await codex();
+      return c ? reviewChunkCodex(c.cli, codexDir, c.schema, systemText, chunk, ac.signal) : null;
+    };
     try {
       const status = await this.keyStatus();
       if (status.source === 'claude-code') {
@@ -125,6 +143,10 @@ export class ClaudeService {
         await fs.writeFile(spFile, systemText);
         cleanup = () => fs.rm(dir, { recursive: true, force: true }).catch(() => {});
         review = (chunk) => reviewChunkCli(cli, dir, spFile, chunk, ac.signal, alt);
+      } else if (status.source === 'codex') {
+        if (!(await codex())) throw Object.assign(new Error('Codex was found but is not signed in. Open Codex and sign in, or set up Claude under Tools → Claude Connection….'), { code: 'auth' });
+        useCodex = true;
+        review = async () => ({ ok: false, error: { code: 'cli', message: 'Codex is not available.' } });
       } else if (status.source === 'none') {
         const message = status.provider === 'cli' ? NO_CLI + (status.key ? USE_KEY : '')
           : status.provider === 'api' ? NO_API_KEY + (status.cli ? ' Or choose your Claude sign-in there.' : '')
@@ -144,12 +166,19 @@ export class ClaudeService {
     const worker = async () => {
       while (queue.length && !ac.signal.aborted) {
         const chunk = queue.shift();
-        this.send('review:chunk', { reviewId, index: chunk.index, ...(await review(chunk)) });
+        let res = useCodex ? await viaCodex(chunk) : await review(chunk);
+        if (!useCodex && res?.error?.code === 'rate_limit' && !ac.signal.aborted) {
+          // Claude has no usage left: this section and the rest go to Codex, when it is there.
+          const alt = await viaCodex(chunk);
+          if (alt) { useCodex = true; res = alt; }
+        }
+        this.send('review:chunk', { reviewId, index: chunk.index, ...(res || { ok: false, error: { code: 'cli', message: 'Codex is not available.' } }) });
       }
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
     await cleanup();
-    this.send('review:done', { reviewId, cancelled: ac.signal.aborted });
+    if (codexDir) await fs.rm(codexDir, { recursive: true, force: true }).catch(() => {});
+    this.send('review:done', { reviewId, cancelled: ac.signal.aborted, ...(useCodex ? { via: 'codex' } : {}) });
     this.runs.delete(reviewId);
   }
 
