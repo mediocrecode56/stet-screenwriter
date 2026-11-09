@@ -856,11 +856,43 @@ async function saveAs() {
 /** Opens a screenplay; true once it is open. `quiet`: a file that can't be read is skipped without a word. */
 /** Open a screenplay. `quiet`: no message if it can't be read. `onlyOver`: only in place of that
  *  document, untouched (the reopening on launch gives way to anything the writer does meanwhile). */
+const BUSY = new Set(['EBUSY', 'EPERM', 'EACCES', 'EAGAIN', 'EIO', 'UNKNOWN']);
+
+/**
+ * On launch: the last screenplay edited, else the newest in Open Recent that still opens. A drive
+ * that has to spin up can take seconds, longer than the window waits to show itself, so until it is
+ * in, typing waits (a word typed into the blank page would otherwise call the reopening off), with a
+ * notice once it takes long. After half a minute the blank page is the writer's again.
+ */
+async function reopenLast(blank) {
+  const order = launchOrder(settings.recent, settings.lastEdited);
+  if (!order.length) return false;
+  const name = (settings.recent || []).find((r) => r.path === order[0])?.name || 'your screenplay';
+  input.hold(true);
+  let told = false;
+  const tell = setTimeout(() => { told = true; toast(`Opening “${name}”…`, 30000); }, 1500);
+  const release = setTimeout(() => input.hold(false), 30000);
+  try {
+    for (const p of order) if (session.doc !== blank || await openPath(p, { quiet: true, onlyOver: blank })) break;
+  } finally {
+    clearTimeout(tell); clearTimeout(release);
+    input.hold(false);
+  }
+  const opened = session.doc !== blank;
+  if (told) toast(opened ? `Opened “${(session.path || '').split(/[\\/]/).pop().replace(/\.stet$/i, '') || name}”` : `“${name}” could not be opened. Open Recent has the others.`, 2500);
+  return opened;
+}
+
 async function openPath(file, { quiet = false, onlyOver = null } = {}) {
   const movedOn = () => onlyOver && (session.doc !== onlyOver || session.dirty);
   if (/\.fdx$/i.test(file)) return importFdx(file);
   if (onlyOver ? movedOn() : !(await releaseCurrent())) return false; // (in place of an untouched document there is nothing to release)
-  const r = await Session.readFile(file);
+  let r = await Session.readFile(file);
+  // A file another program holds for a moment (a backup or sync tool, an antivirus scan): tried again.
+  for (let i = 0; i < 3 && !r.ok && BUSY.has(r.code) && !movedOn(); i++) {
+    await new Promise((ok) => setTimeout(ok, 300 * (i + 1)));
+    r = await Session.readFile(file);
+  }
   if (movedOn()) return false;
   if (!r.ok) {
     if (quiet) return false;
@@ -1386,7 +1418,7 @@ if (info.sample) {
     const pending = await api.invoke('app:pending-open');
     const blank = session.doc;
     if (pending) await openPath(pending);
-    else for (const p of launchOrder(settings.recent, settings.lastEdited)) if (session.doc !== blank || await openPath(p, { quiet: true, onlyOver: blank })) break;
+    else await reopenLast(blank);
   }
 }
 // Shown once it is all in place and painted, the fonts in (main.js keeps the window hidden till then).

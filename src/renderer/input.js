@@ -26,6 +26,7 @@ export class Input {
     this.names = () => [];  // the cast in suggestion order (app.js)
     this.onCue = null;      // a character cue was finished: its name
     this.onSpace = null;    // Space typed after a word (spelling.js)
+    this.held = false;      // hold(): typing waits (the screenplay STET reopens is still loading)
 
     const ta = textarea;
     ta.addEventListener('keydown', (e) => this.keydown(e));
@@ -73,10 +74,17 @@ export class Input {
 
   // ---- text ------------------------------------------------------------------
 
+  /** While on, nothing typed or pasted reaches the screenplay (shortcuts with Ctrl/Cmd still work). */
+  hold(on) {
+    this.held = !!on;
+    this.ta.readOnly = this.held;
+  }
+
   input() {
     if (this.composing) return;
     const v = this.ta.value;
     this.ta.value = '';
+    if (this.held) return;
     if (v) this.typed(v);
   }
 
@@ -132,6 +140,7 @@ export class Input {
 
   keydown(e) {
     if (this.composing || e.isComposing) return;
+    if (this.held) { if (e.ctrlKey || e.metaKey) this.onCommandKey(e); e.preventDefault(); return; }
     const ed = this.ed;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key;
@@ -323,7 +332,7 @@ export class Input {
   copy(e, cut) {
     const ed = this.ed;
     e.preventDefault();
-    if (!ed.hasSelection()) return;
+    if (!ed.hasSelection() || (cut && this.held)) return;
     const frag = ed.fragment();
     const text = toPlainText(frag);
     e.clipboardData.setData('text/plain', text);
@@ -334,6 +343,7 @@ export class Input {
 
   paste(e) {
     e.preventDefault();
+    if (this.held) return;
     const dt = e.clipboardData;
     let frag = null;
     const custom = dt.getData('application/x-stet-fragment');
@@ -367,6 +377,7 @@ function cleanFragment(frag) {
       && ((m.k === 'hl' && HIGHLIGHT_COLORS.includes(m.v)) || (m.k === 'cm' && typeof m.v === 'string') || STYLES.includes(m.k)));
     const b = { type: TYPES.includes(f.type) ? f.type : 'action', text, marks };
     if (ALIGNS.includes(f.align)) b.align = f.align;
+    if (typeof f.cased === 'string' && f.cased.length === text.length) b.cased = f.cased.replace(/\r\n?/g, '\n');
     out.push(b);
   }
   return out.length ? out : null;

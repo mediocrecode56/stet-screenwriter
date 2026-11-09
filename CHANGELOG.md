@@ -2,6 +2,13 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.59.0 · 9 Nov 2026
+
+### BUGS, PERFORMANCE
+
+- STET opens your last screenplay again at launch, even from a slow drive. Before, a drive that took a few seconds to wake up could leave you on a blank page, and typing there cancelled the reopening. Now typing waits until the screenplay is in, with an "Opening…" notice if it takes a while. A file another program is holding for a moment (a backup or sync tool) is tried again instead of skipped.
+- Capitals come off again when a line goes back to an element that isn't in capitals, however the text got there. Before, text pasted into a scene heading, character, transition or shot, lines joined into one, and words replaced in one stayed in capitals for good.
+
 ## 0.58.0 · 8 Nov 2026
 
 ### FEATURES

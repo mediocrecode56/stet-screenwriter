@@ -6,7 +6,7 @@
 // used by incremental pagination. Undo/redo replays those steps.
 
 import {
-  makeBlock, withText, withType, withTyped, withAlign, sliceBlock, UPPER_TYPES, TYPES, cueName,
+  makeBlock, withText, withType, withTyped, withAlign, withWritten, writtenText, writtenOf, sliceBlock, UPPER_TYPES, TYPES, cueName,
   marksAfterInsert, marksAfterDelete, sliceMarks, concatMarks, setHighlight, removeCommentMarks, STYLES, setStyle, hasStyle,
 } from './model.js';
 import { blockWords, documentWords, isWordChar, wordLeft, wordRight, escapeRegExp } from './text.js';
@@ -17,6 +17,8 @@ export const NEXT_ON_ENTER = { scene: 'action', action: 'action', character: 'di
 
 const SCENE_PREFIX = /^(int|ext|est|i\/e|int\.?\s?\/\s?ext|ext\.?\s?\/\s?int)\.(\s|$)/i;
 const MERGE_WINDOW_MS = 1500;
+/** A block's text as written, offset for offset with its text (its text where capitals changed the length). */
+const asWritten = (b) => { const w = writtenText(b); return w.length === b.text.length ? w : b.text; };
 
 export const pos = (b, o) => ({ b, o });
 export const cmp = (p, q) => (p.b - q.b) || (p.o - q.o);
@@ -289,6 +291,8 @@ export class Editor {
       const z = i === e.b ? e.o : b.text.length;
       const f = { type: b.type, text: b.text.slice(a, z), marks: sliceMarks(b.marks, a, z) };
       if (b.align) f.align = b.align;
+      const w = asWritten(b);
+      if (w !== b.text) f.cased = w.slice(a, z); // (pasted, it keeps the case it was written in)
       out.push(f);
     }
     return out;
@@ -311,15 +315,12 @@ export class Editor {
       this._splice(s.b, e.b - s.b + 1, [sliceBlock(last, e.o, last.text.length, last.id)]);
       return s;
     }
-    const head = first.text.slice(0, s.o);
-    let tail = last.text.slice(e.o);
-    let tailMarks = sliceMarks(last.marks, e.o, last.text.length);
-    if (UPPER_TYPES.has(first.type) && tail !== tail.toUpperCase()) {
-      const up = tail.toUpperCase();
-      if (up.length !== tail.length) tailMarks = [];
-      tail = up;
-    }
-    const nb = withText(first, head + tail, concatMarks(sliceMarks(first.marks, 0, s.o), head.length, tailMarks));
+    // The two lines join as written: in a capitalised element the joined text shows in capitals and
+    // keeps its own case for a later change of element; in any other, a capitalised line's text
+    // comes back as it was written.
+    const head = asWritten(first).slice(0, s.o);
+    const tail = asWritten(last).slice(e.o);
+    const nb = withWritten(first, head + tail, concatMarks(sliceMarks(first.marks, 0, s.o), head.length, sliceMarks(last.marks, e.o, last.text.length)));
     this._splice(s.b, e.b - s.b + 1, [nb]);
     return s;
   }
@@ -388,37 +389,30 @@ export class Editor {
       if (this.hasSelection()) this._deleteSelection();
       const p = this.caret;
       const cur = this.blocks[p.b];
+      // Every piece is kept as it was written: in a capitalised element it shows in capitals and keeps
+      // its own case, so a change of element brings that case back.
+      const piece = (f, type) => (UPPER_TYPES.has(type) ? writtenOf(f) : f.text).replace(/\r\n?/g, '\n');
+      const w = asWritten(cur);
+      const head = w.slice(0, p.o), tail = w.slice(p.o);
+      const headMarks = sliceMarks(cur.marks, 0, p.o), tailMarks = sliceMarks(cur.marks, p.o, cur.text.length);
       if (fragment.length === 1) {
-        let t = fragment[0].text.replace(/\r\n?/g, '\n');
-        if (UPPER_TYPES.has(cur.type)) t = t.toUpperCase();
-        const ms = fragment[0].marks && t.length === fragment[0].text.length ? fragment[0].marks : [];
-        const head = cur.text.slice(0, p.o), tail = cur.text.slice(p.o);
-        const marks = concatMarks(concatMarks(sliceMarks(cur.marks, 0, p.o), head.length, ms), head.length + t.length, sliceMarks(cur.marks, p.o, cur.text.length));
-        this._replace(p.b, withText(cur, head + t + tail, marks));
-        const np = pos(p.b, p.o + t.length);
+        const t = piece(fragment[0], cur.type);
+        const marks = concatMarks(concatMarks(headMarks, head.length, fragment[0].marks || []), head.length + t.length, tailMarks);
+        const nb = withWritten(cur, head + t + tail, marks);
+        this._replace(p.b, nb);
+        const np = pos(p.b, p.o + (nb.text.length - cur.text.length));
         this.sel = { a: np, f: np };
         return;
       }
-      const head = cur.text.slice(0, p.o), tail = cur.text.slice(p.o);
-      const headMarks = sliceMarks(cur.marks, 0, p.o), tailMarks = sliceMarks(cur.marks, p.o, cur.text.length);
       const out = [];
       fragment.forEach((f, i) => {
-        let type = f.type;
-        let text = f.text;
-        let marks = f.marks || [];
-        if (i === 0) {
-          if (head.length) type = cur.type;
-          if (UPPER_TYPES.has(type)) text = text.toUpperCase();
-          out.push(withAlign({ id: cur.id, type, text: head + text, marks: concatMarks(headMarks, head.length, text.length === f.text.length ? marks : []) }, head.length ? cur.align : f.align));
-        } else {
-          if (UPPER_TYPES.has(type)) { const up = text.toUpperCase(); if (up.length !== text.length) marks = []; text = up; }
-          out.push(withAlign(makeBlock(type, text, marks), f.align));
-        }
+        const type = i === 0 && head.length ? cur.type : f.type;
+        const base = withAlign(makeBlock(type, '', [], i === 0 ? cur.id : undefined), i === 0 && head.length ? cur.align : f.align);
+        out.push(i === 0 ? withWritten(base, head + piece(f, type), concatMarks(headMarks, head.length, f.marks || [])) : withWritten(base, piece(f, type), f.marks || []));
       });
       const lastBlock = out[out.length - 1];
       const caretO = lastBlock.text.length;
-      const tailText = UPPER_TYPES.has(lastBlock.type) ? tail.toUpperCase() : tail;
-      out[out.length - 1] = withText(lastBlock, lastBlock.text + tailText, concatMarks(lastBlock.marks, lastBlock.text.length, tailText.length === tail.length ? tailMarks : []));
+      out[out.length - 1] = withWritten(lastBlock, asWritten(lastBlock) + tail, concatMarks(lastBlock.marks, lastBlock.text.length, tailMarks));
       this._splice(p.b, 1, out);
       const np = pos(p.b + out.length - 1, caretO);
       this.sel = { a: np, f: np };
@@ -902,7 +896,9 @@ export class Editor {
         let marks = marksAfterInsert(marksAfterDelete(b.marks, m.s, m.e), m.s, r.length);
         // A replaced word keeps the styles it had throughout.
         for (const k of STYLES) if (m.e > m.s && hasStyle(b.marks, m.s, m.e, k)) marks = setStyle(marks, m.s, m.s + r.length, k, true);
-        this._replace(m.b, withText(b, b.text.slice(0, m.s) + r + b.text.slice(m.e), marks));
+        // (in capitals, the replacement keeps its own case as written, for a change of element)
+        const w = asWritten(b);
+        this._replace(m.b, UPPER_TYPES.has(b.type) ? withWritten(b, w.slice(0, m.s) + replacement + w.slice(m.e), marks) : withText(b, b.text.slice(0, m.s) + r + b.text.slice(m.e), marks));
       }
       const first = matches[0];
       this.sel = { a: pos(first.b, first.s), f: pos(first.b, first.s) };

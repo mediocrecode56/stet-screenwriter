@@ -71,6 +71,22 @@ export function withType(block, type) {
   return extras({ id: block.id, type, text, marks }, block.align, UPPER_TYPES.has(type) ? written : undefined);
 }
 
+/**
+ * `block` (its id, element, alignment) holding `written`, shown as its element shows text: in capitals
+ * for the capitalised elements, the case as written kept (cased) so a change of element brings it back.
+ * `marks` index the text; they are dropped if capitals change its length.
+ */
+export function withWritten(block, written, marks = block.marks) {
+  const upper = UPPER_TYPES.has(block.type);
+  const text = upper ? written.toUpperCase() : written;
+  return extras({ id: block.id, type: block.type, text, marks: text.length === written.length ? marks : EMPTY }, block.align, upper ? written : undefined);
+}
+
+/** The written text of a fragment piece or block, falling back to its text. */
+export function writtenOf(f) {
+  return typeof f.cased === 'string' && f.cased.length === f.text.length && f.cased.toUpperCase() === f.text ? f.cased : f.text;
+}
+
 /** A block aligned `align` (null: its element's own alignment). */
 export function withAlign(block, align) {
   return extras({ id: block.id, type: block.type, text: block.text, marks: block.marks }, align || undefined, block.cased);

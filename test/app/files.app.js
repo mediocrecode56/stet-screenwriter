@@ -378,6 +378,17 @@ test('launching opens the last screenplay edited: not one only looked at since, 
   await app.close();
   app = await launch();
   await app.until(`__stet.session.path === ${JSON.stringify(edited)}`, { what: 'the last one edited to open', timeout: 10000 });
+  // While it loads (a slow drive can take seconds, longer than the window waits to show), typing
+  // waits: a word typed into the blank page would call the reopening off.
+  assert.equal(await app.eval('__stet.input.held'), false, 'typing is free once it is in');
+  await app.load([['action', '']]);
+  await app.eval('__stet.input.hold(true)');
+  await app.type('Lost? ');
+  await app.key('Enter');
+  assert.deepEqual(await app.eval('[__stet.editor.blocks.length, __stet.editor.blocks[0].text, __stet.session.dirty]'), [1, '', false], 'nothing typed reaches the page while held');
+  await app.eval('__stet.input.hold(false)');
+  await app.type('Here.');
+  assert.equal(await app.eval('__stet.editor.blocks[0].text'), 'Here.');
 });
 
 test('a screenplay opens again where it was left, at launch and from Open Recent: the caret and the window as they were', async () => {
