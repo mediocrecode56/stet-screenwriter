@@ -132,7 +132,9 @@ async function winRemembered(exe) {
 }
 
 async function winInstaller() {
-  const iscc = path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe');
+  const iscc = [process.env.ISCC, 'E:\\CODING\\TOOLS\\InnoSetup\\ISCC.exe',
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe')].find(f => f && fs.existsSync(f))
+    || path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe');
   const files = path.join(tmp, 'app');
   fakeExe(files);
   execFileSync(iscc, ['/Q', '/DAppVersion=0.0.1', `/DAppFiles=${files}`, `/O${tmp}`, path.join(ROOT, 'scripts', 'installer', 'STET.iss')], { stdio: 'inherit' });
