@@ -7,7 +7,7 @@ const INVOKE = new Set([
   'dialog:folder', 'path:join', 'path:default-dir',
   'recovery:write', 'recovery:clear', 'recovery:list', 'recovery:read',
   'backup:create', 'backup:list', 'backup:delete', 'backup:prune', 'backup:read', 'backup:dir', 'backup:reveal',
-  'stats:get', 'stats:add', 'stats:flush', 'stats:reset', 'e2e:close-window',
+  'stats:get', 'stats:add', 'stats:flush', 'stats:reset', 'e2e:close-window', 'e2e:memory',
   'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'perf:scratch', 'perf:cleanup', 'perf:system', 'shell:reveal', 'app:pending-open', 'app:ready',
   'recent:list', 'recent:dismiss', 'recent:trash',
   'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel', 'claude:ask', 'clock:offset',

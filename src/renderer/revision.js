@@ -224,6 +224,10 @@ export class Revision {
     r.finished = true;
     if (m.cancelled) r.cancelled = true;
     if (m.error) r.fatal = m.error;
+    // The request (the script's text in sections, and every paragraph as it was) is needed again only to
+    // retry sections that failed; otherwise it is let go now rather than held until the next review.
+    // (Every section's answer has arrived: the main process says done after the last of them.)
+    if (!r.failed.size) { r.chunks = []; r.refs = null; }
     if (this.review) {
       this.review.state = r.fatal ? 'failed' : r.cancelled ? 'cancelled' : r.failed.size ? 'partial' : 'complete';
       this.session.touch();

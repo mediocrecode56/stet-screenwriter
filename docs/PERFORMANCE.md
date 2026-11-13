@@ -29,6 +29,54 @@ as a failed step. `test/app/smoke.app.js` fails on any failed step, on every rel
 Checked with the CPU slowed down in the real app (i9-13900K): 100 at full speed, 84 at 6×, 41 at 20×, 22 at
 60× (there the long script is left out for time). Full speed takes about 7 seconds.
 
+## Memory
+
+`npm run mem` prints what each of STET's processes takes, with a feature-length script open and a real
+dictionary loaded (`scripts/mem.js`; `-- --type` types for a while first). `test/app/memory.app.js` fails a
+release that brings back a network process, lets either side's JavaScript pass 40 MB, or lets spelling's
+caches outgrow the screenplay.
+
+Measured 2026-11-13 on the machine below, the sample script, a 97 000-word English dictionary, Windows
+private working set (Task Manager's Memory column), three runs each:
+
+| process | 0.60.0 | now |
+|---|---|---|
+| main (with the spelling worker) | 69 MB | 56 MB |
+| network service | 7.5 MB | (in the main process) |
+| GPU | 34 MB | 33 MB |
+| window | 37 MB | 40 MB |
+| **all of STET** | **148 MB** | **130 MB** |
+| window JavaScript after typing 3 000 characters into one paragraph | 11.3 MB | 6.8 MB |
+
+A bare Electron window with nothing in it takes 70 MB, so STET's own share fell from 78 to 60 MB. Typing,
+scrolling and opening measured the same as before (Performance Probe, both 100).
+
+The rules that keep it there:
+
+- **One copy of the dictionary, compactly.** Words with the same affix flags share one `Set` of them
+  (a dictionary has a few thousand combinations, not 100 000): 25 → 8 MB. The made-up candidates a
+  suggestion tries are never cached, only words someone wrote (20 000 at most).
+- **Small nurseries where little is short-lived.** The spelling worker runs with a 2 MB young generation
+  (−7 MB; loading measured no slower). The same flag for the window measured no gain, so it isn't set.
+- **No process for what one can do.** The network service runs inside the main process
+  (`NetworkServiceInProcess2`): STET fetches only an update, a dictionary and its own files. Its
+  process took 7.5 MB; in its place the main process takes nothing measurable and the window about
+  2 MB more, so about 5 MB in all.
+- **Caches forget what only undo remembers.** Per-block results heavier than a number live in a
+  `BlockMemo`, which drops blocks the screenplay no longer holds (see ARCHITECTURE.md, the editing
+  pipeline). A finished review lets go of its request unless a section failed and may be retried.
+- **Nothing written twice, nothing downloaded kept.** Settings and statistics are written only when they
+  changed (a quit used to start a second write the exit cut short, leaving a `.tmp` file each time; those
+  left over are cleaned up a minute after starting). Update and dictionary downloads skip Chromium's disk
+  cache.
+
+What remains is Chromium's own: about 33 MB of GPU process and 38 MB of window for any real page,
+which STET can't lower without changing how it looks or feels (software rendering, fewer effects).
+Chromium's own textarea undo (1 000 steps, about 0.3 MB) and event-timing records are capped by
+Chromium.
+
+## Speed
+
 Performance is measured two ways, both reproducible from the repo:
 
 - `npm run bench` — the document engine in Node with high-resolution timers

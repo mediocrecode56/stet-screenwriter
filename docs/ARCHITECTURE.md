@@ -80,7 +80,10 @@ key event ─▶ Input ─▶ Editor command ─▶ _splice() ─▶ dirty range
 - **Immutable blocks.** Each edit replaces the touched block object. Layout
   (`linesOf`) and word counts are cached in `WeakMap`s keyed by block identity,
   so unchanged blocks are never re-wrapped or re-counted, and undo steps hold
-  references instead of copies.
+  references instead of copies. Anything heavier than a number worked out per
+  block (spelling's word lists) goes in a `BlockMemo` (`src/core/blockmemo.js`)
+  instead, which keeps only the blocks the screenplay holds: a `WeakMap` would
+  keep it for every earlier version the undo history holds.
 - **Transactions.** Every mutation is a splice `{from, removed, added}` recorded
   in the open transaction; undo replays them in reverse. Typing merges into one
   step per word; formatting, type changes and auto-capitalisation are separate
@@ -400,7 +403,8 @@ used there.
 four notations, aliases, prefixes and suffixes with their conditions, `REP`,
 `TRY`, `NEEDAFFIX`, `FORBIDDENWORD`) and checks a word by taking a suffix
 and/or a prefix off by those rules and looking the stem up with the right flag,
-never by listing every form: a large dictionary stays a few megabytes. Only an
+never by listing every form, and words with the same flags share one set of
+them: a 97 000-word dictionary takes 8 MB. Only an
 obvious slip is flagged: a word it doesn't know that is one edit (a swapped
 pair, a known slip, a doubled letter, a wrong, missing or extra letter) from
 words it does. Auto corrects only when one fix stands out. Words under three
@@ -408,7 +412,8 @@ letters, all caps, with a capital inside, capitalised mid-sentence (names),
 by a digit, a slash or a dot are never checked, nor the cast's names. Scene
 headings, cues and transitions aren't checked at all.
 
-The checking runs in a worker thread (`spell-worker.js`); the renderer
+The checking runs in a worker thread (`spell-worker.js`, with a small young
+generation: it holds one long-lived dictionary); the renderer
 (`src/renderer/spelling.js`) sends each word it hasn't seen yet once, keeps the
 answers, and recomputes the underlines from them on every edit or caret move
 (the word being typed is underlined once the caret leaves it). The words added

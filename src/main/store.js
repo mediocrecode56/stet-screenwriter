@@ -19,6 +19,7 @@ export class JsonStore {
     }
     this.timer = null;
     this.writing = Promise.resolve();
+    this.written = null; // the text last written: the same again is not written twice
   }
 
   get() { return this.data; }
@@ -40,7 +41,10 @@ export class JsonStore {
     clearTimeout(this.timer);
     this.timer = null;
     const snapshot = JSON.stringify(this.data, null, 1);
-    this.writing = this.writing.then(() => atomicWrite(this.file, Buffer.from(snapshot), { verify: (b) => JSON.parse(b.toString('utf8')) })).catch((e) => console.error('store write failed', this.file, e));
+    // Quitting flushes twice (window-all-closed, then before-quit, which nothing waits for): the
+    // second, unchanged, would be cut off by the exit and leave its temporary file behind.
+    if (snapshot === this.written) return this.writing;
+    this.writing = this.writing.then(() => atomicWrite(this.file, Buffer.from(snapshot), { verify: (b) => JSON.parse(b.toString('utf8')) })).then(() => { this.written = snapshot; }).catch((e) => console.error('store write failed', this.file, e));
     return this.writing;
   }
 }

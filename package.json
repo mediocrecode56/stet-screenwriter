@@ -1,7 +1,7 @@
 {
   "name": "stet",
   "productName": "STET",
-  "version": "0.60.0",
+  "version": "0.60.1",
   "description": "A fast, minimal, dependable screenwriting application.",
   "type": "module",
   "main": "src/main/boot.js",
@@ -12,6 +12,7 @@
     "test": "node --test --test-isolation=none \"test/unit/*.test.js\"",
     "bench": "node bench/core-bench.js",
     "perf": "electron . --perf-probe",
+    "mem": "node scripts/mem.js",
     "smoke": "node --test --test-force-exit test/app/smoke.app.js",
     "quick": "node --test --test-isolation=none \"test/unit/*.test.js\" && node --test --test-force-exit test/app/smoke.app.js",
     "e2e": "node --test --test-force-exit --test-timeout=120000 --test-concurrency=4 \"test/app/*.app.js\"",

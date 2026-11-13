@@ -42,6 +42,11 @@ if (process.env.STET_USER_DATA) app.setPath('userData', path.resolve(process.env
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'stet', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
+// Memory (docs/PERFORMANCE.md, "Memory"): the network service runs inside this process instead of
+// a process of its own. STET fetches little (an update, a dictionary, its own files), and a process
+// costs about 7 MB just to exist (about 5 MB saved in all: the window takes a little more).
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess2');
+
 if (!PERF && !SHOT && !E2E && !app.requestSingleInstanceLock()) app.quit();
 
 let win = null;
@@ -387,6 +392,11 @@ function registerIpc() {
   // page can't ask for the lock itself. The code is fixed: nothing from the page runs here.
   handle('win:fullscreen', (on) => { if (win && !win.isDestroyed() && win.isFullScreen() !== !!on) win.setFullScreen(!!on); return true; }); // focus mode
   ipcMain.handle('pointer:lock', (e) => e.sender.executeJavaScript('window.__stetPointerLock?.()', true).then(() => true, () => false));
+  // Tests and `npm run mem` only: the memory of each of STET's processes (and of this one's own JavaScript).
+  handle('e2e:memory', () => E2E && {
+    main: process.memoryUsage(),
+    processes: app.getAppMetrics().map((m) => ({ type: m.type, service: m.serviceName || m.name || null, workingSetKB: m.memory.workingSetSize, privateKB: m.memory.privateBytes ?? null })),
+  });
   handle('e2e:close-window', () => { if (E2E && win) setImmediate(() => win && win.close()); return E2E; });
   handle('clock:offset', () => getDayOffset());
   handle('stats:get', () => stats.state());
@@ -577,6 +587,8 @@ app.whenReady().then(async () => {
   if (PERF) win.webContents.once('did-finish-load', () => setTimeout(() => win.webContents.send('perf:start'), 800));
   if (PERF) setTimeout(() => { allowClose = true; app.quit(); }, 120000).unref(); // (npm run perf always ends)
   setTimeout(removeStaleProbeDirs, 60000).unref(); // (well after starting: nothing here is urgent)
+  // Temporary files a settings or statistics write left when STET was stopped in the middle of one.
+  setTimeout(() => cleanTemps(ud), 60000).unref();
 });
 
 app.on('before-quit', () => { settings?.flush(); stats?.flush(); });

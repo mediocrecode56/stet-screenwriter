@@ -2,6 +2,16 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.60.1 · 13 Nov 2026
+
+### BUGS, PERFORMANCE
+
+- STET uses less memory: about 130 MB instead of 148 MB with a feature-length script open and spelling on. The spelling dictionary takes a third of the room it did, and STET runs one process fewer.
+- A long writing session no longer slowly builds up memory: spelling stopped keeping notes on every earlier version of a paragraph that Undo remembers.
+- A finished review lets go of its copy of the script straight away, unless a section failed and can be tried again.
+- Quitting no longer leaves a stray temporary file in STET's settings folder each time, and the ones already there are cleared up a minute after starting.
+- Updates and dictionaries you download are no longer also kept in a hidden download cache.
+
 ## 0.60.0 · 13 Nov 2026
 
 ### FEATURES

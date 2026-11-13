@@ -54,7 +54,9 @@ export class SpellService {
 
   start() {
     if (this.worker) return this.worker;
-    const w = this.worker = new Worker(new URL('./spell-worker.js', import.meta.url));
+    // A small young generation: the worker holds one long-lived dictionary and answers in short bursts,
+    // so a large nursery only sat empty (about 7 MB of it). Loading is no slower (measured).
+    const w = this.worker = new Worker(new URL('./spell-worker.js', import.meta.url), { resourceLimits: { maxYoungGenerationSizeMb: 2 } });
     w.unref();
     w.on('message', ({ id, ok, value, error }) => { const p = this.waiting.get(id); if (!p) return; this.waiting.delete(id); ok ? p.resolve(value) : p.reject(new Error(error)); });
     const fail = (e) => { for (const p of this.waiting.values()) p.reject(e instanceof Error ? e : new Error('The spelling checker stopped.')); this.waiting.clear(); this.worker = null; this.loaded = null; };

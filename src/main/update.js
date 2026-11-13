@@ -104,7 +104,7 @@ export function installKind({ platform, packaged, execPath, env, exists }) {
 export async function download({ asset, dest, fetch, onProgress = () => {}, signal, userAgent = 'STET' }) {
   let res;
   try {
-    res = await fetch(asset.url, { headers: { Accept: 'application/octet-stream', 'User-Agent': userAgent }, signal });
+    res = await fetch(asset.url, { cache: 'no-store', headers: { Accept: 'application/octet-stream', 'User-Agent': userAgent }, signal });
   } catch {
     if (signal?.aborted) throw new UpdateError('Cancelled.', { cancelled: true });
     throw new UpdateError("STET couldn't reach GitHub. Check your internet connection and try again.");

@@ -82,7 +82,7 @@ async function getJson(get, url) { return JSON.parse((await get(url)).toString('
 /** A fetch(url) → Buffer, with a time limit and a size limit; throws on anything but a 200. */
 export function getter(fetch) {
   return async (url) => {
-    const r = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT), headers: { 'User-Agent': 'STET', Accept: '*/*' } });
+    const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT), headers: { 'User-Agent': 'STET', Accept: '*/*' } });
     if (!r.ok) throw new Error(`${r.status} from ${new URL(url).host}`);
     const len = +r.headers.get('content-length');
     if (len > MAX) throw new Error('too large');

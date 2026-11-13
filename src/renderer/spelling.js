@@ -18,6 +18,7 @@
 import { pos, cmp } from '../core/editor.js';
 import { SPELLED, wordsToCheck, namesIn, inCaseOf, oneEdit, languageName } from '../core/spell.js';
 import { normalize } from '../core/revision.js';
+import { BlockMemo } from '../core/blockmemo.js';
 import { h, esc, open as openDialog } from './ui/dialog.js';
 import { closeMenu } from './ui/commands.js';
 import { arrive, leave, DUR_FAST } from './ui/motion.js';
@@ -39,8 +40,8 @@ export class Spelling {
     this.ready = false;      // the chosen one is loaded
     this.results = new Map(); // word → null (fine) | { fixes, auto }, with the loaded dictionary
     this.asking = null;      // words on their way to the checker
-    this.tokens = new WeakMap(); // block → its words to check (blocks are replaced, never changed)
-    this.nameCache = new WeakMap(); // paragraph -> the names in it
+    this.tokens = new BlockMemo((b) => wordsToCheck(b.text)); // block → its words to check (blocks are replaced, never changed)
+    this.nameCache = new BlockMemo((b) => [...namesIn(b.text)]); // paragraph -> the names in it
     this.marks = [];         // [{ b, s, e, word, fixes, auto }] in script order
     this.timer = 0;
     this.pop = null;
@@ -154,10 +155,7 @@ export class Spelling {
   }
 
   wordsOf(b) {
-    if (!SPELLED.has(b.type)) return [];
-    let t = this.tokens.get(b);
-    if (!t) { t = wordsToCheck(b.text); this.tokens.set(b, t); }
-    return t;
+    return SPELLED.has(b.type) ? this.tokens.get(b) : [];
   }
 
   /** Recompute the marks from the answers (no checking): after an edit, a move of the caret, a word added or ignored. */
@@ -174,6 +172,7 @@ export class Spelling {
           marks.push({ b: bi, s: t.s, e: t.e, word: t.word, fixes: r.fixes, auto: r.auto });
         }
       });
+      this.tokens.keep(ed.blocks); // (only the paragraphs the screenplay holds: not every version undo keeps)
     }
     this.marks = marks;
     this.view.spelling = this.ready && this.opts.suggest && marks.length ? { marks } : null;
@@ -189,15 +188,14 @@ export class Spelling {
     for (const x of ign) if (x.category === 'spelling') s.add(normalize(x.text));
     for (const n of this.ed.characterNames()) for (const w of n.split(/\s+/)) s.add(w.toLowerCase());
     for (const b of this.ed.blocks) if (SPELLED.has(b.type)) for (const n of this.namesOf(b)) s.add(n);
+    this.nameCache.keep(this.ed.blocks);
     this.skip = { key, set: s };
     return s;
   }
 
   /** The names in a paragraph, worked out once for each (a paragraph is replaced whenever it changes). */
   namesOf(b) {
-    let n = this.nameCache.get(b);
-    if (!n) { n = [...namesIn(b.text)]; this.nameCache.set(b, n); }
-    return n;
+    return this.nameCache.get(b);
   }
 
   /** The flagged word at offset o of block b. */

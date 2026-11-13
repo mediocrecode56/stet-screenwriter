@@ -57,6 +57,15 @@ export class Speller {
   constructor(affText, dicText) {
     const aff = this.aff = parseAff(affText);
     this.words = new Map(); // word → its flags (a Set), or null for none
+    // Words share a handful of flag combinations, so each combination is one Set shared by all its
+    // words (a dictionary of 100 000 words holds a few thousand Sets, not 100 000). Never changed after.
+    const shared = new Map();
+    const setOf = (flags) => {
+      const key = flags.join('\u0001');
+      let s = shared.get(key);
+      if (!s) shared.set(key, s = new Set(flags));
+      return s;
+    };
     const lines = dicText.split(/\r?\n/);
     for (let i = 1; i < lines.length; i++) { // (the first line is the count)
       const line = lines[i].trim();
@@ -68,7 +77,7 @@ export class Speller {
       flags = typeof flags === 'string' ? (aff.aliases && /^\d+$/.test(flags) ? aff.aliases[+flags - 1] || [] : splitFlags(flags, aff.flag)) : flags;
       if (!word) continue;
       const had = this.words.get(word);
-      const set = had ? new Set([...had, ...flags]) : flags.length ? new Set(flags) : null;
+      const set = had ? setOf([...new Set([...had, ...flags])]) : flags.length ? setOf(flags) : null;
       this.words.set(word, set);
     }
     // The affix rules by what they add, for taking an ending (or a beginning) off a word.
@@ -133,11 +142,18 @@ export class Speller {
     word = word.replace(/’/g, "'");
     let v = this.cache.get(word);
     if (v !== undefined) return v;
-    const lower = word.toLowerCase(), cap = lower[0].toUpperCase() + lower.slice(1);
-    v = this.form(word) || (word !== lower && (word === cap || word === word.toUpperCase()) && this.form(lower)) || (word === word.toUpperCase() && this.form(cap));
-    if (!v && /'s$/i.test(word)) v = this.has(word.slice(0, -2)); // a possessive
-    if (this.cache.size > 50000) this.cache.clear();
+    v = this.knows(word);
+    if (this.cache.size > 20000) this.cache.clear();
     this.cache.set(word, v);
+    return v;
+  }
+
+  /** has(), without remembering the answer: for the hundreds of made-up candidates a suggestion tries,
+   *  which would only fill the cache with words nobody wrote. */
+  knows(word) {
+    const lower = word.toLowerCase(), cap = lower[0].toUpperCase() + lower.slice(1);
+    let v = this.form(word) || (word !== lower && (word === cap || word === word.toUpperCase()) && this.form(lower)) || (word === word.toUpperCase() && this.form(cap));
+    if (!v && /'s$/i.test(word)) v = this.has(word.slice(0, -2)); // a possessive
     return v;
   }
 
@@ -148,7 +164,7 @@ export class Speller {
   /** [fix, rank] one edit away, best first (rank 0 a swap, 1 a known slip, 2 a doubled letter, 3–4 the rest). */
   ranked(word) {
     const w = word.replace(/’/g, "'").toLowerCase(), found = new Map();
-    const add = (c, rank) => { if (c && c !== w && !found.has(c) && this.has(c)) found.set(c, rank); };
+    const add = (c, rank) => { if (c && c !== w && !found.has(c) && this.knows(c)) found.set(c, rank); };
     for (let i = 0; i + 1 < w.length; i++) add(w.slice(0, i) + w[i + 1] + w[i] + w.slice(i + 2), 0);
     for (const [from, to] of this.aff.rep) for (let i = w.indexOf(from); i >= 0; i = w.indexOf(from, i + 1)) add(w.slice(0, i) + to + w.slice(i + from.length), 1);
     for (let i = 0; i < w.length; i++) { add(w.slice(0, i) + w[i] + w.slice(i), 2); if (w[i] === w[i + 1]) add(w.slice(0, i) + w.slice(i + 1), 2); }

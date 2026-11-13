@@ -41,6 +41,7 @@ export class StatsStore {
     this.timer = null;
     this.writing = Promise.resolve();
     this.lastBackupDay = null;
+    this.written = null;    // the text last written: the same again is not written twice
     this.dirty = false;
     this.book = new StatsBook(null, now);
     this._load();
@@ -147,7 +148,10 @@ export class StatsStore {
       // Daily safety copy of the last good file.
       try { parse(await fs.readFile(this.file)); await fs.copyFile(this.file, this.bak); this.lastBackupDay = today; } catch {}
     }
-    await atomicWrite(this.file, Buffer.from(JSON.stringify(this.book.data, null, 1)), { verify: parse });
+    const text = JSON.stringify(this.book.data, null, 1);
+    if (text === this.written) return; // (unchanged: quitting flushes twice, and an exit cuts the second short)
+    await atomicWrite(this.file, Buffer.from(text), { verify: parse });
+    this.written = text;
   }
 }
 
