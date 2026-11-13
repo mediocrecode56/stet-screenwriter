@@ -78,10 +78,14 @@ test('a review sends a structured request with a progress indicator; one list in
   assert.equal(await app.eval('__stet.revision.run.rejected'), 1, 'the made-up element discarded');
   assert.deepEqual(await app.eval('[...document.querySelectorAll("#rev .rv-item")].map((n) => n.dataset.id)'), f.map((x) => x.id), 'one list, in script order');
   assert.deepEqual(f.map((x) => x.at.b), [1, 3, 4, 5]);
-  // The top of the panel: no title, the last review in one line, the button centred under it, clear of the edges.
-  const top = await app.eval(`(() => { const h = document.getElementById('rev'), r = h.getBoundingClientRect(), l = h.querySelector('.rv-line').getBoundingClientRect(), b = h.querySelector('.rv-run').getBoundingClientRect();
-    return { title: /ENGLISH/.test(h.textContent), first: l.bottom <= b.top && l.top - r.top < 16, one: l.height < 16, off: Math.abs((b.left + b.right) / 2 - (r.left + r.right) / 2), gap: b.left - r.left, text: h.querySelector('.rv-line').textContent }; })()`);
+  // The top of the panel: no title, the last review in one line, the two reviews (the usual one and
+  // the strict one) side by side under it, set alike, centred as a pair, clear of the edges.
+  const top = await app.eval(`(() => { const h = document.getElementById('rev'), r = h.getBoundingClientRect(), l = h.querySelector('.rv-line').getBoundingClientRect(), [b, s] = [...h.querySelectorAll('.rv-run')].map((x) => x.getBoundingClientRect());
+    return { title: /ENGLISH/.test(h.textContent), first: l.bottom <= b.top && l.top - r.top < 16, one: l.height < 16, off: Math.abs((b.left + s.right) / 2 - (r.left + r.right) / 2), gap: b.left - r.left, text: h.querySelector('.rv-line').textContent,
+      labels: [...h.querySelectorAll('.rv-run')].map((x) => x.textContent), alike: [Math.abs(b.width - s.width) < 1, b.top === s.top, b.height === s.height, b.right < s.left] }; })()`);
   assert.deepEqual([top.title, top.first, top.one], [false, true, true], 'no title; the status first, on one line');
+  assert.deepEqual(top.labels, ['REVIEW AGAIN', 'STRICT REVIEW']);
+  assert.deepEqual(top.alike, [true, true, true, true], 'one width, one line, one height, side by side');
   assert.ok(top.off < 1.5 && top.gap >= 16, `centred (${top.off}px off), ${top.gap}px from the edge`);
   assert.match(top.text, /^Reviewed .+ · 4 of 4 open/);
   await app.eval('__stet.view.frame()');
@@ -269,27 +273,125 @@ test('suggestions, decisions and ignored passages are kept across a restart; a n
   assert.ok(!f.some((x) => x.cat === 'non_native' || x.id === g.id), 'ignored passages not shown again; the old ones gone');
   // Set aside once, a guideline is soft: the suggestion still comes, marked as close to it.
   assert.equal(await app.eval(`__stet.revision.findings.filter((x) => x.original === 'ITNRO' && x.guide).length`), 1, 'shown, marked as close to a guideline');
-  const sys = mock.requests.find((r) => r.body && r.body.system).body.system[0].text;
-  assert.match(sys, /guidelines[\s\S]*\[hint\] awkward: "ITNRO"[\s\S]*a band name/);
+  const sys = mock.requests.find((r) => r.body && Array.isArray(r.body.system)).body.system[0].text;
+  assert.match(sys, /guidelines[\s\S]*never make you leave a problem out[\s\S]*G1 \[hint\] awkward: "ITNRO"[\s\S]*a band name/);
   assert.match(sys, /already reviewed[\s\S]*looking to him since five minutes/);
-  // The guidelines window: the passages ignored in this screenplay first, then the guidelines (what
-  // they are for in one sentence), each section folding from its header with its own RESET, which
-  // works only on a second press and empties that section alone.
+});
+
+const gl = (sel) => `#overlay .dlg.gl-dlg ${sel}`;
+const rows = () => app.eval(`[...document.querySelectorAll('${gl('.gl-row')}')].map((r) => [r.querySelector('.gl-lv')?.textContent || '', r.querySelector('.gl-main').textContent, r.querySelector('.gl-meta')?.textContent || ''])`);
+
+test('a guideline set aside twice holds the suggestion back, in sight under HELD BACK; REOPEN brings it back; a strict review leaves the guidelines out', async () => {
+  // (ITNRO is a guideline already, set aside once in the test before: the second time makes it firm. Of the
+  // other three, one was accepted there and one ignored: one is left open.)
+  const it = (await findings()).find((x) => x.o === 'ITNRO');
+  await app.eval(`__stet.revision.addToGuidelines('${it.id}', '')`);
+  mock.requests.length = 0;
+  await review();
+  let f = await findings();
+  assert.deepEqual(f.filter((x) => x.decision).map((x) => [x.o, x.decision]), [['ITNRO', 'held']], 'held back, and still with the review');
+  assert.match(await app.eval(`document.querySelector('#rev .rv-line').textContent`), /1 of 1 open · 1 ignored · 1 held back by your guidelines/);
+  assert.equal(await app.eval(`document.querySelector('#rev .rv-held .tb').textContent.trim()`), '▸ HELD BACK · 1');
+  assert.equal(await app.eval(`document.querySelectorAll('#rev .rv-held .rv-item').length`), 0, 'folded: out of the way');
+  await app.clickOn('#rev .rv-held .tb');
+  await app.until(`document.querySelectorAll('#rev .rv-held .rv-item').length === 1`, { what: 'the held ones unfolded' });
+  assert.match(await app.eval(`document.querySelector('#rev .rv-held .rv-dec').textContent`), /^Held back by your guidelines: “ITNRO”$/);
+  assert.equal(await app.eval(`document.querySelectorAll('.revr').length`), 1, 'not marked in the script');
+  await app.clickOn('#rev .rv-held [data-act="reopen"]');
+  await app.until(`__stet.revision.open().length === 2 && !document.querySelector('#rev .rv-held')`, { what: 'reopened: an open suggestion again' });
+  // Accepted after all: that counts against the guideline, which is no longer firm.
+  await app.eval(`__stet.revision.accept([__stet.revision.findings.find((x) => x.original === 'ITNRO').id])`);
+  await app.until(`__stet.settings().guidelines.some((g) => g.against)`, { what: 'the guideline weakened' });
+  assert.equal((await texts())[3], "Ain't nobody awake. INTRO starts soon.");
+  await app.key('Mod+Z');
+  await settled();
+  // Firm again, and a strict review: nothing about guidelines is sent, nothing held, nothing marked.
+  await app.eval(`(async () => { const r = __stet.revision; for (let i = 0; i < 2; i++) await r.saveFlags([...r.flags, { ...r.flags.find((g) => !g.against), at: Date.now() + i }]); })()`);
+  mock.requests.length = 0;
+  await app.eval('(() => { const r = __stet.revision; window.__run0 = r.run; })()');
+  await app.clickOn('#rev [data-act="run-strict"]');
+  await app.dialogMatching(/STRICT REVIEW/);
+  await app.press('Review');
+  await ended();
+  f = await findings();
+  assert.deepEqual([f.length, f.filter((x) => x.decision).length], [2, 0], 'everything Claude found is open');
+  assert.equal(await app.eval(`__stet.revision.findings.some((x) => x.guide)`), false, 'none marked GUIDELINE?');
+  assert.equal(await app.eval('__stet.session.doc.revision.review.strict'), true);
+  assert.match(await app.eval(`document.querySelector('#rev .rv-line').textContent`), /^Strict review .+ · 2 of 2 open/);
+  const strictSys = mock.requests.find((r) => r.body && Array.isArray(r.body.system)).body.system[0].text;
+  assert.ok(!/The writer's guidelines/.test(strictSys), 'the guidelines are not sent');
+  assert.match(strictSys, /already reviewed[\s\S]*looking to him since five minutes/, 'the passages ignored in this screenplay stay ignored');
+});
+
+test('the guidelines window: the direction written by Claude, two tabs, the kinds, a list that scrolls on its own, RESET on a second press', async () => {
+  // Enough guidelines to scroll, each its own passage and its own change (alike, they would be one habit).
+  await app.eval(`(async () => { const r = __stet.revision; let fl = r.flags;
+    for (let i = 0; i < 30; i++) fl = [...fl, { text: 'line number ' + i + ' here', category: 'awkward', replacement: 'row ' + i + ' there', edit: '', note: '', at: 1000 + i }];
+    fl = [...fl, { text: '', category: null, replacement: '', edit: '', note: 'Rosa mixes Spanish into her lines', at: 5 }];
+    await r.saveFlags(fl); })()`);
   await app.eval(`__stet.cmd.run('revise-guides')`);
-  const sec = (k) => `#overlay .dlg .gl-sec[data-k="${k}"]`;
-  await app.until(`!!document.querySelector('${sec('guides')} .gl-reset')`, { what: 'the guidelines window' });
-  assert.deepEqual(await app.eval(`[...document.querySelectorAll('#overlay .dlg .gl-sec')].map((s) => s.dataset.k)`), ['ignored', 'guides'], 'ignored at the top');
-  assert.equal(await app.eval(`document.querySelector('${sec('guides')} .gl-in > p.gl-lead').textContent`), 'What Revise leaves alone everywhere, learned from the suggestions you set aside.');
-  await app.clickOn(`${sec('guides')} .gl-fold`);
-  await app.until(`document.querySelector('${sec('guides')}').classList.contains('shut')`, { what: 'the guidelines folded shut' });
-  await app.clickOn(`${sec('guides')} .gl-fold`);
-  await app.until(`!document.querySelector('${sec('guides')}').classList.contains('shut')`, { what: 'and open again' });
+  await app.until(`document.querySelectorAll('${gl('.gl-row')}').length === 33`, { what: 'the guidelines window' }); // (32 guidelines, and a habit noticed: Teo's lines)
+  // The direction: asked of Claude for these guidelines, shown as written, kept with the settings.
+  await app.until(`/^Mock Claude says: 33 guidelines\\.$/.test(document.querySelector('${gl('.gl-dir-t')}').textContent)`, { what: 'the direction from Claude', timeout: 15000 });
+  assert.equal(await app.eval(`document.querySelector('${gl('.gl-dir-by')}').textContent`), 'written by Claude');
+  const ask = mock.requests.filter((r) => r.body && typeof r.body.system === 'string').at(-1).body;
+  assert.equal(ask.model, 'claude-haiku-5-5', 'a small job: the smallest model');
+  assert.match(ask.messages[0].content, /^The guidelines:\n\[firm\] awkward: "ITNRO"/);
+  assert.match(await app.eval('__stet.settings().guidelineDirection.text'), /^Mock Claude says/);
+  // The tabs with their counts; the kinds; the list.
+  assert.deepEqual(await app.eval(`[...document.querySelectorAll('${gl('.gl-tab')}')].map((t) => t.textContent)`), ['EVERY SCREENPLAY32', 'THIS SCREENPLAY1']);
+  assert.deepEqual(await app.eval(`[...document.querySelectorAll('${gl('.gl-kind')}')].map((t) => t.textContent + (t.disabled ? '-' : ''))`), ['FIRM1', 'LEARNING30', 'HABIT1', 'NOTE1']);
+  let list = await rows();
+  assert.deepEqual(list[0].slice(0, 2), ['FIRM', 'ITNRO']);
+  assert.match(list[0][2], /^Awkward Phrasing · set aside 4 times · accepted once · “a band name”/);
+  assert.deepEqual(list.slice(-2).map((x) => x.slice(0, 2)), [['NOTE', 'Rosa mixes Spanish into her lines'], ['HABIT', 'TEO’s lines']], 'the notes, then what the choices show together');
+  // Scrolling: only the list moves, inside its own box; the direction, tabs and field stay where they are.
+  const box = () => app.eval(`(() => { const q = (s) => document.querySelector('${gl('')}' + s).getBoundingClientRect(), s = document.querySelector('${gl('.gl-scroll')}'), l = q('.gl-scroll');
+    const out = [...s.querySelectorAll('.gl-row')].map((r) => r.getBoundingClientRect()).filter((r) => r.bottom > l.top && r.top < l.bottom);
+    return { dir: q('.gl-dir').top, bar: q('.gl-bar').top, tools: q('.gl-tools').bottom, add: q('.gl-add').top, top: l.top, bottom: l.bottom, scrolls: s.scrollHeight > s.clientHeight, at: s.scrollTop, body: document.querySelector('${gl('.gl-body')}').scrollTop,
+      hit: document.elementFromPoint(l.left + 40, l.top - 6).closest('.gl-tools, .gl-row')?.className, shown: out.length }; })()`);
+  const b0 = await box();
+  assert.ok(b0.scrolls && b0.tools <= b0.top + 0.5 && b0.bottom <= b0.add + 0.5, 'the list in its own box, between the kinds and the field');
+  const mid = await app.rect(gl('.gl-scroll'));
+  await app.wheel(mid.x, mid.y, 600);
+  await app.until(`document.querySelector('${gl('.gl-scroll')}').scrollTop > 300`, { what: 'the list scrolled' });
+  const b1 = await box();
+  assert.deepEqual([b1.dir, b1.bar, b1.tools, b1.add, b1.top, b1.body], [b0.dir, b0.bar, b0.tools, b0.add, b0.top, 0], 'nothing else moved');
+  assert.equal(b1.hit, 'gl-tools', 'no row over the first row of the window');
+  // A kind picked shows only those; the field finds by words.
+  await app.clickOn(gl('.gl-kind[data-k="note"]'));
+  await app.until(`document.querySelectorAll('${gl('.gl-row')}').length === 1`, { what: 'only the notes' });
+  await app.clickOn(gl('.gl-kind[data-k="note"]'));
+  await app.clickOn(gl('.gl-q'));
+  await app.type('number 2');
+  await app.until(`document.querySelectorAll('${gl('.gl-row')}').length === 11`, { what: 'found by its words' });
+  await app.key('Enter');
+  assert.match(await app.dialog(), /REVISE GUIDELINES/, 'Enter in a field never closes the window');
+  await app.eval(`(() => { const q = document.querySelector('${gl('.gl-q')}'); q.value = ''; q.dispatchEvent(new Event('input')); })()`);
+  // One written by hand; one removed; the direction written again each time.
+  mock.requests.length = 0;
+  await app.clickOn(gl('.gl-add input'));
+  await app.type('Teo drops his articles');
+  await app.key('Enter');
+  await app.until(`document.querySelectorAll('${gl('.gl-row')}').length === 34`, { what: 'the note added' });
+  await app.until(`/^Mock Claude says: 34 guidelines/.test(document.querySelector('${gl('.gl-dir-t')}').textContent)`, { what: 'the direction written again', timeout: 15000 });
+  await app.eval(`document.querySelector('${gl('.gl-scroll')}').scrollTop = 0`);
+  await app.clickOn(gl('.gl-row .gl-x'));
+  await app.until(`document.querySelectorAll('${gl('.gl-row')}').length === 32 && !__stet.settings().guidelines.some((g) => g.text === 'ITNRO')`, { what: 'the first one removed, with all its flags' });
+  await app.until(`/^Mock Claude says: 32 guidelines/.test(document.querySelector('${gl('.gl-dir-t')}').textContent)`, { what: 'and again', timeout: 15000 });
+  assert.equal(mock.requests.filter((r) => r.body && typeof r.body.system === 'string').length, 2, 'once for each change');
+  // The other tab: the passages ignored in this screenplay. RESET works on a second press, on the tab shown alone.
+  await app.clickOn(gl('.gl-tab[data-k="ignored"]'));
+  await app.until(`document.querySelectorAll('${gl('.gl-row')}').length === 1 && document.querySelector('${gl('.gl-add')}').hidden`, { what: 'the ignored passages' });
+  assert.deepEqual(await rows(), [['', 'looking to him since five minutes', 'Non-Native Construction']]);
+  await app.clickOn(gl('.gl-tab[data-k="guides"]'));
   const ignored = await app.eval('__stet.session.doc.revision.ignored.length');
-  await app.clickOn(`${sec('guides')} .gl-reset`);
-  assert.equal(await app.eval(`document.querySelector('${sec('guides')} .gl-reset').textContent`), 'CONFIRM');
+  await app.clickOn(gl('.gl-reset'));
+  assert.equal(await app.eval(`document.querySelector('${gl('.gl-reset')}').textContent`), 'CONFIRM');
   assert.ok((await app.eval('__stet.settings().guidelines.length')) > 0, 'one press: nothing forgotten');
-  await app.clickOn(`${sec('guides')} .gl-reset`);
-  await app.until(`(__stet.settings().guidelines || []).length === 0 && document.querySelector('${sec('guides')} .gl-reset').disabled`, { what: 'the guidelines reset' });
+  await app.clickOn(gl('.gl-reset'));
+  await app.until(`(__stet.settings().guidelines || []).length === 0 && document.querySelector('${gl('.gl-reset')}').disabled`, { what: 'the guidelines reset' });
+  assert.equal(await app.eval(`document.querySelector('${gl('.gl-dir-t')}').textContent`), 'No guidelines yet: Revise flags everything it finds.');
   assert.equal(await app.eval('__stet.session.doc.revision.ignored.length'), ignored, 'the ignored passages left as they were');
   await app.key('Escape');
 });

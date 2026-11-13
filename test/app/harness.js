@@ -103,6 +103,9 @@ export class App {
     await app.send('Runtime.enable');
     // Started: the screenplay to reopen is open, or STET is asking about unsaved work from a crash.
     await app.until(`!!window.__stet && (__stet.started || !!document.querySelector('#overlay:not([hidden]) .dlg'))`, { what: 'STET to finish starting', timeout: START_MS });
+    // Its window is shown a moment after STET says it has started, its contents fading up (ui/startup.js);
+    // a press sent before it is on screen is simply lost. The tests begin once it has come up.
+    if (!hidden) await app.until(`!document.documentElement.matches('.starting, .opening, .opened')`, { timeout: 3000, what: 'the window to come up' }).catch(() => {});
     return app;
   }
 

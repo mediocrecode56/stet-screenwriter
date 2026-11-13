@@ -17,7 +17,13 @@
 
 import { cueName } from './model.js';
 
+// The models, chosen by measuring (docs/DEVELOPING.md, "Which model reviews"): Sonnet 5.5 found every
+// planted mistake, obvious and subtle, and left the characters' voices alone; Haiku 5.5 missed one
+// subtle mistake in five; low effort found exactly what medium did for fewer tokens. The one
+// sentence about the guidelines (core/guidelines.js) is a small job: the smallest model.
 export const MODEL = 'claude-sonnet-5-5';
+export const EFFORT = 'low';
+export const SUMMARY_MODEL = 'claude-haiku-5-5';
 export const CATEGORIES = ['grammar', 'non_native', 'awkward'];
 export const CATEGORY_LABEL = { grammar: 'Grammar Error', non_native: 'Non-Native Construction', awkward: 'Awkward Phrasing', spelling: 'Spelling' }; // (spelling: words ignored by Spelling)
 export const CONFIDENCE = ['high', 'medium', 'low'];
@@ -53,6 +59,7 @@ For each issue give:
 - replacement: what should replace original. Change only what is needed and keep the writer's own words everywhere else.
 - explanation: one or two plain sentences saying what is wrong and why the replacement is correct or more natural.
 - confidence: "high" = clearly an error a careful editor would fix; "medium" = very likely unnatural but could be deliberate; "low" = possibly intentional or a matter of taste.
+- guideline: the number of the writer's guideline that covers this passage (for example "G3"), when the writer's guidelines are listed below and one clearly does; otherwise an empty string.
 
 Never report the same span twice or two overlapping spans — combine them into one finding.`;
 
@@ -70,8 +77,9 @@ export const FINDINGS_SCHEMA = {
           replacement: { type: 'string' },
           explanation: { type: 'string' },
           confidence: { type: 'string', enum: CONFIDENCE },
+          guideline: { type: 'string' },
         },
-        required: ['element', 'category', 'original', 'replacement', 'explanation', 'confidence'],
+        required: ['element', 'category', 'original', 'replacement', 'explanation', 'confidence', 'guideline'],
         additionalProperties: false,
       },
     },
@@ -226,6 +234,7 @@ export function validateFindings(chunk, raw, blockRefs) {
       contextBefore: el.text.slice(Math.max(0, m.s - 30), m.s), contextAfter: el.text.slice(m.e, m.e + 30),
       category: r.category, confidence: r.confidence, explanation: r.explanation.trim().slice(0, 600),
       type: el.type, ...(el.speaker ? { speaker: el.speaker } : {}), // (what the guidelines learn from)
+      ...(typeof r.guideline === 'string' && r.guideline.trim() ? { tagged: r.guideline.trim().slice(0, 12) } : {}), // (the guideline Claude says covers it: core/guidelines.js)
       decision: null, appliedText: null,
     });
   }
@@ -267,8 +276,10 @@ export function resolveOverlaps(findings) {
 // when that is certain; otherwise it is reported as not locatable, never
 // pointed at a different passage.
 
-export const DECISIONS = ['accepted', 'discarded', 'ignored', 'guideline'];
-export const DECISION_LABEL = { accepted: 'Accepted', discarded: 'Discarded', ignored: 'Ignored', guideline: 'Added to guidelines' };
+// ('held': never shown as open because the writer's guidelines cover it; kept with the review, so
+// nothing a guideline does is out of sight, and REOPEN brings it back.)
+export const DECISIONS = ['accepted', 'discarded', 'ignored', 'guideline', 'held'];
+export const DECISION_LABEL = { accepted: 'Accepted', discarded: 'Discarded', ignored: 'Ignored', guideline: 'Added to guidelines', held: 'Held back by your guidelines' };
 
 export function indexById(blocks) {
   const m = new Map();
@@ -448,14 +459,14 @@ export function afterApply(findings, plan, blocks) {
 
 // ---- storing a review in the .stet file -------------------------------------------------
 
-const KEEP = ['id', 's', 'e', 'padL', 'padR', 'original', 'replacement', 'shownOriginal', 'shownReplacement', 'contextBefore', 'contextAfter', 'category', 'confidence', 'explanation', 'decision', 'appliedText', 'guide', 'type', 'speaker'];
+const KEEP = ['id', 's', 'e', 'padL', 'padR', 'original', 'replacement', 'shownOriginal', 'shownReplacement', 'contextBefore', 'contextAfter', 'category', 'confidence', 'explanation', 'decision', 'appliedText', 'guide', 'heldBy', 'type', 'speaker'];
 
 /** Plain-JSON form of a review. Block ids aren't stored in files, so positions use element numbers. */
 export function reviewToJSON(review, blocks) {
   if (!review) return null;
   const idx = indexById(blocks);
   return {
-    id: review.id, at: review.at, model: review.model, state: review.state,
+    id: review.id, at: review.at, model: review.model, state: review.state, ...(review.strict ? { strict: true } : {}),
     findings: review.findings.map((f) => {
       const o = {};
       for (const k of KEEP) if (f[k] !== undefined && f[k] !== null) o[k] = f[k];
@@ -485,11 +496,12 @@ export function reviewFromJSON(r, blocks) {
       explanation: isStr(x.explanation) ? x.explanation : '',
       decision: x.decision === 'dictionary' ? 'guideline' : DECISIONS.includes(x.decision) ? x.decision : null, // (before 0.37: "in dictionary")
       appliedText: isStr(x.appliedText) ? x.appliedText : null,
+      ...(isStr(x.heldBy) && x.heldBy ? { heldBy: x.heldBy.slice(0, 200) } : {}),
       ...(REVIEWABLE.has(x.type) ? { type: x.type } : {}), ...(isStr(x.speaker) && x.speaker ? { speaker: x.speaker.slice(0, 60) } : {}),
       ...(x.guide && typeof x.guide.score === 'number' ? { guide: { score: x.guide.score, notes: Array.isArray(x.guide.notes) ? x.guide.notes.filter(isStr) : [] } } : {}),
     });
   }
-  return { id: isStr(r.id) ? r.id : 'r0', at: isStr(r.at) ? r.at : null, model: isStr(r.model) ? r.model : MODEL, state: isStr(r.state) ? r.state : 'complete', findings };
+  return { id: isStr(r.id) ? r.id : 'r0', at: isStr(r.at) ? r.at : null, model: isStr(r.model) ? r.model : MODEL, state: isStr(r.state) ? r.state : 'complete', ...(r.strict === true ? { strict: true } : {}), findings };
 }
 
 /** Rough size of a review for the consent dialog. */

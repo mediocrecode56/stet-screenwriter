@@ -33,6 +33,9 @@ if (mode === 'logged-out') { out({ subtype: 'success', is_error: true, result: '
 if (mode === 'limit') { out({ subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1762600000', api_error_status: 429 }); process.exit(1); }
 if (mode === 'garbage') { process.stdout.write('panic: something broke\n'); process.exit(2); }
 
+// Not a review (no findings schema asked for): the short answer in plain words (the guidelines' direction).
+if (!args.includes('--json-schema')) { out({ subtype: 'success', is_error: false, result: `Fake Claude Code says: ${stdin.split('\n').length - 1} guidelines.` }); process.exit(0); }
+
 const findings = [];
 for (const el of elementsOf(stdin)) {
   for (const [find, replacement, category, confidence] of RULES) {

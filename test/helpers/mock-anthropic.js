@@ -19,7 +19,9 @@ export async function startMock(handler) {
     }
     if (req.method !== 'POST' || !req.url.startsWith('/v1/messages')) { res.writeHead(404); res.end(); return; }
     const prompt = json.messages[0].content;
-    const plan = (await handler({ prompt, body: json, attempt: requests.filter((r) => r.body && r.body.messages && r.body.messages[0].content === prompt).length })) || {};
+    // Not a review: a short answer in plain words (the guidelines' direction), never the test's handler.
+    const ask = !String(prompt).includes('<review>');
+    const plan = ask ? { raw: `Mock Claude says: ${String(prompt).split('\n').length - 1} guidelines.` } : (await handler({ prompt, body: json, attempt: requests.filter((r) => r.body && r.body.messages && r.body.messages[0].content === prompt).length })) || {};
     if (plan.delayMs) await new Promise((r) => setTimeout(r, plan.delayMs));
     if (res.destroyed || res.writableEnded) return; // client cancelled while we waited
     if (plan.status) {

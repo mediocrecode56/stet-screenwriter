@@ -30,6 +30,8 @@ src/
     pdf-worker.js  worker thread: JSON -> pages -> PDF bytes
     spell.js       the dictionaries installed on the computer;  spell-worker.js  the worker thread that checks words
     dictinstall.js a dictionary downloaded when none is installed (several sources, each checked)
+    cli.js         running a command-line helper (Claude Code, Codex): stdin, a time limit, cancelling
+    osclock.js     the operating system's own offset from UTC (Windows), for the day the statistics count by
   renderer/    sandboxed UI (no Node access)
     app.js         composition root, commands, document operations
     view.js        virtualised page renderer, caret/selection overlays, hit testing, zoom
@@ -38,6 +40,7 @@ src/
     spelling.js    spelling: underlines, the right-click fixes, Auto, the toolbar menu
     ui/resize.js   side panels widened by dragging their inner edge (the lock beside REVISE)
     dino.js        the writing companion: behaviour engine and canvas;  dino-acts.js  its repertoire;  dino-art.js  its pixel art
+    ui/guidelines.js the Revise guidelines window: the direction, the tabs, the kinds, the list
     ui/icons.js    every toolbar and menu icon, shared so a menu shows the toolbar's own
     ui/            menus + palette (one command registry), dialogs, panels, find bar
   preload.cjs  whitelisted IPC bridge
@@ -145,7 +148,8 @@ Since 0.6 a suggestion never changes or resolves by itself: `locate()`
 recomputes only its position — unchanged element, exact diff against the
 element version last seen, same text with the same context, a distinctive
 unique phrase — and otherwise reports it as not locatable. Decisions
-(accepted / discarded / ignored / guideline) change only through the panel.
+(accepted / discarded / ignored / guideline) change only through the panel; `held`
+is the one a review sets itself, for what the writer's guidelines cover (below).
 What no screenplay should have flagged lives in the writer's guidelines
 (`src/core/guidelines.js`, `settings.guidelines`), never in the spelling
 dictionary. They are soft, and stored as evidence, never as rules: each suggestion
@@ -155,10 +159,34 @@ against. A new suggestion is weighed against every flag by the closest thing the
 share: the same passage 1, the same edit 0.5, one passage inside the other 0.4, the
 same words kept whatever the fix 0.35; apart from those, flags of the same kind in
 the same character's lines add 0.25 each, up to 1.5 (a voice alone never hides one).
-It is held back at 2 (2.5 when Claude is highly confident, 1.5 when it is not), and
-from 0.4 shown marked GUIDELINE?, with Claude told about it as a hint. Patterns across
-many flags (words kept against several fixes, a character's voice) go to Claude as
-patterns to apply to similar passages. The list keeps at most 400 flags, letting go of
+It is held back at 2 (1.5 when Claude is not confident), and from 0.4 shown marked
+GUIDELINE?.
+
+The guidelines must never make a review stop finding mistakes, so they are narrow by
+construction. Claude is told to report everything, guidelines or not, and only to name
+the guideline that covers a passage (each finding's `guideline`: G1, G2…, the numbered
+list from `promptEntries()`); what is held back is decided in `applyGuidelines()`,
+never by Claude leaving something out. What Claude calls a clear error (high
+confidence) is held back only by its very passage, set aside three times: the same
+edit elsewhere, a character's voice, a pattern or a note can mark it, never hide it. An
+edit that only adds words ("→the") is no habit and counts for its own passage only.
+Nothing held back is thrown away: it stays in the review with the decision `held` and
+what covers it (`heldBy`), listed in the panel under HELD BACK, where Reopen brings it
+back and accepting it then counts against the guideline. A strict review (the panel's
+STRICT REVIEW, `review.strict`) sends no guidelines and applies none; the passages
+ignored in the screenplay stay ignored.
+
+The direction is one sentence about where the guidelines are taking the review,
+shown at the top of the guidelines window (`src/renderer/ui/guidelines.js`). It is
+written by Claude (`claude.ask()` in the main process: the smallest model, by the
+same connection a review uses, Codex when Claude has no usage left) a moment after a
+guideline is added or removed, once for a run of changes, and kept in
+`settings.guidelineDirection` with the key of the flags it was written for
+(`flagsKey()`), so it is never written twice for the same guidelines. Until it
+arrives, and when Claude can't be reached, a plain count stands in (`localDirection()`).
+
+Patterns across many flags (words kept against several fixes, a character's voice) go
+to Claude as patterns that cover similar passages. The list keeps at most 400 flags, letting go of
 the surplus examples of understood guidelines before anything else, so nothing learned
 is lost to age. Passages are compared in one Unicode form, without case or end
 punctuation; scripts without spaces (Chinese, Japanese, Thai…) count a character as a word.
@@ -196,6 +224,15 @@ files kept aside, a newer format left untouched, 0.6's format upgraded with
 undo is charged to the right day. The only reset is the confirmed one in the
 weekly view: it archives the ledger, clears it and records the reset; credits
 older than the reset are ignored afterwards.
+
+**The day** is the computer's own calendar day. The runtime works the time zone out
+for itself and can disagree with the operating system, which would turn the day over
+an hour early or late; so on Windows the main process asks the system directly
+(`src/main/osclock.js`: ActiveTimeBias from the registry, the offset the taskbar clock
+uses) at start, every five minutes and when the computer wakes, and gives it to
+`setDayOffset()` in `core/stats.js`, in the main process and (over `clock:offset`)
+in the window. Days are added and compared on the calendar alone, never through a
+clock. The window looks again exactly as the day turns (`msToNextDay()`).
 
 **The writing streak** (`core/streak.js`) is booked by the same `apply()`:
 the first positive credit on a calendar day books that day (once, however many
@@ -378,10 +415,14 @@ answers, and recomputes the underlines from them on every edit or caret move
 to the dictionary are spelling's own (`settings.dictionary`; Claude's revision
 has its guidelines instead), and the words ignored are kept with the script in
 `doc.revision.ignored` (category `spelling`), so Tools > Spelling Dictionary
-lists both. With none installed, `src/main/dictinstall.js` downloads one into STET's own
-folder (`userData/dictionaries`, no administrator rights) in the background, at
-once for the computer's language (if that fails, the menu points out Add a
-Language), or one chosen from Add a Language. No single link is
+lists both. A right-click on a flagged word inside a selection that holds several
+acts on them all: the obvious fixes in one undo step, or all added or ignored.
+With none installed, STET offers once a start to download the one for the computer's
+language (a notice above the status bar: DOWNLOAD, NOT NOW, DON'T ASK AGAIN, the last
+kept as `settings.spelling.noOffer`); until there is one the SPELLING button carries
+a small "!" whose tooltip says what is missing. `src/main/dictinstall.js` downloads
+into STET's own folder (`userData/dictionaries`, no administrator rights) in the
+background, that one or one chosen from Add a Language. No single link is
 relied on: it looks at LibreOffice's dictionaries through GitHub's listing of the
 repository, the npm `dictionary-*` packages through jsDelivr's file listing (the
 version pinned), unpkg, and LibreOffice's usual file paths, in that order; every

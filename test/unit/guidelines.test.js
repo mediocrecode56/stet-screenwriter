@@ -2,7 +2,7 @@
 // aside, separate from the spelling dictionary.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { editOf, flagOf, noteFlag, assess, applyGuidelines, addFlag, guidelinesOf, guidelinesPrompt, removeGuideline, cleanFlags, patternsOf, words, FIRM } from '../../src/core/guidelines.js';
+import { editOf, flagOf, noteFlag, assess, applyGuidelines, addFlag, guidelinesOf, guidelinesPrompt, removeGuideline, cleanFlags, patternsOf, words, FIRM, promptEntries, flagsKey, localDirection, directionRequest, cleanDirection, NO_GUIDELINES } from '../../src/core/guidelines.js';
 
 const sug = (shownOriginal, shownReplacement, category = 'grammar', more = {}) => ({ shownOriginal, shownReplacement, original: shownOriginal, replacement: shownReplacement, category, ...more });
 
@@ -131,4 +131,84 @@ test('guidelines saved by earlier versions read the same', () => {
   assert.equal(flags.length, 3);
   assert.equal(assess(sug("Ain't nobody", 'Nobody is'), flags).level, 'firm');
   assert.deepEqual(guidelinesOf(flags).map((g) => g.level), ['firm', 'note']);
+});
+
+// ---- the guidelines never make the review stop finding mistakes ------------------------------
+
+test('nothing held back is thrown away: it stays with the review, marked held with what covers it', () => {
+  const f = sug('ain’t nobody', 'nobody is');
+  const flags = addFlag(addFlag([], flagOf(f)), flagOf(f));
+  const all = [sug('ain’t nobody', 'nobody is', 'grammar', { decision: null }), sug('He go home', 'He goes home', 'grammar', { decision: null })];
+  const r = applyGuidelines(all, flags);
+  assert.equal(r.findings.length, 2, 'both still there');
+  assert.deepEqual(r.findings.map((x) => x.decision), ['held', null]);
+  assert.equal(r.findings[0].heldBy, 'ain’t nobody');
+  assert.ok(r.findings[0].guide, 'accepting it later counts against the guideline');
+});
+
+test('a clear error is held back only by its very passage; a habit, a voice or a pattern only marks it', () => {
+  let flags = [];
+  for (const o of ['I gonna run', 'we gonna eat', 'they gonna leave', 'you gonna see', 'he gonna stay', 'it gonna rain']) flags = addFlag(flags, flagOf(sug(o, o.replace('gonna', 'going to'))));
+  const fresh = (confidence) => sug('she gonna cry', 'she going to cry', 'grammar', { confidence });
+  assert.equal(assess(fresh('medium'), flags).level, 'firm', 'a habit seen six times holds back what Claude is unsure of');
+  assert.equal(assess(fresh('high'), flags).level, 'soft', 'never what Claude calls a clear error');
+  const same = sug('the people says', 'the people say', 'grammar', { confidence: 'high' });
+  let own = [];
+  for (let i = 0; i < 3; i++) own = addFlag(own, flagOf(same));
+  assert.equal(assess(same, own).level, 'firm', 'the same passage set aside three times');
+});
+
+test('an edit that only adds words is no habit: adding "the" somewhere says nothing about anywhere else', () => {
+  let flags = [];
+  for (const [o, r] of [['went to store', 'went to the store'], ['opens door', 'opens the door'], ['on table', 'on the table'], ['at window', 'at the window'], ['in kitchen', 'in the kitchen'], ['by car', 'by the car']]) flags = addFlag(flags, flagOf(sug(o, r)));
+  assert.equal(editOf('went to store', 'went to the store'), '→the');
+  assert.equal(assess(sug('reads letter', 'reads the letter', 'grammar', { confidence: 'low' }), flags).level, 'none', 'a missing article elsewhere is still flagged');
+  assert.equal(guidelinesOf(flags).length, 6, 'six passages, not one rule about articles');
+  assert.equal(assess(sug('on table', 'on the table'), flags).level, 'soft', 'each still counts for its own passage');
+});
+
+test('a voice alone never hides a suggestion, however often it was set aside and however unsure Claude is', () => {
+  const rosa = (o, r, more) => sug(o, r, 'non_native', { type: 'dialogue', speaker: 'ROSA', ...more });
+  let flags = [];
+  for (let i = 0; i < 12; i++) flags = addFlag(flags, flagOf(rosa('line ' + i, 'fixed ' + i)));
+  const a = assess(rosa('She have reason', 'She is right', { confidence: 'low' }), flags);
+  assert.equal(a.level, 'soft');
+  assert.equal(applyGuidelines([rosa('She have reason', 'She is right', { confidence: 'low' })], flags).held, 0);
+});
+
+test('Claude reports everything and only names the guideline: what it names is held or marked here', () => {
+  let flags = addFlag([], noteFlag('Rosa mixes in Spanish on purpose'));
+  const f = sug('ain’t nobody', 'nobody is');
+  flags = addFlag(flags, flagOf(f)); // a hint: set aside once
+  const entries = promptEntries(flags);
+  assert.deepEqual(entries.map((e) => [e.id, e.level]), [['G1', 'hint'], ['G2', 'note']]);
+  const p = guidelinesPrompt(flags);
+  assert.match(p, /never make you leave a problem out/);
+  assert.match(p, /G1 \[hint\] grammar: "ain’t nobody"/);
+  const tagged = (g, confidence) => sug('Que pasa, mijo', 'What is happening, son', 'non_native', { tagged: g, confidence, decision: null });
+  let r = applyGuidelines([tagged('G2', 'medium'), tagged('G2', 'high'), tagged('G1', 'low'), tagged('G9', 'low')], flags);
+  assert.deepEqual(r.findings.map((x) => x.decision), ['held', null, null, null], 'a note holds what Claude is unsure of; a clear error, a hint and a made-up number never');
+  assert.equal(r.findings[0].heldBy, 'Rosa mixes in Spanish on purpose');
+  assert.deepEqual([!!r.findings[1].guide, !!r.findings[2].guide, !!r.findings[3].guide], [true, true, false], 'the others marked GUIDELINE?');
+  assert.ok(r.findings.every((x) => !('tagged' in x)), 'the tag is used up');
+  r = applyGuidelines([tagged('G2', 'medium'), sug('ain’t nobody', 'nobody is', 'grammar', { decision: null })], addFlag(flags, flagOf(f)), { strict: true });
+  assert.deepEqual([r.held, r.findings.map((x) => x.decision), r.findings.some((x) => x.guide)], [0, [null, null], false], 'a strict review ignores them all');
+});
+
+test('the direction: one sentence asked of Claude, a plain one meanwhile, its key changing with the guidelines', () => {
+  assert.equal(directionRequest([]), null, 'nothing to ask with no guidelines');
+  assert.equal(localDirection([]), NO_GUIDELINES);
+  const f = sug('ain’t nobody', 'nobody is');
+  let flags = addFlag([], flagOf(f));
+  const k1 = flagsKey(flags);
+  assert.match(localDirection(flags), /^Revise marks 1 thing you set aside once\. Clear errors are always shown\.$/);
+  flags = addFlag(addFlag(flags, flagOf(f)), noteFlag('Rosa mixes in Spanish'));
+  assert.notEqual(flagsKey(flags), k1);
+  assert.equal(flagsKey(cleanFlags(JSON.parse(JSON.stringify(flags)))), flagsKey(flags), 'the same after a save');
+  assert.match(localDirection(flags), /holds back 1 thing you set aside more than once and reads 1 note you wrote/);
+  const req = directionRequest(flags);
+  assert.match(req.system, /one sentence of at most 28 words/);
+  assert.match(req.prompt, /\[firm\] grammar: "ain’t nobody"\n\[note\] "Rosa mixes in Spanish"/);
+  assert.equal(cleanDirection('  "Revise now leaves Teo’s dialect\nalone."  '), 'Revise now leaves Teo’s dialect alone.');
+  assert.equal(cleanDirection('ok'), '');
 });

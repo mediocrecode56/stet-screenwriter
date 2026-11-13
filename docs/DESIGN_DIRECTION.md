@@ -50,6 +50,15 @@ lessons go at the end of their section. Update this file whenever new feedback a
 - Lists in windows (Revise guidelines) are plain rows: a small tag column, the main text, one quiet
   line of detail under it, a small × to remove. No tables of oversized buttons; no explanatory
   paragraphs where a short lead line will do. Settings need no legends explaining how they work.
+- A window with a long list (Revise guidelines) is big enough to read, and only the list scrolls,
+  in a box of its own under what stays fixed (a summary line, tabs, filters). Nothing sticky: a
+  row must never slide over or under a header. Tabs carry their counts.
+- Something the writer may want and has not asked for (a dictionary to download) is offered in one
+  line above the status bar with its answers beside it, never in a window, and one of the answers
+  ends the offers for good. What is still missing afterwards is a small "!" on the button it
+  belongs to, with a tooltip that says what is missing and how to get it.
+- Two ways to do the same job (Review, Strict Review) sit side by side, set alike; the usual one
+  is the filled one.
 - Show context in plain words (a scene's name, "page 3"), never cryptic codes like "P.3".
 - A View menu item that turns something on or off says what it will do now (Show ... / Hide ...,
   Enter / Leave, Turn On / Turn Off), never a tick beside a fixed name.
@@ -108,4 +117,10 @@ and live in core/format.js; change them only on the owner's word.
 - Startup must feel calm: the window shows once ready and its contents fade up, with no jump.
 - Before every release: unit tests, the full app suite (timed, see stet test timings), the Mac traps.
 - Privacy: nothing personal in the repository (handle only, no real name, no local paths); the
-  script leaves the computer only through Revise, which the writer runs.
+  script leaves the computer only through Revise, which the writer runs. The one addition, asked
+  for by the owner: the guidelines (passages the writer set aside, their notes) go to Claude or
+  Codex when one is added or removed, for the one sentence of direction.
+- The review must never go quiet because of the guidelines: what they hold back stays in sight
+  (HELD BACK), a clear error is always shown, and a strict review ignores them all.
+- A day is the computer's own day: counted from the operating system's clock, never from a time
+  zone worked out some other way.

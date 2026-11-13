@@ -325,7 +325,14 @@ body.cyc-dragging, body.cyc-dragging * { cursor: ew-resize !important; }
 .tb.on { background: var(--inv-bg); color: var(--inv-fg); }
 #btn-spell.off { color: var(--ink-3); } /* spelling off, or no dictionary */
 #btn-spell.need { position: relative; }
-#btn-spell.need::after { content: ''; position: absolute; top: 5px; right: 3px; width: 4px; height: 4px; background: var(--spell); } /* none installed: one can be */
+#btn-spell.need::after { content: '!'; position: absolute; top: 2px; right: 1px; font: 700 10px/1 var(--ui); letter-spacing: 0; color: var(--spell); } /* on, with no dictionary to check with: the tooltip says how to get one */
+/* An offer above the status bar (a dictionary to download): one line and its answers, there until answered. */
+.offer { position: fixed; z-index: 60; left: 50%; bottom: 34px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; max-width: calc(100vw - 24px); padding: 4px 5px 4px 12px; background: var(--page); border: 1px solid var(--rule-strong); box-shadow: 3px 3px 0 var(--rule); font-size: 11px; }
+.offer-t { margin-right: 8px; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.offer .tb { flex: none; height: 22px; padding: 0 9px; font-size: 9px; letter-spacing: .12em; border: 1px solid var(--rule); white-space: nowrap; cursor: pointer; }
+.offer .tb.primary { background: var(--inv-bg); color: var(--inv-fg); border-color: var(--inv-bg); }
+.offer .tb.primary:hover { opacity: .85; }
+.sp-menu .sp-fix.off { color: var(--ink-3); pointer-events: none; }
 #btn-spell.busy { animation: spell-busy 1.2s var(--ease-out) infinite alternate; } /* downloading one */
 @keyframes spell-busy { to { opacity: .45; } }
 .tb sup { font-size: 8px; margin-left: 3px; color: var(--ink-3); vertical-align: 2px; }
@@ -812,7 +819,8 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 /* The top: the last review in one quiet line, the button centred under it, clear of the edges. */
 .rv-status { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 16px 14px; border-bottom: 1px solid var(--rule); }
 .rv-line { align-self: stretch; text-align: center; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rv-run { min-width: 168px; padding: 5px 18px; }
+.rv-runs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; align-self: stretch; }
+.rv-run { flex: 0 1 150px; min-width: 0; padding: 5px 8px; white-space: nowrap; } /* (the two reviews set alike, side by side) */
 /* progress: indeterminate (no fabricated percentage), transform-only so it costs nothing */
 .rv-progress { padding: 12px 16px 14px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 7px; }
 .rv-indet { height: 2px; background: var(--rule); position: relative; overflow: hidden; }
@@ -835,34 +843,51 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-where { display: flex; gap: 8px; margin-top: 3px; font-size: 9px; letter-spacing: .1em; color: var(--ink-3); white-space: nowrap; }
 .rv-sc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rv-pg { flex: none; font-variant-numeric: tabular-nums; }
-/* The guidelines window: two sections that fold from their headers, each with its own reset, each a
-   plain list (a tag, the passage, a quiet line of detail, an × to remove it). */
-.gl-body { width: 560px; max-width: calc(100vw - 80px); max-height: min(64vh, 580px); overflow-y: auto; padding-top: 0; }
-.gl-sec + .gl-sec { margin-top: 16px; }
-.gl-h { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 10px 0 6px; background: var(--page); border-bottom: 1px solid var(--rule-strong); }
-.gl-fold { flex: 1; display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 2px 0; text-align: left; font-size: 10px; letter-spacing: .12em; color: var(--ink); cursor: pointer; }
-.gl-fold .dn { display: inline-block; width: 8px; font-size: 8px; color: var(--ink-3); transition: transform var(--dur-panel) var(--ease-out); }
-.gl-sec.shut .gl-fold .dn { transform: rotate(-90deg); }
-.gl-fold:hover .dn { color: var(--ink); }
+/* The guidelines window (ui/guidelines.js): the direction, the two tabs, the kinds and a field to
+   find by, all fixed; under them the list, the only part that scrolls, in a box of its own (so no
+   row ever slides over or under a header); then the field to write one. */
+.dlg.gl-dlg { max-width: min(880px, 94vw); }
+.gl-body { width: 820px; max-width: calc(100vw - 80px); height: min(74vh, 720px); display: flex; flex-direction: column; padding: 0 !important; overflow: hidden !important; }
+.gl-body > * { flex: none; }
+.gl-dir { padding: 14px 18px 16px; border-bottom: 1px solid var(--rule-strong); }
+.gl-dir-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 9px; letter-spacing: .16em; color: var(--ink-3); }
+.gl-dir-by { letter-spacing: .12em; text-transform: uppercase; }
+.gl-dir-t { margin: 8px 0 0; max-width: 68ch; font-size: 14px; line-height: 1.5; color: var(--ink); transition: opacity var(--dur-fast) var(--ease-out); }
+.gl-dir-t.busy { opacity: .55; }
+.gl-bar { display: flex; align-items: stretch; justify-content: space-between; gap: 12px; padding: 0 18px; min-height: 36px; border-bottom: 1px solid var(--rule); }
+.gl-tabs { display: flex; gap: 18px; }
+.gl-tab { display: flex; align-items: center; gap: 8px; padding: 0; font-size: 10px; letter-spacing: .14em; color: var(--ink-3); cursor: pointer; }
+.gl-tab:hover { background: none; color: var(--ink); }
+.gl-tab.cur { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
 .gl-n { min-width: 16px; padding: 0 4px; border: 1px solid var(--rule); color: var(--ink-3); font-size: 9px; letter-spacing: 0; text-align: center; font-variant-numeric: tabular-nums; }
-.gl-reset { font-size: 9px; letter-spacing: .14em; padding: 3px 8px; color: var(--ink-3); }
-.gl-reset:disabled { opacity: .35; }
-.gl-in { overflow: hidden; }
-.gl-lead { margin: 8px 0 4px 16px; color: var(--ink-3); font-size: 10px; line-height: 1.5; }
-.gl-empty { margin: 6px 0 4px 16px; color: var(--ink-3); font-size: 10px; }
+.gl-reset { align-self: center; font-size: 9px; letter-spacing: .14em; padding: 4px 9px; color: var(--ink-3); border: 1px solid var(--rule); }
+.gl-reset:disabled, .gl-kind:disabled { opacity: .35; }
+.gl-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 18px; border-bottom: 1px solid var(--rule); }
+.gl-kinds { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.gl-kind { display: flex; align-items: center; gap: 6px; padding: 3px 7px; font-size: 9px; letter-spacing: .12em; border: 1px solid var(--rule); color: var(--ink-2); cursor: pointer; }
+.gl-kind:disabled { cursor: default; }
+.gl-kind.cur { background: var(--inv-bg); color: var(--inv-fg); border-color: var(--inv-bg); }
+.gl-kind.cur .gl-n { color: inherit; border-color: currentColor; }
+.gl-lead { color: var(--ink-3); font-size: 10px; line-height: 1.5; }
+.gl-q { flex: none; width: 170px; border: 1px solid var(--rule); padding: 3px 7px; }
+.gl-q:focus, .gl-add input:focus { border-color: var(--rule-strong); }
+.gl-body > .gl-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.gl-empty { margin: 18px; color: var(--ink-3); font-size: 11px; }
 .gl-list { list-style: none; margin: 0; padding: 0; }
-.gl-row { display: grid; grid-template-columns: 72px 1fr 22px; align-items: start; gap: 10px; padding: 7px 0 7px 16px; border-bottom: 1px solid var(--rule); transition: background-color var(--dur-fast) var(--ease-out); }
-.gl-row.notag { grid-template-columns: 1fr 22px; } /* (an ignored passage: no tag) */
-.gl-row:last-child { border-bottom: 0; }
+.gl-row { display: grid; grid-template-columns: 76px 1fr 24px; align-items: start; gap: 12px; padding: 9px 14px 9px 18px; border-bottom: 1px solid var(--rule); transition: background-color var(--dur-fast) var(--ease-out); }
+.gl-row.notag { grid-template-columns: 1fr 24px; } /* (an ignored passage: no tag) */
 .gl-row:hover { background: var(--hover); }
-.gl-lv { padding-top: 2px; font-size: 9px; letter-spacing: .12em; color: var(--ink-3); }
+.gl-lv { padding-top: 3px; font-size: 9px; letter-spacing: .12em; color: var(--ink-3); cursor: help; }
 .gl-txt { min-width: 0; }
-.gl-main { color: var(--ink); line-height: 1.45; overflow-wrap: anywhere; }
-.gl-meta { margin-top: 2px; color: var(--ink-3); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
-.gl-x { width: 22px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); opacity: .5; cursor: default; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.gl-main { color: var(--ink); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.gl-meta { margin-top: 3px; color: var(--ink-3); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.gl-x { width: 24px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-3); opacity: .5; cursor: pointer; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
 .gl-row:hover .gl-x, .gl-x:focus-visible { opacity: 1; }
 .gl-x:hover { color: var(--ink); background: var(--hover-on); }
-.gl-sec.shut .gl-in { display: none; }
+.gl-add { display: flex; gap: 6px; padding: 10px 18px; border-top: 1px solid var(--rule-strong); }
+.gl-add[hidden] { display: none; }
+.gl-add input { flex: 1; border: 1px solid var(--rule); padding: 5px 8px; }
+.gl-add .tb { border: 1px solid var(--rule); padding: 0 14px; }
 .rv-item.decided .rv-diff, .rv-item.decided .rv-why { opacity: .6; }
 .rv-item .nh { gap: 6px; }
 .rv-acts .tb:disabled { opacity: .35; }
@@ -993,10 +1018,6 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 
 /* ---- Revise guidelines -------------------------------------------------- */
 .rv-guide { font: 9px var(--ui); letter-spacing: .12em; color: var(--ink-2); border: 1px dashed var(--ink-3); padding: 0 4px; margin-left: 6px; vertical-align: 1px; cursor: help; } /* close to a guideline: still shown */
-.gl-add { display: flex; gap: 6px; margin: 10px 0 2px 16px; }
-.gl-add input { flex: 1; border: 1px solid var(--rule); padding: 3px 6px; }
-.gl-add input:focus { border-color: var(--rule-strong); }
-.gl-add .tb { border: 1px solid var(--rule); padding: 0 10px; }
 
 /* ---- focus mode (ui/focus.js) ------------------------------------------------- */
 /* The menus and toolbar wait above the screen and drop back in over the page when the pointer

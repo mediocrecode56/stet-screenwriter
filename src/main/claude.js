@@ -18,9 +18,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { atomicWrite } from './files.js';
-import { findClaudeCode, signedIn, reviewChunkCli, NO_CLI } from './claude-code.js';
-import { findCodex, codexSignedIn, prepareCodex, reviewChunkCodex } from './codex.js';
-import { MODEL, SYSTEM_PROMPT, FINDINGS_SCHEMA } from '../core/revision.js';
+import { findClaudeCode, signedIn, reviewChunkCli, askCli, NO_CLI } from './claude-code.js';
+import { findCodex, codexSignedIn, prepareCodex, reviewChunkCodex, askCodex } from './codex.js';
+import { MODEL, EFFORT, SUMMARY_MODEL, SYSTEM_PROMPT, FINDINGS_SCHEMA } from '../core/revision.js';
 
 const CONCURRENCY = 3;
 // The Claude SDK is loaded the first time a review needs it, not with every start of STET.
@@ -190,7 +190,7 @@ export class ClaudeService {
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium', format: { type: 'json_schema', schema: FINDINGS_SCHEMA } },
+        output_config: { effort: EFFORT, format: { type: 'json_schema', schema: FINDINGS_SCHEMA } },
         system,
         messages: [{ role: 'user', content: chunk.prompt }],
       }, { signal });
@@ -205,6 +205,36 @@ export class ClaudeService {
     } catch (e) {
       return { ok: false, error: describeError(e) };
     }
+  }
+
+  /**
+   * A short answer in plain words from the smallest model (the guidelines' direction), by the same
+   * way a review would go: the API key or Claude Code, and Codex when Claude has no usage left or is
+   * not set up. Resolves { ok, text, via: 'claude' | 'codex' } or { ok: false, error }.
+   */
+  async ask({ system, prompt }) {
+    const viaCodex = async () => {
+      const cli = await findCodex();
+      if (!cli || !(await codexSignedIn(cli))) return null;
+      const r = await askCodex(cli, { system, prompt });
+      return r.ok ? { ...r, via: 'codex' } : r;
+    };
+    let res;
+    try {
+      const status = await this.keyStatus();
+      if (status.source === 'none') return { ok: false, error: { code: 'no_key', message: NO_KEY } };
+      if (status.source === 'codex') return (await viaCodex()) || { ok: false, error: { code: 'auth', message: 'Codex is not signed in.' } };
+      if (status.source === 'claude-code') res = await askCli(await findClaudeCode(), { system, prompt });
+      else {
+        const client = await this.client();
+        // (streamed like a review, so one stand-in serves the tests; Haiku takes no refusal fallback)
+        const msg = await client.messages.stream({ model: SUMMARY_MODEL, max_tokens: 2000, output_config: { effort: 'low' }, system, messages: [{ role: 'user', content: prompt }] }).finalMessage();
+        const text = msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+        res = msg.stop_reason === 'refusal' || !text.trim() ? { ok: false, error: { code: 'bad_output', message: 'Claude gave no answer.' } } : { ok: true, text };
+      }
+    } catch (e) { res = { ok: false, error: describeError(e) }; }
+    if (res.ok) return { ...res, via: 'claude' };
+    return (res.error?.code === 'rate_limit' && await viaCodex()) || res;
   }
 
   cancel(reviewId) {

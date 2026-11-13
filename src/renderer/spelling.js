@@ -1,19 +1,28 @@
 // Spelling (the toolbar's SPELLING menu): obvious slips underlined with a thin pale red line,
 // fixed from a right-click (with Add to dictionary and Ignore in this script), and, with Auto on,
-// corrected as Space moves on to the next word. The words are checked against a dictionary
-// installed on the computer, in the main process (src/main/spell.js); a Mac can use its own checker.
+// corrected as Space moves on to the next word. A right-click on a flagged word inside a selection
+// that holds several does the same for all of them at once: the obvious fixes in one undo step, or
+// every one of them added to the dictionary or ignored.
+//
+// With no dictionary on the computer, STET offers once a start to download the one for its
+// language (a small notice above the status bar, never a window to dismiss): DOWNLOAD fetches it in
+// the background, NOT NOW leaves it for the next start, DON'T ASK AGAIN ends the offers for good.
+// Either way the SPELLING button carries a small "!" until there is one, and says why.
+//
+// The words are checked against a dictionary installed on the computer, in the main process
+// (src/main/spell.js); a Mac can use its own checker.
 // Its dictionary (settings.dictionary, every screenplay) is spelling's own: Claude's revision keeps
 // guidelines of its own (core/guidelines.js). Words ignored are kept with the script
 // (doc.revision.ignored, as "spelling"), so neither comes up again.
 
-import { pos } from '../core/editor.js';
+import { pos, cmp } from '../core/editor.js';
 import { SPELLED, wordsToCheck, namesIn, inCaseOf, oneEdit, languageName } from '../core/spell.js';
 import { normalize } from '../core/revision.js';
 import { h, esc, open as openDialog } from './ui/dialog.js';
 import { closeMenu } from './ui/commands.js';
 import { arrive, leave, DUR_FAST } from './ui/motion.js';
 
-const DEFAULTS = { on: true, lang: null, suggest: true, auto: false };
+const DEFAULTS = { on: true, lang: null, suggest: true, auto: false, noOffer: false }; // (noOffer: never offer to download a dictionary again)
 // The languages Add a Language offers to download (any installed one is simply chosen instead).
 export const LANGUAGES = ['en-US', 'en-GB', 'en-AU', 'en-CA', 'en-ZA', 'fr-FR', 'fr-CA', 'de-DE', 'de-AT', 'de-CH', 'es-ES', 'es-MX', 'it-IT', 'pt-BR', 'pt-PT',
   'nl-NL', 'sv-SE', 'da-DK', 'nb-NO', 'fi-FI', 'pl-PL', 'cs-CZ', 'sk-SK', 'hu-HU', 'ro-RO', 'el-GR', 'tr-TR', 'ru-RU', 'uk-UA', 'ca-ES'];
@@ -35,7 +44,12 @@ export class Spelling {
     this.marks = [];         // [{ b, s, e, word, fixes, auto }] in script order
     this.timer = 0;
     this.pop = null;
+    this.offered = false;    // the download was offered (or started) since STET started
+    this.offerEl = null;     // the offer, while it is up
   }
+
+  /** Spelling is on and has nothing to check with (and none is on its way). */
+  get missing() { return this.opts.on && !this.list.length && !this.installing; }
 
   get opts() { return { ...DEFAULTS, ...(this.getSettings().spelling || {}) }; }
   get lang() { return this.list.find((d) => d.id === this.opts.lang) || null; }
@@ -48,9 +62,7 @@ export class Spelling {
       if (!this.lang && pick) await this.setSettings({ spelling: { ...this.opts, lang: pick } });
     } catch { this.list = []; }
     await this.load();
-    // None on this computer: the one for its language is installed at once, in the background (once a
-    // start; if it can't be, Add a Language is pointed out in the menu instead).
-    if (!this.list.length && this.opts.on && !this.tried) { this.tried = true; this.install(); }
+    this.offer();
   }
 
   async load() {
@@ -70,7 +82,40 @@ export class Spelling {
     await this.setSettings({ spelling: { ...was, ...patch } });
     if (was.on !== this.opts.on || was.lang !== this.opts.lang) await this.load();
     else { this.paint(); this.onState(); }
-    if (this.opts.on && !was.on && !this.list.length && !this.tried) { this.tried = true; this.install(); } // turned on with none: one on its way
+    if (this.opts.on && !was.on) this.offer(); // (turned on with none to check with)
+    else if (!this.opts.on) this.closeOffer();
+  }
+
+  // ---- no dictionary: the offer to download one ------------------------------------------------
+
+  /** Offer the dictionary for this computer's language: once a start, and never after DON'T ASK AGAIN. */
+  async offer() {
+    if (!this.missing || this.offered || this.opts.noOffer) return;
+    this.offered = true;
+    const lang = await this.api.invoke('spell:install-offer').catch(() => null);
+    if (!this.missing || this.offerEl) return;
+    const el = this.offerEl = h('div', { class: 'offer sp-offer', role: 'status' },
+      h('span', { class: 'offer-t' }, `Spelling needs a dictionary${lang ? `: ${lang.label} can be downloaded now` : ''}.`),
+      h('button', { class: 'tb primary', 'data-o': 'get', title: 'Download it in the background; spelling starts as soon as it is in' }, 'DOWNLOAD'),
+      h('button', { class: 'tb', 'data-o': 'later', title: 'Ask again the next time STET starts' }, 'NOT NOW'),
+      h('button', { class: 'tb', 'data-o': 'never', title: 'Never offer again. SPELLING > Add a Language downloads one whenever you want' }, 'DON’T ASK AGAIN'));
+    el.addEventListener('mousedown', (e) => e.preventDefault()); // the script keeps the keyboard
+    el.addEventListener('click', async (e) => {
+      const o = e.target.closest('[data-o]')?.dataset.o;
+      if (!o) return;
+      this.closeOffer();
+      if (o === 'get') this.install();
+      else if (o === 'never') { await this.setSettings({ spelling: { ...this.opts, noOffer: true } }); this.onState(); }
+    });
+    document.body.appendChild(el);
+    arrive(el, { dist: -3, dur: DUR_FAST * 2 });
+  }
+
+  closeOffer() {
+    const el = this.offerEl;
+    if (!el) return;
+    this.offerEl = null;
+    leave(el, () => el.remove(), { dist: -3 });
   }
 
   // ---- what is flagged ----------------------------------------------------------------------
@@ -173,16 +218,12 @@ export class Spelling {
     return true;
   }
 
-  async addToDictionary(word) {
-    const dict = [...(this.getSettings().dictionary || [])];
-    if (!dict.some((d) => normalize(d) === normalize(word))) dict.push(word);
-    await this.setSettings({ dictionary: dict });
-    this.paint();
-  }
+  addToDictionary(word) { return this.addAllToDictionary([word]); }
 
-  ignore(word) {
+  /** Ignore a word (or several) in this screenplay. */
+  ignore(words) {
     const rv = this.session.doc.revision || (this.session.doc.revision = { ignored: [] });
-    if (!rv.ignored.some((x) => x.category === 'spelling' && normalize(x.text) === normalize(word))) rv.ignored.push({ text: word, category: 'spelling' });
+    for (const word of [].concat(words)) if (!rv.ignored.some((x) => x.category === 'spelling' && normalize(x.text) === normalize(word))) rv.ignored.push({ text: word, category: 'spelling' });
     this.session.touch();
     this.paint();
   }
@@ -205,32 +246,65 @@ export class Spelling {
 
   // ---- the right-click menu ------------------------------------------------------------------
 
-  /** A right-click at a point in the script: the flagged word's fixes, if it is on one. */
+  /** The flagged words inside the selection, in script order ([] with no selection). */
+  marksInSelection() {
+    if (!this.view.spelling || !this.ed.hasSelection()) return [];
+    const [s, z] = this.ed.ordered();
+    return this.marks.filter((m) => cmp(pos(m.b, m.s), s) >= 0 && cmp(pos(m.b, m.e), z) <= 0);
+  }
+
+  /** A right-click at a point in the script: the flagged word's fixes, if it is on one; on one of
+   *  several inside the selection, what can be done with them all. */
   contextMenu(e) {
     if (!e.target.closest || !e.target.closest('.page')) return false;
     const p = this.view.posAt(e.clientX, e.clientY);
     const m = p && this.markAt(p.b, p.o);
     if (!m) return false;
     e.preventDefault();
-    this.openMenu(m, e.clientX, e.clientY);
+    const many = this.marksInSelection();
+    this.openMenu(many.length > 1 && many.includes(m) ? many : [m], e.clientX, e.clientY);
     return true;
   }
 
-  openMenu(m, x, y) {
+  /** Put each flagged word's obvious fix in its place: one undo step, the selection kept around them. Returns how many. */
+  fixAll(marks) {
+    const ed = this.ed, list = marks.filter((m) => m.auto && ed.blocks[m.b]?.text.slice(m.s, m.e) === m.word);
+    if (!list.length) return 0;
+    ed.replaceRanges(list.map((m) => ({ b: m.b, s: m.s, e: m.e })), list.map((m) => m.auto)); // (keeps the selection where it was, around the words)
+    this.after(false);
+    return list.length;
+  }
+
+  async addAllToDictionary(words) {
+    const dict = [...(this.getSettings().dictionary || [])];
+    for (const w of words) if (!dict.some((d) => normalize(d) === normalize(w))) dict.push(w);
+    await this.setSettings({ dictionary: dict });
+    this.paint();
+  }
+
+  /** The menu for one flagged word (its fixes) or for several selected ones (what can be done with them all). */
+  openMenu(marks, x, y) {
     closeMenu(false);
     this.closeMenu(false);
+    const m = marks[0], many = marks.length > 1;
+    const words = [...new Set(marks.map((k) => k.word))], what = many ? `${words.length} words` : `"${m.word}"`;
     const pop = this.pop = h('div', { class: 'menu sp-menu', role: 'menu' });
     pop.addEventListener('mousedown', (e) => e.preventDefault()); // the script keeps the keyboard
-    for (const f of m.fixes) {
-      const row = h('div', { class: 'mi sp-fix', role: 'menuitem' }, h('span', {}, f));
-      row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; this.closeMenu(); this.fix(m, f, false); });
+    const item = (label, title, run) => {
+      const row = h('div', { class: 'mi sp-fix', role: 'menuitem', title }, h('span', {}, label));
+      row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; this.closeMenu(); run(); });
       pop.appendChild(row);
-    }
+    };
+    if (many) {
+      const sure = marks.filter((k) => k.auto);
+      if (sure.length) item(sure.length === marks.length ? `Correct all ${sure.length}` : `Correct ${sure.length} of ${marks.length}`, sure.slice(0, 8).map((k) => `${k.word} → ${k.auto}`).join(', ') + (sure.length > 8 ? '…' : ''), () => this.fixAll(marks));
+      else pop.appendChild(h('div', { class: 'mi sp-fix off', role: 'menuitem', 'aria-disabled': 'true' }, h('span', {}, 'No obvious fixes')));
+    } else for (const f of m.fixes) item(f, null, () => this.fix(m, f, false));
     const acts = h('div', { class: 'sp-acts' });
-    acts.innerHTML = `<button class="sp-act sp-dict" title="Add &quot;${esc(m.word)}&quot; to your dictionary (every screenplay)" aria-label="Add to dictionary">${BOOK}<span>DICTIONARY</span></button>`
-      + `<button class="sp-act sp-ign" title="Ignore &quot;${esc(m.word)}&quot; in this screenplay" aria-label="Ignore in this screenplay">${IGNORE}<span>IGNORE</span></button>`;
-    acts.querySelector('.sp-dict').addEventListener('click', () => { this.closeMenu(); this.addToDictionary(m.word); });
-    acts.querySelector('.sp-ign').addEventListener('click', () => { this.closeMenu(); this.ignore(m.word); });
+    acts.innerHTML = `<button class="sp-act sp-dict" title="Add ${esc(what)} to your dictionary (every screenplay)" aria-label="Add to dictionary">${BOOK}<span>DICTIONARY</span></button>`
+      + `<button class="sp-act sp-ign" title="Ignore ${esc(what)} in this screenplay" aria-label="Ignore in this screenplay">${IGNORE}<span>IGNORE</span></button>`;
+    acts.querySelector('.sp-dict').addEventListener('click', () => { this.closeMenu(); this.addAllToDictionary(words); });
+    acts.querySelector('.sp-ign').addEventListener('click', () => { this.closeMenu(); this.ignore(words); });
     pop.appendChild(acts);
     document.body.appendChild(pop);
     pop.style.left = Math.max(0, Math.min(x, innerWidth - pop.offsetWidth)) + 'px';
@@ -256,6 +330,8 @@ export class Spelling {
    *  `locale` (Add a Language); a notice says when it is ready (or why not), and spelling uses it. */
   async install(locale) {
     if (this.installing) return;
+    this.offered = true;
+    this.closeOffer();
     this.installing = '…'; // (at once: a second call meanwhile does nothing)
     const offer = await this.api.invoke('spell:install-offer', locale).catch(() => ({ label: locale || 'the' }));
     this.installing = offer.label;
@@ -276,7 +352,7 @@ export class Spelling {
   // ---- the toolbar menu -----------------------------------------------------------------------
 
   /** The SPELLING menu: the switch, Suggestions, Auto, and the dictionaries installed. With none,
-   *  the one for this computer's language is on its way (install()), or Add a Language stands out. */
+   *  one is on its way (install()), or Add a Language stands out. */
   menuItems() {
     const o = this.opts, off = () => !this.opts.on;
     const langs = this.list.length

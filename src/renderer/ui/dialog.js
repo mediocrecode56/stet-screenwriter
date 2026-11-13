@@ -51,7 +51,7 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
     if (!swap) arrive(dlg, { dist: 4, scale: 0.97 });
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
-      else if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
+      else if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON' && !e.target.closest('[data-own-enter]')) { // (a field with a job of its own for Enter keeps it)
         const i = buttons.findIndex((b) => b.primary);
         if (i >= 0 && !btns[i].disabled) { e.preventDefault(); btns[i].click(); }
       }

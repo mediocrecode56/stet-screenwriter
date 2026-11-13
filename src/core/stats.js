@@ -38,27 +38,60 @@ export const STATS_VERSION = 2;
 export const isProbePath = (p) => typeof p === 'string' && /(^|[\\/])(perf-probe\.stet|stet-probe-[^\\/]*[\\/]probe\.stet)$/i.test(p);
 const UNKNOWN_DOC = '(earlier)'; // per-document detail the old format had already dropped
 
+// ---- the day ---------------------------------------------------------------------------------
+//
+// A day is the computer's own calendar day: the one its clock shows. Normally that is simply what
+// this runtime's local time says. But the runtime works the time zone out for itself, and can
+// disagree with the operating system (a zone or summer-time rule it reads differently, a change
+// of zone it has not noticed): the day would then turn over an hour early or late. So where the
+// operating system can be asked directly (Windows: src/main/osclock.js), its answer is given here
+// with setDayOffset() and the day is counted from that, in the main process and in the window
+// alike. Without one (a Mac, the tests) the runtime's local time stands.
+
+const p2 = (n) => String(n).padStart(2, '0');
+const utcKey = (d) => `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
+const utcDay = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+let dayOffset = null; // minutes east of UTC, as the operating system has it now; null: this runtime's own
+
+/** The operating system's own offset from UTC (minutes east), or null to use this runtime's. Returns whether it changed. */
+export function setDayOffset(min) {
+  const v = Number.isFinite(min) && Math.abs(min) <= 16 * 60 ? Math.round(min) : null;
+  if (v === dayOffset) return false;
+  dayOffset = v;
+  return true;
+}
+export const getDayOffset = () => dayOffset;
+
+/** The calendar day of a moment, as 'YYYY-MM-DD'. */
 export function dayKey(d = new Date()) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  if (dayOffset != null) return utcKey(new Date(d.getTime() + dayOffset * 60000));
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
 
+/** How long until the day turns over, in ms (to look again exactly then). */
+export function msToNextDay(d = new Date()) {
+  const off = dayOffset ?? -d.getTimezoneOffset(), day = 86400000;
+  return day - (((d.getTime() + off * 60000) % day) + day) % day;
+}
+
+/** Midnight at the start of day k, in this runtime's local time (for showing a date). */
 export function parseDay(k) {
   const [y, m, d] = k.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 
+// (Days are counted on the calendar alone, never through a clock: no time zone can shift them.)
 export function addDays(k, n) {
-  const d = parseDay(k);
-  d.setDate(d.getDate() + n);
-  return dayKey(d);
+  const d = utcDay(k);
+  d.setUTCDate(d.getUTCDate() + n);
+  return utcKey(d);
 }
 
 /** Monday of the week containing day k. */
 export function weekStart(k) {
-  const d = parseDay(k);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return dayKey(d);
+  const d = utcDay(k);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return utcKey(d);
 }
 
 export function emptyStats(now = new Date()) {

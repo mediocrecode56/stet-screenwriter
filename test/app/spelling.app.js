@@ -37,10 +37,26 @@ async function menuRow(text) {
 
 const settled = () => app.until(`!document.querySelector('.menu')`, { what: 'the last menu gone' }); // (one fading out still holds its rows)
 
-test('no dictionary: one is installed at once in the background, a notice says when, spelling works at once', async () => {
-  // In the background: the writer still writing meanwhile.
+// Press one of the offer's answers, for real. (A press sent to a window that is not in front is now and then not delivered: pressed again until the offer has gone.)
+const answer = (o) => app.until(async () => {
+  if (!(await app.eval(`!!__stet.spelling.offerEl`))) return true;
+  await app.move(600, 400);
+  await app.clickOn(`.sp-offer [data-o="${o}"]`).catch(() => {});
+  return false;
+}, { every: 150, what: 'the offer answered: ' + o });
+const need = () => app.eval(`(() => { const b = document.getElementById('btn-spell'); return { on: b.classList.contains('need'), mark: getComputedStyle(b, '::after').content, tip: b.title }; })()`);
+
+test('no dictionary: an offer to download one, never a window; DOWNLOAD installs it in the background, a notice says when, spelling works at once', async () => {
   await app.load([['action', 'Rain on teh glass.']]);
-  assert.equal(await app.dialog(), '', 'no questions');
+  await app.until(`!!document.querySelector('.sp-offer')`, { what: 'the offer' });
+  assert.equal(await app.dialog(), '', 'no window to dismiss');
+  assert.match(await app.eval(`document.querySelector('.sp-offer').textContent`), /Spelling needs a dictionary: .+ can be downloaded now.DOWNLOADNOT NOWDON’T ASK AGAIN$/);
+  assert.deepEqual(hits, [], 'nothing downloaded unasked');
+  const n = await need();
+  assert.deepEqual([n.on, n.mark], [true, '"!"'], 'a small exclamation mark on the button');
+  assert.match(n.tip, /no dictionary on this computer.*Add a Language/);
+  await answer('get');
+  await app.until(`!document.querySelector('.sp-offer')`, { what: 'the offer gone' });
   await app.clickOn('#btn-spell');
   const labels = await app.eval(`[...document.querySelectorAll('.menu .mi')].map((x) => x.textContent)`);
   assert.ok(!labels.some((l) => /Install Dictionary/.test(l)), 'no Install item: ' + labels.join(' | '));
@@ -82,4 +98,28 @@ test('Add a Language: another one downloaded and chosen; the menu switches betwe
   assert.ok(labels.includes('French (France)') && labels.includes('Add a Language'), labels.join(' | '));
   await menuRow(await app.eval(`__stet.spelling.list.find((d) => d.id === ${JSON.stringify(first)}).label`));
   await app.until(`__stet.spelling.ready && __stet.spelling.lang.id === ${JSON.stringify(first)}`, { what: 'back to the first' });
+});
+
+test('NOT NOW leaves the offer for the next start; DON’T ASK AGAIN ends it for good, and only the mark on the button is left', async () => {
+  const env = { STET_DICT_DIRS: path.join(tmp, 'none'), STET_DICT_ONLY: '1', STET_DICT_SOURCES: JSON.stringify([{ aff: base + '/good/{code}.aff', dic: base + '/good/{code}.dic' }]) };
+  const start = async () => { await app.close(); app = await App.launch({ userData: path.join(tmp, 'ud-offer'), env }); await app.until('__stet.started', { what: 'STET started' }); };
+  hits = [];
+  await start();
+  await app.until(`!!document.querySelector('.sp-offer')`, { what: 'the offer' });
+  await app.type('Rain. ');
+  assert.equal(await app.eval('__stet.editor.blocks[0].text'), 'RAIN. ', 'the writer writing meanwhile: the offer never takes the keyboard');
+  await answer('later');
+  await app.until(`!document.querySelector('.sp-offer')`, { what: 'the offer gone' });
+  assert.equal((await need()).on, true, 'the mark stays');
+  await start();
+  await app.until(`!!document.querySelector('.sp-offer')`, { what: 'the offer again on the next start' });
+  await answer('never');
+  await app.until(`!document.querySelector('.sp-offer') && __stet.settings().spelling.noOffer === true`, { what: 'never again, saved' });
+  await start();
+  await app.eval('__stet.spelling.init()'); // (looked for again: still none, and still no offer)
+  assert.equal(await app.eval(`!!document.querySelector('.sp-offer')`), false, 'no offer any more');
+  const n = await need();
+  assert.deepEqual([n.on, n.mark], [true, '"!"'], 'only the exclamation mark');
+  assert.match(n.tip, /no dictionary on this computer.*Add a Language/, 'saying what is missing and how to get it');
+  assert.deepEqual(hits, [], 'nothing ever downloaded unasked');
 });

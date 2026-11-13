@@ -266,7 +266,7 @@ test('the review checks the language, not how clear or complete the story is', (
 test('structured-output schema is strict', () => {
   const item = FINDINGS_SCHEMA.properties.findings.items;
   assert.equal(item.additionalProperties, false);
-  assert.deepEqual(item.required.sort(), ['category', 'confidence', 'element', 'explanation', 'original', 'replacement']);
+  assert.deepEqual(item.required.sort(), ['category', 'confidence', 'element', 'explanation', 'guideline', 'original', 'replacement']);
 });
 
 test('ignored passages (per script) suppress findings; the spelling dictionary and spelling ignores never do', async () => {

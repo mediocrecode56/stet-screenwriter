@@ -15,13 +15,15 @@ import { started } from './ui/startup.js';
 import { FocusMode } from './ui/focus.js';
 import { Dino } from './dino.js';
 import { WritingStats } from './writing.js';
+import { setDayOffset, msToNextDay } from '../core/stats.js';
 import { FindBar } from './ui/find.js';
 import * as cmd from './ui/commands.js';
 import * as dlg from './ui/dialog.js';
 import * as dialogs from './ui/dialogs.js';
 import { initUpdates } from './ui/update.js';
 import { runPerfProbe, stopPerfProbe } from './perf.js';
-import { Revision, keyDialog, guidelinesDialog } from './revision.js';
+import { Revision, keyDialog } from './revision.js';
+import { guidelinesDialog } from './ui/guidelines.js';
 import { Spelling } from './spelling.js';
 import { toast } from './ui/toast.js';
 import { resizable } from './ui/resize.js';
@@ -57,6 +59,9 @@ const editor = new Editor([makeBlock('scene')]);
 const placeholderDoc = newDocument();
 const view = new View({ scroller: $('scroller'), content: $('content'), editor, doc: placeholderDoc });
 const session = new Session({ editor, appVersion: info.version, onState: renderSaveState, onLoaded: onDocLoaded });
+// The day is the computer's own (core/stats.js, "the day"): the main process asks the system and says here.
+setDayOffset(await api.invoke('clock:offset'));
+api.on('clock:offset', (off) => { if (setDayOffset(off)) dayTurns(); });
 // Writing statistics are recorded only for real use, never for probes or screenshots.
 const writing = new WritingStats(api, await api.invoke('stats:get'), { enabled: !info.perf && !info.shot && !info.sample });
 
@@ -363,6 +368,12 @@ function polls(resting = false) {
   tickClock();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) renderGoal(); });
+// And exactly as the day turns over (a moment past midnight on the computer's clock), resting or not.
+function dayTurns() {
+  clearTimeout(dayTurns.timer);
+  dayTurns.timer = setTimeout(dayTurns, msToNextDay() + 500);
+  if (session.doc) renderGoal();
+}
 
 // The square beside the title is the one sign of the save state: hollow when saved, filled while
 // there are unsaved changes, blinking when saving fails (a click on it then saves again).
@@ -631,9 +642,11 @@ fitToolbar();
 function renderSpelling() {
   const o = spelling.opts, lang = spelling.lang;
   spellBtn.classList.toggle('off', !o.on || !spelling.ready);
-  spellBtn.classList.toggle('need', o.on && !spelling.list.length); // a dot: none installed, one can be
-  spellBtn.classList.toggle('busy', spelling.installing);
-  spellBtn.title = spelling.installing ? `Spelling: downloading the ${spelling.installing} dictionary…` : !spelling.list.length ? 'Spelling: no dictionary on this computer (click to add a language)'
+  spellBtn.classList.toggle('need', spelling.missing); // a small "!": on, with nothing to check with
+  spellBtn.classList.toggle('busy', !!spelling.installing);
+  spellBtn.title = spelling.installing ? `Spelling: downloading the ${spelling.installing} dictionary…`
+    : spelling.missing ? 'Spelling can’t check anything: there is no dictionary on this computer. Click here and choose Add a Language to download one.'
+    : !spelling.list.length ? 'Spelling: off (no dictionary on this computer; Add a Language downloads one)'
     : !o.on ? 'Spelling: off' : `Spelling: ${lang ? lang.label : 'no dictionary'}${o.suggest ? '' : ', no suggestions'}${o.auto ? ', corrects as you type' : ''}`;
 }
 tip($('btn-comment'), 'Comment on selection', 'note-add');
@@ -1404,7 +1417,7 @@ if (settings.timeline) timeline.show(true);
 
 session.newUntitled();
 spelling.init();
-renderGoal();
+dayTurns();
 input.focus();
 
 if (info.sample) {

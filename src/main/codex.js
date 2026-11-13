@@ -4,13 +4,18 @@
 // Runs `codex exec` on the user's own Codex sign-in, read-only, ephemeral, without the user's
 // config or rules, in an empty temporary folder, answering in the same findings schema.
 
-import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { FINDINGS_SCHEMA } from '../core/revision.js';
+import { exists, runCli as run, stopped } from './cli.js';
 
-async function exists(p) { try { return (await fs.stat(p)).isFile(); } catch { return false; } }
+// Its own newest model (none is named, so it follows Codex as models come and go) with the least
+// reasoning: measured, that found every planted mistake. The effort is pinned, because the user's
+// own Codex settings are left out and a default may change.
+const QUIET = ['exec', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', '-s', 'read-only', '-c', 'model_reasoning_effort="low"'];
+const LIMIT = /usage limit|rate.?limit|quota/i;
+const lastLines = (r) => String(r.err || r.out || `Codex exited with code ${r.code}.`).trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 300);
 
 /** Locate the Codex CLI. Returns { path, label, node? } or null. */
 export async function findCodex() {
@@ -40,28 +45,6 @@ export async function findCodex() {
   return best ? { path: best.p, label: 'Codex' } : null;
 }
 
-function run(cli, args, { cwd, input, signal, timeoutMs = 10 * 60 * 1000 }) {
-  return new Promise((resolve, reject) => {
-    const env = { ...process.env };
-    const [cmd, argv] = cli.node ? [process.execPath, [cli.path, ...args]] : [cli.path, args];
-    if (cli.node) env.ELECTRON_RUN_AS_NODE = '1';
-    let child;
-    try { child = spawn(cmd, argv, { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { reject(e); return; }
-    let out = '', err = '', killedBy = null;
-    const kill = (why) => { if (killedBy) return; killedBy = why; try { child.kill(); } catch { /* gone */ } };
-    const onAbort = () => kill('cancelled');
-    signal?.addEventListener('abort', onAbort, { once: true });
-    if (signal?.aborted) onAbort();
-    const timer = setTimeout(() => kill('timeout'), timeoutMs);
-    child.stdout.setEncoding('utf8').on('data', (d) => { out += d; });
-    child.stderr.setEncoding('utf8').on('data', (d) => { err += d; });
-    child.stdin.on('error', () => {});
-    child.stdin.end(input ?? '');
-    child.on('error', (e) => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); reject(e); });
-    child.on('close', (code) => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); resolve({ code, out, err, killedBy }); });
-  });
-}
-
 /** Is Codex signed in? `codex login status` exits 0 when it is. */
 export async function codexSignedIn(cli) {
   if (!cli) return false;
@@ -78,24 +61,41 @@ export async function prepareCodex(dir) {
 let seq = 0;
 export async function reviewChunkCodex(cli, dir, schemaFile, systemText, chunk, signal) {
   const outFile = path.join(dir, `codex-out-${process.pid}-${++seq}.json`);
-  const args = ['exec', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check',
-    '-s', 'read-only', '-C', dir, '--output-schema', schemaFile, '-o', outFile, '-'];
   const input = `${systemText}\n\nAnswer only with the JSON object the output schema describes. Do not run any commands.\n\n${chunk.prompt}`;
   let r;
-  try { r = await run(cli, args, { cwd: dir, input, signal }); } catch (e) {
+  try { r = await run(cli, [...QUIET, '-C', dir, '--output-schema', schemaFile, '-o', outFile, '-'], { cwd: dir, input, signal }); } catch (e) {
     return { ok: false, error: { code: 'cli', message: `Could not start Codex: ${e.message}` } };
   }
-  if (r.killedBy === 'cancelled') return { ok: false, error: { code: 'cancelled', message: 'Cancelled.' } };
-  if (r.killedBy === 'timeout') return { ok: false, error: { code: 'network', message: 'Codex did not answer within 10 minutes.' } };
+  const halt = stopped(r, 'Codex');
+  if (halt) return halt;
   let text = '';
   try { text = await fs.readFile(outFile, 'utf8'); } catch { /* none */ }
   fs.rm(outFile, { force: true }).catch(() => {});
   let parsed = null;
   try { parsed = JSON.parse(text.trim()); } catch { /* not JSON */ }
   if (!parsed || !Array.isArray(parsed.findings)) {
-    const t = String(r.err || r.out || `Codex exited with code ${r.code}.`).trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 300);
-    if (/usage limit|rate.?limit|quota/i.test(t)) return { ok: false, error: { code: 'rate_limit', message: 'Claude and Codex have both reached their usage limits. Try the failed sections again later.' } };
+    const t = lastLines(r);
+    if (LIMIT.test(t)) return { ok: false, error: { code: 'rate_limit', message: 'Claude and Codex have both reached their usage limits. Try the failed sections again later.' } };
     return { ok: false, error: { code: text ? 'bad_output' : 'cli', message: text ? 'The Codex response had no findings list.' : 'Codex: ' + t } };
   }
   return { ok: true, findings: parsed.findings, usage: { input: 0, output: 0 }, via: 'codex' };
+}
+
+/** A short answer in plain words (the guidelines' direction). { ok, text } | { ok: false, error }. */
+export async function askCodex(cli, { system, prompt }, signal) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-codex-ask-'));
+  try {
+    const outFile = path.join(dir, 'answer.txt');
+    const r = await run(cli, [...QUIET, '-C', dir, '-o', outFile, '-'], { cwd: dir, input: `${system}\n\nDo not run any commands.\n\n${prompt}`, signal, timeoutMs: 90000 });
+    const halt = stopped(r, 'Codex');
+    if (halt) return halt;
+    const text = await fs.readFile(outFile, 'utf8').catch(() => '');
+    if (text.trim()) return { ok: true, text };
+    const t = lastLines(r);
+    return { ok: false, error: { code: LIMIT.test(t) ? 'rate_limit' : 'cli', message: 'Codex: ' + t } };
+  } catch (e) {
+    return { ok: false, error: { code: 'cli', message: `Could not start Codex: ${e.message}` } };
+  } finally {
+    fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }

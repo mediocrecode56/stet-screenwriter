@@ -116,6 +116,7 @@ spelling dictionary and the revision's guidelines are not stored in screenplays 
   "review": {
     "id": "r1a2b3", "at": "2026-10-19T21:30:00.000Z", "model": "claude-opus-5-5",
     "state": "complete",            // complete | partial | cancelled | failed | interrupted
+    "strict": true,                 // only for a strict review (made without the writer's guidelines)
     "findings": [ {
       "id": "f12", "el": 4,           // element index (block ids are not stored)
       "s": 7, "e": 27,                // last known position of the minimal span
@@ -125,6 +126,8 @@ spelling dictionary and the revision's guidelines are not stored in screenplays 
       "contextBefore": "She is ", "contextAfter": " five minutes.",
       "category": "non_native", "confidence": "medium", "explanation": "…",
       "decision": "discarded",        // absent = undecided; accepted | discarded | ignored | guideline ("dictionary" before 0.37, read as guideline)
+                                      // | held (held back by the writer's guidelines; an older STET reads it as undecided)
+      "heldBy": "…",                  // held only: the guideline that covers it, in a few words
       "appliedText": "…"              // accepted only: the text that was put in
     } ]
   }

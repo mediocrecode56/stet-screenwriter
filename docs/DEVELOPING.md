@@ -292,7 +292,8 @@ script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
 
 - Per suggestion: **Accept** (one undo step), **Discard**, **Ignore**
   (remembered in this screenplay's .stet file — never flagged again here) and
-  **+Guideline** (every screenplay, soft: set aside twice, it stops coming up). *Accept all…* (all, or one kind)
+  **+Guideline** (every screenplay, soft: set aside twice, it is held back from then on, listed
+  under *Held back* where **Reopen** brings it back; a clear error is always shown). *Accept all…* (all, or one kind)
   asks first and is a single undo step. Decided suggestions move to a folded
   *Decided* group, also in script order; near the lower end of the list a floating
   **DECIDED** button goes there while it is out of sight. **Reopen** makes one
@@ -335,6 +336,38 @@ script (solid / dashed / dotted). F7 / Shift+F7 move between suggestions.
   at scene headings, with preceding text as context), three at a time, with
   retries on rate limits; cancel at any time; failed sections can be retried.
 - Live check: `node bench/revision-live.js` (uses your Claude sign-in, or a key if set).
+
+### Strict review and the guidelines window
+
+**STRICT REVIEW**, beside the review button, reviews without the guidelines: everything Claude
+finds is shown. Passages ignored in the screenplay stay ignored.
+
+**GUIDELINES** opens the guidelines window: at the top the direction, one sentence written by
+Claude (or Codex) about what the guidelines now make the review leave alone, written again each
+time one is added or removed; two tabs (every screenplay, this screenplay); the kinds with their
+counts (a press shows only that kind) and a field to find a passage; the list; a field to write a
+guideline by hand.
+
+### Which model reviews
+
+Measured on 13 Nov 2026 with two sample sections holding planted mistakes (22 obvious ones; 20
+subtle ones: false friends, wrong prepositions, tense, Spanish agreement) and lines that must be
+left alone (dialect, fragments), through Claude Code and Codex on a signed-in account:
+
+| | obvious (22) | subtle (20) | left alone | cost of a section |
+|---|---|---|---|---|
+| Claude Sonnet 5.5, low effort | 22 | 20 | all | about $0.02 |
+| Claude Sonnet 5.5, medium effort | 22 | 20 | all | about $0.02, more output |
+| Claude Haiku 5.5, low or medium | 22 | 16 | all | about $0.002 |
+| Claude Opus 5.5, low effort | 22 | not run | all | about $0.06 |
+| Codex, its default model, low effort | 22 | not run | all | about 18,000 tokens |
+
+So a review uses **Sonnet 5.5 at low effort** (`MODEL` and `EFFORT` in `src/core/revision.js`): it
+found everything medium effort did, for fewer output tokens. Haiku is a tenth of the price and
+misses one subtle mistake in five, which a review must not. The one sentence of direction is a
+small job and uses Haiku (`SUMMARY_MODEL`). Codex keeps its own newest model (none is named, so it
+follows Codex as models change) with the effort pinned to low. Two samples are a small test: run
+`node bench/revision-live.js` on a real script before changing any of this.
 
 ## Word count and writing statistics
 

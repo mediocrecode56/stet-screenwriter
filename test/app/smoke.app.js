@@ -619,6 +619,38 @@ test('spelling: obvious slips underlined (names left alone), fixed, added or ign
   await app.until('!__stet.spelling.opts.auto');
 });
 
+test('spelling on several selected words at once: the obvious fixes in one undo step, or all of them ignored', async () => {
+  await app.load([['action', 'Mara opens teh door.'], ['action', 'She says ghe wlak. A dorr.']]);
+  const flagged = () => app.eval('__stet.spelling.marks.map((m) => m.word)');
+  await app.until(`document.querySelectorAll('.spr').length === 4`, { what: 'four underlines' });
+  const rightClick = async () => { const r = await app.rect('.spr'); await app.click(r.x, r.y, { button: 'right' }); await app.until(`[...document.querySelectorAll('.sp-menu')].some((m) => m.style.pointerEvents !== 'none')`, { what: 'the spelling menu' }); };
+  // With nothing selected, a right-click is about that one word, as before.
+  await rightClick();
+  assert.equal(await app.eval(`[...document.querySelectorAll('.sp-menu .sp-fix')].map((x) => x.textContent).join()`), 'the');
+  await app.key('Escape');
+  // With both paragraphs selected: every flagged word in the selection.
+  await app.eval(`(() => { const e = __stet.editor; e.setSel({ b: 0, o: 0 }, { b: 1, o: e.blocks[1].text.length }); __stet.input.after(); })()`);
+  await app.until(`document.querySelectorAll('.spr').length === 4`, { what: 'the underlines drawn again' });
+  const sure = await app.eval('__stet.spelling.marks.filter((m) => m.auto).length');
+  assert.ok(sure >= 2 && sure < 4, 'some have one obvious fix, some none: ' + sure);
+  await rightClick();
+  assert.equal(await app.eval(`[...document.querySelectorAll('.sp-menu')].find((m) => m.style.pointerEvents !== 'none').querySelector('.sp-fix').textContent`), `Correct ${sure} of 4`, 'the menu is about them all');
+  await menuRow('Correct');
+  await app.until(`__stet.editor.blocks[0].text === 'Mara opens the door.'`, { what: 'the fixes' });
+  assert.match(await app.eval('__stet.editor.blocks[1].text'), /^She says ghe walk\. A door\.$/, 'the one with several possible fixes left for the writer');
+  await app.key('Mod+Z');
+  assert.deepEqual(await app.blocks(), [['action', 'Mara opens teh door.'], ['action', 'She says ghe wlak. A dorr.']], 'one undo step takes them all back');
+  await app.eval(`(() => { const e = __stet.editor; e.setSel({ b: 1, o: 0 }, { b: 1, o: e.blocks[1].text.length }); __stet.input.after(); })()`);
+  await app.until(`document.querySelectorAll('.spr').length === 4`, { what: 'the underlines back' });
+  const r = await app.eval(`(() => { const b = [...document.querySelectorAll('.spr')].at(-1).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+  await app.click(r.x, r.y, { button: 'right' });
+  await app.until(`[...document.querySelectorAll('.sp-menu')].some((m) => m.style.pointerEvents !== 'none')`, { what: 'the menu for the second paragraph' });
+  await menuRow('IGNORE');
+  await app.until(`document.querySelectorAll('.spr').length === 1`, { what: 'only the word outside the selection left' });
+  assert.deepEqual(await flagged(), ['teh']);
+  assert.equal((await app.eval('__stet.session.doc.revision.ignored')).length, 3, 'the three in the selection, kept with the script');
+});
+
 test('a changed shortcut works, and the old keys no longer do', async () => {
   await app.load([['action', 'Text.']]);
   await app.caret(0, 0, 5);

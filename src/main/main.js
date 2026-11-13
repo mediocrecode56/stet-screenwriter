@@ -23,6 +23,8 @@ import { linkFiles } from './assoc.js';
 import { SpellService, findDictionaries, pickDictionary, dictionaryDirs } from './spell.js';
 import { installDictionary, localeCode } from './dictinstall.js';
 import { languageName } from '../core/spell.js';
+import { setDayOffset, getDayOffset } from '../core/stats.js';
+import { followSystemClock } from './osclock.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
@@ -378,6 +380,7 @@ function registerIpc() {
   handle('claude:provider-set', (p) => claude.setProvider(p));
   handle('review:start', (req) => { claude.start(req); return true; });
   handle('review:cancel', (id) => claude.cancel(id));
+  handle('claude:ask', (req) => claude.ask(req)); // the guidelines' direction, in one sentence
 
   // Test driver only: close the window the way its X button does.
   // Stepping on the timeline locks the pointer; a modifier key held is no user gesture, so the
@@ -385,6 +388,7 @@ function registerIpc() {
   handle('win:fullscreen', (on) => { if (win && !win.isDestroyed() && win.isFullScreen() !== !!on) win.setFullScreen(!!on); return true; }); // focus mode
   ipcMain.handle('pointer:lock', (e) => e.sender.executeJavaScript('window.__stetPointerLock?.()', true).then(() => true, () => false));
   handle('e2e:close-window', () => { if (E2E && win) setImmediate(() => win && win.close()); return E2E; });
+  handle('clock:offset', () => getDayOffset());
   handle('stats:get', () => stats.state());
   handle('stats:add', (batch) => stats.add(batch));
   handle('stats:flush', () => stats.flush().then(() => true));
@@ -535,6 +539,10 @@ app.whenReady().then(async () => {
   });
   // 0.33 shows the timeline by default: once, also for those whose settings still hold the old default.
   if (!settings.get().timelineDefault) settings.set({ timeline: true, timelineDefault: true });
+  // The day turns over with the computer's own clock (core/stats.js, "the day"): asked of the system before
+  // the statistics are read, again every few minutes and whenever the computer wakes, and the window told.
+  const checkClock = await followSystemClock((off) => { if (setDayOffset(off) && win && !win.isDestroyed()) win.webContents.send('clock:offset', getDayOffset()); });
+  powerMonitor.on('resume', checkClock);
   stats = new StatsStore(ud);
   recovery = new Recovery(path.join(ud, 'recovery'));
   claude = new ClaudeService(ud, (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });

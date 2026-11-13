@@ -10,11 +10,11 @@ const INVOKE = new Set([
   'stats:get', 'stats:add', 'stats:flush', 'stats:reset', 'e2e:close-window',
   'export:pdf', 'print:html', 'theme:apply', 'perf:report', 'perf:scratch', 'perf:cleanup', 'perf:system', 'shell:reveal', 'app:pending-open', 'app:ready',
   'recent:list', 'recent:dismiss', 'recent:trash',
-  'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel',
+  'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel', 'claude:ask', 'clock:offset',
   'app:open-url', 'app:link-files', 'update:check', 'update:download', 'update:cancel', 'update:install', 'pointer:lock', 'win:fullscreen',
   'spell:list', 'spell:load', 'spell:check', 'spell:off', 'spell:install-offer', 'spell:install',
 ]);
-const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress', 'app:fullscreen']);
+const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress', 'app:fullscreen', 'clock:offset']);
 
 contextBridge.exposeInMainWorld('stet', {
   invoke(channel, ...args) {
