@@ -2,6 +2,25 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.60.0 · 13 Nov 2026
+
+### FEATURES
+
+- Revise has a new Strict Review button beside the usual one. It reviews the script without your guidelines, so you see everything Claude finds.
+- The Guidelines window is new: bigger, with one tab for every screenplay and one for this screenplay, a count of each kind of guideline you can press to see only those, and a field to find a passage. Each guideline says how often you set it aside and when.
+- At the top of the Guidelines window, one sentence now tells you where your guidelines are taking the review. Claude writes it again each time you add or remove a guideline.
+- What your guidelines hold back is no longer hidden. It sits in the Revise panel under Held Back, and Reopen brings a suggestion back.
+- Spelling works on several words at once: select some text, right-click one of the underlined words in it, and correct, add or ignore all of them together.
+- With no spelling dictionary on your computer, STET now offers to download one instead of doing it unasked. You can say not now, or never again. Until there is one, the Spelling button shows a small exclamation mark that tells you what is missing.
+
+### BUGS, PERFORMANCE
+
+- Your guidelines can no longer make a review go quiet. A clear error is always shown unless you set aside that very passage several times, a character's way of speaking alone never hides a suggestion, and fixing one missing word no longer teaches Revise to skip all the others.
+- Scrolling the Guidelines window no longer slides the list over its first row.
+- The day for Today, the week and the streak now follows the Windows clock exactly, and changes at midnight on the dot.
+- Reviews use less of your Claude plan for the same findings.
+- Resetting the passages ignored in a screenplay no longer clears the words you told Spelling to ignore.
+
 ## 0.59.0 · 9 Nov 2026
 
 ### BUGS, PERFORMANCE
