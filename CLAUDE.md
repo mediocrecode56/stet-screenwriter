@@ -1,33 +1,3 @@
-# Working on STET
+# STET
 
-- Never release a new version unless the owner says so. A push to main that raises
-  `version` in package.json publishes a release automatically
-  (.github/workflows/release.yml), so don't raise the version or push a tag without
-  being asked. Other changes can go to main as usual.
-- Only the newest release is kept on GitHub. The Release workflow deletes the older
-  releases itself (their tags stay).
-- A release is published by the Windows job and never waits for a Mac; the Mac job adds
-  that version's STET-macOS.dmg when GitHub has a Mac free (until then the previous one
-  stands in). It is done when the release has all four files (STET-Windows.zip,
-  STET-Setup.exe, STET-macOS.dmg, STET-Patch-electron-*.zip). Watch the run; if it fails,
-  fix the cause and push to main (every push retries an unreleased version).
-- Run `npm run quick` (the unit tests and the smoke test, about ten seconds) before
-  pushing, and `npm run e2e` (the whole real-app suite, about 25 seconds) before a
-  version; a test must pass on Windows and macOS too (no platform-specific paths in
-  assertions). New behaviour gets a unit test (test/unit), and a step in
-  test/app/smoke.app.js when it is a workflow a release must not break. App tests wait
-  with `app.until`, never a fixed sleep, and drive the app with real input (test/app/harness.js).
-- web/ is the browser version (ALPHA), a separate project: read web/README.md first. The desktop never
-  depends on it, and browser needs never go into src/ (its tests in web/test fail if they do). A change
-  to src/core or the shared renderer files can break it: run `npm test` in web/ after one. It publishes on
-  its own (.github/workflows/web.yml), not through releases.
-- Read docs/DESIGN_DIRECTION.md before design or UI work, and add to it when the owner gives new
-  feedback that sets a direction (it is the reference for decisions a request leaves open).
-
-## Release pipeline
-
-Before any version bump, installer, tag, push or publish, read `RELEASE.md` at the project root and follow it. Update it in the same commit as any release or change to the pipeline.
-
-## Project bible
-
-Before changing code, read `BIBLE.md` at the project root: it lists the quirks that are not obvious from the code. Update it in the same commit when a quirk changes or you hit a new trap.
+@BIBLE.md
