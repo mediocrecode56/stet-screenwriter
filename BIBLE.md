@@ -19,6 +19,7 @@ Free screenplay editor for Windows and macOS (Electron). It formats as you type 
 
 ## Build and test
 - `npm run quick` (about 10 s) before any push. `npm run e2e` (about 25 s) before a version.
+- GUI checks (windows, transitions, resizing, animations, visual bugs) run in WinTest's hidden Sandbox, never on the owner's desktop: build, then `E:\CODING\WinTest\WinTest.ps1 launch stet` (read its bible).
 
 ## Release
 - Version: `package.json` `version`. `CHANGELOG.md` needs a section for it (`scripts/release-notes.js`). The tag `vX.Y.Z` must equal it.
