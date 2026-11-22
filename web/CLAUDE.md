@@ -1,3 +1,3 @@
 # STET browser
 
-@BIBLE.md
+@../BIBLE.md

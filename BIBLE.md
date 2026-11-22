@@ -13,7 +13,6 @@ Free screenplay editor for Windows and macOS (Electron). It formats as you type 
 - Fetch before release work. Local `main` can be behind `origin/main`: inspect the divergence before any fast-forward, and never reset or pull over local commits.
 
 ## Quirks
-- `web/` is a separate ALPHA browser project with its own README and tests. The desktop never depends on it, and browser needs never go into `src/`. After a change to `src/core` or the shared renderer, run `npm test` in `web/`. It publishes through `web.yml`.
 - Only the newest GitHub release is kept. Tags stay.
 - A release needs all four assets: `STET-Windows.zip`, `STET-Setup.exe`, `STET-macOS.dmg`, `STET-Patch-electron-<version>.zip`. The Mac DMG can lag a release by design.
 
@@ -28,6 +27,13 @@ Free screenplay editor for Windows and macOS (Electron). It formats as you type 
 - Verify: all four assets are present and the notes match the CHANGELOG section.
 - Page: the README's Download buttons link to `releases/latest/download/<fixed asset name>`, so asset names never change. CHANGELOG.md is newest first, with `## X.Y.Z · D Mon YYYY` headings and FEATURES / BUGS sections. A release's notes are that section.
 - Rollback: a new patch version. Never reuse a version number, move or delete tags.
+
+## Browser (`web/`, ALPHA)
+- Its own version (`web/package.json`), README and tests; it reads the shared core and renderer. The desktop never depends on `web/`: fix browser needs there, never with browser conditions in `src/`. Keep the separation tests passing.
+- `build.mjs` copies the code its imports reach into `web/dist/` (not committed); no runtime install step.
+- In `web/`: `npm test`, then `npm run build`; `npm run serve` serves port 8127. Run its `npm test` after any change to `src/core` or the shared renderer.
+- Test saves and IndexedDB drafts with disposable documents only. Read `docs/CLOUD.md` before changing cloud storage.
+- A push to `main` touching `web/` or shared files deploys GitHub Pages (`web.yml`), even without a version bump. Verify the reported URL with disposable `.stet` files (open, edit, save, cloud) apart from the Node tests. Rollback: revert and redeploy.
 
 ## Look here first
 - Also: `.github/workflows/release.yml` (the release automation), `docs/DESIGN_DIRECTION.md` (design decisions).

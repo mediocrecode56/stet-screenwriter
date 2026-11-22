@@ -1,3 +1,3 @@
 # STET browser
 
-Read `BIBLE.md` before changing anything.
+Read `../BIBLE.md` before changing anything.
