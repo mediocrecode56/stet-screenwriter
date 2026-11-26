@@ -49,6 +49,9 @@ if (MAC) {
 const $ = (id) => document.getElementById(id);
 
 const info = await api.invoke('app:info');
+// STET_STARTUP_TRACE=1 (main.js): each step of starting, in ms since the page began.
+const trace = info.trace ? (what) => { api.invoke('app:trace', `${what} at ${performance.now().toFixed(0)} ms`); } : () => {};
+trace('modules loaded, info in');
 let settings = await api.invoke('settings:get');
 $('ver').textContent = `${info.version} β`;
 $('brand').title = `STET ${info.version} β — click for the changelog`;
@@ -340,7 +343,7 @@ function renderGoal() {
   const streakTip = k.days
     ? `Streak: ${k.days} day${k.days === 1 ? '' : 's'}${k.best > k.days ? ` (best ${k.best})` : ''}${k.today ? '' : ` — ${aim} today to add today`}.`
       + ` The dinosaur has grown ${k.growth} px${k.next ? `; it grows again at ${k.next} days` : ', its full size'}.${k.unlocked ? ` Special routines unlocked: ${k.unlocked} of 3.` : ''}`
-    : `Streak: none yet — ${aim} to start one; up to two days a week that miss it don’t break it (the dinosaur grows at 1, 2, 4, 8, 16 and 32 days).`;
+    : `Streak: none yet — ${aim} to start one; up to two days a week that miss it don’t break it (the dinosaur grows at 2, 4, 6, 8, 16 and 32 days).`;
   // Beside the flame, a shield with this week's rest days left: two days a week may miss the goal.
   const restTip = `Rest days left this week: ${k.rest.left} of 2. Each day that ${missed} uses one, and the streak carries on; a third in the same week ends it. Today counts once it is over. Two new ones every Monday.`;
   // (written only when it changed: the readout is redrawn after every pause in writing, and once a minute)
@@ -455,7 +458,8 @@ function renderThemeSeg(t) {
   $('th-dark').classList.toggle('cur', auto && t === 'dark');
   $('th-auto').classList.toggle('on', auto);
   const s = schedule();
-  $('th-auto').title = `${auto ? 'Automatic: ' : 'Switch automatically — '}dark from ${timeLabel(s.darkAt)}, light from ${timeLabel(s.lightAt)}. Right-click to change the times.`;
+  const title = `${auto ? 'Automatic: ' : 'Switch automatically — '}dark from ${timeLabel(s.darkAt)}, light from ${timeLabel(s.lightAt)}. Right-click to change the times.`;
+  if ($('th-auto').title !== title) $('th-auto').title = title; // (the theme poll runs every 15 s: no change, no DOM write)
 }
 
 async function editSchedule() {
@@ -1419,6 +1423,7 @@ session.newUntitled();
 spelling.init();
 dayTurns();
 input.focus();
+trace('everything set up');
 
 if (info.sample) {
   const { sampleDocument } = await import('../dev/sample.js');
@@ -1434,10 +1439,17 @@ if (info.sample) {
     else await reopenLast(blank);
   }
 }
-// Shown once it is all in place and painted, the fonts in (main.js keeps the window hidden till then).
+trace('screenplay open');
+// Shown once it is all in place, the fonts in (main.js keeps the window hidden till then). Not waiting for
+// it to be painted: a hidden window's first frame comes only once the compositor is up (about 200 ms
+// later, whatever the page does), and the contents are faded out until then anyway (ui/startup.js), so
+// the window comes up in the bar colour and its contents fade in on the frames that follow, as before.
+// With motion reduced there is no fade to cover them: then it still waits until they are painted.
 await Promise.race([document.fonts?.ready, new Promise((r) => setTimeout(r, 400))]);
-await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+trace('fonts in');
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 started();
+requestAnimationFrame(() => trace('first frame'));
 if (info.e2e) window.__stet.started = true; // the tests begin once STET has finished starting
 // The first start of each version: a short word that STET is a free beta, written with AI, used at one's own risk.
 if (!info.e2e && !info.perf && !info.shot && settings.betaNotice !== info.version) {

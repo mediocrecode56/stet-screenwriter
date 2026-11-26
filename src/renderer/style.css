@@ -812,6 +812,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .revr.r-grammar { box-shadow: inset 0 -2px 0 var(--ink); }
 .revr.r-non_native { border-bottom: 2px dashed var(--ink); }
 .revr.r-awkward { border-bottom: 2px dotted var(--ink); }
+.revr.r-fact { border-bottom: 3px double var(--ink); }
 /* The suggestion you point at or clicked: only a soft highlight, no outline or underline over the text. */
 .revr.hov, .revr.cur { box-shadow: none; border-bottom: 0; }
 .revr.hov { background: var(--rev-hover); z-index: 1; }
@@ -899,6 +900,7 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .k-grammar .rv-new { box-shadow: inset 0 -2px 0 var(--ink); }
 .k-non_native .rv-new { border-bottom: 2px dashed var(--ink); }
 .k-awkward .rv-new { border-bottom: 2px dotted var(--ink); }
+.k-fact .rv-new { border-bottom: 3px double var(--ink); }
 .rv-arrow { color: var(--ink-3); }
 .rv-conf { flex: none; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--rule); padding: 0 4px; line-height: 14px; }
 .rv-conf.c-high { color: var(--ink); border-color: var(--ink); }

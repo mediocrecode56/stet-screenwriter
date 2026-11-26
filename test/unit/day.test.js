@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dayKey, addDays, weekStart, msToNextDay, setDayOffset, getDayOffset, StatsBook } from '../../src/core/stats.js';
-import { parseActiveBias, systemUtcOffset } from '../../src/main/osclock.js';
+import { parseActiveBias, systemUtcOffset, followSystemClock } from '../../src/main/osclock.js';
 
 test('with the system’s offset the day turns at the system’s midnight, whatever this runtime thinks the zone is', (t) => {
   t.after(() => setDayOffset(null));
@@ -82,4 +82,15 @@ test('Windows says how far its clock is from UTC; anything unreadable leaves the
   assert.deepEqual(calls[0][1].slice(-2), ['/v', 'ActiveTimeBias']);
   assert.equal(await systemUtcOffset({ platform: 'win32', env: {}, run: (e, a, o, cb) => cb(new Error('no')) }), null);
   assert.equal(await systemUtcOffset({ platform: 'win32', env: {}, run: () => { throw new Error('cannot start'); } }), null);
+});
+
+test('the system clock asked while STET starts up is the first answer used: no second question on the way to the window', async () => {
+  const seen = [];
+  let reads = 0;
+  const check = await followSystemClock((off) => seen.push(off), { everyMs: 3600000, read: async () => { reads++; return 120; }, first: Promise.resolve(60) });
+  assert.deepEqual([seen, reads], [[60], 0], 'the early answer, nothing asked again');
+  await check();
+  assert.deepEqual([seen, reads], [[60, 120], 1], 'asked afresh when it is asked for (the computer woke up)');
+  await followSystemClock((off) => seen.push(off), { everyMs: 3600000, read: async () => 30 });
+  assert.equal(seen.at(-1), 30, 'with no early answer, it asks');
 });

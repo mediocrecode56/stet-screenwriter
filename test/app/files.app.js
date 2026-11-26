@@ -186,7 +186,7 @@ test('the Open Recent window: a folder, × and bin on each row, all visible on h
   // A hidden test window doesn't run CSS transitions, so read the hovered state with motion reduced (no fade).
   await app.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   for (const w of [1280, 760]) {
-    await app.send('Emulation.setDeviceMetricsOverride', { width: w, height: 700, deviceScaleFactor: 1, mobile: false });
+    await app.size({ width: w, height: 700 });
     await openRecent();
     const row = await app.until(`(() => { const r = [...document.querySelectorAll('#overlay .recent-row')].find((r) => r.cells[0].textContent.startsWith('The Extraordinarily'))?.getBoundingClientRect(); return r && { x: r.left + 40, y: r.top + r.height / 2 }; })()`);
     await app.move(row.x, row.y);
@@ -209,7 +209,7 @@ test('the Open Recent window: a folder, × and bin on each row, all visible on h
     await app.key('Escape');
     await app.noDialog();
   }
-  await app.send('Emulation.clearDeviceMetricsOverride');
+  await app.standardSize();
   await app.send('Emulation.setEmulatedMedia', { features: [] });
   // Not hovered, the icons stay out of sight; × and the bin are kept well apart.
   await openRecent();

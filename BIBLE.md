@@ -1,6 +1,6 @@
 # STET: bible
 
-Last verified: 2026-11-15.
+Last verified: 2026-11-26.
 
 ## What it is
 Free screenplay editor for Windows and macOS (Electron). It formats as you type and saves as you go.
@@ -17,8 +17,9 @@ Free screenplay editor for Windows and macOS (Electron). It formats as you type 
 - A release needs all four assets: `STET-Windows.zip`, `STET-Setup.exe`, `STET-macOS.dmg`, `STET-Patch-electron-<version>.zip`. The Mac DMG can lag a release by design.
 
 ## Build and test
-- `npm run quick` (about 10 s) before any push. `npm run e2e` (about 25 s) before a version.
-- GUI checks (windows, transitions, resizing, animations, visual bugs) run in WinTest's hidden Sandbox, never on the owner's desktop: build, then `E:\CODING\WinTest\WinTest.ps1 launch stet` (read its bible).
+- All testing runs in WinTest's hidden Sandbox, never on the owner's desktop (owner, 2026-11-26). `scripts/wintest.js` copies the tests in (only what changed) and runs them there: `npm run quick` (unit and smoke, about 25 s warm) before any push, `npm run e2e` (everything, about 60 s warm) before a version, `npm run app -- test/app/x.app.js [--test-name-pattern=...]` for chosen files, `npm run web-test` for `web/`. `npm run startup`, `npm run perf` and `npm run mem` measure there too. On Windows the app tests refuse to start outside it (`test/app/harness.js`); `npm test` is the plain unit run CI uses. A packaged build: `E:\CODING\WinTest\WinTest.ps1 launch stet` (read its bible).
+- In the guest every window is 1280 × 860 at 100% (emulated: the shared guest's screen changes), app windows open without taking the focus except `smoke.app.js` (pointer lock) and `window.app.js` (real Alt+Tab, run once the others are done), and Windows' animations are on (WinTest prepares it; a guest reporting reduced motion fails at launch). Time animations in the page (`app.frames()`, `app.animations()`, `app.metrics()`): WinTest's screen recorder sees about two changes a second.
+- Other projects use the same guest and their windows may be open: rely on nothing in it (screen size, focus, the window list) that a test does not set up itself.
 
 ## Release
 - Version: `package.json` `version`. `CHANGELOG.md` needs a section for it (`scripts/release-notes.js`). The tag `vX.Y.Z` must equal it.
@@ -31,7 +32,7 @@ Free screenplay editor for Windows and macOS (Electron). It formats as you type 
 ## Browser (`web/`, ALPHA)
 - Its own version (`web/package.json`), README and tests; it reads the shared core and renderer. The desktop never depends on `web/`: fix browser needs there, never with browser conditions in `src/`. Keep the separation tests passing.
 - `build.mjs` copies the code its imports reach into `web/dist/` (not committed); no runtime install step.
-- In `web/`: `npm test`, then `npm run build`; `npm run serve` serves port 8127. Run its `npm test` after any change to `src/core` or the shared renderer.
+- Tests: `npm run web-test` from the root (in WinTest); in `web/`, `npm run build`; `npm run serve` serves port 8127. Run its tests after any change to `src/core` or the shared renderer.
 - Test saves and IndexedDB drafts with disposable documents only. Read `docs/CLOUD.md` before changing cloud storage.
 - A push to `main` touching `web/` or shared files deploys GitHub Pages (`web.yml`), even without a version bump. Verify the reported URL with disposable `.stet` files (open, edit, save, cloud) apart from the Node tests. Rollback: revert and redeploy.
 

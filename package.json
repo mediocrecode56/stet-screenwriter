@@ -1,7 +1,7 @@
 {
   "name": "stet",
   "productName": "STET",
-  "version": "0.60.1",
+  "version": "0.60.2",
   "description": "A fast, minimal, dependable screenwriting application.",
   "type": "module",
   "main": "src/main/boot.js",
@@ -11,14 +11,17 @@
     "start": "electron .",
     "test": "node --test --test-isolation=none \"test/unit/*.test.js\"",
     "bench": "node bench/core-bench.js",
-    "perf": "electron . --perf-probe",
-    "mem": "node scripts/mem.js",
-    "smoke": "node --test --test-force-exit test/app/smoke.app.js",
-    "quick": "node --test --test-isolation=none \"test/unit/*.test.js\" && node --test --test-force-exit test/app/smoke.app.js",
-    "e2e": "node --test --test-force-exit --test-timeout=120000 --test-concurrency=4 \"test/app/*.app.js\"",
+    "perf": "node scripts/wintest.js script scripts/perf.js",
+    "mem": "node scripts/wintest.js script scripts/mem.js",
+    "smoke": "node scripts/wintest.js smoke",
+    "quick": "node scripts/wintest.js quick",
+    "e2e": "node scripts/wintest.js e2e",
     "postinstall": "node node_modules/electron/install.js",
     "exe": "node scripts/build-exe.js",
-    "mac": "node scripts/build-mac.js"
+    "mac": "node scripts/build-mac.js",
+    "app": "node scripts/wintest.js app",
+    "startup": "node scripts/wintest.js script scripts/startup.js",
+    "web-test": "node scripts/wintest.js web"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

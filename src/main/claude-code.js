@@ -10,7 +10,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { MODEL, EFFORT, SUMMARY_MODEL, FINDINGS_SCHEMA } from '../core/revision.js';
+import { MODEL, EFFORT, SUMMARY_MODEL, FACT_MODEL, FINDINGS_SCHEMA } from '../core/revision.js';
 import { exists, runCli, stopped } from './cli.js';
 
 export const NO_CLI = 'Claude Code was not found on this computer. Install the Claude desktop app (or Claude Code) and sign in, then try again.';
@@ -114,7 +114,27 @@ export async function reviewChunkCli(cli, cwd, systemFile, chunk, signal, alt = 
   const parsed = res.structured_output ?? (() => { try { return JSON.parse(res.result); } catch { return null; } })();
   if (!parsed || !Array.isArray(parsed.findings)) return { ok: false, error: { code: 'bad_output', message: 'The response had no findings list.' } };
   const u = res.usage || {};
-  return { ok: true, findings: parsed.findings, usage: { input: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), output: u.output_tokens || 0 } };
+  return { ok: true, findings: parsed.findings, claims: Array.isArray(parsed.claims) ? parsed.claims : [], usage: { input: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), output: u.output_tokens || 0 } };
+}
+
+/** One factual claim checked by the smallest model, with Claude Code's own web search and nothing else. { ok, text } | { ok: false, error }. */
+export async function checkFactCli(cli, system, prompt, signal) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stet-fact-'));
+  try {
+    const systemFile = path.join(dir, 'system.txt');
+    await fs.writeFile(systemFile, system);
+    const tools = ['--tools', 'WebSearch,WebFetch', '--allowedTools', 'WebSearch,WebFetch', ...BARE.slice(2)];
+    const r = await run(cli, ['-p', '--output-format', 'json', '--model', FACT_MODEL, '--effort', 'low', '--system-prompt-file', systemFile, ...tools], { cwd: dir, input: prompt, signal, timeoutMs: 120000 });
+    const halt = stopped(r, 'Claude Code');
+    if (halt) return halt;
+    const res = resultOf(r), error = failure(r, res, '');
+    if (error) return { ok: false, error };
+    return typeof res.result === 'string' && res.result.trim() ? { ok: true, text: res.result } : { ok: false, error: { code: 'bad_output', message: 'Claude Code gave no answer.' } };
+  } catch (e) {
+    return { ok: false, error: { code: 'cli', message: `Could not start Claude Code: ${e.message}` } };
+  } finally {
+    fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 /** A short answer in plain words (the guidelines' direction), from the smallest model. { ok, text } | { ok: false, error }. */

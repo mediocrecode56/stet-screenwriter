@@ -24,8 +24,13 @@ import { cueName } from './model.js';
 export const MODEL = 'claude-sonnet-5-5';
 export const EFFORT = 'low';
 export const SUMMARY_MODEL = 'claude-haiku-5-5';
-export const CATEGORIES = ['grammar', 'non_native', 'awkward'];
-export const CATEGORY_LABEL = { grammar: 'Grammar Error', non_native: 'Non-Native Construction', awkward: 'Awkward Phrasing', spelling: 'Spelling' }; // (spelling: words ignored by Spelling)
+// The factual claims a review lists are each checked by the smallest model with a web search of its
+// own (low-cost agents, a few at a time): only a claim found wrong or out of date becomes a suggestion.
+export const FACT_MODEL = SUMMARY_MODEL;
+/** What Claude may report itself; 'fact' comes only from a checked claim (factFinding()). */
+export const REVIEW_CATEGORIES = ['grammar', 'non_native', 'awkward'];
+export const CATEGORIES = [...REVIEW_CATEGORIES, 'fact'];
+export const CATEGORY_LABEL = { grammar: 'Grammar Error', non_native: 'Non-Native Construction', awkward: 'Awkward Phrasing', fact: 'Factual Error', spelling: 'Spelling' }; // (spelling: words ignored by Spelling)
 export const CONFIDENCE = ['high', 'medium', 'low'];
 
 // Elements Claude may flag. Scene headings, cues, transitions and shots are
@@ -61,7 +66,74 @@ For each issue give:
 - confidence: "high" = clearly an error a careful editor would fix; "medium" = very likely unnatural but could be deliberate; "low" = possibly intentional or a matter of taste.
 - guideline: the number of the writer's guideline that covers this passage (for example "G3"), when the writer's guidelines are listed below and one clearly does; otherwise an empty string.
 
-Never report the same span twice or two overlapping spans — combine them into one finding.`;
+Never report the same span twice or two overlapping spans — combine them into one finding.
+
+Factual claims (listed apart, in "claims", never as findings): every statement in a <review> element that presents something about the real world as true and could be checked — a date, a historical event, a real place, person, organisation or product, science, medicine, law, technology, a statistic or a record. The story's own invented facts (its characters, their lives, a made-up town) are not claims, nor are a character's opinions, jokes, lies or mistakes the scene makes plain. For each give:
+- element: the id of the element that states it.
+- original: the shortest span copied character for character from that element that states it (the words a correction would change).
+- claim: the claim as one self-contained sentence, with what the scene makes clear (who, when, where), so it can be checked on its own.
+List at most eight, the most checkable first. Do not judge them: each is checked separately.`;
+
+/** A checker's instructions: one claim from a screenplay, checked with web search. */
+export const FACT_SYSTEM = `You check one factual claim made in a screenplay. Search the web for reliable, current sources (official sites, encyclopedias, major news, scientific or government bodies) and decide whether the claim is accurate today. Treat the screenplay's own story as fiction: judge only what it says about the real world. If the scene is set in the past, judge the claim as of that time.
+
+Answer with one JSON object and nothing else:
+{"verdict": "correct" | "wrong" | "outdated" | "unsure", "replacement": "...", "explanation": "...", "source": "..."}
+- verdict: "correct" when reliable sources confirm it; "wrong" when they show it is false; "outdated" when it was true but no longer is; "unsure" when the sources disagree or you found none.
+- replacement: for "wrong" or "outdated", the corrected wording of the quoted text, changing as little as possible and keeping the writer's words and language; otherwise "".
+- explanation: one or two plain sentences, in the language of the quoted text, saying what the sources say.
+- source: the address of the most reliable page you used, or "".`;
+
+/** The checker's message for one claim ({ original, claim, element text }). */
+export function factPrompt({ original, claim, text }) {
+  return `<claim>${claim}</claim>\n<quoted>${original}</quoted>\n<line>${text}</line>\n\nCheck the claim.`;
+}
+
+/** The checker's answer: its JSON object (the last one in the text, so a sentence before it does no harm), or null. */
+export function parseVerdict(text) {
+  const s = String(text || '');
+  // (lastIndexOf clamps a negative start to 0, so each loop stops itself at the first character)
+  for (let end = s.lastIndexOf('}'); end > 0; end = s.lastIndexOf('}', end - 1)) {
+    for (let start = s.lastIndexOf('{', end); start >= 0; start = start ? s.lastIndexOf('{', start - 1) : -1) {
+      try {
+        const v = JSON.parse(s.slice(start, end + 1));
+        if (v && ['correct', 'wrong', 'outdated', 'unsure'].includes(v.verdict)) return v;
+      } catch { /* not this span */ }
+    }
+  }
+  return null;
+}
+
+/** A checked claim as a raw finding (as Claude reports one, for validateFindings()), or null when there is nothing to fix. */
+export function factFinding(c, v) {
+  if (!v || !['wrong', 'outdated'].includes(v.verdict)) return null;
+  const replacement = typeof v.replacement === 'string' ? v.replacement.trim() : '';
+  if (!replacement || replacement === c.original) return null;
+  const source = typeof v.source === 'string' && /^https?:\/\/\S+$/.test(v.source.trim()) ? v.source.trim() : '';
+  const why = (typeof v.explanation === 'string' && v.explanation.trim()) || (v.verdict === 'outdated' ? 'This is no longer true.' : 'Reliable sources say otherwise.');
+  return {
+    element: c.element, category: 'fact', original: c.original, replacement,
+    explanation: (why + (source ? ` Source: ${source}` : '')).slice(0, 600),
+    confidence: source ? 'high' : 'medium', guideline: '',
+  };
+}
+
+/** The claims of one chunk's answer worth checking: each in a reviewable element, quoted from it, at most `max`. */
+export function claimsOf(chunk, raw, max = 8) {
+  const byId = new Map(chunk.ids.map((x) => [x.id, x]));
+  const out = [], seen = new Set();
+  for (const c of Array.isArray(raw) ? raw : []) {
+    const el = c && byId.get(String(c.element).trim());
+    if (!el || typeof c.original !== 'string' || !c.original.trim() || typeof c.claim !== 'string' || !c.claim.trim()) continue;
+    // (quoted as whole words, in either Unicode form, as validateFindings() will want it)
+    const original = [c.original, c.original.normalize('NFC'), c.original.normalize('NFD')].find((o) => findWhole(el.text, o) !== -1);
+    if (original == null || seen.has(el.id + '\n' + original)) continue;
+    seen.add(el.id + '\n' + original);
+    out.push({ element: el.id, original, claim: c.claim.trim().slice(0, 400), text: el.text });
+    if (out.length >= max) break;
+  }
+  return out;
+}
 
 export const FINDINGS_SCHEMA = {
   type: 'object',
@@ -72,7 +144,7 @@ export const FINDINGS_SCHEMA = {
         type: 'object',
         properties: {
           element: { type: 'string' },
-          category: { type: 'string', enum: CATEGORIES },
+          category: { type: 'string', enum: REVIEW_CATEGORIES },
           original: { type: 'string' },
           replacement: { type: 'string' },
           explanation: { type: 'string' },
@@ -83,8 +155,17 @@ export const FINDINGS_SCHEMA = {
         additionalProperties: false,
       },
     },
+    claims: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { element: { type: 'string' }, original: { type: 'string' }, claim: { type: 'string' } },
+        required: ['element', 'original', 'claim'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['findings'],
+  required: ['findings', 'claims'],
   additionalProperties: false,
 };
 
@@ -175,7 +256,7 @@ ${chunk.contextLines.join('\n') || '(start of script)'}
 ${chunk.lines.join('\n')}
 </review>
 
-Report the language problems in the <review> elements.`;
+Report the language problems in the <review> elements, and list their factual claims.`;
 }
 
 // ---- validation --------------------------------------------------------------------

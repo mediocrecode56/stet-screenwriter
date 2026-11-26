@@ -2,6 +2,21 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.60.2 · 26 Nov 2026
+
+### FEATURES
+
+- Revise now checks facts as well as language. When the script states something about the real world (a date, a place, a piece of history, science or law), each claim is checked separately by a smaller Claude model that searches the web. A claim found wrong or out of date becomes a Factual Error suggestion with the correction and its source. Claims that check out add nothing, and the review says how many facts it checked.
+- Ctrl+Z after accepting a suggestion now puts your text back and brings the suggestion back too, open again where it was. Ctrl+Y accepts it again. If accepting it counted against one of your guidelines, undoing it takes that back as well.
+- The dinosaur grows more slowly: never more than once every two days of your streak (at 2, 4, 6, 8, 16 and 32 days, instead of 1, 2, 4, 8, 16 and 32).
+
+### BUGS, PERFORMANCE
+
+- STET appears sooner when it starts: the window is on screen about a quarter of a second earlier, with the same calm fade-in as before. Reading the Windows clock no longer holds the window back.
+- With animations turned off in Windows, going to a note or a timeline mark now lands exactly in place, no longer a few pixels off.
+- Switching windows with Alt+Tab: checked with real key presses in five situations (reading further up, writing at the end, the notes panel open, Focus Mode, a minimised window), and the script stays exactly where it was in all of them. If it still jumps for you, tell us what you were doing and it will be followed up.
+- The AUTO theme button no longer rewrites its tooltip every 15 seconds when nothing has changed.
+
 ## 0.60.1 · 13 Nov 2026
 
 ### BUGS, PERFORMANCE

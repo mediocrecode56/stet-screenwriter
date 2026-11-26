@@ -18,11 +18,13 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { atomicWrite } from './files.js';
-import { findClaudeCode, signedIn, reviewChunkCli, askCli, NO_CLI } from './claude-code.js';
+import { findClaudeCode, signedIn, reviewChunkCli, askCli, checkFactCli, NO_CLI } from './claude-code.js';
 import { findCodex, codexSignedIn, prepareCodex, reviewChunkCodex, askCodex } from './codex.js';
-import { MODEL, EFFORT, SUMMARY_MODEL, SYSTEM_PROMPT, FINDINGS_SCHEMA } from '../core/revision.js';
+import { MODEL, EFFORT, SUMMARY_MODEL, FACT_MODEL, FACT_SYSTEM, SYSTEM_PROMPT, FINDINGS_SCHEMA, factPrompt, parseVerdict, factFinding, claimsOf } from '../core/revision.js';
 
 const CONCURRENCY = 3;
+// Claims checked at once in a section, each by its own small checker (FACT_MODEL with web search).
+const FACT_CONCURRENCY = 4;
 // The Claude SDK is loaded the first time a review needs it, not with every start of STET.
 let Anthropic = null;
 const sdk = async () => (Anthropic ||= (await import('@anthropic-ai/sdk')).default);
@@ -116,7 +118,8 @@ export class ClaudeService {
     const ac = new AbortController();
     this.runs.set(reviewId, ac);
     const systemText = extra ? `${SYSTEM_PROMPT}\n\n${extra}` : SYSTEM_PROMPT;
-    let review, cleanup = async () => {};
+    // check: a claim's checker for this way of reaching Claude (none through Codex: it has no search here).
+    let review, check = null, cleanup = async () => {};
     // Codex as the backup, set up the first time it is needed.
     let codexDir = null, codexReady = null, useCodex = false;
     const codex = () => (codexReady ||= (async () => {
@@ -143,6 +146,7 @@ export class ClaudeService {
         await fs.writeFile(spFile, systemText);
         cleanup = () => fs.rm(dir, { recursive: true, force: true }).catch(() => {});
         review = (chunk) => reviewChunkCli(cli, dir, spFile, chunk, ac.signal, alt);
+        check = (c) => checkFactCli(cli, FACT_SYSTEM, factPrompt(c), ac.signal);
       } else if (status.source === 'codex') {
         if (!(await codex())) throw Object.assign(new Error('Codex was found but is not signed in. Open Codex and sign in, or set up Claude under Tools → Claude Connection….'), { code: 'auth' });
         useCodex = true;
@@ -156,6 +160,7 @@ export class ClaudeService {
         const client = await this.client();
         const system = [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }];
         review = (chunk) => this.reviewChunk(client, system, chunk, ac.signal);
+        check = (c) => this.checkFact(client, c, ac.signal);
       }
     } catch (e) {
       this.send('review:done', { reviewId, error: ['no_key', 'auth', 'cli'].includes(e.code) ? { code: e.code, message: e.message } : describeError(e) });
@@ -172,6 +177,8 @@ export class ClaudeService {
           const alt = await viaCodex(chunk);
           if (alt) { useCodex = true; res = alt; }
         }
+        if (res?.ok && check && !useCodex && !ac.signal.aborted) res = { ...res, ...(await this.checkClaims(chunk, res, check, ac.signal)) };
+        if (res) delete res.claims;
         this.send('review:chunk', { reviewId, index: chunk.index, ...(res || { ok: false, error: { code: 'cli', message: 'Codex is not available.' } }) });
       }
     };
@@ -201,10 +208,55 @@ export class ClaudeService {
       let parsed;
       try { parsed = JSON.parse(text); } catch { return { ok: false, error: { code: 'bad_output', message: 'The response could not be read.' } }; }
       if (!parsed || !Array.isArray(parsed.findings)) return { ok: false, error: { code: 'bad_output', message: 'The response had no findings list.' } };
-      return { ok: true, findings: parsed.findings, usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens } };
+      return { ok: true, findings: parsed.findings, claims: Array.isArray(parsed.claims) ? parsed.claims : [], usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens } };
     } catch (e) {
       return { ok: false, error: describeError(e) };
     }
+  }
+
+  /**
+   * The factual claims of a reviewed section, each checked by its own small checker, a few at a time.
+   * A claim found wrong or out of date joins the section's findings (category 'fact', with the source);
+   * one confirmed, unsure or unchecked adds nothing. `facts`: how many were checked, and found wrong.
+   */
+  async checkClaims(chunk, res, check, signal) {
+    const claims = chunk.ids ? claimsOf(chunk, res.claims) : [];
+    if (!claims.length) return { facts: { checked: 0, wrong: 0 } };
+    const queue = [...claims], found = [];
+    let checked = 0;
+    const worker = async () => {
+      while (queue.length && !signal.aborted) {
+        const c = queue.shift();
+        const r = await check(c);
+        if (!r?.ok) continue; // (a checker that failed says nothing: the claim is left as written)
+        checked++;
+        const f = factFinding(c, parseVerdict(r.text));
+        if (f) found.push(f);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(FACT_CONCURRENCY, claims.length) }, worker));
+    // A fact and a language finding on the same words: the fact wins (it changes them anyway).
+    const facts = new Set(found.map((f) => f.element + '\n' + f.original));
+    const findings = [...res.findings.filter((f) => !facts.has(f.element + '\n' + f.original)), ...found];
+    return { findings, facts: { checked, wrong: found.length } };
+  }
+
+  /** One claim checked by the smallest model with its own web search. { ok, text } | { ok: false, error }. */
+  async checkFact(client, c, signal) {
+    try {
+      const messages = [{ role: 'user', content: factPrompt(c) }];
+      // (streamed like a review, so one stand-in serves the tests; a long search may pause the turn: go on, twice at most)
+      for (let turn = 0; turn < 3; turn++) {
+        const msg = await client.messages.stream({
+          model: FACT_MODEL, max_tokens: 4000, output_config: { effort: 'low' }, system: FACT_SYSTEM, messages,
+          tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+        }, { signal }).finalMessage();
+        if (msg.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: msg.content }); continue; }
+        if (msg.stop_reason === 'refusal') return { ok: false, error: { code: 'refusal', message: 'Claude declined to check this claim.' } };
+        return { ok: true, text: msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('') };
+      }
+      return { ok: false, error: { code: 'incomplete', message: 'The check did not finish.' } };
+    } catch (e) { return { ok: false, error: describeError(e) }; }
   }
 
   /**

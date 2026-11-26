@@ -244,7 +244,7 @@ again. It is stored in the ledger (`streak: { last, count, best, prev }`), so
 the window and the main process agree and it is saved, backed up and upgraded
 with everything else; statistics from before 0.9 get the streak their days
 already show. The current streak is `count` while `last` is today or
-yesterday, else 0. Growth is one pixel per milestone reached (1, 2, 4, 8, 16,
+yesterday, else 0. Growth is one pixel per milestone reached (2, 4, 6, 8, 16,
 32 days) and a special loop is unlocked per two; both are pure functions of
 the current streak, so nothing can be applied twice and a broken streak
 resets them. A Reset keeps the streak.

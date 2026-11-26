@@ -442,3 +442,20 @@ test('Tab is announced, on a written line and an empty one; a move or a shortcut
   ed.tab(true);
   assert.equal(told, 2, 'Shift+Tab on an empty line');
 });
+
+test('undo and redo tell whoever listens which step went, with what that step carries (Revise reopens its suggestions)', () => {
+  const ed = new Editor([makeBlock('action', 'Mara enter in the kitchen.')]);
+  const heard = [];
+  ed.history.add((how, t) => heard.push([how, t.accepted]));
+  ed.replaceRanges([{ b: 0, s: 5, e: 10 }], ['enters']);
+  ed.undoStack.at(-1).accepted = ['f1']; // (what Revise writes on the step that accepted f1)
+  ed.insertText('!');
+  assert.deepEqual(heard, [], 'nothing said for edits');
+  ed.undo(); ed.undo();
+  assert.equal(ed.blocks[0].text, 'Mara enter in the kitchen.');
+  ed.redo();
+  assert.deepEqual(heard, [['undo', undefined], ['undo', ['f1']], ['redo', ['f1']]]);
+  assert.equal(ed.blocks[0].text, 'Mara enters in the kitchen.');
+  assert.equal(ed.undo(), true); assert.equal(ed.undo(), false, 'nothing left: no word');
+  assert.equal(heard.length, 4);
+});

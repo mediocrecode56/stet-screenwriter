@@ -99,6 +99,8 @@ and live in core/format.js; change them only on the owner's word.
 - One thing grows out of the last: between two activities it does something small that belongs to
   both (a bridge, dino-acts.js), and after a reaction it finds its place again. New routines keep to
   this: never a cut from one thing to another, and a bridge never changes what it chooses to do.
+- It grows slowly: never more than once every two days of a streak (owner, 0.60.2: it got too big too
+  quickly), and never sooner than before.
 
 ## Words
 
@@ -114,7 +116,16 @@ and live in core/format.js; change them only on the owner's word.
 
 ## Process
 
-- Startup must feel calm: the window shows once ready and its contents fade up, with no jump.
+- Startup must feel calm: the window shows once ready and its contents fade up, with no jump. Keep
+  that animation exactly when making STET start faster (owner, 0.60.2): the window comes up in the bar
+  colour as soon as everything is in place, and the same 280 ms fade plays once the first frame is
+  drawn. With motion reduced, it still waits for a painted frame (no fade to cover it).
+- Undo is the writer's: Ctrl+Z on a step that accepted Revise suggestions puts the text back and the
+  suggestions with it, open again; Ctrl+Y accepts them again (owner, 0.60.2).
+- Revise checks facts as well as language: a factual claim found wrong or out of date by a small
+  checker searching the web is a suggestion like any other (FACTUAL ERROR, a double underline), with
+  its source. One that checks out, or can't be settled, adds nothing.
+- All testing runs in WinTest's hidden Sandbox, never on the owner's desktop (owner, 0.60.2).
 - Before every release: unit tests, the full app suite (timed, see stet test timings), the Mac traps.
 - Privacy: nothing personal in the repository (handle only, no real name, no local paths); the
   script leaves the computer only through Revise, which the writer runs. The one addition, asked

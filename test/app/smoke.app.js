@@ -11,7 +11,7 @@ import { App, scratch } from './harness.js';
 let tmp, app;
 before(async () => {
   tmp = await scratch('stet-smoke');
-  app = await App.launch({ userData: path.join(tmp, 'ud') });
+  app = await App.launch({ userData: path.join(tmp, 'ud'), focus: true }); // (the window's real focus: stepping locks the pointer)
   await app.eval('__stet.input.focus()');
 });
 after(() => app?.close());
@@ -500,7 +500,7 @@ test('the timeline: a click on a timecode edits it; a right-click on a scene giv
   await app.click(s4.left + 200, s4.bottom + 120); // (on the script)
   assert.equal(await app.eval('__stet.session.doc.timecodes.length + document.querySelectorAll(".tc-pop").length'), 0, 'not confirmed: no timecode');
   await app.click(s4.left + 1, s4.top + 6, { button: 'right' });
-  assert.equal(await app.eval('document.activeElement.className'), 'tc-time', 'the time, ready to type over');
+  await app.until(`document.activeElement.className === 'tc-time'`, { what: 'the time, ready to type over' });
   await app.type('00:09:00');
   await app.eval(`document.querySelector('.tc-pop .tc-tag').value = 'Turn'`);
   await app.clickOn('.tc-pop .tc-ok');

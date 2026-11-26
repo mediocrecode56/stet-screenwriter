@@ -53,6 +53,7 @@ export class Editor {
     this.blocks = blocks.length ? blocks : [makeBlock('action')];
     this.sel = { a: pos(0, 0), f: pos(0, 0) };
     this.undoStack = [];
+    this.history = new Set(); // fn('undo' | 'redo', the transaction): a step undone or redone (Revise follows its suggestions)
     this.redoStack = [];
     this.rev = 0;          // increments on every committed change
     this.dirty = null;     // pending dirty range for pagination
@@ -142,6 +143,7 @@ export class Editor {
     this.redoStack.push(t);
     this.sel = t.selBefore;
     this.rev++;
+    for (const fn of this.history) fn('undo', t);
     this._emit();
     return true;
   }
@@ -155,6 +157,7 @@ export class Editor {
     this.undoStack.push(t);
     this.sel = t.selAfter;
     this.rev++;
+    for (const fn of this.history) fn('redo', t);
     this._emit();
     return true;
   }

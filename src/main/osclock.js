@@ -34,10 +34,11 @@ export function systemUtcOffset({ platform = process.platform, env = process.env
 /**
  * Keep `apply(offset)` told of the system's offset: now (resolving once that answer is in) and
  * every few minutes after. Returns a function that asks again at once (the computer woke up).
+ * `first`: the answer to a question already asked (main.js asks while Electron starts up).
  */
-export async function followSystemClock(apply, { everyMs = 5 * 60000, read = systemUtcOffset } = {}) {
+export async function followSystemClock(apply, { everyMs = 5 * 60000, read = systemUtcOffset, first = null } = {}) {
   const check = async () => apply(await read());
-  await check();
+  apply(await (first || read()));
   setInterval(check, everyMs).unref?.();
   return check;
 }

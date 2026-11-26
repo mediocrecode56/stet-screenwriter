@@ -24,7 +24,12 @@ import { SpellService, findDictionaries, pickDictionary, dictionaryDirs } from '
 import { installDictionary, localeCode } from './dictinstall.js';
 import { languageName } from '../core/spell.js';
 import { setDayOffset, getDayOffset } from '../core/stats.js';
-import { followSystemClock } from './osclock.js';
+import { followSystemClock, systemUtcOffset } from './osclock.js';
+
+// STET_STARTUP_TRACE=1: when each step of starting is reached, in ms since the process began (docs/PERFORMANCE.md, "Startup").
+const STARTUP_TRACE = !!process.env.STET_STARTUP_TRACE;
+const trace = STARTUP_TRACE ? (what) => process.stderr.write(`[startup] ${performance.now().toFixed(1)} ms main: ${what}\n`) : () => {};
+trace('main.js loaded');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
@@ -39,7 +44,6 @@ const SAMPLE = !!flag('--sample');
 const E2E = !!flag('--e2e');
 const RUN = flagValue('--run'); // dev: run a command after startup (used for screenshots)
 if (process.env.STET_USER_DATA) app.setPath('userData', path.resolve(process.env.STET_USER_DATA));
-
 protocol.registerSchemesAsPrivileged([{ scheme: 'stet', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
 // Memory (docs/PERFORMANCE.md, "Memory"): the network service runs inside this process instead of
@@ -47,7 +51,12 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'stet', privileges: { standard: 
 // costs about 7 MB just to exist (about 5 MB saved in all: the window takes a little more).
 app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess2');
 
-if (!PERF && !SHOT && !E2E && !app.requestSingleInstanceLock()) app.quit();
+const second = !PERF && !SHOT && !E2E && !app.requestSingleInstanceLock();
+if (second) app.quit();
+// The system's clock (osclock.js) is asked now, while Electron starts up, not after: on a PC whose
+// antivirus looks at every program started, that one reg.exe could hold the window back. (Not by a
+// second launch, which only hands its file to the first.)
+const firstClock = second ? null : systemUtcOffset();
 
 let win = null;
 let revealWin = () => {}; // shows the window (createWindow); the renderer asks once it has started
@@ -105,7 +114,10 @@ function createWindow() {
   revealWin = () => {
     if (shown || !win || win.isDestroyed() || SHOT || flag('--hidden')) return;
     shown = true;
-    if (b.maximized) win.maximize(); else win.show();
+    if (b.maximized) win.maximize();
+    // (app tests run side by side: one shown without taking the focus never takes it from another's test)
+    else if (E2E && process.env.STET_E2E_BACKGROUND) win.showInactive();
+    else win.show();
   };
   win.once('ready-to-show', () => setTimeout(revealWin, 2500));
   for (const [ev, on] of [['enter-full-screen', true], ['leave-full-screen', false]]) win.on(ev, () => win.webContents.send('app:fullscreen', on));
@@ -166,7 +178,7 @@ function handle(channel, fn) {
 
 function registerIpc() {
   handle('app:info', () => ({
-    version: pkg.version, platform: process.platform, perf: PERF, shot: !!SHOT, sample: SAMPLE, e2e: E2E, run: RUN,
+    version: pkg.version, platform: process.platform, perf: PERF, shot: !!SHOT, sample: SAMPLE, e2e: E2E, run: RUN, trace: STARTUP_TRACE,
     defaultDir: defaultDir(), userData: app.getPath('userData'), electron: process.versions.electron,
     // A packaged STET checks for updates when it starts (unless turned off in Preferences); tests point it at a mock.
     updateCheck: (app.isPackaged || !!process.env.STET_UPDATE_URL) && !PERF && !SHOT && !SAMPLE,
@@ -541,6 +553,7 @@ let pendingOpen = fileArg(argv);
 if (process.platform === 'win32') app.setAppUserModelId('app.stet.screenwriting');
 
 app.whenReady().then(async () => {
+  trace('electron ready');
   const ud = app.getPath('userData');
   settings = new JsonStore(path.join(ud, 'settings.json'), {
     theme: 'dark', zoom: 1, defaultDir: null, recent: [], autosave: true, autosaveDelayMs: 1200,
@@ -551,8 +564,9 @@ app.whenReady().then(async () => {
   if (!settings.get().timelineDefault) settings.set({ timeline: true, timelineDefault: true });
   // The day turns over with the computer's own clock (core/stats.js, "the day"): asked of the system before
   // the statistics are read, again every few minutes and whenever the computer wakes, and the window told.
-  const checkClock = await followSystemClock((off) => { if (setDayOffset(off) && win && !win.isDestroyed()) win.webContents.send('clock:offset', getDayOffset()); });
+  const checkClock = await followSystemClock((off) => { if (setDayOffset(off) && win && !win.isDestroyed()) win.webContents.send('clock:offset', getDayOffset()); }, { first: firstClock });
   powerMonitor.on('resume', checkClock);
+  trace('system clock read');
   stats = new StatsStore(ud);
   recovery = new Recovery(path.join(ud, 'recovery'));
   claude = new ClaudeService(ud, (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
@@ -581,9 +595,15 @@ app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
   }
   registerIpc();
-  handle('app:ready', () => { revealWin(); return true; });
+  handle('app:ready', () => { trace('renderer started: window shown'); revealWin(); return true; });
+  handle('app:trace', (what) => { trace('renderer: ' + String(what).slice(0, 80)); return true; });
   handle('app:pending-open', () => { const f = pendingOpen; pendingOpen = null; return f; });
   createWindow();
+  trace('window created');
+  if (STARTUP_TRACE) {
+    win.webContents.once('dom-ready', () => trace('page parsed'));
+    win.webContents.once('did-finish-load', () => trace('page loaded'));
+  }
   if (PERF) win.webContents.once('did-finish-load', () => setTimeout(() => win.webContents.send('perf:start'), 800));
   if (PERF) setTimeout(() => { allowClose = true; app.quit(); }, 120000).unref(); // (npm run perf always ends)
   setTimeout(removeStaleProbeDirs, 60000).unref(); // (well after starting: nothing here is urgent)

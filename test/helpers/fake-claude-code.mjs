@@ -5,7 +5,7 @@
 // or FAKE_CC_MODE_FILE, a file holding the mode, so a test can change it without restarting STET.
 const MODE = (() => { try { return fs.readFileSync(process.env.FAKE_CC_MODE_FILE, 'utf8').trim(); } catch { return process.env.FAKE_CC_MODE || ''; } })();
 import fs from 'node:fs';
-import { elementsOf } from './mock-anthropic.js';
+import { elementsOf, checkVerdict } from './mock-anthropic.js';
 
 const RULES = [
   ['enter in the kitchen', 'enters the kitchen', 'grammar', 'high'],
@@ -33,6 +33,8 @@ if (mode === 'logged-out') { out({ subtype: 'success', is_error: true, result: '
 if (mode === 'limit') { out({ subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1762600000', api_error_status: 429 }); process.exit(1); }
 if (mode === 'garbage') { process.stdout.write('panic: something broke\n'); process.exit(2); }
 
+// A claim's check, with web search and nothing else.
+if (stdin.includes('<claim>')) { out({ subtype: 'success', is_error: false, result: checkVerdict(stdin) }); process.exit(0); }
 // Not a review (no findings schema asked for): the short answer in plain words (the guidelines' direction).
 if (!args.includes('--json-schema')) { out({ subtype: 'success', is_error: false, result: `Fake Claude Code says: ${stdin.split('\n').length - 1} guidelines.` }); process.exit(0); }
 
@@ -42,4 +44,6 @@ for (const el of elementsOf(stdin)) {
     if (el.text.includes(find)) findings.push({ element: el.id, category, original: find, replacement, explanation: 'fake cli: ' + category, confidence });
   }
 }
-out({ subtype: 'success', is_error: false, result: JSON.stringify({ findings }), structured_output: { findings } });
+// The one factual claim the fakes know: a tower finished in 1902 (checked separately: checkVerdict()).
+const claims = elementsOf(stdin).filter((el) => /finished in 1902/.test(el.text)).map((el) => ({ element: el.id, original: 'finished in 1902', claim: 'The Eiffel Tower was finished in 1902.' }));
+out({ subtype: 'success', is_error: false, result: JSON.stringify({ findings, claims }), structured_output: { findings, claims } });

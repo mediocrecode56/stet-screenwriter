@@ -30,9 +30,9 @@ function daysInARow(n, today = '2026-10-20') {
   return book;
 }
 
-test('milestones at 1, 2, 4, 8, 16 and 32 days: one pixel each, a special loop every second one', () => {
-  assert.deepEqual(MILESTONES, [1, 2, 4, 8, 16, 32]);
-  const want = { 0: [0, 0], 1: [1, 0], 2: [2, 1], 3: [2, 1], 4: [3, 1], 7: [3, 1], 8: [4, 2], 15: [4, 2], 16: [5, 2], 31: [5, 2], 32: [6, 3], 33: [6, 3], 100: [6, 3] };
+test('milestones at 2, 4, 6, 8, 16 and 32 days: one pixel each, never two within two days, a special loop every second one', () => {
+  assert.deepEqual(MILESTONES, [2, 4, 6, 8, 16, 32]);
+  const want = { 0: [0, 0], 1: [0, 0], 2: [1, 0], 3: [1, 0], 4: [2, 1], 5: [2, 1], 6: [3, 1], 7: [3, 1], 8: [4, 2], 15: [4, 2], 16: [5, 2], 31: [5, 2], 32: [6, 3], 33: [6, 3], 100: [6, 3] };
   for (const [n, [g, u]] of Object.entries(want)) {
     const book = n === '0' ? new StatsBook(null, clock(noon('2026-10-20'))) : daysInARow(+n);
     const s = book.summary({}).writing;
@@ -47,6 +47,9 @@ test('milestones at 1, 2, 4, 8, 16 and 32 days: one pixel each, a special loop e
     const d = growthFor(n) - growthFor(n - 1);
     assert.equal(d, MILESTONES.includes(n) ? 1 : 0, `day ${n}`);
   }
+  // Never more often than every two days, and never sooner than the first schedule (1, 2, 4, 8, 16, 32).
+  for (let n = 1; n <= 40; n++) if (growthFor(n) > growthFor(n - 1)) assert.equal(growthFor(n - 1), growthFor(Math.max(0, n - 2)), `day ${n}: no growth the day before`);
+  for (let n = 0; n <= 40; n++) assert.ok(growthFor(n) <= [1, 2, 4, 8, 16, 32].filter((m) => n >= m).length, `day ${n}: no bigger than before`);
   assert.deepEqual([2, 4, 6].map(unlocksFor), [1, 2, 3]);
   assert.deepEqual([1, 3, 5].map(unlocksFor), [0, 1, 2]);
 });
@@ -70,7 +73,7 @@ test('a third day off in one week breaks the streak; an unfinished today never d
   write(book, '2026-10-09');
   const s = book.summary({}).writing;
   assert.equal(s.days, 1, 'a new streak starts');
-  assert.equal(s.growth, 1);
+  assert.equal(s.growth, 0, 'one day: no growth yet (the first comes at two)');
   assert.equal(s.best, 5, 'the best is remembered');
   // Midnight is the boundary, in local time: 23:59 and 00:01 are different days.
   now.set(new Date(2026, 9, 9, 23, 59)); book.apply([{ doc: 'a', n: 1, t: now().getTime() }]);

@@ -21,7 +21,9 @@ export async function startMock(handler) {
     const prompt = json.messages[0].content;
     // Not a review: a short answer in plain words (the guidelines' direction), never the test's handler.
     const ask = !String(prompt).includes('<review>');
-    const plan = ask ? { raw: `Mock Claude says: ${String(prompt).split('\n').length - 1} guidelines.` } : (await handler({ prompt, body: json, attempt: requests.filter((r) => r.body && r.body.messages && r.body.messages[0].content === prompt).length })) || {};
+    // A claim's check (core/revision.js factPrompt()): the stand-in for the checker's web search knows one fact.
+    const fact = String(prompt).includes('<claim>');
+    const plan = fact ? { raw: checkVerdict(prompt) } : ask ? { raw: `Mock Claude says: ${String(prompt).split('\n').length - 1} guidelines.` } : (await handler({ prompt, body: json, attempt: requests.filter((r) => r.body && r.body.messages && r.body.messages[0].content === prompt).length })) || {};
     if (plan.delayMs) await new Promise((r) => setTimeout(r, plan.delayMs));
     if (res.destroyed || res.writableEnded) return; // client cancelled while we waited
     if (plan.status) {
@@ -29,7 +31,7 @@ export async function startMock(handler) {
       res.end(JSON.stringify({ type: 'error', error: { type: plan.status === 429 ? 'rate_limit_error' : 'api_error', message: 'mock ' + plan.status } }));
       return;
     }
-    const text = plan.raw ?? JSON.stringify({ findings: plan.findings || [] });
+    const text = plan.raw ?? JSON.stringify({ findings: plan.findings || [], claims: plan.claims || [] });
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
     ev('message_start', { message: { id: 'msg_mock', type: 'message', role: 'assistant', model: json.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 1 } } });
@@ -54,4 +56,11 @@ export function elementsOf(prompt) {
     if (m) out.push({ id: m[1], type: m[2], text: JSON.parse(m[3]) });
   }
   return out;
+}
+
+/** The stand-in checker's answer: a tower finished in 1902 is wrong (1889), anything else confirmed. */
+export function checkVerdict(prompt) {
+  const quoted = /<quoted>([\s\S]*?)<\/quoted>/.exec(String(prompt))?.[1] || '';
+  if (/1902/.test(quoted)) return 'Checked. ' + JSON.stringify({ verdict: 'wrong', replacement: quoted.replace('1902', '1889'), explanation: 'The Eiffel Tower was finished in 1889.', source: 'https://www.toureiffel.paris/en/the-monument/history' });
+  return JSON.stringify({ verdict: 'correct', replacement: '', explanation: 'Confirmed.', source: '' });
 }

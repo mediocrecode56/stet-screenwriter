@@ -104,18 +104,29 @@ test('hovering a suggestion highlights exactly its passage; leaving removes it',
   assert.deepEqual(await hov('mouseleave'), { marks: [], dom: 0, item: null });
 });
 
-test('decisions are explicit and kept: accept, undo the text, reopen, discard; accept again changes the text once; decided ones in script order', async () => {
+test('decisions are explicit and kept: accept, Ctrl+Z brings the suggestion back and Ctrl+Y accepts it again, discard; accept again changes the text once; decided ones in script order', async () => {
   let f = await findings();
   const g = f.find((x) => x.cat === 'grammar'), aw = f.find((x) => x.o === 'made a decision of leaving');
   await app.eval(`__stet.revision.accept(['${g.id}'])`);
   assert.equal((await texts())[1], 'Mara enters the kitchen and sits.');
   assert.equal((await findings()).find((x) => x.id === g.id).o, 'enter in the kitchen', 'the original kept as reviewed');
-  await app.eval('__stet.editor.undo()');
+  // Ctrl+Z, as the writer presses it: the text back, and the suggestion open again in the list and the script.
+  await app.key('Mod+Z');
   await settled();
   assert.equal((await texts())[1], 'Mara enter in the kitchen and sits.');
-  assert.equal((await findings()).find((x) => x.id === g.id).decision, 'accepted', 'undoing the text does not change the decision');
-  await app.eval(`__stet.revision.reopen('${g.id}')`);
-  assert.equal((await findings()).find((x) => x.id === g.id).decision, null, 'reopening is explicit');
+  let back = (await findings()).find((x) => x.id === g.id);
+  assert.ok(back.decision === null && back.at, 'the suggestion is back, on its passage');
+  await app.until(`[...document.querySelectorAll('#rev .rv-item[data-id="${g.id}"] [data-act="accept"]:not([disabled])')].some((b) => !b.closest('.rv-decided'))`, { what: 'its card open again, ready to accept' });
+  await app.until(`document.querySelectorAll('.revr.r-grammar').length === 1`, { what: 'marked in the script again' });
+  // Ctrl+Y: accepted again, the text changed again; and Ctrl+Z once more brings it back.
+  await app.key('Mod+Y');
+  await settled();
+  assert.equal((await texts())[1], 'Mara enters the kitchen and sits.');
+  assert.equal((await findings()).find((x) => x.id === g.id).decision, 'accepted', 'redo accepts it again');
+  await app.key('Mod+Z');
+  await settled();
+  back = (await findings()).find((x) => x.id === g.id);
+  assert.deepEqual([(await texts())[1], back.decision], ['Mara enter in the kitchen and sits.', null]);
   await app.eval(`__stet.revision.discard('${aw.id}')`);
   assert.equal((await findings()).find((x) => x.id === aw.id).decision, 'discarded', 'kept, with its decision');
   assert.equal((await texts())[5], 'Teo made a decision of leaving.');
@@ -296,7 +307,8 @@ test('a guideline set aside twice holds the suggestion back, in sight under HELD
   await app.clickOn('#rev .rv-held .tb');
   await app.until(`document.querySelectorAll('#rev .rv-held .rv-item').length === 1`, { what: 'the held ones unfolded' });
   assert.match(await app.eval(`document.querySelector('#rev .rv-held .rv-dec').textContent`), /^Held back by your guidelines: “ITNRO”$/);
-  assert.equal(await app.eval(`document.querySelectorAll('.revr').length`), 1, 'not marked in the script');
+  // (the marks are drawn on the next frame after the review changes)
+  await app.until(`document.querySelectorAll('.revr').length === 1`, { what: 'only the open one marked in the script, not the held one' });
   await app.clickOn('#rev .rv-held [data-act="reopen"]');
   await app.until(`__stet.revision.open().length === 2 && !document.querySelector('#rev .rv-held')`, { what: 'reopened: an open suggestion again' });
   // Accepted after all: that counts against the guideline, which is no longer firm.
@@ -305,6 +317,9 @@ test('a guideline set aside twice holds the suggestion back, in sight under HELD
   assert.equal((await texts())[3], "Ain't nobody awake. INTRO starts soon.");
   await app.key('Mod+Z');
   await settled();
+  // Undone, it never counted: the guideline as it was, and the suggestion open again.
+  await app.until(`!__stet.settings().guidelines.some((g) => g.against)`, { what: 'the guideline as it was before the accept' });
+  assert.equal(await app.eval(`__stet.revision.findings.find((x) => x.original === 'ITNRO').decision`), null, 'the suggestion open again');
   // Firm again, and a strict review: nothing about guidelines is sent, nothing held, nothing marked.
   await app.eval(`(async () => { const r = __stet.revision; for (let i = 0; i < 2; i++) await r.saveFlags([...r.flags, { ...r.flags.find((g) => !g.against), at: Date.now() + i }]); })()`);
   mock.requests.length = 0;
@@ -343,7 +358,7 @@ test('the guidelines window: the direction written by Claude, two tabs, the kind
   assert.deepEqual(await app.eval(`[...document.querySelectorAll('${gl('.gl-kind')}')].map((t) => t.textContent + (t.disabled ? '-' : ''))`), ['FIRM1', 'LEARNING30', 'HABIT1', 'NOTE1']);
   let list = await rows();
   assert.deepEqual(list[0].slice(0, 2), ['FIRM', 'ITNRO']);
-  assert.match(list[0][2], /^Awkward Phrasing · set aside 4 times · accepted once · “a band name”/);
+  assert.match(list[0][2], /^Awkward Phrasing · set aside 4 times · “a band name”/, 'the accept undone earlier does not count');
   assert.deepEqual(list.slice(-2).map((x) => x.slice(0, 2)), [['NOTE', 'Rosa mixes Spanish into her lines'], ['HABIT', 'TEO’s lines']], 'the notes, then what the choices show together');
   // Scrolling: only the list moves, inside its own box; the direction, tabs and field stay where they are.
   const box = () => app.eval(`(() => { const q = (s) => document.querySelector('${gl('')}' + s).getBoundingClientRect(), s = document.querySelector('${gl('.gl-scroll')}'), l = q('.gl-scroll');
@@ -528,4 +543,41 @@ test('the connection is the writer’s choice, kept across a restart, and never 
   await app.noDialog();
   assert.equal((await calls()).length, 0, 'it did not fall back to Claude Code by itself');
   assert.equal(await app.eval('__stet.revision.run'), null, 'no review started');
+});
+
+test('factual claims are each checked by a small model with web search: a wrong one becomes a Factual Error with its source, a right one adds nothing', async () => {
+  const FACTS = [['scene', 'EXT. PARIS - NIGHT'], ['action', 'The Eiffel Tower, finished in 1902, glows over the river.'], ['character', 'TEO'], ['dialogue', 'Paris is the capital of France, you know.']];
+  const claimsHandler = async ({ prompt }) => ({
+    findings: [],
+    claims: elementsOf(prompt).flatMap((el) => [['finished in 1902', 'The Eiffel Tower was finished in 1902.'], ['the capital of France', 'Paris is the capital of France.']]
+      .filter(([o]) => el.text.includes(o)).map(([original, claim]) => ({ element: el.id, original, claim }))),
+  });
+  // Through an API key: the checks go to the smallest model, each with a web search of its own.
+  await app.close();
+  const factMock = await startMock(claimsHandler);
+  try {
+    app = await App.launch({ userData: path.join(tmp, 'ud-facts'), env: { STET_ANTHROPIC_BASE_URL: factMock.url, ANTHROPIC_API_KEY: KEY } });
+    await consent();
+    await app.load(FACTS, {}, 'FACTS');
+    await app.eval('__stet.revision.start()'); await done();
+    const f = await findings();
+    assert.deepEqual(f.map((x) => [x.cat, x.o, x.r]), [['fact', 'finished in 1902', 'finished in 1889']], 'only the wrong claim, as a suggestion');
+    assert.match(f[0].why, /1889\. Source: https:\/\/www\.toureiffel\.paris\//, 'with what the sources say, and where');
+    const checks = factMock.requests.filter((r) => r.body?.messages?.[0]?.content?.includes?.('<claim>'));
+    assert.equal(checks.length, 2, 'each claim checked on its own');
+    assert.ok(checks.every((r) => r.body.model === 'claude-haiku-5-5' && r.body.tools?.[0]?.type === 'web_search_20250305'), 'by the smallest model, searching the web');
+    assert.match(await app.eval(`document.querySelector('#rev .rv-kind').textContent`), /^Factual Error$/);
+    assert.match(await app.eval(`document.querySelector('#rev .rv-line').textContent`), / · 2 facts checked/, 'the review says how many were checked');
+  } finally { await app.close(); await factMock.close(); }
+  // Through Claude Code: the checker may search the web, and nothing else.
+  await fs.rm(log, { force: true }); await cliMode('');
+  app = await App.launch({ userData: path.join(tmp, 'ud-facts-cli'), env: { STET_CLAUDE_CODE: FAKE, FAKE_CC_LOG: log, FAKE_CC_MODE_FILE: modeFile, ANTHROPIC_API_KEY: '' } });
+  await consent();
+  await app.load(FACTS, {}, 'FACTS');
+  await app.eval('__stet.revision.start()'); await done();
+  assert.deepEqual((await findings()).map((x) => [x.cat, x.r]), [['fact', 'finished in 1889']]);
+  const check = (await calls()).find((c) => c.stdin.includes('<claim>'));
+  assert.ok(check, 'the claim was checked');
+  const at = (flag) => check.args[check.args.indexOf(flag) + 1];
+  assert.deepEqual([at('--model'), at('--tools'), at('--allowedTools')], ['claude-haiku-5-5', 'WebSearch,WebFetch', 'WebSearch,WebFetch']);
 });

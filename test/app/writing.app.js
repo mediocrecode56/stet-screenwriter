@@ -379,7 +379,7 @@ test('the caret, the selection and clicks sit on the drawn letters at display sc
   await app.load([['action', LINE]]);
   await app.caret(0, LINE.length);
   for (const dpr of [1, 1.5]) {
-    await app.send('Emulation.setDeviceMetricsOverride', { width: 0, height: 0, deviceScaleFactor: dpr, mobile: false });
+    await app.size({ deviceScaleFactor: dpr });
     for (const z of [1, 1.25, 0.8]) {
       const m = await app.eval(`(async () => {
         __stet.view.setZoom(${z}); await new Promise((r) => requestAnimationFrame(r));
@@ -401,7 +401,7 @@ test('the caret, the selection and clicks sit on the drawn letters at display sc
       assert.equal(m.hitErrors, 0, `${at}: clicks landed on the wrong character ${JSON.stringify(m)}`);
     }
   }
-  await app.send('Emulation.clearDeviceMetricsOverride');
+  await app.standardSize();
   await app.eval('__stet.view.setZoom(1)');
 });
 

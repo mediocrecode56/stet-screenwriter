@@ -50,7 +50,29 @@ export class Revision {
     host.addEventListener('scroll', () => this.nearEnd(this.near), true);
     api.on('review:chunk', (m) => this.onChunk(m));
     api.on('review:done', (m) => this.onDone(m));
+    this.editor.history.add((how, t) => this.onHistory(how, t));
     this.render();
+  }
+
+  /** Ctrl+Z on the step that accepted suggestions puts the text back and the suggestions with it, open
+   *  again where they were; Ctrl+Y accepts them again. (Only the step's own suggestions, as it left them.) */
+  onHistory(how, t) {
+    if (!t.accepted || !this.review) return;
+    let n = 0;
+    for (const a of t.accepted) {
+      const f = this.byId(a.id);
+      if (!f) continue;
+      if (how === 'undo' && f.decision === 'accepted') { f.decision = null; f.appliedText = null; n++; }
+      else if (how === 'redo' && !f.decision) { f.decision = 'accepted'; f.appliedText = a.appliedText; n++; }
+    }
+    // The guidelines as that step left them (only if nothing else changed them since).
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    if (t.flags && same(this.flags, cleanFlags(how === 'undo' ? t.flags.after : t.flags.before))) this.saveFlags(how === 'undo' ? t.flags.before : t.flags.after);
+    if (!n) return;
+    this.session.touch();
+    this.relocate();
+    this.render();
+    this.paint();
   }
 
   get visible() { return isOpen(this.host); }
@@ -138,7 +160,7 @@ export class Revision {
         title: strict ? 'STRICT REVIEW' : 'REVISE', sub: MODEL,
         body: dlg.h('div', { class: 'body', style: 'max-width:560px' },
           dlg.h('p', {}, `Send this screenplay's action, dialogue and parentheticals (about ${words.toLocaleString()} words) to Claude for a review? Claude reads it in the language it is written in.`),
-          dlg.h('p', { class: 'hint' }, `${est.requests} request${est.requests === 1 ? '' : 's'}, roughly ${est.inputTokens.toLocaleString()} input tokens plus Claude's reasoning and answers, ${viaCli ? 'through Claude Code on your Claude sign-in (counts toward your plan usage)' : 'billed to your Anthropic API account'}. Scene headings and character names are sent as context; the title page and your notes are not sent. Nothing in the script changes until you accept a suggestion.`),
+          dlg.h('p', { class: 'hint' }, `${est.requests} request${est.requests === 1 ? '' : 's'}, roughly ${est.inputTokens.toLocaleString()} input tokens plus Claude's reasoning and answers, ${viaCli ? 'through Claude Code on your Claude sign-in (counts toward your plan usage)' : 'billed to your Anthropic API account'}. Scene headings and character names are sent as context; the title page and your notes are not sent. Factual claims are each checked with a few web searches by a smaller model. Nothing in the script changes until you accept a suggestion.`),
           strict ? dlg.h('p', { class: 'hint' }, 'A strict review leaves your guidelines out: everything Claude finds is shown.') : null,
           this.findings.length ? dlg.h('p', { class: 'hint' }, 'The current suggestions and your decisions on them will be replaced by the new review.') : null,
           dlg.h('label', { class: 'chk' }, remember, "don't ask again")),
@@ -158,7 +180,7 @@ export class Revision {
     this.session.touch();
     this.cur = null;
     this.locs = new Map();
-    this.run = { id, chunks, refs, strict, done: 0, failed: new Map(), cancelled: false, finished: false, stage: 'connecting', started: Date.now(), rejected: 0, suppressed: 0, held: 0, fatal: null };
+    this.run = { id, chunks, refs, strict, done: 0, failed: new Map(), cancelled: false, finished: false, stage: 'connecting', started: Date.now(), rejected: 0, suppressed: 0, held: 0, facts: 0, fatal: null };
     this.show(true);
     this.startTicker();
     this.render();
@@ -168,7 +190,7 @@ export class Revision {
 
   send(chunks) {
     const r = this.run;
-    Promise.resolve(api.invoke('review:start', { reviewId: r.id, chunks: chunks.map((c) => ({ index: c.index, prompt: chunkPrompt(c) })), extra: [listsPrompt(this.lists()), r.strict ? '' : guidelinesPrompt(this.flags)].filter(Boolean).join('\n\n') }))
+    Promise.resolve(api.invoke('review:start', { reviewId: r.id, chunks: chunks.map((c) => ({ index: c.index, prompt: chunkPrompt(c), ids: c.ids.map(({ id, text }) => ({ id, text })) })), extra: [listsPrompt(this.lists()), r.strict ? '' : guidelinesPrompt(this.flags)].filter(Boolean).join('\n\n') }))
       .then(() => { if (this.run === r && !r.finished && r.stage === 'connecting') { r.stage = 'reviewing'; this.renderStatus(); } })
       .catch((e) => this.onDone({ reviewId: r.id, error: { code: 'ipc', message: String(e && e.message || e) } }));
   }
@@ -209,6 +231,7 @@ export class Revision {
       r.suppressed += u.suppressed;
       const g = applyGuidelines(u.findings, this.flags, { strict: r.strict }); // (those held back stay in the review, marked)
       r.held += g.held;
+      r.facts += m.facts?.checked || 0; // (the factual claims checked against the web: main/claude.js)
       this.review.findings.push(...g.findings);
       this.session.touch();
     }
@@ -281,13 +304,22 @@ export class Revision {
     for (const f of already) f.decision = 'accepted';
     const plan = planApply(list.filter((f) => !already.includes(f)), this.editor.blocks);
     if (!plan.applied.length && !already.length) { this.render(); return 0; }
+    let t = null;
     if (plan.applied.length) {
       this.editor.replaceRanges(plan.matches, plan.replacements); // one undo step
       afterApply(this.findings, plan, this.editor.blocks);
+      // (that step remembers what it accepted: undoing it brings the suggestions back, onHistory())
+      t = this.editor.undoStack.at(-1);
+      if (t) t.accepted = plan.applied.map((f) => ({ id: f.id, appliedText: f.appliedText }));
     }
-    // Accepted although it looked like a guideline: the guideline was wrong about this one.
+    // Accepted although it looked like a guideline: the guideline was wrong about this one. (Undone, it
+    // never was: the step keeps the guidelines from before and after, onHistory().)
     const counter = [...already, ...plan.applied].filter((f) => f.guide);
-    if (counter.length) this.saveFlags(counter.reduce((fl, f) => addFlag(fl, flagOf(f, { against: true })), this.flags));
+    if (counter.length) {
+      const before = this.flags, after = counter.reduce((fl, f) => addFlag(fl, flagOf(f, { against: true })), before);
+      if (t && plan.applied.some((f) => f.guide)) t.flags = { before, after };
+      this.saveFlags(after);
+    }
     this.session.touch();
     this.relocate();
     this.render();
@@ -474,6 +506,7 @@ export class Revision {
       msg = `${state}${when ? ' ' + when : ''} · ${n ? `${n} of ${shown} open` : `${shown} decided`}`;
       if (r && r.suppressed) msg += ` · ${r.suppressed} ignored`;
       if (held) msg += ` · ${held} held back by your guidelines`;
+      if (r && r.facts) msg += ` · ${r.facts} fact${r.facts === 1 ? '' : 's'} checked`;
       if (r && r.rejected) msg += ` · ${r.rejected} unverifiable dropped`;
     } else msg = 'Claude suggests fixes; nothing changes until you accept.';
     // The two reviews side by side, set alike: the usual one, and the strict one that leaves the guidelines out.

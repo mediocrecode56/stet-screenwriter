@@ -8,6 +8,11 @@
 //   await app.until('__stet.session.dirty === false');
 //
 // STET_E2E_EXE runs them against a packaged build instead of the dev tree.
+//
+// On Windows they run only inside WinTest's hidden Sandbox (scripts/wintest.js sets STET_WINTEST),
+// never on the owner's desktop; there the guest must animate as a real desktop does (no reduced motion).
+// For timing and motion: app.frames(during) (frame times), app.animations(during) (every CSS animation
+// and transition started meanwhile, with its timing), app.metrics() (layouts, style passes, script time).
 
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
@@ -26,6 +31,8 @@ const SEND_MS = 30000;
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** A Mac, where STET's shortcuts and timeline stepping use Cmd for Ctrl ('Mod' in a key combo). */
 export const MAC = process.platform === 'darwin';
+/** The window every app test sees (App.size()). */
+export const STANDARD = { width: 1280, height: 860, deviceScaleFactor: 1 };
 
 // Every app and folder still around when the test process ends goes with it, so a failed test
 // can never leave one behind (or keep the run waiting on it).
@@ -71,11 +78,15 @@ const KEYS = {
 const BIT = { Alt: 1, Ctrl: 2, Control: 2, Meta: 4, Cmd: 4, Shift: 8 };
 
 export class App {
-  static async launch({ userData, args = [], hidden = false, env = {} }) {
+  static async launch({ userData, args = [], hidden = false, focus = false, env = {} }) {
+    if (process.platform === 'win32' && !process.env.STET_WINTEST && !process.env.CI) throw new Error('App tests open real windows: on Windows they run inside WinTest (npm run quick, npm run e2e, or node scripts/wintest.js app <file>), never on the desktop.');
     const screen = XVFB ? await display() : null;
     const child = spawn(ELECTRON, [...APP_ARGS, '--e2e', ...(hidden ? ['--hidden'] : []), '--remote-debugging-port=0', ...args], {
       // Spelling with the tests' own small dictionary (test/fixtures/hunspell), whatever the machine has installed.
-      env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0', STET_DICT_DIRS: path.join(ROOT, 'test', 'fixtures', 'hunspell'), STET_DICT_ONLY: '1', STET_CODEX: 'none', ...(screen ? { DISPLAY: screen.name } : {}), ...env },
+      env: { ...process.env, STET_USER_DATA: userData, ELECTRON_ENABLE_LOGGING: '0', STET_DICT_DIRS: path.join(ROOT, 'test', 'fixtures', 'hunspell'), STET_DICT_ONLY: '1', STET_CODEX: 'none', ...(screen ? { DISPLAY: screen.name } : {}),
+        // In WinTest's guest, shown without taking the focus (files run side by side), unless a test needs the
+        // window's real focus (pointer lock, Alt+Tab). Elsewhere (the Mac release runner) as a writer's window.
+        ...(focus || !process.env.STET_WINTEST ? {} : { STET_E2E_BACKGROUND: '1' }), ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     live.add(child);
@@ -89,7 +100,7 @@ export class App {
     child.stderr.on('data', (d) => { err = child.err = (err + d).slice(-2000); port ||= +(/DevTools listening on ws:\/\/[^/]*:(\d+)\//.exec(err)?.[1] || 0); for (const l of String(d).split('\n')) if (/Uncaught|JavaScript error|Error occurred in handler|renderer gone|write failed|could not start/.test(l)) failed.push(l.trim()); });
     let target = null;
     for (const end = Date.now() + START_MS; Date.now() < end && !target && child.exitCode === null;) {
-      await sleep(100);
+      await sleep(25); // (STET is up in about a quarter of a second: a short poll finds it sooner)
       if (!port) continue;
       try {
         const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
@@ -100,16 +111,33 @@ export class App {
     const app = new App(child, target.webSocketDebuggerUrl, userData);
     await app.open();
     await app.send('Emulation.setFocusEmulationEnabled', { enabled: true }); // keys reach it like the focused window it would be
+    // In WinTest's guest every test sees the same window, 1280 × 860 at 100%, whatever screen the shared guest
+    // has at the time. (Elsewhere, such as the Mac release runner's 1024-pixel screen, the real window.)
+    if (!hidden && process.env.STET_WINTEST) await app.standardSize();
     await app.send('Runtime.enable');
+    // A guest with Windows' animation effects off would skip every glide and fade and measure nothing (WinTest prepares it).
+    if (process.env.STET_WINTEST && await app.eval(`matchMedia('(prefers-reduced-motion: reduce)').matches`)) { await app.kill(); throw new Error('The WinTest guest reports reduced motion: its animations are off (WinTest start prepares them; try start -Fresh).'); }
     // Started: the screenplay to reopen is open, or STET is asking about unsaved work from a crash.
     await app.until(`!!window.__stet && (__stet.started || !!document.querySelector('#overlay:not([hidden]) .dlg'))`, { what: 'STET to finish starting', timeout: START_MS });
     // Its window is shown a moment after STET says it has started, its contents fading up (ui/startup.js);
     // a press sent before it is on screen is simply lost. The tests begin once it has come up.
-    if (!hidden) await app.until(`!document.documentElement.matches('.starting, .opening, .opened')`, { timeout: 3000, what: 'the window to come up' }).catch(() => {});
+    // (the fade itself, not the class that outlasts it by a moment)
+    if (!hidden) await app.until(`!document.documentElement.matches('.starting, .opening') && document.getAnimations().every((a) => a.animationName !== 'stet-open' || a.playState === 'finished')`, { timeout: 3000, what: 'the window to come up' }).catch(() => {});
     return app;
   }
 
-  constructor(child, wsUrl, userData) { this.child = child; this.wsUrl = wsUrl; this.userData = userData; this.id = 0; this.pending = new Map(); this.mods = 0; this.errors = []; this.expected = []; }
+  constructor(child, wsUrl, userData) { this.child = child; this.wsUrl = wsUrl; this.userData = userData; this.id = 0; this.pending = new Map(); this.mods = 0; this.errors = []; this.expected = []; this.listeners = new Map(); }
+
+  /** Call fn with each DevTools event `method`, until the function this returns is called. */
+  on(method, fn) {
+    if (!this.listeners.has(method)) this.listeners.set(method, new Set());
+    this.listeners.get(method).add(fn);
+    return () => this.listeners.get(method).delete(fn);
+  }
+
+  /** The page as in a window of `width` × `height` at `deviceScaleFactor` (the standard window: 1280 × 860 at 100%). */
+  size(o = {}) { return this.send('Emulation.setDeviceMetricsOverride', { ...STANDARD, ...o, mobile: false }); }
+  standardSize() { return this.size(); }
 
   /** An error the main process will report on purpose (a test of how STET copes with it). */
   expect(re) { this.expected.push(re); }
@@ -130,6 +158,7 @@ export class App {
       this.ws.onmessage = (m) => {
         const msg = JSON.parse(m.data);
         if (msg.method === 'Runtime.exceptionThrown') { const d = msg.params.exceptionDetails; this.errors.push(d.exception?.description || d.text); }
+        if (msg.method) for (const fn of this.listeners.get(msg.method) || []) fn(msg.params);
         if (msg.id && this.pending.has(msg.id)) {
           const { res, rej } = this.pending.get(msg.id);
           this.pending.delete(msg.id);
@@ -262,6 +291,47 @@ export class App {
   noDialog() { return this.until(`document.getElementById('overlay').hidden`, { what: 'the dialog to close' }); }
   /** A frame drawn: what the last change shows is on screen. */
   frame() { return this.eval('new Promise((r) => { requestAnimationFrame(() => requestAnimationFrame(() => r(true))); setTimeout(() => r(true), 150); })'); }
+
+  // ---- timing and motion ----
+
+  /** Frame times while `during` runs (an async function here) or for `during` milliseconds: how many
+   *  frames, the frame rate, the median, 95th percentile and longest frame (ms), and how many took over
+   *  twice the median (a stutter). */
+  async frames(during) {
+    await this.eval(`(() => { const f = window.__frames = [], tick = (t) => { if (window.__frames !== f) return; f.push(t); requestAnimationFrame(tick); }; requestAnimationFrame(tick); })()`);
+    if (typeof during === 'function') await during(); else await sleep(during);
+    const t = await this.eval('(() => { const f = window.__frames; window.__frames = null; return f; })()');
+    const d = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b), at = (q) => d[Math.min(d.length - 1, Math.floor(q * d.length))] ?? 0;
+    const median = at(0.5);
+    return { frames: d.length, fps: d.length ? (1000 * d.length) / (t.at(-1) - t[0]) : 0, median, p95: at(0.95), worst: d.at(-1) ?? 0, long: d.filter((x) => x > 2 * median).length };
+  }
+
+  /** Every CSS animation and transition that starts while `during` runs, with its timing as the page set
+   *  it: { type, name (the animation, or the property a transition moves), duration, delay, easing, node }. */
+  async animations(during) {
+    const seen = [];
+    await this.send('Animation.enable');
+    const off = this.on('Animation.animationStarted', ({ animation: a }) => seen.push(a));
+    try { await during(); await this.frame(); } finally { off(); await this.send('Animation.disable'); }
+    const out = [];
+    for (const a of seen) {
+      let node = '';
+      try {
+        const { object } = await this.send('DOM.resolveNode', { backendNodeId: a.source.backendNodeId });
+        node = (await this.send('Runtime.callFunctionOn', { objectId: object.objectId, returnByValue: true,
+          functionDeclaration: 'function () { return this.id ? "#" + this.id : (this.tagName || "").toLowerCase() + [...(this.classList || [])].map((c) => "." + c).join(""); }' })).result.value;
+      } catch { /* gone already */ }
+      out.push({ type: a.type, name: a.name, duration: a.source.duration, delay: a.source.delay, easing: a.source.easing, node });
+    }
+    return out;
+  }
+
+  /** Chromium's counters for the page (LayoutCount, RecalcStyleCount, ScriptDuration, TaskDuration …). */
+  async metrics() {
+    await this.send('Performance.enable');
+    const { metrics } = await this.send('Performance.getMetrics');
+    return Object.fromEntries(metrics.map((m) => [m.name, m.value]));
+  }
 
   async screenshot(file) {
     const r = await this.send('Page.captureScreenshot', { format: 'png' });

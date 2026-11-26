@@ -67,8 +67,8 @@
 // How lively it is follows the words you actually write, smoothed over minutes
 // so it warms up and calms down gradually. Time passing alone never makes it
 // busier, and it never nags: an idle writer just gets a dinosaur having a nap.
-// A writing streak makes it grow a pixel at each milestone (1, 2, 4, 8, 16 and
-// 32 days in a row) and unlocks a special routine at every second one.
+// A writing streak makes it grow a pixel at each milestone (2, 4, 6, 8, 16 and
+// 32 days in a row: never more than once every two days) and unlocks a special routine at every second one.
 
 import { W, H, FRAMES, PROPS, GLYPHS, ALPHA, MOUTH, HEAD_TOP, GET_UP, postureOf, spriteEdges } from './dino-art.js';
 import { ACTIVITIES, REACTIONS, CATEGORY, MOODS, ENV_ACTIVITIES, ABSORBED, SPECIALS, QUIET, CRITTERS, BASELINE_0_8, BRIDGES, settles, findPlace } from './dino-acts.js';

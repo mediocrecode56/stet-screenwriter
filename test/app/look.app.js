@@ -430,7 +430,7 @@ test('a narrow window: the toolbar tightens only as far as it must, NOTES and ev
     const btns = [...bar.querySelectorAll('.tb')].map((b) => b.getBoundingClientRect()).filter((q) => q.width);
     return { cls: bar.className, notes: last.right <= innerWidth - 1 && last.width > 0, all: btns.every((q) => q.left >= r.left && q.right <= r.right), apart: btns.every((q, i) => !i || q.left >= btns[i - 1].right - 0.5) }; })()`;
   const at = async (w) => {
-    await app.send('Emulation.setDeviceMetricsOverride', { width: w, height: 700, deviceScaleFactor: 1, mobile: false });
+    await app.size({ width: w, height: 700 });
     return app.until(async () => { const s = await app.eval(inView); return s.notes && s.all && s.apart && s; }, { what: `the toolbar fitted at ${w}px` });
   };
   try {
@@ -441,6 +441,37 @@ test('a narrow window: the toolbar tightens only as far as it must, NOTES and ev
     const min = await at(720); // (the smallest the window goes: main.js minWidth)
     assert.match(min.cls, /tight-/);
   } finally {
-    await app.send('Emulation.clearDeviceMetricsOverride');
+    await app.standardSize();
   }
+});
+
+test('starting: the contents fade up once, 280 ms on the calm ease-out, every frame on time; the window never waits on a paint to be shown', async () => {
+  // The fade as STET plays it at the start (ui/startup.js), measured where it runs: Chromium's own record of
+  // each animation (its timing as set), and the time of every frame while it plays.
+  const root = 'document.documentElement.classList';
+  await app.eval(`${root}.add('opening')`);
+  await app.frame();
+  let seen;
+  const f = await app.frames(async () => {
+    seen = await app.animations(async () => {
+      await app.eval(`${root}.replace('opening', 'opened')`);
+      await app.until(`document.getAnimations().every((a) => a.animationName !== 'stet-open' || a.playState === 'finished')`, { what: 'the fade to end' });
+    });
+  });
+  await app.eval(`${root}.remove('opened')`);
+  const fades = seen.filter((a) => a.name === 'stet-open');
+  assert.ok(fades.length >= 3, `the bars, the page and the status bar fade together (${fades.map((a) => a.node).join(', ')})`);
+  for (const a of fades) assert.deepEqual([a.type, a.duration, a.delay], ['CSSAnimation', 280, 0], a.node);
+  // (the curve of a CSS animation is on its keyframes, so it is read as the page computes it)
+  const nums = (t) => (String(t).match(/-?[\d.]+/g) || []).map(Number).join();
+  await app.eval(`${root}.add('opened')`);
+  const curves = await app.eval(`[...new Set(document.getAnimations().filter((a) => a.animationName === 'stet-open').map((a) => getComputedStyle(a.effect.target).animationTimingFunction))]`);
+  await app.eval(`${root}.remove('opened')`);
+  const ease = await app.eval(`getComputedStyle(document.documentElement).getPropertyValue('--ease-out')`);
+  assert.deepEqual(curves.map(nums), [nums(ease)], `one calm ease-out (${curves} / ${ease})`);
+  assert.equal(new Set(fades.map((a) => a.node)).size, fades.length, 'each part once');
+  // Smooth: no hitch you would see, no frame of the fade as long as two and a half of the usual one. (One
+  // repeated frame is allowed: with every other test window busy beside it the guest drops one now and then.)
+  assert.ok(f.frames >= 8, `enough frames to see it move (${f.frames})`);
+  assert.ok(f.worst < 2.5 * f.median && f.long <= 1, `no stutter while it fades (${JSON.stringify(f)})`);
 });

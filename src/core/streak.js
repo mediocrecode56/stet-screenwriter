@@ -30,14 +30,15 @@
 // The current streak is `count` while every day between `last` and today
 // (today isn't over yet) can be spared, and 0 once one can't.
 //
-// Growth: one pixel at each milestone — 1, 2, 4, 8, 16 and 32 days — so at
-// most six. A special loop animation is unlocked at every second milestone
-// (the 2nd, 4th and 6th: 2, 8 and 32 days). Both follow the current streak,
+// Growth: one pixel at each milestone — 2, 4, 6, 8, 16 and 32 days — so at
+// most six, and never more than once every two days (until 0.60.2 it grew on
+// days 1, 2 and 4: too big too soon). A special loop animation is unlocked at
+// every second milestone (the 2nd, 4th and 6th: 4, 8 and 32 days). Both follow the current streak,
 // so when it breaks the dinosaur is back to its first size.
 
 import { addDays, weekStart } from './stats.js';
 
-export const MILESTONES = [1, 2, 4, 8, 16, 32];
+export const MILESTONES = [2, 4, 6, 8, 16, 32];
 export const REST_DAYS = 2; // days a week without writing that don't break the streak
 
 export function emptyStreak() { return { last: null, count: 0, best: 0, spared: [], prev: null }; }

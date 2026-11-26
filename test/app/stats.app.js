@@ -70,7 +70,7 @@ test('the weekly view: today on its bar; Reset only after an explicit yes, and c
   const confirm = async () => { await app.eval(`document.querySelector('#overlay .wk-reset').click()`); await app.dialogMatching(/^RESET STATISTICS/); };
   await confirm();
   assert.match(await app.dialog(), /Not affected/);
-  assert.equal(await app.eval('document.activeElement.textContent'), 'Cancel', 'Cancel has the focus, not Reset');
+  await app.until(`document.activeElement.textContent === 'Cancel'`, { what: 'Cancel to have the focus, not Reset' });
   await app.key('Escape');
   await app.dialogMatching(/^WRITING/);
   assert.equal(await total(), before, 'Escape is no yes');
@@ -193,7 +193,7 @@ test('the streak beside TODAY at 0 to 32 days: the size and special loops each m
   assert.equal(where.parent, 'st-goal', 'part of TODAY, in the status bar');
   assert.ok(where.streak.l >= where.meter.r && where.streak.l - where.meter.r < 14, 'right beside the day’s count');
   assert.ok(where.streak.t >= where.status.t && where.streak.b <= where.status.b && where.streak.r < where.clock, 'inside the status bar, clear of the clock');
-  const want = { 0: [0, 0], 1: [1, 0], 2: [2, 1], 3: [2, 1], 4: [3, 1], 7: [3, 1], 8: [4, 2], 15: [4, 2], 16: [5, 2], 31: [5, 2], 32: [6, 3] };
+  const want = { 0: [0, 0], 1: [0, 0], 2: [1, 0], 3: [1, 0], 4: [2, 1], 5: [2, 1], 6: [3, 1], 7: [3, 1], 8: [4, 2], 15: [4, 2], 16: [5, 2], 31: [5, 2], 32: [6, 3] };
   await app.eval(`__stet.dino.setStreak({ growth: 0, unlocked: 0 }, false)`);
   const base = await measure();
   for (const [n, [g, u]] of Object.entries(want)) {
@@ -253,7 +253,7 @@ test('a day joins the streak at its goal, once however many screenplays; opening
   await app.type(' The ferry comes.'); // 6 of 6
   await todayIs(6);
   s = await streak();
-  assert.deepEqual([s.text, s.data.last, s.targetG, s.unlocked], ['2', dayAgo(0), 2, 1], 'the goal reached: two days, a milestone, the first special loop');
+  assert.deepEqual([s.text, s.data.last, s.targetG, s.unlocked], ['2', dayAgo(0), 1, 0], 'the goal reached: two days, the first milestone (a special loop comes with the second)');
   assert.ok(s.cls.includes('lit'));
   // It starts growing at its next natural moment, while you watch (how it grows: test/unit/dino.test.js).
   await app.eval(`(() => { const c = __stet.dino.c; c.queue = []; c.envDue = null; c.inReaction = null; c.paused = null; c.held = []; c.gen = null; })()`);
@@ -266,7 +266,7 @@ test('a day joins the streak at its goal, once however many screenplays; opening
   // A restart: the streak and the size it earned, at once.
   app = await App.launch({ userData: ud });
   s = await streak();
-  assert.deepEqual([s.text, s.g, s.unlocked], ['2', 2, 1], 'restored at once, no ceremony');
+  assert.deepEqual([s.text, s.g, s.unlocked], ['2', 1, 0], 'restored at once, no ceremony');
   const saved = JSON.parse(await fs.readFile(path.join(ud, 'stats.json'), 'utf8'));
   assert.deepEqual([saved.streak.count, saved.streak.last], [2, dayAgo(0)], 'saved with the statistics');
   // Reset: the words go, the streak stays, and the confirmation says so.

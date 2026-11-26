@@ -75,6 +75,33 @@ which STET can't lower without changing how it looks or feels (software renderin
 Chromium's own textarea undo (1 000 steps, about 0.3 MB) and event-timing records are capped by
 Chromium.
 
+## Startup
+
+`npm run startup [runs] [--sample]` starts STET a few times in WinTest's guest with `STET_STARTUP_TRACE=1`
+and prints when each step is reached, in ms since the main process began: `main.js` loaded, Electron
+ready, the system clock read, the window created, the page parsed and loaded, then the page's own steps
+(modules in, everything set up, the screenplay open, fonts in), the window shown, and its first frame.
+Any run of STET prints the same lines to stderr with that variable set.
+
+Measured in the guest at 0.60.2 (empty profile, 4-10 starts each, spawn to event):
+
+| Step | 0.60.1 | 0.60.2 |
+|---|---|---|
+| System clock read (reg.exe) | after Electron is ready, ~15 ms on the path | asked while Electron starts, off the path |
+| Window on screen | ~510 ms | ~280 ms |
+| First frame, contents start to fade in | ~510 ms | ~485 ms |
+
+What it found: the page waited for two animation frames in its still hidden window before asking to be
+shown, and a hidden window's first frame only comes once the compositor is up (about 200 ms after the
+page is ready, whatever the page does). The contents are faded out until then anyway (ui/startup.js), so
+the window now comes up as soon as everything is in place, in the bar colour, and the same 280 ms fade
+plays once the first frame is drawn (test/app/look.app.js measures it: one fade per part, 280 ms, the
+shared ease-out, no visible hitch). With motion reduced there is no fade, so it still waits for a painted
+frame. The system clock is now read while Electron starts: on a PC whose antivirus inspects every
+program started, that one reg.exe could hold the window back far longer than in the guest. The network
+service inside the main process (0.60.1) costs about 15 ms of page loading at most, and stays for the
+memory it saves.
+
 ## Speed
 
 Performance is measured two ways, both reproducible from the repo:

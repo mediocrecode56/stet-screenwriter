@@ -602,21 +602,33 @@ export class View {
     };
     const r = this.caretRect(a);
     if (r) { const lx = r.x - sc.scrollLeft; if (lx < 20 || lx > sc.clientWidth - 20) sc.scrollLeft = r.x - sc.clientWidth / 2; }
-    if (reducedMotion()) { sc.scrollTop = goal(); return; }
+    // A wheel or a press on the script takes over at once, from a glide or from the settling below.
+    const takeOver = () => this.stopGlide();
+    const own = (g) => {
+      sc.addEventListener('wheel', takeOver, { passive: true });
+      sc.addEventListener('pointerdown', takeOver);
+      g.off = () => { sc.removeEventListener('wheel', takeOver); sc.removeEventListener('pointerdown', takeOver); };
+      return g;
+    };
+    // Reduced motion goes straight there, and again once the pages that jump brought into view are drawn
+    // (drawing them can move the passage a few pixels; a glide recomputes its goal every frame instead).
+    if (reducedMotion()) {
+      sc.scrollTop = goal();
+      const g = this.glide = own({ from: sc.scrollTop, goal });
+      g.raf = requestAnimationFrame(() => { if (this.glide !== g) return; sc.scrollTop = goal(); g.raf = requestAnimationFrame(() => { if (this.glide === g) { sc.scrollTop = goal(); this.stopGlide(); } }); });
+      g.timer = setTimeout(() => { if (this.glide === g) { sc.scrollTop = goal(); this.stopGlide(); } }, 200);
+      return;
+    }
     const from = sc.scrollTop, t0 = performance.now();
     const dur = 0.873 * Math.min(700, 280 + Math.abs(goal() - from) / 10); // (3% quicker than 0.9 in 0.52)
     const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
-    const g = this.glide = { from, goal }; // (the timeline's band travels along with it)
+    const g = this.glide = own({ from, goal }); // (the timeline's band travels along with it)
     const step = () => {
       if (this.glide !== g) return;
       const k = Math.min(1, (performance.now() - t0) / dur);
       sc.scrollTop = from + (goal() - from) * ease(k);
       if (k < 1) g.raf = requestAnimationFrame(step); else this.stopGlide();
     };
-    const takeOver = () => this.stopGlide();
-    sc.addEventListener('wheel', takeOver, { passive: true });
-    sc.addEventListener('pointerdown', takeOver);
-    g.off = () => { sc.removeEventListener('wheel', takeOver); sc.removeEventListener('pointerdown', takeOver); };
     g.timer = setTimeout(() => { if (this.glide === g) { sc.scrollTop = goal(); this.stopGlide(); } }, dur + 200);
     g.raf = requestAnimationFrame(step);
   }
