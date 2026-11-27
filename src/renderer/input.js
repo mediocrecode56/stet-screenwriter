@@ -27,10 +27,18 @@ export class Input {
     this.onCue = null;      // a character cue was finished: its name
     this.onSpace = null;    // Space typed after a word (spelling.js)
     this.held = false;      // hold(): typing waits (the screenplay STET reopens is still loading)
+    this.historyAt = -Infinity; // when the last undo or redo ran (history())
 
     const ta = textarea;
     ta.addEventListener('keydown', (e) => this.keydown(e));
     ta.addEventListener('input', (e) => this.input(e));
+    // The field's own undo (a Mac sends it from its Edit menu, Touch Bar or shake) never touches the
+    // hidden field's text: it is the script's undo, once per press (history()).
+    ta.addEventListener('beforeinput', (e) => {
+      if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return;
+      e.preventDefault();
+      this.history(e.inputType === 'historyUndo' ? 'undo' : 'redo', 'native');
+    });
     ta.addEventListener('compositionstart', () => { this.composing = true; ta.classList.add('composing'); this.placeTextarea(); });
     ta.addEventListener('compositionend', (e) => {
       this.composing = false;
@@ -62,6 +70,21 @@ export class Input {
   }
 
   focus() { this.ta.focus({ preventScroll: true }); }
+
+  /**
+   * Undo or redo in the script, once per press. A Mac can deliver the same Cmd+Z a second time, through
+   * its Edit menu or as the text field's own undo: only the first counts, so one press never takes back
+   * two steps (an accepted suggestion and the edit before it). A press of the key always counts.
+   */
+  history(how, source = 'key') {
+    const now = performance.now();
+    if (source !== 'key' && now - this.historyAt < 400) return false;
+    this.historyAt = now;
+    if (how === 'undo') this.ed.undo(); else this.ed.redo();
+    this.goalCol = null;
+    this.after();
+    return true;
+  }
 
   placeTextarea() {
     const r = this.view.caretRect();
@@ -214,8 +237,8 @@ export class Input {
         return;
       default:
         if (mod && (k === 'a' || k === 'A') && !e.altKey) { ed.selectAll(); this.after(); e.preventDefault(); return; }
-        if (mod && !e.altKey && (k === 'z' || k === 'Z')) { if (ext) ed.redo(); else ed.undo(); this.after(); e.preventDefault(); return; }
-        if (mod && !e.altKey && (k === 'y' || k === 'Y')) { ed.redo(); this.after(); e.preventDefault(); return; }
+        if (mod && !e.altKey && (k === 'z' || k === 'Z')) { this.history(ext ? 'redo' : 'undo'); e.preventDefault(); return; }
+        if (mod && !e.altKey && (k === 'y' || k === 'Y')) { this.history('redo'); e.preventDefault(); return; }
         return; // printable keys arrive through the input event
     }
     e.preventDefault();
@@ -246,7 +269,9 @@ export class Input {
   // ---- mouse -----------------------------------------------------------------------
 
   mousedown(e) {
-    if (e.button === 2 && e.target.closest?.('.page')) { e.preventDefault(); this.focus(); return; } // a right-click (spelling) leaves the keyboard with the script
+    // A right-click (spelling, the selection menu) leaves the keyboard with the script and the selection
+    // as it is. On a Mac, Control-click is the right-click: it arrives as a left press, then the menu.
+    if ((e.button === 2 || (MAC && e.button === 0 && e.ctrlKey)) && e.target.closest?.('.page')) { e.preventDefault(); this.focus(); return; }
     if (e.button !== 0) return;
     if (this.view.ghost) this.view.setGhost(null);
     const t = e.target;

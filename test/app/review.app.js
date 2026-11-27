@@ -104,6 +104,32 @@ test('hovering a suggestion highlights exactly its passage; leaving removes it',
   assert.deepEqual(await hov('mouseleave'), { marks: [], dom: 0, item: null });
 });
 
+test('the pointer resting on an underline shows the suggestion as the panel does; accepting there is one undo step, even if Undo arrives twice', async () => {
+  const nn = (await findings()).find((f) => f.cat === 'non_native');
+  await app.eval('__stet.view.frame()'); // (the window draws no frames: drawn here, the moves sent as events)
+  const at = await app.eval(`(() => { const r = document.querySelector('.revr[data-f="${nn.id}"]').getBoundingClientRect(); return { x: r.left + 3, y: r.top + r.height / 2 }; })()`);
+  await app.eval(`document.getElementById('scroller').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: ${at.x}, clientY: ${at.y} }))`);
+  await app.until(`!!document.querySelector('.rv-card')`, { what: 'the card', timeout: 4000 });
+  const card = await app.eval(`(() => { const c = document.querySelector('.rv-card'), f = __stet.revision.byId('${nn.id}'); return { kind: c.querySelector('.rv-kind').textContent, why: c.querySelector('.rvc-why').textContent, fix: c.querySelector('.rvc-fix').textContent === f.replacement, acts: [...c.querySelectorAll('.sp-act')].map((b) => b.textContent), lit: document.querySelector('#rev .rv-item.hov')?.dataset.id }; })()`);
+  assert.deepEqual(card, { kind: 'Non-Native Construction', why: 'mock: non_native', fix: true, acts: ['DISCARD', 'IGNORE', '+GUIDELINE'], lit: nn.id }, 'its kind, explanation, the change and the other answers; its card in the panel lit');
+  await app.key('Escape');
+  await app.until(`!document.querySelector('.rv-card')`, { what: 'closed by Escape' });
+  // Accepted from the card: the text changed in one undo step.
+  const before = await texts();
+  await app.eval(`__stet.revision.openCard('${nn.id}')`);
+  await app.eval(`document.querySelector('.rv-card .rvc-fix').dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }))`);
+  assert.match((await texts())[4], /staring at him for five minutes/);
+  assert.equal(await app.eval(`__stet.revision.byId('${nn.id}').decision`), 'accepted');
+  // Ctrl+Z, then the same undo again from the Mac's Edit menu or the field itself: one step back, not two.
+  const steps = await app.eval('__stet.editor.undoStack.length');
+  await app.key('Mod+Z');
+  await app.eval(`document.getElementById('input').dispatchEvent(new InputEvent('beforeinput', { inputType: 'historyUndo', bubbles: true, cancelable: true }))`);
+  assert.deepEqual(await texts(), before, 'the text as it was');
+  assert.equal(await app.eval('__stet.editor.undoStack.length'), steps - 1, 'one step undone');
+  await settled();
+  assert.equal(await app.eval(`__stet.revision.byId('${nn.id}').decision`), null, 'the suggestion open again');
+});
+
 test('decisions are explicit and kept: accept, Ctrl+Z brings the suggestion back and Ctrl+Y accepts it again, discard; accept again changes the text once; decided ones in script order', async () => {
   let f = await findings();
   const g = f.find((x) => x.cat === 'grammar'), aw = f.find((x) => x.o === 'made a decision of leaving');
@@ -437,6 +463,35 @@ test('in a shown window the glide passes through the positions in between, one w
   const [r, g, b] = look.bg.match(/[\d.]+/g).map(Number);
   assert.ok(r === g && g === b, `the selected suggestion's shade is a grey, never a highlight colour (${look.bg})`);
   assert.deepEqual([look.shadow, look.border], ['none', '0px'], 'no outline, no underline');
+});
+
+test('SCOPE: the elements reviewed (every screenplay) and the scenes left out (this one) decide what is sent', async () => {
+  await app.load(SCRIPT, {}, 'SCOPE');
+  await app.eval(`document.querySelector('#rev [data-act="scope"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))`);
+  await app.until(`!!document.querySelector('#overlay .scope-dlg')`, { what: 'the SCOPE window' });
+  const rows = await app.eval(`[...document.querySelectorAll('#overlay .sc-els .sc-row')].map((r) => [r.dataset.t, r.querySelector('input').checked])`);
+  assert.deepEqual(rows, [['scene', false], ['action', true], ['character', false], ['dialogue', true], ['paren', true], ['transition', false], ['shot', false]], 'the usual three');
+  assert.equal(await app.eval(`document.querySelectorAll('#overlay .sc-list .sc-row').length`), 1, 'one row per scene');
+  // Action out, character names in.
+  await app.eval(`(() => { for (const t of ['action', 'character']) document.querySelector('#overlay .sc-row[data-t="' + t + '"] input').click(); })()`);
+  await app.eval(`[...document.querySelectorAll('#overlay .btn')].find((b) => b.textContent === 'Save').click()`);
+  await app.until(`!document.querySelector('#overlay .dlg')`);
+  assert.deepEqual(await app.eval('__stet.settings().reviewTypes'), ['character', 'dialogue', 'paren']);
+  const n0 = mock.requests.length;
+  await review();
+  const sent = mock.requests.slice(n0).map((r) => r.body?.messages?.[0]?.content).filter((c) => typeof c === 'string' && c.includes('<review>'));
+  const els = sent.flatMap(elementsOf);
+  assert.deepEqual([...new Set(els.map((e) => e.type))].sort(), ['CHARACTER', 'DIALOGUE'], 'only the chosen elements are reviewable');
+  assert.deepEqual((await findings()).map((f) => f.cat), ['awkward'], 'nothing flagged in action any more');
+  // The one scene left out: nothing to send at all.
+  await app.eval(`(() => { const r = __stet.revision; r.doc.revision.skip = [__stet.editor.blocks[0].id]; })()`);
+  await app.eval('void __stet.revision.start()');
+  await app.until(`[...document.querySelectorAll('#overlay .dlg')].some((d) => /NOTHING TO REVIEW/.test(d.textContent))`, { what: 'nothing to review' });
+  await app.key('Escape');
+  await app.until(`!document.querySelector('#overlay .dlg')`);
+  // Back to the usual: no setting kept for it.
+  await app.eval(`(() => { delete __stet.revision.doc.revision.skip; return __stet.revision.setSettings({ reviewTypes: null }); })()`);
+  assert.equal(await app.eval('__stet.settings().reviewTypes'), null);
 });
 
 // ---- through Claude Code ----

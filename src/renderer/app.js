@@ -9,6 +9,7 @@ import { printHTML } from '../core/printhtml.js';
 import { View } from './view.js';
 import { Input } from './input.js';
 import { Session } from './session.js';
+import { DriveUI } from './drive.js';
 import { ScenePanel, NotesPanel } from './ui/panels.js';
 import { setPanel, isOpen } from './ui/motion.js';
 import { started } from './ui/startup.js';
@@ -62,6 +63,15 @@ const editor = new Editor([makeBlock('scene')]);
 const placeholderDoc = newDocument();
 const view = new View({ scroller: $('scroller'), content: $('content'), editor, doc: placeholderDoc });
 const session = new Session({ editor, appVersion: info.version, onState: renderSaveState, onLoaded: onDocLoaded });
+// Google Drive (drive.js): the File menu's section, the cloud in the status bar, changes made elsewhere.
+const drive = new DriveUI({
+  api, session, el: $('st-drive'),
+  openPath: (file) => openPath(file),
+  backup: () => api.invoke('backup:create', { ...session.ref(), json: session.serialize() }),
+  reload: async (file) => { const r = await Session.readFile(file); if (r.ok) session.load(r.doc, file); else dlg.alertBox('CANNOT OPEN', r.error); },
+  notify: (text) => toast(text, 6000),
+});
+drive.init();
 // The day is the computer's own (core/stats.js, "the day"): the main process asks the system and says here.
 setDayOffset(await api.invoke('clock:offset'));
 api.on('clock:offset', (off) => { if (setDayOffset(off)) dayTurns(); });
@@ -125,6 +135,18 @@ const spelling = new Spelling({
   notify: (text) => toast(text, 5000),
 });
 input.onSpace = () => spelling.spaced();
+// The Mac's Edit menu (main.js): in a text field, the field's own undo, redo or select all; anywhere
+// else, the script's (behind a window, nothing). One press of Cmd+Z is one step (input.history()).
+api.on('menu:edit', (what) => {
+  const t = document.activeElement;
+  if (t && t !== $('input') && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+    document.execCommand(what === 'select-all' ? 'selectAll' : what);
+    return;
+  }
+  if (dlg.isOpen()) return;
+  if (what === 'select-all') { editor.selectAll(); input.after(); } else input.history(what, 'menu');
+  input.focus();
+});
 // A right-click on a misspelt word: its fixes; on selected text: its element type (those in the Tab
 // cycle), style, alignment and a note.
 view.scroller.addEventListener('contextmenu', (e) => {
@@ -185,6 +207,7 @@ editor.onChange = () => {
 view.onFrame = () => { renderStatus(); timeline.update(); };
 
 function onDocLoaded(s) {
+  drive.opened();
   view.doc = s.doc;
   view.pages = [];
   view.relayout();
@@ -381,6 +404,7 @@ function dayTurns() {
 // The square beside the title is the one sign of the save state: hollow when saved, filled while
 // there are unsaved changes, blinking when saving fails (a click on it then saves again).
 function renderSaveState(s) {
+  drive.sessionChanged(); // (a save under a new name: Drive follows the new path)
   const dot = $('docdot');
   const problem = s.status === 'error' || s.status === 'conflict';
   dot.className = problem ? 'error' : s.status === 'saving' || s.status === 'dirty' ? 'dirty' : '';
@@ -1208,7 +1232,13 @@ cmd.register([
   { id: 'save', cat: 'File', label: 'Save', keys: 'Ctrl+S', global: true, run: save },
   { id: 'save-as', cat: 'File', label: 'Save As…', keys: 'Ctrl+Shift+S', global: true, run: saveAs },
   { id: 'rename', cat: 'File', label: 'Rename…', enabled: () => !!session.path, run: () => renameInPlace() },
-  { id: 'reveal', cat: 'File', label: 'Show in Folder', enabled: () => !!session.path, run: () => api.invoke('shell:reveal', session.path) },
+  { id: 'reveal', cat: 'File', label: MAC ? 'Show in Finder' : 'Show in Folder', enabled: () => !!session.path, run: () => api.invoke('shell:reveal', session.path) },
+  // Google Drive: the section of the File menu (drive.js).
+  { id: 'drive-connect', cat: 'File', label: 'Connect Google Drive…', enabled: () => drive.account.configured, run: () => drive.connect() },
+  { id: 'drive-folder', cat: 'File', label: 'Open Google Drive Folder', enabled: () => drive.connected, run: () => drive.folder() },
+  { id: 'drive-open', cat: 'File', label: 'Open from Google Drive…', enabled: () => drive.connected, run: () => drive.openFromDrive() },
+  { id: 'drive-sync', cat: 'File', label: () => (drive.syncing ? 'Stop Syncing This Screenplay' : 'Sync This Screenplay with Google Drive'), enabled: () => drive.connected, run: () => drive.toggle() },
+  { id: 'drive-disconnect', cat: 'File', label: 'Disconnect Google Drive…', enabled: () => drive.connected, run: () => drive.disconnect() },
   { id: 'backups', cat: 'File', label: 'Restore Backup…', keys: 'Ctrl+Shift+B', global: true, run: () => restoreFromBackups(session.ref()) },
   { id: 'backup-now', cat: 'File', label: 'Backup Now', run: async () => { const r = await session.maybeBackup(true); if (r && !r.ok) dlg.alertBox('BACKUP FAILED', 'The backup could not be written.', r.error); } },
   { id: 'recover', cat: 'File', label: 'Recover Unsaved Work…', run: () => checkRecovery(false) },
@@ -1231,7 +1261,7 @@ cmd.register([
   } },
 
   { id: 'undo', cat: 'Edit', label: 'Undo', display: 'Ctrl+Z', run: () => { editor.undo(); input.after(); input.focus(); } },
-  { id: 'redo', cat: 'Edit', label: 'Redo', display: 'Ctrl+Y', run: () => { editor.redo(); input.after(); input.focus(); } },
+  { id: 'redo', cat: 'Edit', label: 'Redo', display: MAC ? 'Ctrl+Shift+Z' : 'Ctrl+Y', run: () => { editor.redo(); input.after(); input.focus(); } },
   { id: 'cut', cat: 'Edit', label: 'Cut', display: 'Ctrl+X', run: () => { input.focus(); document.execCommand('cut'); } },
   { id: 'copy', cat: 'Edit', label: 'Copy', display: 'Ctrl+C', run: () => { input.focus(); document.execCommand('copy'); } },
   { id: 'paste', cat: 'Edit', label: 'Paste', display: 'Ctrl+V', run: () => { input.focus(); document.execCommand('paste'); } },
@@ -1326,7 +1356,8 @@ cmd.onShortcuts(renderTips);
 renderTips();
 
 cmd.buildMenubar($('menubar'), [
-  { label: 'File', items: () => ['new', 'open', 'recent', 'import-fdx', '-', 'save', 'save-as', 'rename', 'reveal', '-', 'backups', 'backup-now', 'recover', '-', 'print', 'export-pdf', '-', 'prefs'] },
+  { label: 'File', items: () => ['new', 'open', 'recent', 'import-fdx', '-', 'save', 'save-as', 'rename', 'reveal', '-', 'backups', 'backup-now', 'recover', '-', 'print', 'export-pdf', '-',
+    ...(!drive.account.configured ? [] : drive.connected ? ['drive-folder', 'drive-open', 'drive-sync', 'drive-disconnect', '-'] : ['drive-connect', '-']), 'prefs'] }, // (no Google setup in this copy: no section)
   { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'select-all', '-', 'find', 'replace', 'find-next', 'find-prev'] },
   { label: 'Element', items: [...typeCmds.map((c) => c.id), '-', 'type-cycle'] },
   { label: 'Format', items: [...styleCmds.map((c) => c.id), '-', ...alignCmds.map((c) => c.id), '-', ...hlCmds.map((c) => c.id), 'hl-none', '-', 'note-add', 'note-next', 'note-prev'] },
@@ -1343,6 +1374,14 @@ window.addEventListener('keydown', (e) => {
   if (!cmd.waiting() && !e.ctrlKey && !e.metaKey && !e.altKey && !/^F\d+$/.test(e.key)) return;
   // Inside text fields only application-level commands run; editing keys stay with the field.
   const r = cmd.resolve(e);
+  // Undo and redo outside any field (after a click on a panel, say) are the script's.
+  const k = e.key.toLowerCase(), mod = MAC ? e.metaKey : e.ctrlKey;
+  if (!r && !inField && mod && !e.altKey && (k === 'z' || (k === 'y' && !MAC))) {
+    e.preventDefault();
+    input.history(k === 'y' || e.shiftKey ? 'redo' : 'undo');
+    input.focus();
+    return;
+  }
   if (!r) return;
   if (r.pending) { e.preventDefault(); return; } // the first keys of a longer shortcut
   const c = r.cmd;
@@ -1392,7 +1431,7 @@ window.addEventListener('drop', (e) => {
 });
 
 // Test hook for the end-to-end driver (only with --e2e).
-if (info.e2e) window.__stet = { editor, view, session, input, writing, notes, cmd, revision, timeline, spelling, focus, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, settings: () => settings, get dino() { return dino; } };
+if (info.e2e) window.__stet = { editor, view, session, input, writing, notes, cmd, revision, timeline, spelling, focus, openPath, importFdx, save, exportPdf, checkRecovery, api, renderGoal, drive, settings: () => settings, get dino() { return dino; } };
 
 // ---- startup -----------------------------------------------------------------------------------------
 

@@ -54,6 +54,8 @@ export function toPayload(doc, appVersion) {
     ...castPayload(doc),
     // Optional (v0.28+): timecodes pinned on the timeline.
     ...timecodesPayload(doc),
+    // Optional (v0.61+): left out of Google Drive sync (only when it is).
+    ...(doc.drive === false ? { drive: false } : {}),
   };
 }
 
@@ -86,6 +88,12 @@ function revisionPayload(doc) {
   const out = {};
   if (rv.ignored && rv.ignored.length) out.ignored = rv.ignored.map((x) => ({ text: x.text, category: x.category }));
   if (rv.review) out.review = reviewToJSON(rv.review, doc.blocks);
+  // Scenes left out of reviews: their headings, by element index (block ids are not stored).
+  if (rv.skip && rv.skip.length) {
+    const skip = new Set(rv.skip), at = [];
+    doc.blocks.forEach((b, i) => { if (b.type === 'scene' && skip.has(b.id)) at.push(i); });
+    if (at.length) out.skip = at;
+  }
   return Object.keys(out).length ? { revision: out } : {};
 }
 
@@ -214,6 +222,11 @@ export function deserialize(json) {
   if (rv && rv.review) {
     const review = reviewFromJSON(rv.review, doc.blocks);
     if (review) doc.revision.review = review;
+  }
+  if (p.drive === false) doc.drive = false;
+  if (rv && Array.isArray(rv.skip)) {
+    const skip = [...new Set(rv.skip.filter((i) => Number.isInteger(i) && blocks[i] && blocks[i].type === 'scene').map((i) => blocks[i].id))];
+    if (skip.length) doc.revision.skip = skip;
   }
   return { doc, warnings, migratedFrom };
 }

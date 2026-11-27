@@ -36,5 +36,8 @@ export const NOTE = svg(12, 12, '<rect x=".5" y=".5" width="11" height="11" fill
 /** The side panels' lock beside REVISE: shut, or open with its shackle lifted. */
 export const lockIcon = (shut) => `<svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="5.5" width="8" height="6" fill="currentColor" shape-rendering="crispEdges"/><path d="M2.8 5.5V3.6a2.2 2.2 0 0 1 4.4 0${shut ? 'V5.5' : 'V3'}" fill="none" stroke="currentColor" stroke-width="1.3" ${shut ? '' : 'transform="translate(2.6 -1)"'}/></svg>`;
 
+/** Google Drive's cloud, stepped like the pixel art (Recent, the status bar): an outline. */
+export const CLOUD = svg(13, 9, '<path d="M1.5 7.5V5.5H2.5V4.5H4.5V2.5H5.5V1.5H8.5V2.5H9.5V4.5H10.5V5.5H11.5V7.5Z" fill="none" stroke="currentColor" stroke-width="1"/>', ' class="cloud"');
+
 /** A dropdown's arrow, after a button's label or icon. */
 export const DROP = '<span class="dn" aria-hidden="true">▾</span>';

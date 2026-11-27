@@ -201,9 +201,9 @@ test('the Open Recent window: a folder, × and bin on each row, all visible on h
     assert.equal(r.scroll, 0, `no sideways scrolling at ${w} px`);
     assert.deepEqual(r.icons.map((i) => i.cls), ['ra-reveal', 'ra-dismiss', 'ra-trash']);
     for (const i of r.icons) { assert.equal(i.op, '1', `${i.title} visible on hover`); assert.ok(i.inside && i.onTop, `${i.title} inside the window and not covered`); }
-    assert.match(r.icons[0].title, /Show in Folder/);
+    assert.match(r.icons[0].title, /Show in (Folder|Finder)/);
     assert.match(r.icons[1].title, /Remove from Recent.*file is kept/s);
-    assert.match(r.icons[2].title, /Move to Recycle Bin/);
+    assert.match(r.icons[2].title, /Move to (Recycle Bin|Trash)/);
     assert.equal(r.path, r.full, 'the whole path, from its beginning');
     assert.ok(r.ellipsis && r.pathRight <= r.iconLeft, 'cut at the end, never under the icons');
     await app.key('Escape');
@@ -241,13 +241,13 @@ test('Open Recent: × removes an entry and keeps the file; the bin asks, then mo
   assert.ok((await rows()).some((x) => x.name === 'Bin'));
   await rowAction('Bin', '.ra-trash');
   await app.dialogMatching(/RECYCLE BIN/);
-  await app.press('Move to Bin');
+  await app.press(process.platform === 'darwin' ? 'Move to Trash' : 'Move to Bin');
   await app.until(async () => !(await rows()).some((x) => x.name === 'Bin'), { what: 'the list without it' });
   await app.until(() => fs.access(files[2]).then(() => false, () => true), { what: 'moved out of its folder' }); // (Windows may show it there a moment longer)
   await fs.access(path.join(bin, 'Bin.stet')); // into the (test) bin, not deleted
   await rowAction('Gone', '.ra-trash');
   await app.dialogMatching(/RECYCLE BIN/);
-  await app.press('Move to Bin');
+  await app.press(process.platform === 'darwin' ? 'Move to Trash' : 'Move to Bin');
   await app.dialogMatching(/no longer exists/);
   await app.eval(`document.querySelector('#overlay .btn.primary').click()`);
   await app.until(async () => !(await rows()).some((x) => x.name === 'Gone'), { what: 'the missing entry removed' });

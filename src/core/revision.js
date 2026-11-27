@@ -33,9 +33,26 @@ export const CATEGORIES = [...REVIEW_CATEGORIES, 'fact'];
 export const CATEGORY_LABEL = { grammar: 'Grammar Error', non_native: 'Non-Native Construction', awkward: 'Awkward Phrasing', fact: 'Factual Error', spelling: 'Spelling' }; // (spelling: words ignored by Spelling)
 export const CONFIDENCE = ['high', 'medium', 'low'];
 
-// Elements Claude may flag. Scene headings, cues, transitions and shots are
-// sent as context only: they follow their own all-caps conventions.
+// Elements Claude may flag unless the writer chooses others (Revise > What to Review): scene headings,
+// cues, transitions and shots are sent as context only, as they follow their own all-caps conventions.
 export const REVIEWABLE = new Set(['action', 'dialogue', 'paren']);
+export const ELEMENT_ORDER = ['scene', 'action', 'character', 'dialogue', 'paren', 'transition', 'shot'];
+/** The element types a review checks: the writer's choice (settings.reviewTypes), or the usual three. */
+export function reviewTypes(chosen) {
+  if (!Array.isArray(chosen)) return new Set(REVIEWABLE);
+  return new Set(ELEMENT_ORDER.filter((t) => chosen.includes(t)));
+}
+/** For each block, whether it lies in a scene the writer left out of reviews (`skip`: the scene headings' block ids). */
+export function skippedBlocks(blocks, skip) {
+  const out = new Array(blocks.length).fill(false);
+  if (!skip || !skip.size) return out;
+  let off = false;
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].type === 'scene') off = skip.has(blocks[i].id);
+    out[i] = off;
+  }
+  return out;
+}
 const LABEL = { scene: 'SCENE HEADING', action: 'ACTION', character: 'CHARACTER', paren: 'PARENTHETICAL', dialogue: 'DIALOGUE', transition: 'TRANSITION', shot: 'SHOT' };
 
 export const SYSTEM_PROMPT = `You are a line editor reviewing a screenplay for language problems. The screenplay may be written in any language, and the writer may not be a native speaker of it. Your job is to find real problems and propose the smallest possible fix — never to restyle the script.
@@ -53,6 +70,7 @@ Report three kinds of issues:
 Protect the writer's voice:
 - Dialogue is how characters speak. Slang, dialect, contractions, fragments, run-ons, profanity, verbal tics, deliberate errors and informal grammar are usually intentional characterization. Never make dialogue more formal. Flag dialogue only when the wording reads as the writer's English mistake rather than the character's voice, and then usually with low or medium confidence.
 - Action lines follow screenplay convention: present tense, terse, sentence fragments are normal ("Rain. Silence."), character names in capitals when introduced, sound cues in capitals. Do not flag these conventions.
+- Scene headings, character cues, transitions and shots are written in capitals with their own abbreviations (INT., EXT., V.O., O.S., CONT'D, CUT TO:). When one is inside <review>, flag only a misspelt or wrong word in it, never its capitals, abbreviations or layout.
 - Do not change meaning, tone, emotional intention or a character's personality. Do not flatten distinctive prose into generic English. Unusual is not the same as wrong.
 - When a phrase could be a deliberate stylistic choice, either leave it alone or flag it with low confidence and say in the explanation that it may be intentional.
 - You are checking the language, not editing the story. Do not flag a passage because it could be clearer, simpler, shorter or easier to follow, because it lacks context or explanation, or because you would phrase it differently. A screenplay leaves things unsaid on purpose, and the reader is not expected to understand every line out of context. Flag clarity only when the English itself makes the meaning come out wrong (a misplaced modifier, an ambiguous pronoun that a grammatical fix resolves).
@@ -62,7 +80,7 @@ For each issue give:
 - element: the id of the element where it occurs (for example "e7"). Only elements inside <review> may be flagged; <context> is for understanding only.
 - original: text copied character for character from that element, in its own script and spelling — the shortest span that contains the problem (usually a few words, not the whole sentence).
 - replacement: what should replace original. Change only what is needed and keep the writer's own words everywhere else.
-- explanation: one or two plain sentences saying what is wrong and why the replacement is correct or more natural.
+- explanation: one short plain sentence, at most 12 words, saying what is wrong. For grammar, name the rule in a few words ("Subject and verb must agree.", "Past tense needed here."), with no lesson and no example. Never restate the original or the replacement.
 - confidence: "high" = clearly an error a careful editor would fix; "medium" = very likely unnatural but could be deliberate; "low" = possibly intentional or a matter of taste.
 - guideline: the number of the writer's guideline that covers this passage (for example "G3"), when the writer's guidelines are listed below and one clearly does; otherwise an empty string.
 
@@ -81,7 +99,7 @@ Answer with one JSON object and nothing else:
 {"verdict": "correct" | "wrong" | "outdated" | "unsure", "replacement": "...", "explanation": "...", "source": "..."}
 - verdict: "correct" when reliable sources confirm it; "wrong" when they show it is false; "outdated" when it was true but no longer is; "unsure" when the sources disagree or you found none.
 - replacement: for "wrong" or "outdated", the corrected wording of the quoted text, changing as little as possible and keeping the writer's words and language; otherwise "".
-- explanation: one or two plain sentences, in the language of the quoted text, saying what the sources say.
+- explanation: one short plain sentence, at most 15 words, in the language of the quoted text, saying what the sources say.
 - source: the address of the most reliable page you used, or "".`;
 
 /** The checker's message for one claim ({ original, claim, element text }). */
@@ -194,15 +212,16 @@ function describe(blocks, i, id) {
  * elements with short ids and carries up to `contextChars` of the preceding
  * text as read-only context.
  */
-export function buildChunks(blocks, { target = 6000, contextChars = 1200 } = {}) {
+export function buildChunks(blocks, { target = 6000, contextChars = 1200, types = REVIEWABLE, skip = null } = {}) {
   const chunks = [];
+  const out = skippedBlocks(blocks, skip); // (a scene left out is not sent at all, not even as context)
   let start = 0;
   while (start < blocks.length) {
     let end = start, size = 0, lastScene = -1;
     while (end < blocks.length) {
       const b = blocks[end];
       if (b.type === 'scene' && end > start) lastScene = end;
-      if (REVIEWABLE.has(b.type)) size += b.text.length;
+      if (types.has(b.type) && !out[end]) size += b.text.length;
       end++;
       if (size >= target) {
         // Prefer ending just before a scene heading in the back half of the chunk.
@@ -210,7 +229,7 @@ export function buildChunks(blocks, { target = 6000, contextChars = 1200 } = {})
         break;
       }
     }
-    chunks.push(makeChunk(blocks, start, end, contextChars, chunks.length));
+    chunks.push(makeChunk(blocks, start, end, contextChars, types, out));
     start = end;
   }
   const withText = chunks.filter((c) => c.ids.length);
@@ -218,14 +237,14 @@ export function buildChunks(blocks, { target = 6000, contextChars = 1200 } = {})
   return withText;
 }
 
-function makeChunk(blocks, start, end, contextChars) {
+function makeChunk(blocks, start, end, contextChars, types = REVIEWABLE, out = []) {
   const ids = []; // element id -> block id, only reviewable elements with text
   const lines = [];
   let chars = 0;
   for (let i = start; i < end; i++) {
     const b = blocks[i];
-    if (!b.text.trim()) continue;
-    if (REVIEWABLE.has(b.type)) {
+    if (!b.text.trim() || out[i]) continue;
+    if (types.has(b.type)) {
       const id = 'e' + (ids.length + 1);
       ids.push({ id, blockId: b.id, text: b.text, type: b.type, speaker: b.type === 'action' ? '' : speakerOf(blocks, i) });
       lines.push(describe(blocks, i, id));
@@ -237,7 +256,7 @@ function makeChunk(blocks, start, end, contextChars) {
   const ctx = [];
   let used = 0;
   for (let i = start - 1; i >= 0 && used < contextChars; i--) {
-    if (!blocks[i].text.trim()) continue;
+    if (!blocks[i].text.trim() || out[i]) continue;
     ctx.unshift(describe(blocks, i, '--'));
     used += blocks[i].text.length;
   }

@@ -13,8 +13,9 @@ const INVOKE = new Set([
   'claude:key-status', 'claude:key-set', 'claude:key-clear', 'claude:key-test', 'claude:provider-set', 'review:start', 'review:cancel', 'claude:ask', 'clock:offset', 'app:trace',
   'app:open-url', 'app:link-files', 'update:check', 'update:download', 'update:cancel', 'update:install', 'pointer:lock', 'win:fullscreen',
   'spell:list', 'spell:load', 'spell:check', 'spell:off', 'spell:install-offer', 'spell:install',
+  'drive:status', 'drive:connect', 'drive:cancel', 'drive:disconnect', 'drive:opened', 'drive:sync', 'drive:state', 'drive:pull', 'drive:keep', 'drive:list', 'drive:download', 'drive:folder',
 ]);
-const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress', 'app:fullscreen', 'clock:offset']);
+const EVENTS = new Set(['app:before-close', 'app:open-file', 'perf:start', 'review:chunk', 'review:done', 'update:progress', 'app:fullscreen', 'clock:offset', 'menu:edit', 'drive:state', 'drive:remote', 'drive:account']);
 
 contextBridge.exposeInMainWorld('stet', {
   invoke(channel, ...args) {

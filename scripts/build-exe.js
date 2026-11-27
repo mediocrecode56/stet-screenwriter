@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
-import { APP_IGNORE, pruneModules, trimLocales, writePatch } from './package-tools.js';
+import { APP_IGNORE, pruneModules, trimLocales, writePatch, writeDriveConfig } from './package-tools.js';
 import { patchAsset } from '../src/main/patch.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,6 +45,7 @@ for (const tag of targets) {
   try { git('worktree', 'prune'); } catch { /* nothing to prune */ }
   git('worktree', 'add', '--detach', '--force', src, tag);
   try {
+    writeDriveConfig(src);
     const pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8'));
     const electronVersion = (pkg.devDependencies?.electron || '').replace(/^[^\d]*/, '');
     // Each version keeps the icon it shipped with (versions before 0.3.0 had none).

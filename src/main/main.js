@@ -1,7 +1,7 @@
 // Electron main process: window, app protocol, and all disk I/O on behalf of
 // the renderer (which is sandboxed and never touches the filesystem).
 
-import { app, BrowserWindow, ipcMain, dialog, protocol, net, nativeTheme, shell, Menu, powerMonitor } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, nativeTheme, shell, Menu, powerMonitor, safeStorage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -18,6 +18,9 @@ import {
   backupDirFor, createBackup, listBackups, pruneBackups, deleteBackup, docBase,
 } from './files.js';
 import { Updater, installKind, cleanupPortable, UpdateError, urlFor } from './update.js';
+import { Drive, URLS as DRIVE_URLS, TIMING as DRIVE_TIMING } from './drive.js';
+import { GOOGLE_DESKTOP } from './drive-config.js';
+import { check as checkContainer } from './container.js';
 import { patchRoot, confirmLaunch, cleanupPatches } from './patch.js';
 import { linkFiles } from './assoc.js';
 import { SpellService, findDictionaries, pickDictionary, dictionaryDirs } from './spell.js';
@@ -62,7 +65,7 @@ let win = null;
 let revealWin = () => {}; // shows the window (createWindow); the renderer asks once it has started
 let allowClose = false;
 let closeAsked = 0;
-let settings, stats, recovery, claude, updater;
+let settings, stats, recovery, claude, updater, drive;
 const queue = new SaveQueue();
 const spell = new SpellService();
 
@@ -121,6 +124,7 @@ function createWindow() {
   };
   win.once('ready-to-show', () => setTimeout(revealWin, 2500));
   for (const [ev, on] of [['enter-full-screen', true], ['leave-full-screen', false]]) win.on(ev, () => win.webContents.send('app:fullscreen', on));
+  win.on('focus', () => drive?.focused());
   win.on('close', (e) => {
     saveBounds();
     if (allowClose) return;
@@ -172,6 +176,13 @@ function backupDirOf({ path: file, id, dir }) {
   return file ? backupDirFor(file, dir) : recovery.backupDir(id);
 }
 
+/** Google's addresses, or the stand-in's (tests). */
+function driveUrls() {
+  const base = (E2E || !app.isPackaged) && process.env.STET_DRIVE_URL;
+  if (!base) return DRIVE_URLS;
+  return { auth: base + '/auth', token: base + '/token', revoke: base + '/revoke', api: base + '/drive/v3', upload: base + '/upload/drive/v3', folder: base + '/folders/' };
+}
+
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_e, ...args) => fn(...args));
 }
@@ -214,6 +225,24 @@ function registerIpc() {
   handle('app:changelog', () => fs.readFile(path.join(ROOT, 'CHANGELOG.md'), 'utf8').catch(() => ''));
   handle('app:close-ready', () => { allowClose = true; setImmediate(() => win && win.close()); });
   handle('app:close-cancel', () => { closeAsked = 0; });
+
+  // Google Drive (drive.js): connecting, the open screenplay, and the STET folder.
+  handle('drive:status', () => drive.status());
+  handle('drive:connect', () => drive.signIn());
+  handle('drive:cancel', () => drive.cancelSignIn());
+  handle('drive:disconnect', () => drive.signOut());
+  handle('drive:opened', ({ path: file, sync }) => {
+    if (file && probeDir && path.dirname(file) === probeDir) file = null; // (the Performance Probe's scratch screenplay never goes anywhere)
+    drive.opened(file, { sync: sync !== false });
+    return file ? drive.stateOf(file) : { state: 'off' };
+  });
+  handle('drive:sync', ({ path: file, on }) => { if (file) drive.setSync(file, !!on); return true; });
+  handle('drive:state', (file) => drive.stateOf(file));
+  handle('drive:pull', (file) => drive.pull(file));
+  handle('drive:keep', async (file) => { await drive.keepLocal(file); return drive.stateOf(file); });
+  handle('drive:list', () => drive.list());
+  handle('drive:download', (id) => drive.download(String(id), settings.get().defaultDir || defaultDir()));
+  handle('drive:folder', async () => { const { folderUrl } = await drive.status(); if (folderUrl.startsWith(driveUrls().folder)) await shell.openExternal(folderUrl); return !!folderUrl; });
 
   handle('settings:get', () => settings.get());
   handle('settings:set', (patch) => settings.set(patch));
@@ -293,9 +322,12 @@ function registerIpc() {
       return { ok: false, code: e.code, error: e.code === 'ENOENT' ? 'The file no longer exists.' : e.message };
     }
   });
-  handle('doc:save', async ({ path: file, rev, json, force }) => {
+  handle('doc:save', async ({ path: file, rev, json, force, sync }) => {
     const r = await queue.save(file, rev, json, { force });
-    if (r.ok && !r.skipped && !(probeDir && path.dirname(file) === probeDir)) addRecent(file, true);
+    if (r.ok && !r.skipped && !(probeDir && path.dirname(file) === probeDir)) {
+      addRecent(file, true);
+      drive.saved(file, { sync: sync !== false }); // (a copy to Google Drive a moment later, if connected)
+    }
     return r;
   });
   handle('doc:known', (file, mtimeMs) => queue.known(file, mtimeMs));
@@ -324,6 +356,7 @@ function registerIpc() {
       queue.forget(file);
       const st = await fs.stat(target);
       queue.known(target, st.mtimeMs);
+      drive.renamed(file, target);
       const s = settings.get();
       settings.set({ recent: (s.recent || []).map((r) => (r.path === file ? { ...r, path: target, name: clean } : r)), ...(s.lastEdited === file ? { lastEdited: target } : {}) });
       return { ok: true, path: target };
@@ -370,7 +403,8 @@ function registerIpc() {
   const dropRecent = (file) => { const s = settings.get(); settings.set({ recent: (s.recent || []).filter((r) => r.path !== file) }); return settings.get().recent; };
   handle('recent:list', async () => {
     const list = settings.get().recent || [];
-    return Promise.all(list.map(async (r) => ({ ...r, exists: await fs.stat(r.path).then((st) => st.isFile(), () => false) })));
+    const inDrive = (await drive.status()).signedIn;
+    return Promise.all(list.map(async (r) => ({ ...r, exists: await fs.stat(r.path).then((st) => st.isFile(), () => false), drive: inDrive && drive.isLinked(r.path) })));
   });
   handle('recent:dismiss', (file) => ({ ok: true, recent: dropRecent(file) }));
   handle('recent:trash', async (file) => {
@@ -569,6 +603,22 @@ app.whenReady().then(async () => {
   trace('system clock read');
   stats = new StatsStore(ud);
   recovery = new Recovery(path.join(ud, 'recovery'));
+  // Google Drive: nothing is sent until the writer connects (File menu). Tests and development runs can
+  // stand in another Google (STET_DRIVE_URL, test/helpers/fake-drive.js), whose "browser" is a fetch.
+  const fakeGoogle = (E2E || !app.isPackaged) && process.env.STET_DRIVE_URL;
+  drive = new Drive({
+    store: new JsonStore(path.join(ud, 'drive.json'), { links: {} }),
+    tokenFile: path.join(ud, 'drive-token.bin'),
+    secret: { available: () => safeStorage.isEncryptionAvailable(), encrypt: (t) => safeStorage.encryptString(t), decrypt: (b) => safeStorage.decryptString(b) },
+    fetch: (url, opts) => net.fetch(url, opts),
+    open: fakeGoogle ? (url) => net.fetch(url).then((r) => r.text()) : (url) => shell.openExternal(url),
+    config: fakeGoogle ? { clientId: 'test-client', clientSecret: '' } : { clientId: process.env.STET_DRIVE_CLIENT || GOOGLE_DESKTOP.clientId, clientSecret: process.env.STET_DRIVE_SECRET || GOOGLE_DESKTOP.clientSecret },
+    emit: (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); },
+    write: atomicWrite, verify: checkContainer,
+    known: async (file) => { const st = await fs.stat(file); queue.known(file, st.mtimeMs); },
+    urls: driveUrls(),
+    timing: fakeGoogle ? { ...DRIVE_TIMING, quiet: 300, maxWait: 2000, focusGap: 0 } : DRIVE_TIMING, // (tests: sooner)
+  });
   claude = new ClaudeService(ud, (ch, payload) => { if (win && !win.isDestroyed()) win.webContents.send(ch, payload); });
   // E2E tests can stand in a portable STET.exe (STET_UPDATE_TARGET) to run the whole update short of quitting.
   const kind = E2E && process.env.STET_UPDATE_TARGET ? { kind: 'portable', target: process.env.STET_UPDATE_TARGET }
@@ -590,7 +640,20 @@ app.whenReady().then(async () => {
   });
 
   if (process.platform === 'darwin') {
-    Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]));
+    // Undo, Redo and Select All go to the window, which decides: in a text field they are the field's,
+    // anywhere else the script's (and never twice for one press: renderer input.js history()). The
+    // built-in roles would run the hidden text field's own undo instead of the script's.
+    const edit = (what) => () => { if (win && !win.isDestroyed()) win.webContents.send('menu:edit', what); };
+    Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: edit('undo') },
+        { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: edit('redo') },
+        { type: 'separator' },
+        { role: 'cut' }, { role: 'copy' }, { role: 'paste' },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: edit('select-all') },
+      ],
+    }, { role: 'windowMenu' }]));
   } else {
     Menu.setApplicationMenu(null);
   }
@@ -613,6 +676,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => { settings?.flush(); stats?.flush(); });
 app.on('window-all-closed', async () => {
-  await Promise.all([settings?.flush(), stats?.flush()]);
+  await Promise.all([settings?.flush(), stats?.flush(), drive && Promise.race([drive.flushAll(), new Promise((r) => setTimeout(r, 4000))])]);
+  drive?.stop();
   app.quit();
 });

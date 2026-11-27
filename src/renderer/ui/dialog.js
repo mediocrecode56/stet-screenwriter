@@ -59,12 +59,21 @@ export function open({ title, sub = '', body, buttons = [{ label: 'Close', value
     ov.addEventListener('keydown', onKey, true);
     const onDown = (e) => { if (e.target === ov) close(null); };
     ov.addEventListener('mousedown', onDown);
+    // The keyboard stays in the window: a click on something that takes no focus (a button that just
+    // turned itself off) would leave it with the page, and Escape and Enter with it.
+    const onOut = () => setTimeout(() => {
+      if (closed || (document.activeElement && document.activeElement !== document.body)) return;
+      dlg.tabIndex = -1;
+      dlg.focus({ preventScroll: true });
+    }, 0);
+    ov.addEventListener('focusout', onOut);
     let closed = false;
     function close(v) {
       if (closed) return; // a click on a dialog already on its way out must not close the next one
       closed = true;
       ov.removeEventListener('keydown', onKey, true);
       ov.removeEventListener('mousedown', onDown);
+      ov.removeEventListener('focusout', onOut);
       active = null;
       dlg.inert = true;
       if (!reducedMotion()) dlg.animate([{ translate: '0 0' }, { translate: '0 -4px' }], { duration: DUR_FAST, easing: EASE_IN_OUT, fill: 'forwards' });

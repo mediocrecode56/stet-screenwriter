@@ -125,7 +125,7 @@ export class Session {
     const json = this.serialize();
     this.status = 'saving';
     this.emit();
-    const p = api.invoke('doc:save', { path: this.path, rev, json, force });
+    const p = api.invoke('doc:save', { path: this.path, rev, json, force, sync: this.doc.drive !== false }); // (sync: to Google Drive as well, unless left out)
     this.saving = p;
     this.savingTo = this.path;
     let r;

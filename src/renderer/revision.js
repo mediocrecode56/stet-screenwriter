@@ -10,14 +10,16 @@
 import {
   buildChunks, chunkPrompt, validateFindings, planApply, afterApply, locateAll, shownRange,
   applyUserLists, listsPrompt, estimate, normalize, ignoreEntry, isApplied, sortByText, revisionIgnores,
-  CATEGORIES, CATEGORY_LABEL, DECISION_LABEL, MODEL,
+  CATEGORIES, CATEGORY_LABEL, DECISION_LABEL, MODEL, reviewTypes, ELEMENT_ORDER,
 } from '../core/revision.js';
+import { TYPE_LABEL } from '../core/model.js';
+import { macKeys } from '../core/keys.js';
 import { applyGuidelines, guidelinesPrompt, flagOf, addFlag, cleanFlags, flagsKey, localDirection, directionRequest, cleanDirection, NO_GUIDELINES } from '../core/guidelines.js';
 import { pos } from '../core/editor.js';
 import { pageOf, linesOf } from '../core/layout.js';
 import { lineIndexOf } from '../core/nav.js';
 import * as dlg from './ui/dialog.js';
-import { setPanel, isOpen } from './ui/motion.js';
+import { setPanel, isOpen, arrive, leave, DUR_FAST } from './ui/motion.js';
 import { guidelinesDialog } from './ui/guidelines.js';
 
 const api = window.stet;
@@ -51,6 +53,12 @@ export class Revision {
     api.on('review:chunk', (m) => this.onChunk(m));
     api.on('review:done', (m) => this.onDone(m));
     this.editor.history.add((how, t) => this.onHistory(how, t));
+    // The card on a passage: the pointer resting on an underline in the script shows its suggestion.
+    this.card = null;      // { id, el, off }
+    const sc = view.scroller;
+    sc.addEventListener('mousemove', (e) => this.pointerAt(e));
+    sc.addEventListener('mouseleave', () => this.aimCard(null));
+    sc.addEventListener('scroll', () => this.closeCard(), { passive: true });
     this.render();
   }
 
@@ -150,8 +158,8 @@ export class Revision {
     }
     const viaCli = status.source === 'claude-code';
     const blocks = this.editor.blocks.slice(); // snapshot: blocks are immutable values
-    const chunks = buildChunks(blocks);
-    if (!chunks.length) { dlg.alertBox('NOTHING TO REVIEW', 'There is no action or dialogue to review yet.'); return; }
+    const types = this.types(), chunks = buildChunks(blocks, { types, skip: this.skipped() });
+    if (!chunks.length) { dlg.alertBox('NOTHING TO REVIEW', types.size ? 'There is nothing to review yet in the elements and scenes chosen under SCOPE.' : 'No element is chosen under SCOPE.'); return; }
     const est = estimate(chunks);
     const words = this.editor.words;
     if (!this.getSettings().reviewConsent) {
@@ -159,7 +167,7 @@ export class Revision {
       const v = await dlg.open({
         title: strict ? 'STRICT REVIEW' : 'REVISE', sub: MODEL,
         body: dlg.h('div', { class: 'body', style: 'max-width:560px' },
-          dlg.h('p', {}, `Send this screenplay's action, dialogue and parentheticals (about ${words.toLocaleString()} words) to Claude for a review? Claude reads it in the language it is written in.`),
+          dlg.h('p', {}, `Send this screenplay's ${typesText(types)} (about ${words.toLocaleString()} words) to Claude for a review? Claude reads it in the language it is written in.`),
           dlg.h('p', { class: 'hint' }, `${est.requests} request${est.requests === 1 ? '' : 's'}, roughly ${est.inputTokens.toLocaleString()} input tokens plus Claude's reasoning and answers, ${viaCli ? 'through Claude Code on your Claude sign-in (counts toward your plan usage)' : 'billed to your Anthropic API account'}. Scene headings and character names are sent as context; the title page and your notes are not sent. Factual claims are each checked with a few web searches by a smaller model. Nothing in the script changes until you accept a suggestion.`),
           strict ? dlg.h('p', { class: 'hint' }, 'A strict review leaves your guidelines out: everything Claude finds is shown.') : null,
           this.findings.length ? dlg.h('p', { class: 'hint' }, 'The current suggestions and your decisions on them will be replaced by the new review.') : null,
@@ -339,7 +347,7 @@ export class Revision {
       pick = await dlg.open({
         title: 'ACCEPT SUGGESTIONS',
         body: dlg.h('div', { class: 'body', style: 'max-width:520px' },
-          dlg.h('p', {}, `Apply all ${open.length} open suggestions, or only one kind? You can undo the text change in one step (Ctrl+Z).`)),
+          dlg.h('p', {}, macKeys(`Apply all ${open.length} open suggestions, or only one kind? You can undo the text change in one step (Ctrl+Z).`))),
         buttons: [{ label: 'Cancel', value: null }, ...(kinds.length > 1 ? kinds.map(([c, n]) => ({ label: `${CATEGORY_LABEL[c]} · ${n}`, value: c })) : []), { label: `All · ${open.length}`, value: 'all', primary: true }],
       });
       if (!pick) return;
@@ -452,11 +460,142 @@ export class Revision {
       if (f.decision && !hov) continue;
       const at = hov ? shownRange(f, this.located(f), this.editor.blocks) : this.located(f);
       if (!at) continue; // never point at a passage we can't identify
-      marks.push({ b: at.b, s: at.s, e: Math.max(at.e, at.s + 1), cat: f.decision ? 'decided' : f.category, cur: f.id === this.cur, hov });
+      marks.push({ b: at.b, s: at.s, e: Math.max(at.e, at.s + 1), cat: f.decision ? 'decided' : f.category, cur: f.id === this.cur, hov, id: f.decision ? null : f.id });
     }
     marks.sort((x, y) => (x.b - y.b) || (x.s - y.s));
     this.view.revision = { marks };
     this.view.schedule();
+    if (this.card && !this.open().some((f) => f.id === this.card.id)) this.closeCard();
+  }
+
+  // ---- the card on a passage ------------------------------------------------------------
+
+  /** The open suggestion whose underline is under the pointer, if any (the underlines are drawn by view.js). */
+  markAt(x, y) {
+    for (const el of this.view.revLayer.children) {
+      if (!el.dataset.f) continue;
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x < r.right && y >= r.top && y < r.bottom + 2) return el.dataset.f;
+    }
+    return null;
+  }
+
+  pointerAt(e) {
+    if (e.buttons || !this.visible || !this.findings.length) return this.aimCard(null);
+    this.aimCard(this.markAt(e.clientX, e.clientY));
+  }
+
+  /** The pointer rests on a suggestion's passage (or on none): its card opens after a moment, and goes
+   *  a moment after the pointer leaves both the passage and the card. */
+  aimCard(id) {
+    clearTimeout(this.cardTimer);
+    if (this.card && this.card.id === id) { clearTimeout(this.cardLeave); return; }
+    if (!id) {
+      if (this.card && !this.cardLeave) this.cardLeave = setTimeout(() => { this.cardLeave = 0; this.closeCard(); }, 280);
+      return;
+    }
+    this.cardTimer = setTimeout(() => this.openCard(id), this.card ? 120 : 380);
+  }
+
+  /** The suggestion as the panel shows it, under its passage: its kind and explanation, the change to
+   *  make, and what else can be done with it (the spelling menu's look). */
+  openCard(id) {
+    const f = this.byId(id);
+    const mark = [...this.view.revLayer.children].find((el) => el.dataset.f === id);
+    if (!f || f.decision || !mark) return;
+    this.closeCard(false);
+    const ok = this.canApply(f);
+    const el = dlg.h('div', { class: 'menu sp-menu rv-card k-' + f.category, role: 'dialog', 'aria-label': CATEGORY_LABEL[f.category] });
+    el.innerHTML = `<div class="rvc-head"><span class="rv-kind">${esc(CATEGORY_LABEL[f.category])}</span><span class="rv-conf c-${f.confidence}" title="Confidence">${f.confidence}</span></div>`
+      + `<div class="rvc-why" dir="auto">${esc(f.explanation)}</div>`
+      + `<div class="mi sp-fix rvc-fix${ok ? '' : ' off'}" role="menuitem" data-act="accept" title="${ok ? `Replace “${esc(f.original)}” with this` : 'The original text is no longer there to replace'}"><span class="rv-new" dir="auto">${esc(f.replacement) || '(remove)'}</span></div>`
+      + '<div class="sp-acts"><button class="sp-act" data-act="discard" title="Keep your text; drop this suggestion">DISCARD</button>'
+      + '<button class="sp-act" data-act="ignore" title="Keep your text and never flag this passage again in this screenplay">IGNORE</button>'
+      + '<button class="sp-act" data-act="guide" title="Fine in every screenplay: add to your guidelines, so similar suggestions stop coming up">+GUIDELINE</button></div>';
+    el.addEventListener('mousedown', (e) => e.preventDefault()); // the script keeps the keyboard
+    el.addEventListener('mouseenter', () => { clearTimeout(this.cardLeave); this.cardLeave = 0; });
+    el.addEventListener('mouseleave', () => this.aimCard(null));
+    el.addEventListener('mouseup', (e) => {
+      const act = e.button === 0 && e.target.closest('[data-act]')?.dataset.act;
+      if (!act) return;
+      this.closeCard();
+      if (act === 'accept') this.accept([id]);
+      else if (act === 'discard') this.discard(id);
+      else if (act === 'ignore') this.ignore(id);
+      else if (act === 'guide') this.addToGuidelines(id);
+    });
+    document.body.appendChild(el);
+    // Under the passage's line, from its start (above it if there's no room below).
+    const r = mark.getBoundingClientRect(), below = r.bottom + 4 + el.offsetHeight <= innerHeight;
+    el.style.left = Math.max(0, Math.min(r.left, innerWidth - el.offsetWidth)) + 'px';
+    el.style.top = Math.max(0, below ? r.bottom + 4 : r.top - 4 - el.offsetHeight) + 'px';
+    arrive(el, { dist: below ? 2 : -2, dur: DUR_FAST, scale: 0.98 }); // (as every menu opens)
+    const off = new AbortController();
+    this.card = { id, el, off };
+    this.setHover(id); // (its card in the panel lights up too)
+    addEventListener('mousedown', (e) => { if (!el.contains(e.target)) this.closeCard(); }, { capture: true, signal: off.signal });
+    addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeCard(); } }, { capture: true, signal: off.signal });
+    addEventListener('blur', () => this.closeCard(), { signal: off.signal });
+  }
+
+  closeCard(animated = true) {
+    clearTimeout(this.cardTimer);
+    clearTimeout(this.cardLeave);
+    this.cardLeave = 0;
+    const c = this.card;
+    if (!c) return;
+    this.card = null;
+    c.off.abort();
+    if (this.hover === c.id) this.setHover(null);
+    if (animated) leave(c.el, () => c.el.remove(), { dist: 2 }); else c.el.remove();
+  }
+
+  // ---- what a review covers ---------------------------------------------------------------
+
+  /** The element types a review checks (every screenplay). */
+  types() { return reviewTypes(this.getSettings().reviewTypes); }
+  /** The scenes left out of reviews in this screenplay: their headings' block ids. */
+  skipped() { return new Set((this.doc && this.doc.revision && this.doc.revision.skip) || []); }
+
+  /** SCOPE: which elements Revise reviews (every screenplay) and which scenes of this one. */
+  async scopeDialog() {
+    const types = this.types(), skip = this.skipped();
+    const row = (label, detail, on, data) => dlg.h('label', { class: 'sc-row', ...data }, dlg.h('input', { type: 'checkbox', checked: on }),
+      dlg.h('span', { class: 'sc-main' }, label), detail ? dlg.h('span', { class: 'sc-meta' }, detail) : null);
+    const els = ELEMENT_ORDER.map((t) => row(TYPE_LABEL[t], '', types.has(t), { 'data-t': t, ...(REVIEWABLE_DEFAULT.has(t) ? {} : { title: 'Only a misspelt or wrong word is flagged here; capitals and abbreviations are left alone' }) }));
+    const blocks = this.editor.blocks, scenes = [];
+    blocks.forEach((b, i) => { if (b.type === 'scene') scenes.push({ b, i }); });
+    const sceneRows = scenes.map(({ b, i }, k) => row(b.text.trim() || 'Untitled scene', `${k + 1} · page ${pageOf(this.view.pages, i, 0) + 1}`, !skip.has(b.id), { 'data-id': b.id }));
+    const count = dlg.h('span', { class: 'sc-count' });
+    const list = dlg.h('div', { class: 'sc-list' }, ...(sceneRows.length ? sceneRows : [dlg.h('div', { class: 'empty' }, 'No scenes yet.')]));
+    const all = (on) => { for (const r of sceneRows) r.querySelector('input').checked = on; recount(); };
+    const recount = () => { const n = sceneRows.filter((r) => r.querySelector('input').checked).length; count.textContent = `${n} of ${sceneRows.length}`; };
+    list.addEventListener('change', recount);
+    recount();
+    const body = dlg.h('div', { class: 'body scope' },
+      dlg.h('div', { class: 'sc-k' }, 'ELEMENTS', dlg.h('span', { class: 'sc-note' }, 'every screenplay')),
+      dlg.h('div', { class: 'sc-els' }, ...els),
+      dlg.h('div', { class: 'sc-k' }, 'SCENES', dlg.h('span', { class: 'sc-note' }, 'this screenplay'), count,
+        dlg.h('span', { class: 'grow' }),
+        sceneRows.length ? dlg.h('button', { class: 'tb', onclick: () => all(true) }, 'ALL') : null,
+        sceneRows.length ? dlg.h('button', { class: 'tb', onclick: () => all(false) }, 'NONE') : null),
+      list);
+    const v = await dlg.open({
+      title: 'SCOPE', sub: 'what Revise reviews', cls: 'scope-dlg', body,
+      buttons: [{ label: 'Cancel', value: null }, { label: 'Save', value: true, primary: true }],
+    });
+    if (!v) return;
+    const chosen = els.filter((r) => r.querySelector('input').checked).map((r) => r.dataset.t);
+    const same = chosen.length === REVIEWABLE_DEFAULT.size && chosen.every((t) => REVIEWABLE_DEFAULT.has(t));
+    await this.setSettings({ reviewTypes: same ? null : chosen }); // (the usual three: no setting)
+    const off = sceneRows.filter((r) => !r.querySelector('input').checked).map((r) => r.dataset.id);
+    const before = [...skip].sort().join(), after = [...off].sort().join();
+    if (before !== after) {
+      this.doc.revision = this.doc.revision || { ignored: [] };
+      if (off.length) this.doc.revision.skip = off; else delete this.doc.revision.skip;
+      this.session.touch();
+    }
+    this.render();
   }
 
   // ---- panel ------------------------------------------------------------------------------
@@ -474,6 +613,7 @@ export class Revision {
       case 'retry': return this.retryFailed();
       case 'key': return keyDialog();
       case 'guides': return guidelinesDialog(this);
+      case 'scope': return this.scopeDialog();
       case 'select': return this.select(id, false);
       case 'accept': return this.accept([id]);
       case 'discard': return this.discard(id);
@@ -549,7 +689,7 @@ export class Revision {
     const r = this.run;
     if (!body && this.review && (!r || r.finished) && this.review.state === 'complete') body = '<div class="empty">No problems found. The writing reads naturally.</div>';
     const nApply = open.filter((f) => this.canApply(f)).length;
-    const foot = `<div class="rv-foot">${nApply > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="guides">GUIDELINES</button><button class="tb" data-act="key">CONNECTION</button></div>`;
+    const foot = `<div class="rv-foot">${nApply > 1 ? '<button class="tb" data-act="all">ACCEPT ALL…</button>' : ''}<span class="grow"></span><button class="tb" data-act="scope" title="Choose the elements and scenes Revise reviews">SCOPE</button><button class="tb" data-act="guides">GUIDELINES</button><button class="tb" data-act="key">CONNECTION</button></div>`;
     const list = this.host.querySelector('.rv-list');
     const scroll = list ? list.scrollTop : 0;
     const jump = decided.length ? `<button class="rv-jump" data-act="to-decided" title="Go to the decided suggestions">DECIDED · ${decided.length} ↓</button>` : '';
@@ -593,6 +733,14 @@ export class Revision {
       <div class="rv-why" dir="auto">${esc(f.explanation)}</div>${note}
       <div class="rv-acts">${actions}</div></div>`;
   }
+}
+
+const REVIEWABLE_DEFAULT = reviewTypes(null);
+const PLURAL = { scene: 'scene headings', action: 'action', character: 'character names', dialogue: 'dialogue', paren: 'parentheticals', transition: 'transitions', shot: 'shots' };
+/** "action, dialogue and parentheticals": the elements a review sends, in plain words. */
+function typesText(types) {
+  const w = ELEMENT_ORDER.filter((t) => types.has(t)).map((t) => PLURAL[t]);
+  return w.length > 1 ? w.slice(0, -1).join(', ') + ' and ' + w.at(-1) : w[0] || 'nothing';
 }
 
 function elapsed(t0) {

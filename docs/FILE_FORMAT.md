@@ -141,6 +141,16 @@ that can't be identified reliably is shown as not locatable rather than matched
 elsewhere. Entries with missing or invalid fields are dropped. Written only
 when a review exists; older builds ignore the field.
 
+### Scenes left out of reviews (optional, since 0.60.3)
+
+```jsonc
+"revision": { "skip": [0, 42] }
+```
+
+Scenes the writer left out of Revise (Revise > SCOPE), by the index of their scene heading in
+`blocks`. Indices that aren't scene headings are dropped on open. Written only when some scene is left
+out; older builds ignore it. (Which element types a review checks is an app setting, not stored here.)
+
 ### Cast (optional, since 0.23.0)
 
 ```jsonc
@@ -161,6 +171,15 @@ older builds ignore it.
 Times pinned on the timeline: `t` seconds at the start of line `l` of element `b`
 (its index in `blocks`), in script order. Entries with an invalid element or time are
 dropped. Written only when there are any; older builds ignore it.
+
+### Google Drive (optional, since 0.60.3)
+
+```jsonc
+"drive": false
+```
+
+The writer left this screenplay out of Google Drive sync (docs/DRIVE.md). Written only when it is
+`false`; absent means synced whenever Google Drive is connected. Older builds ignore it.
 
 ### Comments
 

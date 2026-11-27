@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pruneModules, trimLocales, trimMacLocales, writePatch } from '../../scripts/package-tools.js';
+import { pruneModules, trimLocales, trimMacLocales, writePatch, writeDriveConfig } from '../../scripts/package-tools.js';
 import { zipEntries } from '../../src/main/zip.js';
 
 function tree(root, files) {
@@ -74,4 +74,22 @@ test('the packaged app leaves out development files and icon sources, never what
   const out = (p) => APP_IGNORE.some((re) => re.test(p));
   for (const p of ['/test/x.js', '/docs/a.md', '/.github/workflows/r.yml', '/CLAUDE.md', '/README.md', '/build/icon.svg', '/build/icon.icns', '/build/icon-16.png', '/.build-mac/v1']) assert.ok(out(p), p);
   for (const p of ['/src/main/main.js', '/build/icon.ico', '/build/icon.png', '/CHANGELOG.md', '/package.json', '/node_modules/x/index.js']) assert.ok(!out(p), p);
+});
+
+test('the Drive client goes into the checked-out tag at build time, never into git', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stet-drivecfg-'));
+  try {
+    const file = path.join(root, 'src', 'main', 'drive-config.js');
+    const shipped = fs.readFileSync(new URL('../../src/main/drive-config.js', import.meta.url), 'utf8');
+    assert.match(shipped, /clientId: '',/, 'git holds no client id');
+    assert.match(shipped, /clientSecret: '',/, 'git holds no client secret');
+    tree(root, { 'src/main/drive-config.js': shipped });
+    assert.equal(writeDriveConfig(root, {}), false, 'a local build without them: no Drive');
+    assert.throws(() => writeDriveConfig(root, { GITHUB_ACTIONS: 'true' }), /STET_DRIVE_CLIENT/, 'a release build without them stops');
+    assert.equal(writeDriveConfig(root, { STET_DRIVE_CLIENT: 'id-1.apps.googleusercontent.com', STET_DRIVE_SECRET: 'sec-2' }), true);
+    const out = fs.readFileSync(file, 'utf8');
+    assert.match(out, /clientId: "id-1\.apps\.googleusercontent\.com"/);
+    assert.match(out, /clientSecret: "sec-2"/);
+    assert.equal(writeDriveConfig(path.join(root, 'old-version'), { STET_DRIVE_CLIENT: 'x', STET_DRIVE_SECRET: 'y' }), false, 'versions before Drive are left alone');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

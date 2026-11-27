@@ -159,6 +159,8 @@ jobs:
       # Called with node rather than `npm run exe --`: PowerShell's npm shim drops the `--`.
       - name: Build STET.exe and the patch
         env:
+          STET_DRIVE_CLIENT: ${{ secrets.STET_DRIVE_CLIENT }}
+          STET_DRIVE_SECRET: ${{ secrets.STET_DRIVE_SECRET }}
           STET_EXE_DIR: ${{ runner.temp }}\stet-exe
           STET_PATCH_OUT: ${{ github.workspace }}
         run: |
@@ -255,6 +257,8 @@ jobs:
 
       - name: Build STET.app and STET-macOS.dmg
         env:
+          STET_DRIVE_CLIENT: ${{ secrets.STET_DRIVE_CLIENT }}
+          STET_DRIVE_SECRET: ${{ secrets.STET_DRIVE_SECRET }}
           STET_DMG_OUT: ${{ github.workspace }}
         run: node scripts/build-mac.js "$TAG"
 

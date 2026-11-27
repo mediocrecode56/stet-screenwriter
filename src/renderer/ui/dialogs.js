@@ -5,7 +5,9 @@ import { arm } from './arm.js';
 import { reducedMotion, DUR_PANEL, EASE_IN_OUT } from './motion.js';
 import { dayLabel, ago } from '../../core/when.js';
 import { MAC, macKeys, comboOf, showKeys, unusable, MAX_STEPS, SEQ_MS } from '../../core/keys.js';
-import { buildPrintPages, parseRange, hasTitlePage } from '../../core/printmodel.js';
+import { buildPrintPages, pagesOf, rangeOf, hasTitlePage } from '../../core/printmodel.js';
+import { WheelZoom } from '../../core/wheelzoom.js';
+import { CLOUD } from './icons.js';
 import { HIGHLIGHT_REACH } from '../../core/model.js';
 import { paginate } from '../../core/layout.js';
 import { PAGE } from '../../core/format.js';
@@ -457,63 +459,172 @@ function weekChart(s) {
 
 /**
  * Print preview with export options. `doc` is a live document snapshot.
+ * Over the sheets, the pages in a row (the title page first, when there is one): a click picks a page
+ * (out of every page, only that one; then more), a drag picks a run, Shift+click adds everything up to
+ * it, ALL picks every page again. The Pages field and the row always say the same. The sheets zoom
+ * with the − and + beside the row or Ctrl+wheel (⌘ on a Mac), and are drawn only as they come into view.
  * Resolves with { action: 'pdf'|'print', options } or null.
  */
 export async function previewDialog(doc, initial) {
   const opts = { titlePage: true, highlights: false, comments: false, range: '', ...initial };
   const total = paginate(doc.blocks, doc.settings).length;
-  const tp = h('input', { type: 'checkbox', checked: opts.titlePage && hasTitlePage(doc.titlePage), disabled: !hasTitlePage(doc.titlePage) });
+  const hasTp = hasTitlePage(doc.titlePage);
+  const tp = h('input', { type: 'checkbox', checked: opts.titlePage && hasTp, disabled: !hasTp });
   const hl = h('input', { type: 'checkbox', checked: opts.highlights });
   const cm = h('input', { type: 'checkbox', checked: opts.comments });
   const range = h('input', { type: 'text', value: opts.range, placeholder: `all (1–${total})`, spellcheck: false });
-  const msg = h('div', { class: 'hint' });
+  const msg = h('div', { class: 'hint pv-msg' });
   const sheets = h('div', { class: 'sheets' });
-  const scale = 0.42;
-  let ok = true;
-  const render = () => {
-    try {
-      parseRange(range.value, total);
-      ok = true;
-      msg.textContent = '';
-    } catch (e) { ok = false; msg.textContent = e.message; sheets.replaceChildren(); updateButtons(); return; }
-    const o = { titlePage: tp.checked, highlights: hl.checked, comments: cm.checked, range: range.value };
-    const { pages } = buildPrintPages(doc, o);
-    const frag = document.createDocumentFragment();
+  let ok = true, chosen = new Set(), scale = PREVIEW_ZOOMS.includes(opts.zoom) ? opts.zoom : 0.42;
+
+  // ---- the row of pages
+  const strip = h('div', { class: 'pv-tl', role: 'group', 'aria-label': 'Pages to print' });
+  const tpCell = hasTp ? h('div', { class: 'pv-cell pv-tp', title: 'Title page', 'data-n': 'T' }) : null;
+  if (tpCell) strip.appendChild(tpCell);
+  const cells = [];
+  for (let n = 1; n <= total; n++) {
+    const c = h('div', { class: 'pv-cell', title: `Page ${n}`, 'data-n': String(n) });
+    if (n === 1 || n % (total > 120 ? 20 : 10) === 0) c.classList.add('tick');
+    cells.push(c);
+    strip.appendChild(c);
+  }
+  const paintCells = () => {
+    for (let n = 1; n <= total; n++) cells[n - 1].classList.toggle('on', ok && chosen.has(n));
+    if (tpCell) tpCell.classList.toggle('on', tp.checked);
+  };
+  const setChosen = (set) => { chosen = set; range.value = rangeOf(set, total); ok = true; schedule(); };
+  let drag = null; // { from, on, base } while a run is being picked
+  const cellAt = (x) => {
+    const r = strip.getBoundingClientRect();
+    const first = tpCell ? tpCell.getBoundingClientRect().right : r.left, w = (r.right - first) / total;
+    return Math.max(1, Math.min(total, Math.floor((x - first) / w) + 1));
+  };
+  let anchor = null;
+  strip.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    if (e.target === tpCell) { tp.checked = !tp.checked; schedule(); return; }
+    const n = cellAt(e.clientX), all = chosen.size === total;
+    if (e.shiftKey && anchor) {
+      const s = new Set(all ? [] : chosen);
+      for (let k = Math.min(anchor, n); k <= Math.max(anchor, n); k++) s.add(k);
+      setChosen(s);
+      return;
+    }
+    // Out of every page, a click (or a drag) picks only those; otherwise it turns the page on or off.
+    const base = all ? new Set() : new Set(chosen), on = all || !chosen.has(n);
+    drag = { from: n, on, base };
+    anchor = n;
+    pick(n);
+    const move = (ev) => pick(cellAt(ev.clientX));
+    const up = () => { drag = null; removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+    addEventListener('mousemove', move);
+    addEventListener('mouseup', up);
+  });
+  const pick = (n) => {
+    const s = new Set(drag.base);
+    for (let k = Math.min(drag.from, n); k <= Math.max(drag.from, n); k++) { if (drag.on) s.add(k); else s.delete(k); }
+    if (!s.size) s.add(n); // (never nothing: the page under the pointer stays)
+    setChosen(s);
+    sheetFor(n)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+  const allBtn = h('button', { class: 'tb pv-all', title: 'Every page', onclick: () => setChosen(new Set(cells.map((_, i) => i + 1))) }, 'ALL');
+
+  // ---- zoom
+  const zoomLabel = h('span', { class: 'pv-z' });
+  const zoomTo = (z) => {
+    if (z === scale) return;
+    const sc = sheets, mid = (sc.scrollTop + sc.clientHeight / 2) / (sc.scrollHeight || 1);
+    scale = z;
+    build();
+    sc.scrollTop = mid * sc.scrollHeight - sc.clientHeight / 2;
+  };
+  const stepZoomBy = (d) => { const i = PREVIEW_ZOOMS.indexOf(scale) + d; if (i >= 0 && i < PREVIEW_ZOOMS.length) zoomTo(PREVIEW_ZOOMS[i]); };
+  const out = h('button', { class: 'tb pv-zb', title: 'Smaller', 'aria-label': 'Zoom out', onclick: () => stepZoomBy(-1) }, '−');
+  const inn = h('button', { class: 'tb pv-zb', title: 'Larger', 'aria-label': 'Zoom in', onclick: () => stepZoomBy(1) }, '+');
+  // (they leave the keyboard where it is: a button that turns itself off at the end would drop it, and Escape with it)
+  for (const btn of [out, inn, allBtn]) btn.addEventListener('mousedown', (e) => e.preventDefault());
+  const wz = new WheelZoom();
+  sheets.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !(MAC && e.metaKey)) return; // (a trackpad pinch arrives with ctrlKey)
+    e.preventDefault();
+    const steps = wz.feed(e.deltaY, e.deltaMode, e.timeStamp);
+    if (steps) stepZoomBy(steps);
+  }, { passive: false });
+
+  // ---- the sheets, each drawn as it comes into view
+  let pages = [], io = null;
+  const sheetFor = (n) => sheets.querySelector(`.sheet[data-n="${n}"]`);
+  const fill = (sheet, p) => {
     const col = 9.6 * scale, row = 16 * scale;
-    // Previewing hundreds of pages is wasteful; show the first 40 of the selection.
-    for (const p of pages.slice(0, 40)) {
-      let s = '';
-      for (const r of p.rects) s += `<div class="mk hl-${r.color}" style="left:${r.col * col}px;top:${(r.row - HIGHLIGHT_REACH.above) * row}px;width:${r.w * col}px;height:${(1 + HIGHLIGHT_REACH.above + HIGHLIGHT_REACH.below) * row}px"></div>`;
-      for (const u of p.notes) s += `<div class="mk" style="left:${u.col * col}px;top:${u.row * row}px;width:${u.w * col}px;height:${row}px;border-bottom:1px dashed #000"></div>`;
-      for (const l of p.lines) s += `<div class="l${l.st ? [...l.st].map((k) => ' s' + k).join('') : ''}" style="left:${l.col * col}px;top:${l.row * row}px">${esc(l.text)}</div>`;
+    let s = '';
+    for (const r of p.rects) s += `<div class="mk hl-${r.color}" style="left:${r.col * col}px;top:${(r.row - HIGHLIGHT_REACH.above) * row}px;width:${r.w * col}px;height:${(1 + HIGHLIGHT_REACH.above + HIGHLIGHT_REACH.below) * row}px"></div>`;
+    for (const u of p.notes) s += `<div class="mk" style="left:${u.col * col}px;top:${u.row * row}px;width:${u.w * col}px;height:${row}px;border-bottom:1px dashed #000"></div>`;
+    for (const l of p.lines) s += `<div class="l${l.st ? [...l.st].map((k) => ' s' + k).join('') : ''}" style="left:${l.col * col}px;top:${l.row * row}px">${esc(l.text)}</div>`;
+    sheet.innerHTML = s + `<div class="cap">${sheet.dataset.cap}</div>`;
+  };
+  const build = () => {
+    if (io) io.disconnect();
+    zoomLabel.textContent = Math.round(scale * 100) + '%'; // (100%: the page's own size)
+    out.disabled = scale === PREVIEW_ZOOMS[0];
+    inn.disabled = scale === PREVIEW_ZOOMS.at(-1);
+    const col = 9.6 * scale, row = 16 * scale;
+    const frag = document.createDocumentFragment(), byEl = new Map();
+    for (const p of pages) {
       const cap = p.kind === 'title' ? 'title' : p.kind === 'notes' ? 'notes' : 'p.' + p.number;
-      const sheet = h('div', { class: 'sheet', style: `width:${PAGE.cols * col}px;height:${PAGE.rows * row}px;font-size:${row}px`, html: s + `<div class="cap">${cap}</div>` });
+      const sheet = h('div', { class: 'sheet', style: `width:${PAGE.cols * col}px;height:${PAGE.rows * row}px;font-size:${row}px`, 'data-cap': cap, ...(p.kind !== 'title' && p.kind !== 'notes' ? { 'data-n': String(p.number) } : {}) });
+      byEl.set(sheet, p);
       frag.appendChild(sheet);
     }
     sheets.replaceChildren(frag);
-    msg.textContent = `${pages.length} page${pages.length === 1 ? '' : 's'}${pages.length > 40 ? ' (showing first 40)' : ''}`;
+    io = new IntersectionObserver((entries) => {
+      for (const en of entries) if (en.isIntersecting && !en.target.firstChild) fill(en.target, byEl.get(en.target));
+    }, { root: sheets, rootMargin: '600px 0px' });
+    for (const el of byEl.keys()) io.observe(el);
+  };
+
+  const render = () => {
+    raf = 0;
+    try {
+      chosen = pagesOf(range.value, total);
+      ok = true;
+    } catch (e) {
+      ok = false; msg.textContent = e.message; sheets.replaceChildren(); paintCells(); updateButtons(); return;
+    }
+    const o = { titlePage: tp.checked, highlights: hl.checked, comments: cm.checked, range: range.value };
+    pages = buildPrintPages(doc, o).pages;
+    build();
+    paintCells();
+    msg.textContent = `${pages.length} page${pages.length === 1 ? '' : 's'}`;
     updateButtons();
   };
+  let raf = 0;
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(render); };
   let btns = [];
   const updateButtons = () => { for (const b of btns) b.disabled = !ok; };
-  for (const x of [tp, hl, cm]) x.addEventListener('change', render);
-  range.addEventListener('input', render);
+  for (const x of [tp, hl, cm]) x.addEventListener('change', schedule);
+  range.addEventListener('input', schedule);
   const body = h('div', { class: 'body' },
     h('div', { class: 'opts' },
-      h('div', { class: 'field' }, h('label', {}, 'Pages'), range, h('div', { class: 'hint' }, 'e.g. 1-5, 9, 12-  · title page is not numbered')),
+      h('div', { class: 'field' }, h('label', {}, 'Pages'), range, h('div', { class: 'hint' }, 'e.g. 1-5, 9, 12-  · or pick them in the row over the pages')),
       h('label', { class: 'chk' }, tp, 'title page'),
       h('label', { class: 'chk' }, hl, 'highlights'),
       h('label', { class: 'chk' }, cm, 'notes (marked + listed at end)'),
       h('div', { style: 'height:10px' }), msg),
-    sheets);
+    h('div', { class: 'pv-main' },
+      h('div', { class: 'pv-bar' }, strip, allBtn, h('span', { class: 'pv-zoom' }, out, zoomLabel, inn)),
+      sheets));
   const v = await open({
     title: 'PRINT / EXPORT', sub: `${total} script pages · A4 · Courier 12`, cls: 'preview', body,
     buttons: [{ label: 'Cancel', value: null }, { label: 'Print…', value: 'print' }, { label: 'Export PDF…', value: 'pdf', primary: true }],
     init: (d, close, b) => { btns = b.slice(1); setTimeout(render, 0); },
   });
+  if (io) io.disconnect();
   if (!v) return null;
-  return { action: v, options: { titlePage: tp.checked, highlights: hl.checked, comments: cm.checked, range: range.value } };
+  return { action: v, options: { titlePage: tp.checked, highlights: hl.checked, comments: cm.checked, range: range.value, zoom: scale } };
 }
+// The preview's sizes: from a whole row of small sheets to larger than the page itself.
+const PREVIEW_ZOOMS = [0.25, 0.33, 0.42, 0.5, 0.62, 0.75, 0.9, 1, 1.2, 1.5];
 
 // Renders the changelog's small Markdown subset: headings, paragraphs, lists
 // (one nesting level), **bold**, *italics* and `code`. Also used for release notes.
@@ -687,10 +798,10 @@ export async function recentDialog(api) {
   const sub = async (fn) => { inSub = true; try { await fn(); } finally { inSub = false; show(); } };
   const render = () => {
     tbody.replaceChildren(...recent.map((r) => {
-      const reveal = h('button', { class: 'ra ra-reveal', title: 'Show in Folder', 'aria-label': `Show ${r.name} in its folder`, html: FOLDER_SVG, disabled: !r.exists });
+      const reveal = h('button', { class: 'ra ra-reveal', title: MAC ? 'Show in Finder' : 'Show in Folder', 'aria-label': `Show ${r.name} in its folder`, html: FOLDER_SVG, disabled: !r.exists });
       reveal.addEventListener('click', (e) => { e.stopPropagation(); api.reveal(r.path); });
       const dismiss = h('button', { class: 'ra ra-dismiss', title: 'Remove from Recent (the file is kept)', 'aria-label': `Remove ${r.name} from Recent`, html: DISMISS_SVG });
-      const trash = h('button', { class: 'ra ra-trash', title: 'Move to Recycle Bin…', 'aria-label': `Move ${r.name} to the Recycle Bin`, html: TRASH_SVG });
+      const trash = h('button', { class: 'ra ra-trash', title: `Move to ${BIN}…`, 'aria-label': `Move ${r.name} to the ${BIN}`, html: TRASH_SVG });
       dismiss.addEventListener('click', async (e) => {
         e.stopPropagation();
         recent = withExists(recent, (await api.dismiss(r.path)).recent);
@@ -701,7 +812,7 @@ export async function recentDialog(api) {
         e.stopPropagation();
         sub(async () => {
           if (api.currentPath && api.currentPath === r.path) { await api.alert('MOVE TO BIN', `"${r.name}" is open right now. Open or create another screenplay first, then move this one to the bin.`); return; }
-          if (!(await api.confirm('MOVE TO RECYCLE BIN', `Move "${r.name}" to the Recycle Bin? (${r.path}) You can restore it from the Recycle Bin; its backups are kept.`, 'Move to Bin'))) return;
+          if (!(await api.confirm(`MOVE TO ${BIN.toUpperCase()}`, `Move "${r.name}" to the ${BIN}? (${r.path}) You can restore it from the ${BIN}; its backups are kept.`, MAC ? 'Move to Trash' : 'Move to Bin'))) return;
           const res = await api.trash(r.path);
           if (res.recent) recent = withExists(recent, res.recent);
           if (chosen === r.path) chosen = null;
@@ -709,7 +820,7 @@ export async function recentDialog(api) {
         });
       });
       const tr = h('tr', { class: 'pick recent-row' + (r.path === chosen ? ' on' : '') + (r.exists ? '' : ' missing') },
-        h('td', { class: 'rc-name', title: r.name }, r.name),
+        h('td', { class: 'rc-name', title: r.drive ? `${r.name} · in Google Drive` : r.name }, r.drive ? h('span', { class: 'rc-cloud', 'aria-label': 'In Google Drive', html: CLOUD }) : null, r.name),
         h('td', { class: 'hint rc-path', title: r.path }, r.path),
         h('td', { class: 'rc-time', title: r.exists ? fmtTime(r.opened) : 'The file is no longer there' }, r.exists ? fmtWhen(r.opened) : 'missing'),
         h('td', { class: 'ra-cell' }, reveal, dismiss, trash));
@@ -730,6 +841,7 @@ export async function recentDialog(api) {
   show();
   return result;
 }
+const BIN = MAC ? 'Trash' : 'Recycle Bin'; // (what each system calls it)
 const withExists = (old, list) => (list || []).map((r) => ({ ...r, exists: (old.find((o) => o.path === r.path) || { exists: true }).exists }));
 // The three action icons share one 12×12 box, centred in it, with the same stroke.
 const icon = (d) => `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1"/></svg>`;

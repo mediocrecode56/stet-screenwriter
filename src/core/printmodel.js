@@ -29,6 +29,25 @@ export function parseRange(spec, max) {
   return (n) => ranges.some(([a, b]) => n >= a && n <= b);
 }
 
+/** The pages a range chooses, as a set of page numbers (throws as parseRange does). */
+export function pagesOf(spec, max) {
+  const inRange = parseRange(spec, max), out = new Set();
+  for (let n = 1; n <= max; n++) if (inRange(n)) out.add(n);
+  return out;
+}
+
+/** The range for a set of pages, the way a writer types it: "1-5, 9, 12-14"; every page is "" (all). */
+export function rangeOf(pages, max) {
+  const list = [...pages].filter((n) => n >= 1 && n <= max).sort((a, b) => a - b);
+  if (list.length === max) return '';
+  const runs = [];
+  for (const n of list) {
+    const r = runs.at(-1);
+    if (r && n === r[1] + 1) r[1] = n; else runs.push([n, n]);
+  }
+  return runs.map(([a, b]) => (a === b ? String(a) : `${a}-${b}`)).join(', ');
+}
+
 export function hasTitlePage(tp) {
   // "Written by" on its own (every new screenplay has it) is no title page.
   return TITLE_FIELDS_SPEC.some((f) => f.key !== 'credit' && (tp[f.key] || '').trim());

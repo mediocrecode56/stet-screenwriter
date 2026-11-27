@@ -661,8 +661,9 @@ body.note-drag, body.note-drag * { cursor: grabbing !important; user-select: non
   position: fixed; left: -1000px; top: 0; width: 2px; height: 18px; opacity: 0; border: 0; padding: 0;
   resize: none; overflow: hidden; white-space: pre; z-index: 6; color: var(--ink); background: var(--page);
   font-family: var(--script);
+  pointer-events: none; /* (it sits at the caret: a right-click there is a right-click on the script) */
 }
-#input.composing { opacity: 1; width: auto; min-width: 40px; box-shadow: 0 0 0 1px var(--ink-3); }
+#input.composing { pointer-events: auto; opacity: 1; width: auto; min-width: 40px; box-shadow: 0 0 0 1px var(--ink-3); }
 
 
 /* ---- status bar ------------------------------------------------------ */
@@ -681,6 +682,14 @@ body.note-drag, body.note-drag * { cursor: grabbing !important; user-select: non
 #st-words { min-width: 13ch; }
 #st-el, #st-page, #st-scene, #st-words { font-variant-numeric: tabular-nums; justify-content: center; } /* centred in their reserved width */
 #st-goal:hover { color: var(--ink); }
+/* Google Drive (drive.js): the cloud while the screenplay is in Drive; dimmer while a change is on its
+   way, with a "!" when it can't get there. Recent shows the same cloud before a synced screenplay. */
+.drive-st { gap: 3px; color: var(--ink-3); cursor: default; }
+.drive-st.d-synced { color: var(--ink-2); }
+.drive-st.d-waiting .cloud, .drive-st.d-syncing .cloud { opacity: .55; transition: opacity var(--dur-fast) var(--ease-out); }
+.drive-st .cloud, .rc-cloud .cloud { display: block; flex: none; }
+.d-bang { font-size: 10px; font-weight: 700; color: var(--ink); }
+.rc-cloud { display: inline-block; vertical-align: -1px; margin-right: 6px; color: var(--ink-2); }
 .meter { width: 60px; height: 6px; border: 1px solid var(--ink-2); position: relative; display: inline-block; }
 .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); transition: width var(--dur-panel) var(--ease-out); }
 .streak { display: inline-flex; align-items: center; gap: 3px; margin-left: 2px; font-variant-numeric: tabular-nums; }
@@ -917,6 +926,27 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .rv-jump { position: absolute; left: 50%; bottom: 10px; transform: translate(-50%, 6px); opacity: 0; pointer-events: none; border: 0; padding: 4px 12px; background: var(--inv-bg); color: var(--inv-fg); font-size: 10px; letter-spacing: .14em; cursor: default; box-shadow: 3px 3px 0 var(--rule); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .rv-jump.on { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
 .rv-jump:hover { opacity: .85; }
+/* The card on a passage (revision.js openCard): the spelling menu's look, with the suggestion's kind
+   and its one-line explanation over the change, then what else can be done with it. */
+.rv-card { min-width: 220px; max-width: 340px; }
+.rvc-head { display: flex; align-items: center; gap: 6px; padding: 3px 12px 0; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }
+.rvc-why { padding: 4px 12px 6px; color: var(--ink-2); line-height: 1.45; white-space: normal; overflow-wrap: anywhere; }
+.rv-card .rvc-fix { white-space: normal; font: 12px/1.45 var(--script); overflow-wrap: anywhere; }
+.rv-card .rvc-fix.off { color: var(--ink-3); pointer-events: none; }
+/* SCOPE (revision.js scopeDialog): plain rows, the scenes in a box of their own that alone scrolls. */
+.scope-dlg { width: 460px; }
+.dlg .body.scope { display: flex; flex-direction: column; gap: 6px; max-height: min(640px, 76vh); overflow: hidden; }
+.sc-k { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 9px; letter-spacing: .14em; color: var(--ink-3); }
+.sc-note, .sc-count { letter-spacing: .08em; text-transform: none; font-size: 10px; }
+.sc-k .tb { padding: 1px 7px; font-size: 9px; letter-spacing: .12em; border: 1px solid var(--rule); }
+.sc-els { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); }
+.sc-row { display: flex; align-items: baseline; gap: 6px; padding: 4px 8px; min-width: 0; cursor: pointer; transition: background-color var(--dur-fast) var(--ease-out); }
+.sc-row:hover { background: var(--hover); }
+.sc-row input { flex: none; position: relative; top: 1px; }
+.sc-main { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sc-meta { margin-left: auto; flex: none; color: var(--ink-3); font-size: 10px; }
+.sc-list { flex: 1; min-height: 120px; overflow: auto; border: 1px solid var(--rule); }
+.sc-list .sc-main { font-family: var(--script); font-size: 12px; }
 
 /* Writing week (F9). Monochrome: solid ink = goal met, grey = written, dotted = still to come.
    Compact: numbers first, one chart, a line of facts. The chart's scale adapts
@@ -974,7 +1004,24 @@ table.t tr.missing td:first-child { text-decoration: line-through; color: var(--
 .preview .body { display: flex; gap: 14px; }
 .preview .opts { width: 230px; flex: none; }
 .preview .opts .field { grid-template-columns: 1fr; }
-.preview .sheets { flex: 1; height: 62vh; overflow: auto; background: var(--desk); padding: 12px; display: flex; flex-wrap: wrap; gap: 12px; align-content: flex-start; }
+/* Over the sheets, the pages in a row (dialogs.js previewDialog): picked pages filled, a number every ten,
+   the title page first; ALL and the zoom beside it, set like the Revise footer's buttons. */
+.pv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pv-bar { display: flex; align-items: flex-start; gap: 8px; }
+.pv-tl { flex: 1; min-width: 0; display: flex; gap: 1px; height: 30px; padding-bottom: 12px; cursor: pointer; user-select: none; }
+.pv-cell { position: relative; flex: 1 1 0; min-width: 0; height: 18px; background: var(--rule); transition: background-color var(--dur-fast) var(--ease-out); }
+.pv-cell:hover { background: var(--ink-3); }
+.pv-cell.on { background: var(--ink); }
+.pv-cell.on:hover { background: var(--ink-2); }
+.pv-cell.pv-tp { flex: 0 0 14px; margin-right: 4px; }
+.pv-cell.tick::after, .pv-cell.pv-tp::after { content: attr(data-n); position: absolute; top: 20px; left: 0; font-size: 9px; line-height: 1; color: var(--ink-3); pointer-events: none; }
+.pv-bar .tb { flex: none; height: 18px; padding: 0 7px; font-size: 9px; letter-spacing: .12em; border: 1px solid var(--rule); }
+.pv-bar .tb:hover:not(:disabled) { border-color: var(--ink-3); }
+.pv-bar .tb:disabled { opacity: .35; }
+.pv-zoom { flex: none; display: flex; align-items: center; gap: 4px; }
+.pv-zoom .pv-zb { width: 22px; padding: 0; font-size: 12px; letter-spacing: 0; }
+.pv-z { width: 36px; text-align: center; font-size: 10px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.preview .sheets { flex: 1; height: 58vh; overflow: auto; background: var(--desk); padding: 12px; display: flex; flex-wrap: wrap; gap: 12px; align-content: flex-start; }
 .sheet { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2); position: relative; overflow: hidden; flex: none; color: #000; font-family: var(--script); }
 .sheet .l { position: absolute; white-space: pre; line-height: 1; }
 .sheet .mk { position: absolute; background: var(--paper); } /* (on paper whatever the theme) */

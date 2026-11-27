@@ -106,6 +106,28 @@ export function trimMacLocales(appDir) {
   return saved;
 }
 
+/**
+ * Google Drive sync's Desktop OAuth client goes into the app at build time, from STET_DRIVE_CLIENT and
+ * STET_DRIVE_SECRET (repository secrets in the release workflow), never into git: GitHub's push
+ * protection refuses it there. `srcDir` is the checked-out tag; versions without Drive are left alone.
+ * A release build without them stops, since its notes promise Drive. Returns whether it was written.
+ */
+export function writeDriveConfig(srcDir, env = process.env) {
+  const file = path.join(srcDir, 'src', 'main', 'drive-config.js');
+  if (!fs.existsSync(file)) return false;
+  const id = env.STET_DRIVE_CLIENT, secret = env.STET_DRIVE_SECRET;
+  if (!id || !secret) {
+    if (env.GITHUB_ACTIONS) throw new Error('STET_DRIVE_CLIENT / STET_DRIVE_SECRET are not set: this build would have no Google Drive.');
+    console.warn('No STET_DRIVE_CLIENT / STET_DRIVE_SECRET: this build has no Google Drive.');
+    return false;
+  }
+  const before = fs.readFileSync(file, 'utf8');
+  const after = before.replace(/clientId: ''/, `clientId: ${JSON.stringify(id)}`).replace(/clientSecret: ''/, `clientSecret: ${JSON.stringify(secret)}`);
+  if (!after.includes(JSON.stringify(id)) || !after.includes(JSON.stringify(secret))) throw new Error('src/main/drive-config.js no longer has the empty clientId / clientSecret to fill.');
+  fs.writeFileSync(file, after);
+  return true;
+}
+
 /** The patch for in-app updates: the app's files (as they go into app.asar), zipped. */
 export async function writePatch(appDir, outFile) {
   fs.mkdirSync(path.dirname(outFile), { recursive: true });

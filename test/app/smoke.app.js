@@ -296,6 +296,17 @@ test('a right-click on selected text: element, style, alignment, highlight and a
     await app.click(row.left + row.width / 2, row.top + row.height / 2);
     await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
   };
+  // On a Mac, Control-click is the right-click: the same menu, the selection kept (it arrives as a left press first).
+  if (process.platform === 'darwin') {
+    const r = await app.rect('.selr');
+    await app.down('Control');
+    await app.click(r.left + r.width / 2, r.top + r.height / 2);
+    await app.up('Control');
+    await app.until(`document.querySelectorAll('${bar} .selb').length === 5`, { what: 'the selection menu on Control-click' });
+    assert.equal(await app.eval('__stet.editor.hasSelection()'), true, 'the selection kept');
+    await app.key('Escape');
+    await app.until(`!document.querySelector('${bar}')`, { what: 'the menu closed' });
+  }
   await rightClick();
   assert.equal(await app.eval(`getComputedStyle(document.querySelector('${bar}')).borderRadius`), '0px', 'square');
   // Resting on a button opens nothing; a click opens its dropdown. The element one lists the types

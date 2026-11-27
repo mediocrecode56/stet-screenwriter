@@ -1,6 +1,6 @@
 # STET: bible
 
-Last verified: 2026-11-26.
+Last verified: 2026-11-27.
 
 ## What it is
 Free screenplay editor for Windows and macOS (Electron). It formats as you type and saves as you go.
@@ -22,11 +22,12 @@ Free screenplay editor for Windows and macOS (Electron). It formats as you type 
 - Other projects use the same guest and their windows may be open: rely on nothing in it (screen size, focus, the window list) that a test does not set up itself.
 
 ## Release
+- Google Drive sync needs the repository secrets `STET_DRIVE_CLIENT` and `STET_DRIVE_SECRET`: the builds write them into the packaged app (`docs/DRIVE.md`). Never commit them; push protection refuses it.
 - Version: `package.json` `version`. `CHANGELOG.md` needs a section for it (`scripts/release-notes.js`). The tag `vX.Y.Z` must equal it.
 - Automatic: a push to `main` that raises the version, a pushed tag, or manual "Run workflow". The Windows job publishes; the Mac job adds the DMG when a runner is free. Watch the run; if it fails, fix the cause and push (each push retries).
 - Publish: `mediocrecode56/stet-screenwriter`. The owner decides.
 - Verify: all four assets are present and the notes match the CHANGELOG section.
-- Page: the README's Download buttons link to `releases/latest/download/<fixed asset name>`, so asset names never change. CHANGELOG.md is newest first, with `## X.Y.Z · D Mon YYYY` headings and FEATURES / BUGS sections. A release's notes are that section.
+- Page: the README's Download buttons link to `releases/latest/download/<fixed asset name>`, so asset names never change. CHANGELOG.md is newest first, with `## X.Y.Z · D Mon YYYY` headings and FEATURES / BUGS sections. A release's notes are that section: short lines for writers, nothing technical. The technical record of each version goes in `docs/CHANGELOG_INTERNAL.md`.
 - Rollback: a new patch version. Never reuse a version number, move or delete tags.
 
 ## Browser (`web/`, ALPHA)
@@ -37,4 +38,4 @@ Free screenplay editor for Windows and macOS (Electron). It formats as you type 
 - A push to `main` touching `web/` or shared files deploys GitHub Pages (`web.yml`), even without a version bump. Verify the reported URL with disposable `.stet` files (open, edit, save, cloud) apart from the Node tests. Rollback: revert and redeploy.
 
 ## Look here first
-- Also: `.github/workflows/release.yml` (the release automation), `docs/DESIGN_DIRECTION.md` (design decisions).
+- Also: `.github/workflows/release.yml` (the release automation), `docs/DESIGN_DIRECTION.md` (design decisions), `docs/DRIVE.md` (Google Drive sync and its Google Cloud setup).

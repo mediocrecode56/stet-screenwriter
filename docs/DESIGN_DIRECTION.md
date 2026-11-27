@@ -73,6 +73,16 @@ lessons go at the end of their section. Update this file whenever new feedback a
 - The dinosaur stays out of focus mode unless the writer asks for it (View menu). Then it is the only
   thing at the bottom, standing on the window's edge: no status bar, not even kept out of sight.
 
+- A suggestion is where its underline is: resting the pointer on one shows the same card as the
+  panel, in the spelling menu's look (its kind and one-line explanation, the change, DISCARD, IGNORE,
+  +GUIDELINE), under the passage (owner, 0.60.3).
+- What a review covers is the writer's choice, in one plain window (Revise > SCOPE): the element types
+  for every screenplay, the scenes for this one. A scene left out is not sent at all (owner, 0.60.3).
+- Choosing pages to print is visual: a row of page cells over the preview (a click picks one, a drag a
+  run, ALL every page), always saying the same as the Pages field; the preview zooms like the script,
+  − and + or Ctrl+wheel (owner, 0.60.3).
+- A window keeps the keyboard whatever is clicked in it, so Escape always closes it.
+
 ## Page format
 
 The owner's reference is Final Draft's page. These numbers are checked by test/unit/finaldraft.test.js
@@ -106,6 +116,11 @@ and live in core/format.js; change them only on the owner's word.
 
 - Public changelog: short, simple phrases anyone understands. Each version has exactly two
   sections, FEATURES and BUGS, PERFORMANCE. No internals.
+- The public changelog reads as written for writers, professional and light: one short line per
+  change, what it does for them, never how it was built or checked, never a note to the owner (the
+  0.60.2 Alt+Tab paragraph is the example not to follow). Technical detail goes in
+  docs/CHANGELOG_INTERNAL.md (owner, 0.60.3).
+- Revise explanations are one short sentence; for grammar, the rule in a few words (owner, 0.60.3).
 - In-app text says what a thing does, in one short sentence at most.
 
 ## Code
@@ -133,5 +148,11 @@ and live in core/format.js; change them only on the owner's word.
   Codex when one is added or removed, for the one sentence of direction.
 - The review must never go quiet because of the guidelines: what they hold back stays in sight
   (HELD BACK), a clear error is always shown, and a strict review ignores them all.
+- Google Drive sync, asked for by the owner (0.60.3), is the other way a screenplay leaves the
+  computer, and only once the writer connects it: local saving stays as it was, each screenplay can be
+  left out, and a version changed elsewhere is never overwritten unasked. Requests stay few (one upload
+  per burst of saves, one check a minute) so Google never has to slow STET down (docs/DRIVE.md).
+- On a Mac, everything works the Mac way: Control-click is a right-click, Cmd+Z is one step through
+  the menu or the keyboard, the Finder and the Trash are called by their names.
 - A day is the computer's own day: counted from the operating system's clock, never from a time
   zone worked out some other way.

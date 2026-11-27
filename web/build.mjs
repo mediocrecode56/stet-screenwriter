@@ -31,6 +31,7 @@ function build() {
   for (const f of files) copy(f);
   copy('web/index.html', 'index.html');
   copy('web/web.css', 'web.css');
+  copy('web/privacy.html', 'privacy.html'); // linked from Google's sign-in screen (docs/DRIVE.md)
   copy('src/renderer/style.css');
   copy('src/renderer/mark.svg');
   for (const f of fs.readdirSync(path.join(ROOT, 'src/fonts'))) copy(`src/fonts/${f}`);

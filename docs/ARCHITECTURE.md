@@ -24,6 +24,7 @@ src/
     perfscore.js   the performance probe's rules: keeping to time, the score, how far to trust it
   main/        Electron main process: all disk I/O
     main.js        window, stet:// protocol, IPC handlers, print, close flow
+    drive.js       Google Drive sync: sign-in, uploads after saves, changes made elsewhere (docs/DRIVE.md)
     container.js   binary container (header, CRC-32, gzip)
     files.js       atomic writes, save queue, backups, retention, recovery
     store.js       settings JSON store;  statsstore.js  the saved statistics (backups, upgrades, reset)
@@ -37,6 +38,7 @@ src/
     view.js        virtualised page renderer, caret/selection overlays, hit testing, zoom
     input.js       keyboard, mouse, clipboard, IME
     session.js     save / autosave / recovery / backup orchestration
+    drive.js       Google Drive in the window: the File menu's section, the status bar cloud, the offer
     spelling.js    spelling: underlines, the right-click fixes, Auto, the toolbar menu
     ui/resize.js   side panels widened by dragging their inner edge (the lock beside REVISE)
     dino.js        the writing companion: behaviour engine and canvas;  dino-acts.js  its repertoire;  dino-art.js  its pixel art

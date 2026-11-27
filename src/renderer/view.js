@@ -154,7 +154,7 @@ export class View {
       const h = this.pageTop(this.viewCount) + PAD - this.gap;
       const w = Math.max(this.scroller.clientWidth, this.PW + PAD * 2);
       this.content.style.height = h + 'px';
-      this.content.style.width = w + 'px';
+      this.content.style.width = `max(100%, ${this.PW + PAD * 2}px)`; // (follows a narrowing window at once: no scrollbar flashes while a panel slides in)
       this.layoutDirty = false;
       // Narrower than a page (side panels, high zoom): centre the text column once per width change.
       const cw = this.scroller.clientWidth;
@@ -438,7 +438,7 @@ export class View {
               const m = rm[k];
               const a = Math.max(m.s, ls), z = Math.min(m.e, le === b.text.length ? le : le + 1);
               if (z <= a) continue;
-              revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}${m.hov ? ' hov' : ''}" style="left:${left + cx(a)}px;top:${y}px;width:${cx(z) - cx(a)}px;height:${this.row}px"></div>`;
+              revHTML += `<div class="revr r-${m.cat}${m.cur ? ' cur' : ''}${m.hov ? ' hov' : ''}"${m.id ? ` data-f="${m.id}"` : ''} style="left:${left + cx(a)}px;top:${y}px;width:${cx(z) - cx(a)}px;height:${this.row}px"></div>`;
             }
           }
           if (hasSp) {
@@ -710,7 +710,7 @@ export class View {
     this.invalidate();
     const h = this.pageTop(this.viewCount) + PAD;
     this.content.style.height = h + 'px';
-    this.content.style.width = Math.max(sc.clientWidth, this.PW + PAD * 2) + 'px';
+    this.content.style.width = `max(100%, ${this.PW + PAD * 2}px)`;
     sc.scrollTop = docY * z + PAD - anchorY;
     this.frame();
   }

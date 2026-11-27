@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
-import { APP_IGNORE, MAC_DOC_INFO, pruneModules, trimMacLocales } from './package-tools.js';
+import { APP_IGNORE, MAC_DOC_INFO, pruneModules, trimMacLocales, writeDriveConfig } from './package-tools.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -39,6 +39,7 @@ fs.mkdirSync(DIST, { recursive: true });
 try { git('worktree', 'prune'); } catch { /* nothing to prune */ }
 git('worktree', 'add', '--detach', '--force', src, tag);
 try {
+  writeDriveConfig(src);
   const pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8'));
   const electronVersion = (pkg.devDependencies?.electron || '').replace(/^[^\d]*/, '');
   const icns = path.join(src, 'build', 'icon.icns'); // versions before 0.22.0 had none

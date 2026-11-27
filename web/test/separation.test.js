@@ -22,10 +22,15 @@ test('the browser version is left out of the packaged desktop app', () => {
   assert.ok(APP_IGNORE.some((re) => re.test('/web')));
 });
 
-test('no cloud service is named anywhere in the desktop app', () => {
-  for (const f of walk(path.join(ROOT, 'src')).filter((x) => /\.(c?js|html)$/.test(x))) {
+// The desktop app reaches a cloud service only through its own Google Drive sync, which the writer turns
+// on (src/main/drive.js, docs/DRIVE.md; nothing is sent before: test/unit/drive.test.js). Nothing else in
+// it names one, and it never uses the browser version's code for it.
+test('no cloud service is named anywhere in the desktop app but its opt-in Drive sync', () => {
+  const sync = path.join(ROOT, 'src', 'main', 'drive.js');
+  for (const f of walk(path.join(ROOT, 'src')).filter((x) => /\.(c?js|html)$/.test(x) && x !== sync)) {
     assert.ok(!/googleapis\.com|accounts\.google\.com|apis\.google\.com|icloud\.com|cloudkit/i.test(fs.readFileSync(f, 'utf8')), f);
   }
+  assert.ok(!/icloud\.com|cloudkit|web\/src/i.test(fs.readFileSync(sync, 'utf8')), 'Google Drive only, and its own code');
 });
 
 test('the browser version pulls in nothing that needs a computer of its own: no main process, no Node', () => {

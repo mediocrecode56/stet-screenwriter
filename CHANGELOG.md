@@ -2,282 +2,232 @@
 
 Every version of STET, newest first. The newest one is always on the [download page](https://github.com/mediocrecode56/stet-screenwriter/releases/latest).
 
+## 0.60.3 · 27 Nov 2026
+
+### FEATURES
+
+- Google Drive sync. Connect Google Drive from the File menu and your screenplays are kept in a STET folder in your Drive as you open and save them, while still saving on your computer as before. A cloud marks synced screenplays in Open Recent and in the status bar.
+- The File menu can open your Google Drive folder, open a screenplay from it, and turn syncing off or on for the screenplay you are working on.
+- If a screenplay changed in Google Drive on another computer, STET asks which version to keep. It never overwrites one without asking.
+- Print and export: a row of page numbers above the preview. Click a page to print only that one, drag across several, or press ALL.
+- The print preview zooms with its − and + buttons or Ctrl and the mouse wheel.
+- Revise has a new SCOPE window: choose which elements are reviewed, and leave out any scene of this screenplay.
+- Rest the pointer on an underlined suggestion to see it right there, with its explanation and the buttons to accept or set it aside.
+- Revise explanations are shorter, especially for grammar.
+
+### BUGS, PERFORMANCE
+
+- Mac: Control-click on selected text opens the menu again.
+- Mac: Undo after accepting a suggestion takes back only that suggestion.
+- Mac: no scrollbar flashes at the bottom when a side panel opens.
+- Escape always closes a window, even after clicking a button that has just turned itself off.
+
 ## 0.60.2 · 26 Nov 2026
 
 ### FEATURES
 
-- Revise now checks facts as well as language. When the script states something about the real world (a date, a place, a piece of history, science or law), each claim is checked separately by a smaller Claude model that searches the web. A claim found wrong or out of date becomes a Factual Error suggestion with the correction and its source. Claims that check out add nothing, and the review says how many facts it checked.
-- Ctrl+Z after accepting a suggestion now puts your text back and brings the suggestion back too, open again where it was. Ctrl+Y accepts it again. If accepting it counted against one of your guidelines, undoing it takes that back as well.
-- The dinosaur grows more slowly: never more than once every two days of your streak (at 2, 4, 6, 8, 16 and 32 days, instead of 1, 2, 4, 8, 16 and 32).
+- Revise checks facts as well as language. A date, place or other real-world detail found wrong or out of date becomes a Factual Error suggestion, with its source.
+- Undo after accepting a suggestion brings the suggestion back. Redo accepts it again.
+- The dinosaur grows more slowly: at most once every two days of your streak.
 
 ### BUGS, PERFORMANCE
 
-- STET appears sooner when it starts: the window is on screen about a quarter of a second earlier, with the same calm fade-in as before. Reading the Windows clock no longer holds the window back.
-- With animations turned off in Windows, going to a note or a timeline mark now lands exactly in place, no longer a few pixels off.
-- Switching windows with Alt+Tab: checked with real key presses in five situations (reading further up, writing at the end, the notes panel open, Focus Mode, a minimised window), and the script stays exactly where it was in all of them. If it still jumps for you, tell us what you were doing and it will be followed up.
-- The AUTO theme button no longer rewrites its tooltip every 15 seconds when nothing has changed.
+- STET appears sooner when it starts.
+- With animations turned off in Windows, going to a note or a timeline mark lands exactly in place.
 
 ## 0.60.1 · 13 Nov 2026
 
 ### BUGS, PERFORMANCE
 
-- STET uses less memory: about 130 MB instead of 148 MB with a feature-length script open and spelling on. The spelling dictionary takes a third of the room it did, and STET runs one process fewer.
-- A long writing session no longer slowly builds up memory: spelling stopped keeping notes on every earlier version of a paragraph that Undo remembers.
-- A finished review lets go of its copy of the script straight away, unless a section failed and can be tried again.
-- Quitting no longer leaves a stray temporary file in STET's settings folder each time, and the ones already there are cleared up a minute after starting.
-- Updates and dictionaries you download are no longer also kept in a hidden download cache.
+- STET uses less memory, and no longer builds it up during a long session.
+- No more stray temporary files in STET's settings folder.
 
 ## 0.60.0 · 13 Nov 2026
 
 ### FEATURES
 
-- Revise has a new Strict Review button beside the usual one. It reviews the script without your guidelines, so you see everything Claude finds.
-- The Guidelines window is new: bigger, with one tab for every screenplay and one for this screenplay, a count of each kind of guideline you can press to see only those, and a field to find a passage. Each guideline says how often you set it aside and when.
-- At the top of the Guidelines window, one sentence now tells you where your guidelines are taking the review. Claude writes it again each time you add or remove a guideline.
-- What your guidelines hold back is no longer hidden. It sits in the Revise panel under Held Back, and Reopen brings a suggestion back.
-- Spelling works on several words at once: select some text, right-click one of the underlined words in it, and correct, add or ignore all of them together.
-- With no spelling dictionary on your computer, STET now offers to download one instead of doing it unasked. You can say not now, or never again. Until there is one, the Spelling button shows a small exclamation mark that tells you what is missing.
+- Strict Review: a review that leaves your guidelines out and shows everything Claude finds.
+- A new Guidelines window, with one tab for every screenplay and one for this screenplay.
+- A sentence at the top of the Guidelines window says where your guidelines are taking the review.
+- What your guidelines hold back is listed under Held Back, and can be reopened.
+- Spelling fixes several selected words at once.
+- Without a spelling dictionary, STET offers to download one instead of doing it unasked.
 
 ### BUGS, PERFORMANCE
 
-- Your guidelines can no longer make a review go quiet. A clear error is always shown unless you set aside that very passage several times, a character's way of speaking alone never hides a suggestion, and fixing one missing word no longer teaches Revise to skip all the others.
-- Scrolling the Guidelines window no longer slides the list over its first row.
-- The day for Today, the week and the streak now follows the Windows clock exactly, and changes at midnight on the dot.
-- Reviews use less of your Claude plan for the same findings.
-- Resetting the passages ignored in a screenplay no longer clears the words you told Spelling to ignore.
+- Your guidelines can no longer hide a clear error.
+- Today, the week and the streak follow your computer's clock exactly.
+- Reviews use less of your Claude plan.
+- Resetting ignored passages no longer clears the words ignored by Spelling.
 
 ## 0.59.0 · 9 Nov 2026
 
 ### BUGS, PERFORMANCE
 
-- STET opens your last screenplay again at launch, even from a slow drive. Before, a drive that took a few seconds to wake up could leave you on a blank page, and typing there cancelled the reopening. Now typing waits until the screenplay is in, with an "Opening…" notice if it takes a while. A file another program is holding for a moment (a backup or sync tool) is tried again instead of skipped.
-- Capitals come off again when a line goes back to an element that isn't in capitals, however the text got there. Before, text pasted into a scene heading, character, transition or shot, lines joined into one, and words replaced in one stayed in capitals for good.
+- STET reopens your last screenplay at launch, even from a slow drive.
+- Capitals come off when a line changes to an element that isn't written in capitals.
 
 ## 0.58.0 · 8 Nov 2026
 
 ### FEATURES
 
-- Revise keeps going when Claude has no usage left: if OpenAI Codex is installed and signed in on your computer, it takes over the rest of the review. If no Claude is set up at all, Revise uses Codex on its own. Tools → Claude Connection… says when Codex is there as the backup.
+- When Claude has no usage left, OpenAI Codex can finish the review, if it is installed and signed in.
 
 ## 0.57.0 · 6 Nov 2026
 
 ### FEATURES
 
-- Tools has a new Open STET in the Browser: an early version of STET that runs in any web browser, for writing away from your own computer. It opens and saves .stet files, and works on phones and tablets too. Nothing changes in the app if you don't use it.
-- The dinosaur moves more naturally from one thing to the next: it catches its breath, stretches when it gets up, turns round before it settles, licks its lips after eating and sniffs before it digs.
-- The Performance Probe now tells you plainly whether your computer runs STET smoothly, with a score from 0 to 100 and how reliable that result is. It shows its progress and can be cancelled.
+- Tools > Open STET in the Browser: an early version of STET for any web browser, phones and tablets included.
+- The dinosaur moves more naturally from one thing to the next.
+- The Performance Probe gives a clear score from 0 to 100.
 
 ### BUGS, PERFORMANCE
 
-- The Performance Probe no longer freezes the window or gets stuck, and takes seconds instead of nearly a minute.
-- The probe's score is now fair: fast computers no longer show as slow.
-- Typing is lighter on long scripts with spelling turned on.
-- In Focus Mode, the buttons that appear when you press Tab now work exactly like the toolbar's, also when the toolbar is hidden.
-- Undo still works after running the Performance Probe.
+- The Performance Probe is faster, fairer and never freezes the window.
+- Typing is lighter on long scripts with spelling on.
+- In Focus Mode, the buttons Tab brings up work exactly like the toolbar's.
 
 ## 0.56.0 · 5 Nov 2026
 
 ### FEATURES
 
-- The View menu now says what each option will do: Show or Hide, Enter or Leave, Turn On or Turn Off. That includes the Writing Companion in Focus Mode, the Scene Navigator, the Notes Panel and the Timeline.
+- The View menu says what each option will do: Show or Hide, Turn On or Turn Off.
 
 ### BUGS, PERFORMANCE
 
-- Pages keep the screenplay standard on A4: a full 1 inch margin on the right, so action no longer runs too far across.
-- The page number sits exactly where it should, 1.25 inches from the right edge.
-- Transitions and the title page follow the same margins.
+- A4 pages follow the screenplay standard: a full 1 inch right margin and the page number in its place.
 
 ## 0.55.1 · 5 Nov 2026
 
 ### BUGS, PERFORMANCE
 
-- In Focus Mode, the SCENE, ACTION and other element buttons now appear on their own only when you press Tab, and stay for a few seconds so you can click them.
-- Moving the pointer to the top of the screen in Focus Mode always shows the full toolbar.
+- In Focus Mode, the element buttons appear only when you press Tab.
 
 ## 0.55.0 · 5 Nov 2026
 
 ### FEATURES
 
-- The title page slides in and out smoothly when you show or hide it, like the side panels.
-- Focus Mode can be turned on and off in Preferences.
-- Preferences has a Keyboard Shortcuts button that opens the shortcuts list.
-- In Focus Mode, the SCENE, ACTION and other element buttons appear at the top left when you change the element or move the pointer there.
-- View has a new option to keep the dinosaur in Focus Mode. It is off by default.
+- The title page slides in and out like the side panels.
+- Focus Mode and keyboard shortcuts in Preferences.
+- The dinosaur can stay in Focus Mode (View menu).
 
 ### BUGS, PERFORMANCE
 
-- Showing or hiding the title page further down the script no longer moves your place.
+- Showing or hiding the title page keeps your place in the script.
 
 ## 0.54.1 · 3 Nov 2026
 
 ### BUGS, PERFORMANCE
 
-- Highlights leave a little room above and below the words, like in a word processor, instead of sitting tight on the letters. The same in print and PDF.
-- Find no longer shifts as you type: the match count keeps one width.
-- Pressing Enter in Find glides to the match and places it near the middle of the window, the same way a click on the timeline does.
+- Highlights leave a little room around the words, on screen and on paper.
+- Find no longer shifts as you type, and Enter glides to the match.
 
 ## 0.54.0 · 31 Oct 2026
 
 ### FEATURES
 
-- Highlights have clearer, more natural colours: fuller pastels in light mode, deep rich tones in dark mode, with yellow a warm honey.
-- Selected text over a highlight now shows a deeper shade of that colour, instead of turning it grey or metallic.
-- The timeline marks and note colours match the new highlight colours.
+- Clearer highlight colours in both themes.
+- Selected text over a highlight shows a deeper shade of its colour.
 
 ### BUGS, PERFORMANCE
 
-- The toolbar's colour swatches, B I U S and small icons are evenly spaced and centred.
-- The right-click menu's buttons are the same width, with their icons lined up.
-- SPELLING on the toolbar no longer shows a gap in the middle of the word.
-- The panel lock icon has square corners, like the rest of STET.
-- Behind the scenes: colours and icons are each defined in one place, so future changes are simpler and more consistent.
+- Toolbar and menu icons are evenly spaced and centred.
 
 ## 0.53.0 · 30 Oct 2026
 
 ### FEATURES
 
-- The right-click menu shows the toolbar's icons for text style, alignment and highlight, instead of words.
-- The words-per-minute count sits at the top right of the scene list.
-- Words per minute counts only spoken dialogue. Notes like (beat) inside a line no longer count.
-- Revise guidelines: a cleaner, easier-to-read list, with each detail on its own line and a small × to remove an entry.
-- The dinosaur never freezes. While it rests it glances around, blinks or taps its tail every few seconds.
-- The dinosaur gets a short break after a reaction, so several things no longer happen at once.
-- Small things drift by now and then: a falling leaf, dandelion fluff, a butterfly, a feather, a firefly at night, a breeze. The dinosaur looks their way.
-- New dinosaur habits: humming a tune, watching the clouds on its back, and dribbling a pebble.
-- Preferences: the explanation under the automatic theme is gone, and each section has a clear heading.
+- The right-click menu shows the toolbar's icons.
+- Words per minute counts only spoken dialogue.
+- A cleaner list of Revise guidelines.
+- The dinosaur never freezes, and small things drift by now and then.
 
 ### BUGS, PERFORMANCE
 
-- The yellow and pink highlights look softer and more natural, in both themes and in print.
-- The Clear Formatting button lines up with the other style buttons and has the same look.
-- Revise guidelines: notes no longer sit under the label, and empty details no longer leave a stray dot.
+- Softer yellow and pink highlights.
 
 ## 0.52.0 · 30 Oct 2026
 
 ### FEATURES
 
-- Highlights come in five colours: blue, yellow, pink, red and green. All are pale and easy to read.
-- The right-click menu on selected text has a Highlight button.
-- Its dropdowns open on a click only, and open like every other menu.
-- A Clear Formatting button removes bold, italic, underline and strikethrough (Ctrl+Shift+Space).
-- A small title page button on the toolbar shows or hides the title page.
-- The first page of the script has a page number.
-- Find is a compact box at the top right. Enter goes to the next match.
-- While you use Find, the timeline marks where the match is.
-- Timecode editor: scroll the mouse wheel over the hours, minutes or seconds to change them.
-- Timecode editor: a click outside keeps what you typed.
-- A timecode can be set at 00:00:00, at the very start or on the first scene.
-- Timeline: click near a timecode's label to edit it. Higher up, a click goes to that line.
-- Timeline: zoomed in, the left end has a fade and a whole-script button, like the right end.
-- Notes panel: a colour filter shows only the notes of one colour, in the panel, the script and the timeline.
-- Notes panel: CLEAR ALL deletes the notes listed, after a second press.
-- Each note shows the scene it is in.
-- The note you pinned last goes to the top. Drag pinned notes to reorder them.
-- Scene list: the runtime and the dialogue's words per minute, at the bottom.
-- A scene's timecode editor shows its dialogue's words per minute.
-- Revise: each suggestion shows its scene and page.
-- Revise guidelines: the ignored passages and the guidelines are now two sections. Each folds and has its own reset.
-- STET opens with a soft fade.
-- The first start of each version shows a short beta notice.
+- Five highlight colours, and a Highlight button in the right-click menu.
+- Clear Formatting (Ctrl+Shift+Space).
+- A toolbar button for the title page.
+- Find is a compact box at the top right, marked on the timeline.
+- Notes can be filtered by colour, and pinned notes reordered.
+- The scene list shows the runtime and words per minute.
+- Revise shows each suggestion's scene and page.
 
 ### BUGS, PERFORMANCE
 
-- Deleting a note also removes its colour from the script. One undo brings both back.
-- Going to a note or a timeline mark puts the caret at its start, without selecting the text.
-- Deleting an empty line no longer changes the element of the line below.
-- Changing the element of a line with only spaces stays on that line.
-- Jumps in the script are 3% faster.
-- Buttons inside notes, scenes and Revise cards show the hand pointer, like the cards.
-- Text in fields can always be selected.
-- Menus at the right edge stay inside the window.
+- Deleting a note removes its colour too; one undo brings both back.
+- Going to a note or timeline mark places the caret without selecting.
+- Several editing fixes, and faster jumps in the script.
 
 ## 0.51.2 · 26 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Revise uses much less of your Claude usage. It runs on Claude Sonnet 5.5 at medium effort.
+- Revise uses much less of your Claude usage.
 
 ## 0.51.1 · 25 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- The scene list shows the open screenplay's scenes at once, never the previous one's.
+- The scene list always shows the open screenplay's scenes.
 
 ## 0.51.0 · 25 Oct 2026
 
 ### FEATURES
 
 - Double-click a scene in the scene list to rename it.
-- The dinosaur sets out a little table for its coffee.
 
 ### BUGS, PERFORMANCE
 
-- The right-click menu's dropdowns open more smoothly.
-- A smaller, plainer rock for the dinosaur.
-- Quieter scrollbars.
-- The window appears only once STET is fully ready.
+- Smoother menus, quieter scrollbars.
 
 ## 0.50.0 · 25 Oct 2026
 
 ### FEATURES
 
-- The right-click menu on selected text has an element type button.
-- New icons: a bold B for text style, a square for notes.
-
-### BUGS, PERFORMANCE
-
-- Timeline: the glass box moves to a jump in one smooth move.
-- The right-click menu animates its buttons and dropdowns.
+- The right-click menu can change the element type.
 
 ## 0.49.0 · 25 Oct 2026
 
 ### FEATURES
 
-- Right-click selected text for a small menu: text style, alignment and a note.
+- Right-click selected text for text style, alignment and a note.
 - View > Hide Note Underlines.
-
-### BUGS, PERFORMANCE
-
-- Timeline: the glass box lands where the chosen line is in the window.
-- The line under a note is easier to see.
 
 ## 0.48.0 · 25 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- A note, highlight or timecode you go to always lands a little above the middle of the window.
+- Going to a note, highlight or timecode lands just above the middle of the window.
 
 ## 0.47.0 · 25 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Highlights in the script match their colours on the timeline and in notes.
-- Timeline: a chosen line never lands right against the toolbar.
-- Timeline: holding Ctrl keeps the pointer in place, even when Windows is slow to lock it.
-- Jumps in the script are 10% faster.
+- Highlight colours match on the timeline and in notes.
+- Faster jumps in the script.
 
 ## 0.46.0 · 25 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Softer, more pastel colours for highlights and marks.
-- The Tab cycle outline sits exactly on its buttons.
+- Softer colours for highlights and marks.
 - Restore Backup no longer asks twice.
-- Timeline: zooming stops at two minutes across the bar.
 
 ## 0.45.0 · 25 Oct 2026
 
 ### FEATURES
 
-- Restore Backup makes a new screenplay and leaves yours as it is.
+- Restore Backup opens the backup as a new screenplay and leaves yours as it is.
 
 ### BUGS, PERFORMANCE
 
-- Confirm buttons wait for the second press as long as you like.
 - The click that brings STET forward presses nothing.
-- Timeline: a finer playhead, and every mark sits on a whole second.
-- The line under a note is a light dotted line.
-- A warmer, softer yellow.
 
 ## 0.44.0 · 25 Oct 2026
 
@@ -287,36 +237,23 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### BUGS, PERFORMANCE
 
-- Timeline: zooming is perfectly steady.
-- Timeline: the glass box follows the script smoothly, and its edges are a lens.
-- Tab around the elements no longer leaves text in capitals.
-- The dinosaur never walks on the spot.
+- Smoother timeline zoom.
 
 ## 0.43.0 · 25 Oct 2026
 
 ### FEATURES
 
 - A screenplay opens where you left it.
-- Five new neighbours and three new habits for the dinosaur.
-
-### BUGS, PERFORMANCE
-
-- Timeline: clicks and the glass box line up exactly with the script.
-- Clearer pointers on the timeline, scene rows and Revise cards.
 
 ## 0.42.0 · 24 Oct 2026
 
 ### FEATURES
 
 - A note's colour highlights its passage.
-- Timeline: the part on screen is a pane of glass.
-- The dinosaur blinks, casts a shadow and lands with a little dust.
 
 ### BUGS, PERFORMANCE
 
-- A spelling fix no longer jumps the page.
-- Zoom sizes the side panels too, and stops at 200%.
-- Deleting a note shows an X instead of a countdown.
+- A spelling fix no longer moves the page.
 
 ## 0.40.0 · 24 Oct 2026
 
@@ -324,42 +261,33 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 - Notes have a colour, a pin and a bin.
 
-### BUGS, PERFORMANCE
-
-- Timeline: the fade at the right end shows only near the end.
-
 ## 0.39.2 · 24 Oct 2026
 
 ### BUGS, PERFORMANCE
 
 - Check for Updates always finds the newest version.
-- Timeline: the faded end takes no clicks.
 
 ## 0.39.1 · 24 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- A subtler fade on the timeline.
-- Notices rise and sink smoothly.
-- One hover style everywhere.
+- Smoother notices and one hover style everywhere.
 
 ## 0.39.0 · 24 Oct 2026
 
 ### FEATURES
 
-- A new Restore Backup window: backups by day, with their words and size.
+- A new Restore Backup window, with backups by day.
 
 ### BUGS, PERFORMANCE
 
 - A new note no longer loses what you type.
-- Faster releases.
 
 ## 0.38.1 · 24 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Timeline: no jump on the first Ctrl step on Windows.
-- Switching windows mid-drag ends the drag.
+- Timeline fixes on Windows.
 
 ## 0.38.0 · 24 Oct 2026
 
@@ -367,112 +295,70 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 - Revise works in any language.
 - A redesigned Revise panel and notes panel.
-- Revise guidelines learn patterns and voices. RESET forgets them.
-- +NOTE again on the same text goes back to its note.
-
-### BUGS, PERFORMANCE
-
-- Timeline: the readout stays right while it scrolls or zooms.
 
 ## 0.37.0 · 24 Oct 2026
 
 ### FEATURES
 
-- Focus Mode (F11): only the page and your text.
+- Focus Mode (F11).
 - View > Hide Toolbar.
-- Revise has its own guidelines, which learn from you.
-- Spelling has its own dictionary window, and downloads a dictionary by itself.
-
-### BUGS, PERFORMANCE
-
-- Timeline: zooming is one smooth motion.
-- Every corner is square again.
+- Revise guidelines that learn from you.
 
 ## 0.36.0 · 24 Oct 2026
 
 ### FEATURES
 
-- Spelling: a SPELLING menu, quiet underlines, fixes on right-click, and Auto.
-- Scene list: each scene shows its time. Right-click for its timecode.
-- Drag a side panel's edge to widen it. The lock keeps the sizes.
-- New dinosaur routines, and small animals in the grass.
-
-### BUGS, PERFORMANCE
-
-- STET rests more while in the background.
-- A right-click on the page keeps the keyboard in the script.
+- Spelling, with fixes on right-click.
+- Side panels can be widened.
 
 ## 0.35.0 · 24 Oct 2026
 
 ### FEATURES
 
-- Timeline: right-click a scene for its timecode, with keep and remove buttons.
-- Four new finds for the dinosaur.
-
-### BUGS, PERFORMANCE
-
-- Timeline marks sit on whole seconds.
-- The dinosaur lies on its back less often.
+- A scene's timecode from the timeline.
 
 ## 0.34.3 · 24 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Timeline: gentler motion, and the pointer stays where you stepped to.
 - Smaller updates.
 
 ## 0.34.2 · 24 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Stepping with Ctrl moves only the script, never the caret.
+- Stepping with Ctrl moves only the script.
 
 ## 0.34.1 · 24 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Stepping with Ctrl no longer flickers the toolbar.
+- No more toolbar flicker while stepping.
 
 ## 0.34.0 · 23 Oct 2026
 
-### FEATURES
-
-- Four new dinosaur habits.
-
 ### BUGS, PERFORMANCE
 
-- Timeline: Ctrl holds the pointer still while you step.
-- Several saving and renaming fixes.
-- Much faster tests.
+- Saving and renaming fixes.
 
 ## 0.33.0 · 23 Oct 2026
 
 ### FEATURES
 
-- A scene can have its own timecode, shown beside its heading.
+- A scene can have its own timecode.
 - The timeline is on by default.
-
-### BUGS, PERFORMANCE
-
-- STET opens the screenplay you last edited.
-- Holding Ctrl over the timeline touches nothing else.
 
 ## 0.32.0 · 23 Oct 2026
 
 ### FEATURES
 
-- Timeline: hold Ctrl to step a second at a time.
-
-### BUGS, PERFORMANCE
-
-- Close timecodes no longer pile up.
+- Timeline: hold Ctrl to step one second at a time.
 
 ## 0.31.0 · 23 Oct 2026
 
 ### FEATURES
 
-- A timecode editor: exact time, tag and colour.
-- Ctrl + right-click pins a timecode at once.
+- A timecode editor.
 
 ## 0.30.0 · 23 Oct 2026
 
@@ -484,41 +370,32 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### FEATURES
 
-- Timeline: drag sideways to zoom, down to single seconds.
+- Timeline: drag sideways to zoom.
 
 ## 0.28.0 · 23 Oct 2026
 
 ### FEATURES
 
-- The timeline: the whole script as a strip, with its scenes, notes, highlights and timecodes.
+- The timeline: the whole script as a strip.
 
 ## 0.27.0 · 23 Oct 2026
 
 ### FEATURES
 
-- Revise lists its suggestions in script order. Accept All can take one kind.
-
-### BUGS, PERFORMANCE
-
-- Revise sticks to grammar and wording.
+- Revise lists suggestions in script order.
 
 ## 0.26.0 · 23 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- No automatic bold or extra blank lines.
-- Letters and pages match Final Draft exactly.
+- Pages match Final Draft exactly.
 
 ## 0.25.0 · 22 Oct 2026
 
 ### FEATURES
 
-- Pages print like Final Draft's, on A4, in its Courier.
+- Pages print like Final Draft's.
 - Choose which elements Tab steps through.
-
-### BUGS, PERFORMANCE
-
-- Element and alignment changes touch only the selection or what you write next.
 
 ## 0.24.0 · 22 Oct 2026
 
@@ -527,25 +404,17 @@ Every version of STET, newest first. The newest one is always on the [download p
 - Paragraph alignment.
 - Every shortcut can be changed.
 
-### BUGS, PERFORMANCE
-
-- Tab no longer changes text already written.
-
 ## 0.23.3 · 22 Oct 2026
 
 ### FEATURES
 
 - Import Final Draft (.fdx) scripts.
 
-### BUGS, PERFORMANCE
-
-- Safer file names, pastes and PDF export.
-
 ## 0.23.2 · 22 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Double-clicking a screenplay really opens it in STET, on Windows and Mac.
+- Double-clicking a screenplay opens it in STET.
 
 ## 0.23.1 · 22 Oct 2026
 
@@ -559,10 +428,6 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 - Character names complete as you type.
 
-### BUGS, PERFORMANCE
-
-- Zoom in 5% steps. Faster start, smaller downloads.
-
 ## 0.22.0 · 21 Oct 2026
 
 ### FEATURES
@@ -573,13 +438,13 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### BUGS, PERFORMANCE
 
-- More grass, sooner.
+- Small fixes.
 
 ## 0.21.0 · 21 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Updates are about a megabyte, with no installer.
+- Much smaller updates.
 
 ## 0.20.2 · 21 Oct 2026
 
@@ -603,25 +468,25 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### BUGS, PERFORMANCE
 
-- Short notes in windows are back.
+- Small fixes.
 
 ## 0.19.3 · 21 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Fewer notes in windows.
+- Shorter messages.
 
 ## 0.19.2 · 21 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Words typed by the speed test no longer count as yours.
+- The speed test no longer counts toward your words.
 
 ## 0.19.1 · 21 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- A shorter speed test with a score.
+- A shorter speed test.
 
 ## 0.19.0 · 21 Oct 2026
 
@@ -639,13 +504,13 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### BUGS, PERFORMANCE
 
-- Double-clicking the title renames, not maximises.
+- Double-clicking the title renames it.
 
 ## 0.18.3 · 21 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- The autocomplete popup is gone.
+- No more autocomplete popup.
 
 ## 0.18.2 · 21 Oct 2026
 
@@ -669,13 +534,13 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### FEATURES
 
-- Open Recent lists your last ten screenplays.
+- Open Recent.
 
 ## 0.16.7 · 21 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Weekly view fixes (0.16.2 to 0.16.7).
+- Weekly view fixes.
 
 ## 0.16.1 · 21 Oct 2026
 
@@ -687,13 +552,13 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### FEATURES
 
-- Rest days left this week, shown as a shield.
+- Rest days left this week.
 
 ## 0.15.4 · 21 Oct 2026
 
 ### BUGS, PERFORMANCE
 
-- Revise suggestion fixes (0.15.1 to 0.15.4).
+- Revise fixes.
 
 ## 0.15.0 · 20 Oct 2026
 
@@ -701,15 +566,11 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 - Choose how STET connects to Claude.
 
-### BUGS, PERFORMANCE
-
-- Almost no power used while the dinosaur sleeps.
-
 ## 0.14.0 · 20 Oct 2026
 
 ### FEATURES
 
-- Two rest days a week, and grass that grows while you're away.
+- Rest days, and grass that grows while you're away.
 
 ## 0.13.0 · 20 Oct 2026
 
@@ -721,7 +582,7 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### FEATURES
 
-- The dinosaur is STET's icon.
+- A new icon.
 
 ## 0.11.0 · 20 Oct 2026
 
@@ -745,7 +606,7 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### BUGS, PERFORMANCE
 
-- More room for the dinosaur. Panels slide the same way.
+- More room for the dinosaur.
 
 ## 0.7.0 · 20 Oct 2026
 
@@ -757,13 +618,13 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### BUGS, PERFORMANCE
 
-- A toolbar line fixed.
+- Small fixes.
 
 ## 0.6.0 · 19 Oct 2026
 
 ### FEATURES
 
-- A pixel dinosaur. Suggestions stay until you decide.
+- The writing companion. Suggestions stay until you decide.
 
 ## 0.5.0 · 19 Oct 2026
 
@@ -787,7 +648,7 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### FEATURES
 
-- Light and dark on a schedule. An icon.
+- Light and dark themes on a schedule.
 
 ## 0.2.1 · 19 Oct 2026
 
@@ -805,4 +666,4 @@ Every version of STET, newest first. The newest one is always on the [download p
 
 ### FEATURES
 
-- First version: screenplay formatting, autosave, backups, PDF, notes and highlights.
+- First version: screenplay formatting, autosave, backups, PDF export, notes and highlights.
